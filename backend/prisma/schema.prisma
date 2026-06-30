@@ -1,0 +1,155 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+// ─── TABEL BARU ───────────────────────────────────────────────────
+
+model TbUsers {
+  id           String    @id @default(uuid()) @db.UniqueIdentifier
+  username     String    @unique @db.NVarChar(100)
+  passwordHash String    @db.NVarChar(255)
+  fullName     String    @db.NVarChar(200)
+  role         String    @default("viewer") @db.NVarChar(50)
+  isActive     Boolean   @default(true)
+  lastLoginAt  DateTime? @db.DateTime2
+  createdAt    DateTime  @default(now()) @db.DateTime2
+  updatedAt    DateTime  @updatedAt @db.DateTime2
+
+  @@map("tbUsers")
+}
+
+// ─── TABEL EXISTING — KOLOM DI BAWAH INI PLACEHOLDER ─────────────
+// ⚠️ Owner WAJIB konfirmasi kolom asli sebelum agen menulis ini
+
+model TbCustomers {
+  fdCustCode     String    @id @db.Char(7)
+  fdCustName     String?   @db.VarChar(50)
+  fdContact      String?   @db.Char(25)
+  fdAddr1        String?   @db.VarChar(255)
+  fdAddr2        String?   @db.VarChar(80)
+  fdCityName     String?   @db.Char(35)
+  fdTelp         String?   @db.Char(50)
+  fdFax          String?   @db.Char(50)
+  fdHP           String?   @db.Char(50)
+  fdBillTo       String?   @db.VarChar(50)
+  fdBillAddr1    String?   @db.VarChar(255)
+  fdBillAddr2    String?   @db.VarChar(80)
+  fdBillCityName String?   @db.Char(35)
+  fdBroker       Int?      @default(0) // 1 = tidak broker, 2 = broker
+  fdBlocked      Int?      @default(0) // status 0-5
+  fdSalesNM              String?   @db.Char(25)
+  fdDiscontinued         Int?      @default(0)
+  fdKeterangan           String?   @db.VarChar(255)
+  fdNamaPengiriman       String?   @db.VarChar(100)
+  fdHpPengiriman         String?   @db.VarChar(25)
+  fdAlamatPengiriman     String?   @db.VarChar(255)
+  fdKetPengiriman        String?   @db.VarChar(255)
+  fdKotaPengiriman       String?   @db.VarChar(50)
+  fdHpPenagihan          String?   @db.VarChar(50)
+  fdEmailPenagihan       String?   @db.VarChar(50)
+  fdNotifPenagihan       Int?      @default(0)
+  fdKeteranganPenagihan  String?   @db.VarChar(255)
+
+  // Relations
+  addresses      vwCustomerContacts[]
+
+  @@map("tbCustomers")
+}
+
+model vwCustomerContacts {
+  fdCustCode String  @db.VarChar(7)
+  fdJenis    String  @db.Char(25)
+  fdID       String  @db.Char(2)
+  fdContact  String? @db.VarChar(100)
+  fdHP       String? @db.VarChar(25)
+  fdTelp     String? @db.VarChar(25)
+  fdEmail    String? @db.VarChar(50)
+  fdAddr     String? @db.VarChar(255)
+  fdCity     String? @db.VarChar(100)
+  fdAktif    Int?    @default(1)
+
+  // Relations
+  customer TbCustomers @relation(fields: [fdCustCode], references: [fdCustCode], onDelete: Cascade)
+
+  @@id([fdCustCode, fdID])
+  @@map("vwCustomerContacts")
+}
+
+model TbEntryList {
+  @@map("tbEntryList")
+  @@ignore
+}
+
+model TbMarking {
+  fdMarkingCode    String    @id @db.Char(20)
+  fdListType       Int       @default(0)
+  fdContNo         String    @db.Char(12)
+  fdContSize       String    @db.Char(10)
+  fdBLNo           String    @db.Char(30)
+  fdAWB            String    @db.Char(50)
+  fdConsignee      String    @db.Char(50)
+  fdWilayah        String    @db.Char(50)
+  fdJmlPack        Decimal   @default(0) @db.Decimal(18, 0)
+  fdSatuan         String    @db.Char(20)
+  fdJmlBerat       Decimal   @default(0) @db.Decimal(18, 2)
+  fdM3             Decimal   @default(0) @db.Decimal(18, 4)
+  fdLoadDate       DateTime? @db.DateTime
+  fdETA            DateTime? @db.DateTime
+  fdETD            DateTime? @db.DateTime
+  fdExitDate       DateTime? @db.DateTime
+  fdGudang         String    @db.Char(50)
+  fdKet            String?   @db.Char(2000)
+  fdSysDate        DateTime  @default(now()) @db.DateTime
+  fdCreated        String    @db.Char(30)
+  fdUpdate         DateTime  @default(now()) @db.DateTime
+  fdUpdateBy       String    @db.Char(30)
+  fdFinish         Int       @default(0)
+  fdBranchCode     String    @db.Char(2)
+  fdTypeJalur      Int       @default(0)
+  fdBranded        Decimal?  @default(0) @db.Decimal(18, 2)
+  fdJmlTerima      Decimal   @default(0) @db.Decimal(18, 0)
+  fdTransit        Int       @default(0)
+  fdEnterGudang    DateTime? @db.DateTime
+  fdUpdate2        DateTime  @default(now()) @db.DateTime
+  fdUpdateBy2      String    @db.Char(30)
+  fdStatus         Int       @default(1)
+  fdConsigneeID    String    @db.Char(5)
+  fdReExport       String    @db.VarChar(200)
+  fdDeparture      DateTime? @db.DateTime
+  fdArrival        DateTime? @db.DateTime
+  fdKetCs          String    @db.Char(500)
+  fdLokasi         String    @db.Char(50)
+  fdKrani          String    @db.Char(50)
+
+  @@map("tbMarking")
+}
+
+model TbDelivery {
+  @@map("tbDelivery")
+  @@ignore
+}
+
+model TbEntryListDetail {
+  @@map("tbEntryListDetail")
+  @@ignore
+}
+
+model TbDeliveryDetail {
+  @@map("tbDeliveryDetail")
+  @@ignore
+}
+
+model TbBilling {
+  @@map("tbBilling")
+  @@ignore
+}
+
+model TbBillingDetail {
+  @@map("tbBillingDetail")
+  @@ignore
+}
