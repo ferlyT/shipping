@@ -7,7 +7,7 @@ import { usePagination } from '@/hooks/usePagination'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useQuery } from '@tanstack/react-query'
 import { customersApi } from '@/api/endpoints'
-import { X, Building2, MapPin, Phone, Mail, User, Eye, DollarSign, Edit3, ShieldAlert, Truck, Info } from 'lucide-react'
+import { X, Building2, MapPin, Phone, Mail, User, Eye, DollarSign, Edit3, ShieldAlert, Truck, Info, Calendar } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface CustomerAddress {
@@ -33,6 +33,7 @@ interface Customer {
   fdFax: string
   fdEmail: string
   fdSalesNM: string
+  fdCreatedDate: string | null
   fdBroker: number
   fdBlocked: number
   fdDiscontinued: number
@@ -49,14 +50,50 @@ interface Customer {
   addresses?: CustomerAddress[]
 }
 
-// Konfigurasi warna status berdasarkan legenda gambar
+// Konfigurasi status: satu sumber kebenaran untuk badge, aksen baris, dan legenda filter.
+// bgClass dihapus dari sini secara sengaja — status kini dikomunikasikan lewat kolom
+// Badge eksplisit + aksen border kiri tipis, bukan full-row color wash yang sebelumnya
+// sulit dibedakan antar status di layar penuh berisi ribuan baris.
 const statusConfig = {
-  0: { label: 'NO STATUS', bgClass: 'bg-white hover:bg-gray-50', textClass: 'text-gray-500', dotClass: 'bg-gray-300' },
-  1: { label: 'OK', bgClass: 'bg-slate-800/5 hover:bg-slate-800/10', textClass: 'text-[var(--color-primary)]', dotClass: 'bg-slate-600' },
-  2: { label: 'COD', bgClass: 'bg-green-50 hover:bg-green-100/80', textClass: 'text-green-800', dotClass: 'bg-green-500' },
-  3: { label: 'WARNING', bgClass: 'bg-amber-50 hover:bg-amber-100/80', textClass: 'text-amber-800', dotClass: 'bg-amber-500' },
-  4: { label: 'BLOCKED', bgClass: 'bg-red-50 hover:bg-red-100/80', textClass: 'text-red-800', dotClass: 'bg-red-500' },
-  5: { label: 'URGENT', bgClass: 'bg-cyan-50 hover:bg-cyan-100/80', textClass: 'text-cyan-800', dotClass: 'bg-cyan-500' },
+  0: { label: 'NO STATUS', badgeVariant: 'default' as const, accentClass: 'border-l-gray-200', dotClass: 'bg-gray-300' },
+  1: { label: 'OK', badgeVariant: 'default' as const, accentClass: 'border-l-slate-400', dotClass: 'bg-slate-600' },
+  2: { label: 'COD', badgeVariant: 'success' as const, accentClass: 'border-l-green-500', dotClass: 'bg-green-500' },
+  3: { label: 'WARNING', badgeVariant: 'warning' as const, accentClass: 'border-l-amber-500', dotClass: 'bg-amber-500' },
+  4: { label: 'BLOCKED', badgeVariant: 'danger' as const, accentClass: 'border-l-red-500', dotClass: 'bg-red-500' },
+  5: { label: 'URGENT', badgeVariant: 'info' as const, accentClass: 'border-l-cyan-500', dotClass: 'bg-cyan-500' },
+}
+
+// Kelas warna solid untuk badge inline di panel detail (dipakai di luar komponen <Badge/> bersama)
+const badgeColorClasses: Record<string, string> = {
+  danger: 'bg-red-100 text-red-700',
+  warning: 'bg-amber-100 text-amber-700',
+  success: 'bg-green-100 text-green-700',
+  info: 'bg-cyan-100 text-cyan-700',
+  default: 'bg-gray-100 text-gray-500',
+}
+
+// Prisma mengembalikan DateTime sebagai ISO string lewat JSON (mis. "2019-03-14T00:00:00.000Z").
+// Guard untuk null/invalid karena fdCreatedDate bisa kosong pada data lama.
+function formatCustomerSince(dateStr?: string | null) {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  if (isNaN(date.getTime())) return '-'
+  return new Intl.DateTimeFormat('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }).format(date)
+}
+
+// Versi ringkas untuk tabel: "5 tahun", "8 bulan", atau "Baru" untuk customer <1 bulan.
+// Dipakai di kolom Customer Name (bukan kolom terpisah) supaya tidak menambah lebar tabel.
+function formatCustomerTenure(dateStr?: string | null): string | null {
+  if (!dateStr) return null
+  const date = new Date(dateStr)
+  if (isNaN(date.getTime())) return null
+  const now = new Date()
+  let months = (now.getFullYear() - date.getFullYear()) * 12 + (now.getMonth() - date.getMonth())
+  if (now.getDate() < date.getDate()) months -= 1
+  if (months < 1) return 'Baru'
+  if (months < 12) return `${months} bln`
+  const years = Math.floor(months / 12)
+  return `${years} thn`
 }
 
 export default function CustomersPage() {
@@ -69,6 +106,8 @@ export default function CustomersPage() {
   const [statusFilter, setStatusFilter] = useState<'active' | 'discontinued' | 'all'>('active')
   const [blockStatusFilter, setBlockStatusFilter] = useState<string | null>(null)
   
+  const [jumpPage, setJumpPage] = useState('')
+
   const [selectedRow, setSelectedRow] = useState<Customer | null>(null)
   const [activeTab, setActiveTab] = useState<'info' | 'alamat'>('info')
   const [addressSearch, setAddressSearch] = useState('')
@@ -84,14 +123,14 @@ export default function CustomersPage() {
         sortBy: sortField, 
         sortDir, 
         status: statusFilter,
-        blockStatus: blockStatusFilter || undefined
+        blockStatus: blockStatusFilter || ''
       })
       return res.data as { data: Customer[]; meta: { total: number; totalPages: number } }
     }
   })
 
   // Fetch detail customer terpilih untuk mendapatkan daftar alamat
-  const { data: detailData, isLoading: isLoadingDetail } = useQuery({
+  const { data: detailData } = useQuery({
     queryKey: ['customerDetail', selectedRow?.fdCustCode],
     queryFn: async () => {
       if (!selectedRow) return null
@@ -128,19 +167,29 @@ export default function CustomersPage() {
       key: 'fdCustName', 
       header: 'Customer Name',
       sortable: true,
-      className: 'min-w-[180px]',
+      className: 'w-[260px]',
       render: (row: Customer) => (
-        <div>
-          <div className="text-[13px] font-semibold flex items-center gap-2">
-            {row.fdCustName || '-'}
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold flex items-center gap-2 min-w-0">
+            <span className="truncate">{row.fdCustName || '-'}</span>
             {row.fdBroker === 1 && (
-              <span className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider border border-blue-200">BROKER</span>
+              <span className="shrink-0 bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider border border-blue-200">BROKER</span>
             )}
             {row.fdDiscontinued === 1 && (
-              <span className="bg-gray-100 text-gray-500 text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider border border-gray-200">DISCONTINUED</span>
+              <span className="shrink-0 bg-gray-100 text-gray-500 text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider border border-gray-200">DISCONTINUED</span>
             )}
           </div>
-          <div className="text-xs text-[var(--color-secondary)] font-medium">{row.fdCustCode}</div>
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-xs text-[var(--color-secondary)] font-medium truncate">{row.fdCustCode}</span>
+            {formatCustomerTenure(row.fdCreatedDate) && (
+              <span
+                className="shrink-0 text-[10px] text-[var(--color-muted)] bg-gray-100 px-1.5 py-0.5 rounded"
+                title={`Customer since ${formatCustomerSince(row.fdCreatedDate)}`}
+              >
+                {formatCustomerTenure(row.fdCreatedDate)}
+              </span>
+            )}
+          </div>
         </div>
       )
     },
@@ -148,55 +197,81 @@ export default function CustomersPage() {
       key: 'fdContact', 
       header: 'Contact Person',
       sortable: true,
-      className: 'min-w-[150px]',
+      className: 'w-[170px]',
       render: (row: Customer) => (
-        <div>
-          <div className="font-medium">{row.fdContact}</div>
-          <div className="text-[11px] text-[var(--color-secondary)]">Sales: {row.fdSalesNM || '-'}</div>
+        <div className="min-w-0">
+          <div className="font-medium truncate">{row.fdContact}</div>
+          <div className="text-[11px] text-[var(--color-secondary)] truncate">Sales: {row.fdSalesNM || '-'}</div>
         </div>
       )
     },
-    { key: 'fdHP', header: 'Handphone No.' },
-    { key: 'fdTelp', header: 'Tel No.' },
-    { key: 'fdFax', header: 'Fax No.' },
-    { 
-      key: 'fdEmail', 
-      header: 'Email',
+    {
+      key: 'phone',
+      header: 'Phone',
+      className: 'w-[150px]',
       render: (row: Customer) => (
-        <span className="text-xs truncate max-w-[120px] block" title={row.fdEmail}>
-          {row.fdEmail}
-        </span>
+        <div className="text-xs space-y-0.5 min-w-0">
+          {row.fdHP && (
+            <div className="flex items-center gap-1.5 text-[var(--color-primary)] font-medium min-w-0">
+              <Phone className="w-3 h-3 text-[var(--color-muted)] flex-shrink-0" />
+              <span className="truncate">{row.fdHP}</span>
+            </div>
+          )}
+          {row.fdTelp && (
+            <div className="flex items-center gap-1.5 text-[var(--color-secondary)] min-w-0">
+              <Phone className="w-3 h-3 text-[var(--color-muted)] flex-shrink-0 opacity-60" />
+              <span className="truncate">{row.fdTelp}</span>
+            </div>
+          )}
+          {!row.fdHP && !row.fdTelp && <span className="text-[var(--color-muted)]">-</span>}
+        </div>
       )
     },
-    { key: 'fdCityName', header: 'City', sortable: true },
+    { 
+      key: 'fdCityName', 
+      header: 'City', 
+      sortable: true, 
+      className: 'w-[120px]',
+      render: (row: Customer) => <span className="truncate block">{row.fdCityName || '-'}</span>
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      className: 'w-[130px]',
+      render: (row: Customer) => {
+        const config = statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]
+        return (
+          <Badge variant={config?.badgeVariant || 'default'} className="whitespace-nowrap">
+            {config?.label || 'UNKNOWN'}
+          </Badge>
+        )
+      }
+    },
     {
       key: 'actions',
       header: 'Actions',
-      className: 'w-[140px] text-center',
+      className: 'w-[100px] text-center',
       render: (row: Customer) => (
         <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => setSelectedRow(row)}
-            className="p-1 text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-black/5 rounded"
+            className="p-1.5 text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-black/5 rounded"
             title="View Details"
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
           <button
-            className="p-1 text-[var(--color-secondary)] hover:text-green-600 hover:bg-green-50 rounded"
+            className="p-1.5 text-[var(--color-secondary)] hover:text-green-600 hover:bg-green-50 rounded"
             title="Contract Price"
           >
             <DollarSign className="w-3.5 h-3.5" />
           </button>
           <button
-            className="p-1 text-[var(--color-secondary)] hover:text-blue-600 hover:bg-blue-50 rounded"
+            className="p-1.5 text-[var(--color-secondary)] hover:text-blue-600 hover:bg-blue-50 rounded"
             title="Change Status"
           >
             <Edit3 className="w-3.5 h-3.5" />
           </button>
-          <div className="w-6 flex items-center justify-center">
-            <span className={`w-2 h-2 rounded-full ${statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]?.dotClass || 'bg-gray-300'}`} title={statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]?.label || 'UNKNOWN'} />
-          </div>
         </div>
       )
     }
@@ -297,19 +372,45 @@ export default function CustomersPage() {
               isLoading={isLoading}
               keyExtractor={(row) => row.fdCustCode}
               onRowClick={(row) => setSelectedRow(row)}
-              getRowClassName={(row) => statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]?.bgClass || 'bg-white'}
+              getRowClassName={(row) => cn(
+                'bg-white hover:bg-gray-50 border-l-4',
+                statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]?.accentClass || 'border-l-gray-200'
+              )}
               onSort={handleSort}
               sortColumn={sortField}
               sortDirection={sortDir}
             />
           </div>
-          <Pagination
-            page={page}
-            limit={limit}
-            total={total}
-            totalPages={totalPages}
-            onPageChange={goToPage}
-          />
+          <div className="flex items-center justify-between gap-4 border-t border-[var(--color-border)]">
+            <Pagination
+              page={page}
+              limit={limit}
+              total={total}
+              totalPages={totalPages}
+              onPageChange={goToPage}
+            />
+            {totalPages > 1 && (
+              <div className="flex flex-shrink-0 items-center gap-1.5 px-3 py-2 text-xs text-[var(--color-secondary)]">
+                <span className="hidden sm:inline">Go to page</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={totalPages}
+                  value={jumpPage}
+                  placeholder={String(page)}
+                  onChange={(e) => setJumpPage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key !== 'Enter') return
+                    const target = Math.min(Math.max(1, Number(jumpPage) || 1), totalPages)
+                    goToPage(target)
+                    setJumpPage('')
+                  }}
+                  className="w-14 text-center bg-transparent border border-[var(--color-border)] rounded px-1 py-1 focus:outline-none focus:border-[var(--color-primary)]"
+                />
+                <span>of {totalPages.toLocaleString()}</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -328,20 +429,15 @@ export default function CustomersPage() {
             <div className="flex flex-shrink-0 items-center justify-between p-5 border-b border-[var(--color-border)] bg-[var(--color-neutral)]">
               <div className="min-w-0">
                 <div className="flex items-center gap-2 mb-1">
-                  <h2 className="text-lg font-bold font-[var(--font-display)] truncate" title={selectedCustomer.fdCustName || ''}>{selectedCustomer.fdCustName || '-'}</h2>
-                  <Badge variant={
-                    (selectedCustomer.fdBlocked || 0) === 4 ? 'danger' : 
-                    (selectedCustomer.fdBlocked || 0) === 3 ? 'warning' : 
-                    (selectedCustomer.fdBlocked || 0) === 2 ? 'success' : 
-                    (selectedCustomer.fdBlocked || 0) === 5 ? 'info' : 'default'
-                  }>
-                    {statusConfig[(selectedCustomer.fdBlocked || 0) as keyof typeof statusConfig]?.label || 'UNKNOWN'}
+                  <h2 className="text-lg font-bold font-[var(--font-display)] truncate" title={selectedCustomer?.fdCustName || ''}>{selectedCustomer?.fdCustName || '-'}</h2>
+                  <Badge variant={statusConfig[(selectedCustomer?.fdBlocked || 0) as keyof typeof statusConfig]?.badgeVariant || 'default'}>
+                    {statusConfig[(selectedCustomer?.fdBlocked || 0) as keyof typeof statusConfig]?.label || 'UNKNOWN'}
                   </Badge>
-                  {selectedCustomer.fdDiscontinued === 1 && (
+                  {selectedCustomer?.fdDiscontinued === 1 && (
                     <Badge variant="default" className="bg-gray-200 text-gray-600 border-gray-300">DISCONTINUED</Badge>
                   )}
                 </div>
-                <p className="text-sm text-[var(--color-secondary)] font-mono">{selectedCustomer.fdCustCode}</p>
+                <p className="text-sm text-[var(--color-secondary)] font-mono">{selectedCustomer?.fdCustCode}</p>
               </div>
               <button 
                 onClick={() => setSelectedRow(null)}
@@ -376,9 +472,9 @@ export default function CustomersPage() {
                   }`}
                 >
                   Addresses
-                  {selectedCustomer.addresses && selectedCustomer.addresses.length > 0 && (
+                  {selectedCustomer?.addresses && selectedCustomer?.addresses.length > 0 && (
                     <span className="bg-[var(--color-primary)] text-white text-[10px] px-1.5 py-0.5 rounded-full">
-                      {selectedCustomer.addresses.length}
+                      {selectedCustomer?.addresses.length}
                     </span>
                   )}
                 </button>
@@ -400,19 +496,15 @@ export default function CustomersPage() {
                           <span className="text-sm font-semibold text-gray-900">Company Profile</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          {selectedCustomer.fdBroker === 1 && (
+                          {selectedCustomer?.fdBroker === 1 && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-100 text-indigo-700 tracking-widest">BROKER</span>
                           )}
-                          {selectedCustomer.fdDiscontinued === 1 && (
+                          {selectedCustomer?.fdDiscontinued === 1 && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 tracking-widest border border-gray-200">DISCONTINUED</span>
                           )}
                           <span className={`text-[10px] font-bold px-2 py-0.5 rounded-md tracking-widest ${
-                            (selectedCustomer.fdBlocked || 0) === 4 ? 'bg-red-100 text-red-700' :
-                            (selectedCustomer.fdBlocked || 0) === 3 ? 'bg-amber-100 text-amber-700' :
-                            (selectedCustomer.fdBlocked || 0) === 2 ? 'bg-green-100 text-green-700' :
-                            (selectedCustomer.fdBlocked || 0) === 5 ? 'bg-cyan-100 text-cyan-700' :
-                            'bg-gray-100 text-gray-500'
-                          }`}>{statusConfig[(selectedCustomer.fdBlocked || 0) as keyof typeof statusConfig]?.label || 'OK'}</span>
+                            badgeColorClasses[statusConfig[(selectedCustomer?.fdBlocked || 0) as keyof typeof statusConfig]?.badgeVariant || 'default']
+                          }`}>{statusConfig[(selectedCustomer?.fdBlocked || 0) as keyof typeof statusConfig]?.label || 'OK'}</span>
                         </div>
                       </div>
 
@@ -420,30 +512,37 @@ export default function CustomersPage() {
                       <div className="grid grid-cols-2 gap-x-6 gap-y-4 p-5">
                         <div>
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Contact Person</p>
-                          <p className="text-sm text-gray-900 font-medium">{selectedCustomer.fdContact || '-'}</p>
+                          <p className="text-sm text-gray-900 font-medium">{selectedCustomer?.fdContact || '-'}</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Mobile</p>
-                          <p className="text-sm text-gray-900 font-medium">{selectedCustomer.fdHP || '-'}</p>
+                          <p className="text-sm text-gray-900 font-medium">{selectedCustomer?.fdHP || '-'}</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Phone</p>
-                          <p className="text-sm text-gray-900 font-medium">{selectedCustomer.fdTelp || '-'}</p>
+                          <p className="text-sm text-gray-900 font-medium">{selectedCustomer?.fdTelp || '-'}</p>
                         </div>
                         <div>
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Email</p>
-                          <p className="text-sm text-gray-900 font-medium truncate" title={selectedCustomer.fdEmail}>{selectedCustomer.fdEmail || '-'}</p>
+                          <p className="text-sm text-gray-900 font-medium truncate" title={selectedCustomer?.fdEmail}>{selectedCustomer?.fdEmail || '-'}</p>
                         </div>
                         <div className="col-span-2 pt-2 border-t border-gray-50">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Main Address</p>
-                          <p className="text-sm text-gray-900 font-medium leading-relaxed">{selectedCustomer.fdAddr1 || '-'}</p>
-                          {selectedCustomer.fdCityName && (
-                            <p className="text-xs text-gray-500 mt-0.5">{selectedCustomer.fdCityName}</p>
+                          <p className="text-sm text-gray-900 font-medium leading-relaxed">{selectedCustomer?.fdAddr1 || '-'}</p>
+                          {selectedCustomer?.fdCityName && (
+                            <p className="text-xs text-gray-500 mt-0.5">{selectedCustomer?.fdCityName}</p>
                           )}
                         </div>
-                        <div className="col-span-2 pt-2 border-t border-gray-50">
+                        <div className="pt-2 border-t border-gray-50">
                           <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1">Sales</p>
-                          <p className="text-sm font-bold text-emerald-600">{selectedCustomer.fdSalesNM || '-'}</p>
+                          <p className="text-sm font-bold text-emerald-600">{selectedCustomer?.fdSalesNM || '-'}</p>
+                        </div>
+                        <div className="pt-2 border-t border-gray-50">
+                          <p className="text-[10px] text-gray-400 uppercase tracking-wider mb-1 flex items-center gap-1">
+                            <Calendar className="w-3 h-3" />
+                            Customer Since
+                          </p>
+                          <p className="text-sm text-gray-900 font-medium">{formatCustomerSince(selectedCustomer?.fdCreatedDate)}</p>
                         </div>
                       </div>
                     </div>
@@ -459,20 +558,20 @@ export default function CustomersPage() {
                         <div className="p-4 space-y-4">
                           <div>
                             <p className="text-[10px] text-blue-500 uppercase tracking-wider mb-1">Recipient</p>
-                            <p className="text-sm font-semibold text-gray-900">{selectedCustomer.fdNamaPengiriman || selectedCustomer.fdCustName || '-'}</p>
+                            <p className="text-sm font-semibold text-gray-900">{selectedCustomer?.fdNamaPengiriman || selectedCustomer?.fdCustName || '-'}</p>
                           </div>
                           <div>
                             <p className="text-[10px] text-blue-500 uppercase tracking-wider mb-1">Address</p>
                             <p className="text-sm text-gray-700 leading-relaxed">
-                              {selectedCustomer.fdAlamatPengiriman || selectedCustomer.fdAddr1 || '-'}
+                              {selectedCustomer?.fdAlamatPengiriman || selectedCustomer?.fdAddr1 || '-'}
                             </p>
-                            <p className="text-xs text-gray-500 mt-0.5">{selectedCustomer.fdKotaPengiriman || selectedCustomer.fdCityName || ''}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{selectedCustomer?.fdKotaPengiriman || selectedCustomer?.fdCityName || ''}</p>
                           </div>
                           <div className="pt-3 border-t border-blue-100 space-y-2">
                             <p className="text-[10px] text-blue-500 uppercase tracking-wider">Mobile</p>
-                            <p className="text-xs font-medium text-gray-800">{selectedCustomer.fdHpPengiriman || selectedCustomer.fdHP || '-'}</p>
-                            {(selectedCustomer.fdKetPengiriman || selectedCustomer.fdKeterangan) && (
-                              <p className="text-[11px] text-gray-500 italic leading-relaxed">{selectedCustomer.fdKetPengiriman || selectedCustomer.fdKeterangan}</p>
+                            <p className="text-xs font-medium text-gray-800">{selectedCustomer?.fdHpPengiriman || selectedCustomer?.fdHP || '-'}</p>
+                            {(selectedCustomer?.fdKetPengiriman || selectedCustomer?.fdKeterangan) && (
+                              <p className="text-[11px] text-gray-500 italic leading-relaxed">{selectedCustomer?.fdKetPengiriman || selectedCustomer?.fdKeterangan}</p>
                             )}
                           </div>
                         </div>
@@ -487,23 +586,23 @@ export default function CustomersPage() {
                         <div className="p-4 space-y-4">
                           <div>
                             <p className="text-[10px] text-amber-500 uppercase tracking-wider mb-1">Bill To</p>
-                            <p className="text-sm font-semibold text-gray-900">{selectedCustomer.fdBillTo || selectedCustomer.fdCustName || '-'}</p>
+                            <p className="text-sm font-semibold mt-1">{selectedCustomer?.fdCustName || '-'}</p>
                           </div>
                           <div>
                             <p className="text-[10px] text-amber-500 uppercase tracking-wider mb-1">Address</p>
                             <p className="text-sm text-gray-700 leading-relaxed">
-                              {selectedCustomer.fdBillAddr1 || selectedCustomer.fdAddr1 || '-'}
+                              {selectedCustomer?.fdAddr1 || '-'}
                             </p>
-                            <p className="text-xs text-gray-500 mt-0.5">{selectedCustomer.fdBillCityName || selectedCustomer.fdCityName || ''}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{selectedCustomer?.fdCityName || ''}</p>
                           </div>
                           <div className="pt-3 border-t border-amber-100 space-y-2">
                             <div className="flex items-center gap-2 text-xs text-gray-600">
                               <Mail className="w-3 h-3 text-amber-400" />
-                              <span className="truncate" title={selectedCustomer.fdEmailPenagihan || selectedCustomer.fdEmail || '-'}>{selectedCustomer.fdEmailPenagihan || selectedCustomer.fdEmail || '-'}</span>
+                              <span className="truncate" title={selectedCustomer?.fdEmailPenagihan || selectedCustomer?.fdEmail || '-'}>{selectedCustomer?.fdEmailPenagihan || selectedCustomer?.fdEmail || '-'}</span>
                             </div>
                             <div className="flex items-center gap-2 text-xs text-gray-600">
                               <Phone className="w-3 h-3 text-amber-400" />
-                              <span>{selectedCustomer.fdHpPenagihan || '-'}</span>
+                              <span>{selectedCustomer?.fdHpPenagihan || '-'}</span>
                             </div>
                           </div>
                         </div>
@@ -511,11 +610,11 @@ export default function CustomersPage() {
                     </div>
 
                     {/* Warning Banner */}
-                    {(selectedCustomer.fdBlocked || 0) > 1 && (
+                    {(selectedCustomer?.fdBlocked || 0) > 1 && (
                       <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-red-50 border border-red-200">
                         <ShieldAlert className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-red-700 leading-relaxed">
-                          Customer status: <strong>{statusConfig[(selectedCustomer.fdBlocked || 0) as keyof typeof statusConfig]?.label}</strong>. Check billing status before processing new orders.
+                          Customer status: <strong>{statusConfig[(selectedCustomer?.fdBlocked || 0) as keyof typeof statusConfig]?.label}</strong>. Check billing status before processing new orders.
                         </p>
                       </div>
                     )}
@@ -525,7 +624,7 @@ export default function CustomersPage() {
                 {activeTab === 'alamat' && (
                   <div className="space-y-4 flex flex-col h-full">
                     {/* Search Address */}
-                    {selectedCustomer.addresses && selectedCustomer.addresses.length > 0 && (
+                    {selectedCustomer?.addresses && selectedCustomer?.addresses.length > 0 && (
                       <div className="flex-shrink-0">
                         <SearchBar 
                           value={addressSearch}
@@ -536,14 +635,14 @@ export default function CustomersPage() {
                     )}
 
                     <div className="space-y-3 overflow-y-auto flex-1 pb-4 min-h-0">
-                      {(!selectedCustomer.addresses || selectedCustomer.addresses.length === 0) ? (
+                      {(!selectedCustomer?.addresses || selectedCustomer?.addresses.length === 0) ? (
                         <div className="flex flex-col items-center justify-center py-12 gap-3 text-gray-400">
                           <MapPin className="w-8 h-8 opacity-30" />
                           <p className="text-sm">No saved addresses found.</p>
                         </div>
                       ) : (
                         (() => {
-                          const filtered = selectedCustomer.addresses.filter(addr => {
+                          const filtered = selectedCustomer?.addresses.filter(addr => {
                             const s = addressSearch.toLowerCase()
                             return (
                               (addr.fdContact || '').toLowerCase().includes(s) ||

@@ -10,6 +10,9 @@ export async function getMarkings(query: Record<string, string | undefined>) {
   const sortBy = query.sortBy || 'fdSysDate'
   const sortDir = query.sortDir === 'asc' ? 'asc' : 'desc'
   const listType = query.listType // 1 for AIR, 2 for SEA
+  const isClosed = query.isClosed
+  const groupMode = query.groupMode
+  const groupValue = query.groupValue
 
   try {
     const where: any = {}
@@ -26,6 +29,43 @@ export async function getMarkings(query: Record<string, string | undefined>) {
 
     if (listType !== undefined && listType !== '') {
       where.fdListType = parseInt(listType, 10)
+    }
+
+    if (isClosed === 'true') {
+      where.fdExitDate = { not: null }
+    } else if (isClosed === 'false') {
+      where.fdExitDate = null
+    }
+
+    if (groupMode && groupValue && groupValue !== 'Tidak diketahui') {
+      if (groupMode === 'branch') {
+        where.fdBranchCode = groupValue
+      } else if (groupMode === 'year') {
+        const year = parseInt(groupValue)
+        where.fdLoadDate = {
+          gte: new Date(`${year}-01-01T00:00:00.000Z`),
+          lt: new Date(`${year + 1}-01-01T00:00:00.000Z`)
+        }
+      } else if (['load', 'etd', 'eta'].includes(groupMode)) {
+        const [year, month] = groupValue.split('-')
+        if (year && month) {
+          const startDate = new Date(parseInt(year), parseInt(month) - 1, 1)
+          const endDate = new Date(parseInt(year), parseInt(month), 1)
+          const field = groupMode === 'load' ? 'fdLoadDate' : groupMode === 'etd' ? 'fdETD' : 'fdETA'
+          where[field] = {
+            gte: startDate,
+            lt: endDate
+          }
+        }
+      }
+    } else if (groupMode && groupValue === 'Tidak diketahui') {
+      if (groupMode === 'branch') {
+        // Asumsi null atau kosong
+        where.fdBranchCode = { in: ['', null] }
+      } else {
+        const field = groupMode === 'year' || groupMode === 'load' ? 'fdLoadDate' : groupMode === 'etd' ? 'fdETD' : 'fdETA'
+        where[field] = null
+      }
     }
 
     const [data, total] = await Promise.all([
@@ -54,6 +94,91 @@ export async function getMarkings(query: Record<string, string | undefined>) {
   }
 }
 
+export async function getMarkingGroups(query: Record<string, string | undefined>) {
+  const search = query.search?.trim() || ''
+  const listType = query.listType
+  const isClosed = query.isClosed
+  const groupMode = query.groupMode
+
+  if (!groupMode || groupMode === 'none') {
+    return [{ groupValue: 'Semua batch', count: 0, totalPkgs: 0, totalWeight: 0 }]
+  }
+
+  try {
+    const where: any = {}
+
+    if (search) {
+      where.OR = [
+        { fdMarkingCode: { contains: search } },
+        { fdBLNo: { contains: search } },
+        { fdAWB: { contains: search } },
+        { fdConsignee: { contains: search } },
+        { fdContNo: { contains: search } },
+      ]
+    }
+
+    if (listType !== undefined && listType !== '') {
+      where.fdListType = parseInt(listType, 10)
+    }
+
+    if (isClosed === 'true') {
+      where.fdExitDate = { not: null }
+    } else if (isClosed === 'false') {
+      where.fdExitDate = null
+    }
+
+    const data = await prisma.tbMarking.findMany({
+      where,
+      select: {
+        fdBranchCode: true,
+        fdLoadDate: true,
+        fdETD: true,
+        fdETA: true,
+        fdJmlPack: true,
+        fdJmlBerat: true
+      }
+    })
+
+    const groups: Record<string, { count: number, totalPkgs: number, totalWeight: number }> = {}
+
+    data.forEach(row => {
+      let key = "Tidak diketahui"
+      if (groupMode === 'branch') {
+        key = row.fdBranchCode ? row.fdBranchCode.trim() : "Tidak diketahui"
+        if (key === '') key = "Tidak diketahui"
+      } else if (groupMode === 'year') {
+        key = row.fdLoadDate ? String(row.fdLoadDate.getFullYear()) : "Tidak diketahui"
+      } else {
+        const dateField = groupMode === 'load' ? row.fdLoadDate : groupMode === 'etd' ? row.fdETD : row.fdETA
+        if (dateField) {
+          const m = String(dateField.getMonth() + 1).padStart(2, '0')
+          key = `${dateField.getFullYear()}-${m}`
+        }
+      }
+
+      if (!groups[key]) groups[key] = { count: 0, totalPkgs: 0, totalWeight: 0 }
+      groups[key].count += 1
+      groups[key].totalPkgs += Number(row.fdJmlPack || 0)
+      groups[key].totalWeight += Number(row.fdJmlBerat || 0)
+    })
+
+    const sortedKeys = Object.keys(groups).sort((a, b) => {
+      if (a === "Tidak diketahui") return 1
+      if (b === "Tidak diketahui") return -1
+      if (groupMode === "branch") return a.localeCompare(b)
+      return b.localeCompare(a)
+    })
+
+    return sortedKeys.map(k => ({
+      groupValue: k,
+      ...groups[k]
+    }))
+  } catch (error) {
+    logger.error('Error fetching marking groups:', error)
+    throw new Error('Gagal mengambil data grup marking')
+  }
+}
+
 export async function getMarkingDetail(fdMarkingCode: string) {
   try {
     const marking = await prisma.tbMarking.findUnique({
@@ -68,5 +193,167 @@ export async function getMarkingDetail(fdMarkingCode: string) {
   } catch (error) {
     logger.error(`Error fetching marking detail for ${fdMarkingCode}:`, error)
     throw error
+  }
+}
+
+export async function getManifestByMarkingCode(fdMarkingCode: string) {
+  try {
+    const manifest = await prisma.vwShipment.findMany({
+      where: { fdMarkingCode },
+      orderBy: { fdListCode: 'asc' }
+    })
+    return manifest
+  } catch (error) {
+    logger.error(`Error fetching manifest for ${fdMarkingCode}:`, error)
+    throw new Error('Gagal mengambil data manifest')
+  }
+}
+
+export async function getMarkingKPIs(query: Record<string, string | undefined>) {
+  const search = query.search?.trim() || ''
+  const listType = query.listType // 1 for AIR, 2 for SEA
+
+  try {
+    const where: any = {}
+
+    if (search) {
+      where.OR = [
+        { fdMarkingCode: { contains: search } },
+        { fdBLNo: { contains: search } },
+        { fdAWB: { contains: search } },
+        { fdConsignee: { contains: search } },
+        { fdContNo: { contains: search } },
+      ]
+    }
+
+    if (listType !== undefined && listType !== '') {
+      where.fdListType = parseInt(listType, 10)
+    }
+
+    const today = new Date()
+
+    const [
+      totalBatches,
+      activeBatches,
+      etaNotExitBatches,
+      batchesWithTransitTime,
+      etaNotExitList
+    ] = await Promise.all([
+      prisma.tbMarking.count({ where }),
+      prisma.tbMarking.count({ where: { ...where, fdExitDate: null } }),
+      prisma.tbMarking.count({
+        where: {
+          ...where,
+          fdExitDate: null,
+          fdETA: { lt: today }
+        }
+      }),
+      prisma.tbMarking.findMany({
+        where: {
+          ...where,
+          fdETD: { not: null },
+          fdETA: { not: null }
+        },
+        select: {
+          fdMarkingCode: true,
+          fdListType: true,
+          fdETD: true,
+          fdETA: true,
+          fdConsignee: true
+        }
+      }),
+      prisma.tbMarking.findMany({
+        where: {
+          ...where,
+          fdExitDate: null,
+          fdETA: { lt: today }
+        },
+        select: {
+          fdConsignee: true,
+          fdMarkingCode: true,
+          fdETA: true
+        }
+      })
+    ])
+
+    // Compute ETA Not Exit Consignee Summary
+    const etaNotExitSummary: Record<string, { count: number, codes: { code: string, aging: number }[] }> = {}
+    for (const batch of etaNotExitList) {
+      const consignee = batch.fdConsignee?.trim() || 'Unknown'
+      const code = batch.fdMarkingCode.trim()
+      let aging = 0
+      if (batch.fdETA) {
+        aging = Math.max(0, Math.floor((today.getTime() - batch.fdETA.getTime()) / (1000 * 60 * 60 * 24)))
+      }
+      
+      if (!etaNotExitSummary[consignee]) {
+        etaNotExitSummary[consignee] = { count: 0, codes: [] }
+      }
+      etaNotExitSummary[consignee].count += 1
+      etaNotExitSummary[consignee].codes.push({ code, aging })
+    }
+    const etaNotExitSummaryArray = Object.entries(etaNotExitSummary)
+      .map(([name, data]) => ({ name, count: data.count, codes: data.codes.sort((a,b) => b.aging - a.aging) }))
+      .sort((a, b) => b.count - a.count)
+
+    // Calculate Average Transit Time and Missed Targets
+    let totalTransitDays = 0
+    let validTransitCount = 0
+    let missedTargetBatches = 0
+    
+    const missedTargetMap: Record<string, { count: number, codes: { code: string, transit: number, target: number }[] }> = {}
+
+    for (const batch of batchesWithTransitTime) {
+      if (batch.fdETD && batch.fdETA) {
+        const diffTime = Math.abs(batch.fdETA.getTime() - batch.fdETD.getTime())
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+        totalTransitDays += diffDays
+        validTransitCount++
+
+        // Check if missed target
+        let maxTarget = 0
+        const code = batch.fdMarkingCode.trim().toUpperCase()
+        if (batch.fdListType === 1) { // AIR
+          if (code.includes('SG')) maxTarget = 5
+          else if (code.includes('HK')) maxTarget = 7
+          else if (code.includes('GZ')) maxTarget = 10
+        } else { // SEA
+          if (code.includes('SG')) maxTarget = 20
+          else if (code.includes('HK') || code.includes('GZ') || code.includes('SH')) maxTarget = 30
+          else if (code.includes('YW')) maxTarget = 40
+        }
+
+        if (maxTarget > 0 && diffDays > maxTarget) {
+          missedTargetBatches++
+          
+          const consignee = batch.fdConsignee?.trim() || 'Unknown'
+          if (!missedTargetMap[consignee]) {
+            missedTargetMap[consignee] = { count: 0, codes: [] }
+          }
+          missedTargetMap[consignee].count += 1
+          missedTargetMap[consignee].codes.push({ code: batch.fdMarkingCode.trim(), transit: diffDays, target: maxTarget })
+        }
+      }
+    }
+    
+    const missedTargetSummaryArray = Object.entries(missedTargetMap)
+      .map(([name, data]) => ({ name, count: data.count, codes: data.codes.sort((a,b) => b.transit - a.transit) }))
+      .sort((a, b) => b.count - a.count)
+
+    const avgTransitTime = validTransitCount > 0 ? Math.round(totalTransitDays / validTransitCount) : 0
+
+    return {
+      totalBatches,
+      activeBatches,
+      delayedBatches: etaNotExitBatches, // keep backwards compatibility if needed
+      etaNotExitBatches,
+      etaNotExitSummary: etaNotExitSummaryArray,
+      missedTargetBatches,
+      missedTargetSummary: missedTargetSummaryArray,
+      avgTransitTime
+    }
+  } catch (error) {
+    logger.error('Error fetching marking KPIs:', error)
+    throw new Error('Gagal mengambil data KPI marking')
   }
 }

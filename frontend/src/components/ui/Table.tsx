@@ -31,7 +31,7 @@ export function Table<T>({
 
   return (
     <div className="w-full overflow-x-auto">
-      <table className="w-full text-sm">
+      <table className="w-full text-sm table-fixed">
         <thead>
           <tr className="border-b border-[var(--color-border)] bg-[var(--color-neutral)]">
             {columns.map((col) => (
@@ -74,7 +74,7 @@ export function Table<T>({
                 )}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={cn('px-4 py-3 text-[var(--color-primary)]', col.className)}>
+                  <td key={col.key} className={cn('px-4 py-3 text-[var(--color-primary)] overflow-hidden', col.className)}>
                     {col.render ? col.render(row, index) : String((row as Record<string, unknown>)[col.key] ?? '—')}
                   </td>
                 ))}

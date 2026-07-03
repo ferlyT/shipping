@@ -3,12 +3,14 @@ import { Sidebar } from './Sidebar'
 import { Topbar } from './Topbar'
 import { useUiStore } from '@/stores/uiStore'
 import { cn } from '@/lib/utils'
+import { ToastContainer } from '@/components/ui/ToastContainer'
 
 export function AppLayout() {
   const { isSidebarOpen, setSidebarOpen, isSidebarCollapsed } = useUiStore()
 
   return (
     <div className="min-h-screen bg-[var(--color-neutral)] text-[var(--color-primary)]">
+      <ToastContainer />
       <Sidebar isOpen={isSidebarOpen} onClose={() => setSidebarOpen(false)} />
       
       <div 

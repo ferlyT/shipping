@@ -1,12 +1,12 @@
 import { Hono } from 'hono'
-import { authMiddleware } from '../../middleware/auth'
+import { authMiddleware, requirePermission } from '../../middleware/auth'
 import { getCustomers, getCustomerById } from './customers.service'
 import { successResponse, errorResponse } from '../../utils/response'
 
 const customersRoutes = new Hono()
 
 // Semua route customers memerlukan auth
-customersRoutes.use('/*', authMiddleware)
+customersRoutes.use('/*', authMiddleware, requirePermission('/shipping/customers'))
 
 customersRoutes.get('/', async (c) => {
   try {

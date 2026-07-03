@@ -16,11 +16,24 @@ model TbUsers {
   fullName     String    @db.NVarChar(200)
   role         String    @default("viewer") @db.NVarChar(50)
   isActive     Boolean   @default(true)
+  isDeleted    Boolean   @default(false)
   lastLoginAt  DateTime? @db.DateTime2
   createdAt    DateTime  @default(now()) @db.DateTime2
   updatedAt    DateTime  @updatedAt @db.DateTime2
 
   @@map("tbUsers")
+}
+
+model TbRolePermissions {
+  id        String   @id @default(uuid()) @db.UniqueIdentifier
+  role      String   @db.NVarChar(50)
+  path      String   @db.NVarChar(100)
+  canView   Boolean  @default(true)
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.DateTime2
+
+  @@unique([role, path])
+  @@map("tbRolePermissions")
 }
 
 // ─── TABEL EXISTING — KOLOM DI BAWAH INI PLACEHOLDER ─────────────
@@ -54,9 +67,11 @@ model TbCustomers {
   fdEmailPenagihan       String?   @db.VarChar(50)
   fdNotifPenagihan       Int?      @default(0)
   fdKeteranganPenagihan  String?   @db.VarChar(255)
-
+  fdCreatedDate          DateTime  @default(now()) @db.DateTime2
+  
   // Relations
   addresses      vwCustomerContacts[]
+  billings       TbBilling[]
 
   @@map("tbCustomers")
 }
@@ -80,10 +95,6 @@ model vwCustomerContacts {
   @@map("vwCustomerContacts")
 }
 
-model TbEntryList {
-  @@map("tbEntryList")
-  @@ignore
-}
 
 model TbMarking {
   fdMarkingCode    String    @id @db.Char(20)
@@ -130,26 +141,155 @@ model TbMarking {
 }
 
 model TbDelivery {
+  fdSJNo          String    @id @db.Char(9)
+  fdSJDate        DateTime  @db.SmallDateTime
+  fdCarID         String?   @db.Char(10)
+  fdCustCode      String?   @db.Char(7)
+  fdDescr         String    @db.VarChar(250)
+  fdListCode      String?   @db.Char(7)
+  fdListType      Int?
+  fdPrint         Int?
+  fdSent          Int?
+  fdSndDate       DateTime? @db.DateTime
+  fdLoad          DateTime? @db.SmallDateTime
+  fdJmlPackSJ     Decimal?  @db.Decimal(18, 2)
+  fdJmlBeratSJ    Decimal?  @db.Decimal(18, 2)
+  fdPrintDate     DateTime? @db.DateTime
+  fdKembali       DateTime? @db.DateTime
+  fdUpdate        String    @db.Char(25)
+  fdCreated       String    @db.Char(25)
+  fdPrintBy       String?   @db.Char(25)
+  fdTerima        String?   @db.Char(35)
+  fdGive          Int?
+  fdGiveDate      DateTime? @db.DateTime
+  fdAddr          String?   @db.VarChar(80)
+  fdSupir         String?   @db.Char(35)
+  fdEstimasi      DateTime? @db.SmallDateTime
+  fdCustNameSJ    String?   @db.VarChar(50)
+  fdTelp          String?   @db.Char(50)
+  fdTelpSupir     String?   @db.Char(50)
+  fdSatuan        String?   @db.Char(5)
+  fdContact       String?   @db.Char(50)
+  fdCity          String?   @db.Char(100)
+  fdHp            String?   @db.Char(50)
+  fdEmail         String?   @db.VarChar(100)
+  fdExpID         String?   @db.Char(4)
+  fdExp3          Int?
+  fdKondisiBarang Int?
+
   @@map("tbDelivery")
-  @@ignore
 }
 
-model TbEntryListDetail {
-  @@map("tbEntryListDetail")
-  @@ignore
-}
-
-model TbDeliveryDetail {
-  @@map("tbDeliveryDetail")
-  @@ignore
-}
 
 model TbBilling {
+  fdInvNo        String    @id @db.Char(20)
+  fdInvDate      DateTime  @db.SmallDateTime
+  fdCustCode     String?   @db.Char(7)
+  fdEmpCode      String?   @db.Char(7)
+  fdDescr        String    @db.VarChar(200)
+  fdJumlah1      Decimal?  @db.Decimal(18, 2)
+  fdJumlah2      Decimal?  @db.Decimal(18, 2)
+  fdBranchCode   String?   @db.Char(2)
+  fdTypeBilling  Int?
+  fdListType     Int?
+  fdListCode     String?   @db.Char(7)
+  fdMarkingCode  String    @db.Char(30)
+  fdMarkingNo    String    @db.Char(50)
+  fdHarga1       Decimal?  @db.Decimal(18, 2)
+  fdHarga2       Decimal?  @db.Decimal(18, 2)
+  fdPayTerm      Int?
+  fdPrint        Int?
+  fdCurr1        String?   @db.Char(3)
+  fdPCounter     Int?
+  fdGive         Int?
+  fdGiveDate     DateTime? @db.SmallDateTime
+  fdTake         Int?
+  fdTakeDate     DateTime? @db.SmallDateTime
+  fdGive2        Int?
+  fdGiveDate2    DateTime? @db.SmallDateTime
+  fdTake2        Int?
+  fdTakeDate2    DateTime? @db.SmallDateTime
+  fdAjpDate      DateTime? @db.SmallDateTime
+  fdpost         Int?
+  fdDescr2       String    @db.VarChar(2000)
+  fdLoad         DateTime? @db.SmallDateTime
+  fdEmp2Code     String?   @db.Char(7)
+  fdGive3        Int?
+  fdGive3Date    DateTime? @db.SmallDateTime
+  fdGive3Emp     String    @db.Char(50)
+  fdBillTambahan Int?
+  fdInvSg        String?   @db.Char(20)
+  fdCekDate      DateTime? @db.SmallDateTime
+  fdCekBy        String?   @db.Char(20)
+
+  // Relations
+  customer       TbCustomers? @relation(fields: [fdCustCode], references: [fdCustCode])
+  details        TbBillingDetail[]
+
   @@map("tbBilling")
-  @@ignore
 }
 
 model TbBillingDetail {
+  fdInvNo        String    @db.Char(20)
+  fdID           String    @db.Char(2)
+  fdListCode     String?   @db.Char(7)
+  fdItemCode     String?   @db.Char(7)
+  fdItemName     String    @db.VarChar(100)
+  fdCurr         String?   @db.Char(3)
+  fdQty          Decimal?  @db.Decimal(18, 4)
+  fdItemPrice    Decimal?  @db.Decimal(18, 2)
+  fdTotal        Decimal?  @db.Decimal(18, 2)
+  fdSatuan       String?   @db.Char(10)
+  fdComodity     String    @db.VarChar(100)
+  fdTypeComodity Int?
+
+  // Relations
+  billing        TbBilling @relation(fields: [fdInvNo], references: [fdInvNo], onDelete: Cascade)
+
+  @@id([fdInvNo, fdID])
   @@map("tbBillingDetail")
-  @@ignore
+}
+
+model VwShipmentDimensionWH {
+  fdListCode  String   @db.Char(7)
+  fdListDCode String   @db.Char(7)
+  fdDescr     String?  @db.VarChar(50)
+  fdPjg       Decimal? @db.Decimal(10, 2)
+  fdLbr       Decimal? @db.Decimal(10, 2)
+  fdTng       Decimal? @db.Decimal(10, 2)
+  fdQty       Decimal? @db.Decimal(10, 0)
+  fdSJCreated Int?
+  fdCetak     Int?
+  fdLoad      DateTime @db.SmallDateTime // Made non-nullable for PK
+
+  @@id([fdListCode, fdListDCode, fdLoad])
+  @@map("vwShipmentDimensionWH")
+}
+
+model VwShipment {
+  fdCustName        String?   @db.VarChar(50)
+  fdListCode        String    @id @db.Char(20)
+  fdTerima          String?   @db.VarChar(50)
+  fdTglAgent        DateTime? @db.DateTime
+  fdMarkingCode     String?   @db.Char(20)
+  fdMarkingNo       String?   @db.Char(20)
+  fdBranchCode      String?   @db.Char(2)
+  fdJmlPack         Decimal?  @db.Decimal(18, 0)
+  fdSatuan          String?   @db.Char(20)
+  fdJmlBerat        Decimal?  @db.Decimal(18, 2)
+  fdListType        Int?
+  fdDesc            String?   @db.Char(2000)
+  fdComodity        String?   @db.Char(200)
+  fdM3              Decimal?  @db.Decimal(18, 4)
+  fdCancel          Int?
+  fdMarkingCodeAsal String?   @db.Char(20)
+
+  @@map("vwShipment")
+}
+
+model tbCabang {
+  fdBranchCode String  @id @db.Char(2)
+  fdBranchName String? @db.NVarChar(50)
+
+  @@map("tbCabang")
 }

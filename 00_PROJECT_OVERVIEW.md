@@ -1,10 +1,32 @@
-# Logistics View App — Master Plan
-**Version:** 1.0  
+# mshipping — Master Plan
+**Version:** 1.1  
 **Stack:** React 19 + Vite + TypeScript (frontend) | Hono.js + Bun + Prisma + MS SQL Server (backend)  
-**Production URL:** `http://36.93.22.142/shipping`  
-**Design System:** Heritage Alpha  
+**Production URL:** `http://36.93.22.142/mshipping`  
+**Design System:** mshipping Alpha  
 
 ---
+
+## 🆕 Fitur Baru (v1.1)
+
+### Delivery Orders — Ringkasan per List Code
+**Status:** Planned  
+**File Spec:** `frontend/Fitur-baru-delivery-page.md`
+
+Tambah tampilan tabel ringkasan di `DeliveryOrdersPage` yang mengelompokkan data berdasarkan `fdListCode`.
+
+| Kolom Baru | Sumber Data |
+|------------|-------------|
+| `listCode` | `tbDelivery.fdListCode` |
+| `markingCode` | `tbEntryList.fdMarkingCode` |
+| `totalQty` | `tbEntryList.fdJmlPAck` |
+| `totalTerkirim` | `SUM(tbDeliveryDetail.fdQtySJ)` GROUP BY listcode |
+| `sisa` | `totalQty - totalTerkirim` |
+| `status` | (kosong, untuk pengisian nanti) |
+
+**Endpoint baru:** `GET /mshipping/api/delivery-orders/grouped`
+
+---
+
 
 ## 🗺️ Struktur Dokumen Master Plan
 
@@ -39,10 +61,12 @@
                    ▼
 ┌─────────────────────────────────────────────────────┐
 │  MS SQL Server                                      │
-│  Tables: tbCustomers, tbEntryList, tbMarking,       │
-│          tbDelivery, tbEntryListDetail,             │
+│  Tables & Views: tbUsers, tbRolePermissions,        │
+│          tbCustomers, vwCustomerContacts,           │
+│          tbEntryList, tbEntryListDetail,            │
+│          tbMarking, vwShipment, tbDelivery,         │
 │          tbDeliveryDetail, tbBilling,               │
-│          tbBillingDetail, tbUsers (baru)            │
+│          tbBillingDetail, vwShipmentDimensionWH     │
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -165,6 +189,7 @@ project-root/
 
 ### Anti-Duplikasi
 
+- **Alert/Notifikasi**: Selalu gunakan `toast` dari `stores/toastStore.ts` — DILARANG menggunakan `alert()` bawaan browser.
 - **Pagination**: Selalu gunakan `usePagination.ts` — DILARANG buat state `page`/`limit` manual di komponen manapun
 - **API call**: Semua axios call WAJIB melalui `src/api/client.ts` — DILARANG `fetch()` atau axios direct di komponen
 - **Format tanggal**: Selalu gunakan `formatDate()` dari `lib/utils.ts`

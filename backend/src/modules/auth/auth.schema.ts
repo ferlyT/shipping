@@ -6,3 +6,11 @@ export const loginSchema = z.object({
 })
 
 export type LoginInput = z.infer<typeof loginSchema>
+
+export const registerSchema = z.object({
+  username: z.string().min(3, 'Username minimal 3 karakter'),
+  fullName: z.string().min(1, 'Nama lengkap wajib diisi'),
+  password: z.string().min(6, 'Password minimal 6 karakter'),
+})
+
+export type RegisterInput = z.infer<typeof registerSchema>
