@@ -99,9 +99,9 @@ export default function RoleManagementPage() {
   }
 
   return (
-    <div className="p-8 space-y-6">
+    <div className="p-4 md:p-8 space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight text-[var(--color-primary)] font-[var(--font-display)]">Role Management</h1>
+        <h1 className="font-[var(--font-display)] font-medium text-[40px] m-0 mb-1 tracking-[-0.02em] text-[var(--color-primary)]">Role Management</h1>
         <p className="text-[var(--color-secondary)]">Atur hak akses halaman untuk masing-masing peran.</p>
       </div>
 
@@ -143,9 +143,9 @@ export default function RoleManagementPage() {
               <p>Memuat pengaturan...</p>
             ) : (
               <div className="space-y-6">
-                <div className="flex justify-between items-center border-b pb-4">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 border-b pb-4">
                   <h2 className="text-xl font-medium capitalize">Akses untuk: {selectedRole}</h2>
-                  <Button variant="primary" onClick={handleSave} isLoading={isSaving}>Simpan Perubahan</Button>
+                  <Button variant="primary" onClick={handleSave} isLoading={isSaving} className="w-full sm:w-auto">Simpan Perubahan</Button>
                 </div>
                 
                 {selectedRole === 'admin' && (
@@ -156,7 +156,7 @@ export default function RoleManagementPage() {
 
                 <div className="space-y-4">
                   {AVAILABLE_PATHS.map((item) => (
-                    <div key={item.path} className="flex items-center justify-between p-3 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 transition-colors">
+                    <div key={item.path} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 hover:bg-gray-50 rounded border border-transparent hover:border-gray-200 transition-colors gap-3 sm:gap-0">
                       <label className="flex items-center space-x-3 cursor-pointer flex-1">
                         <input
                           type="checkbox"
@@ -169,7 +169,7 @@ export default function RoleManagementPage() {
                           <div className="text-sm text-gray-500">{item.path}</div>
                         </div>
                       </label>
-                      <label className="flex items-center space-x-2 cursor-pointer text-sm text-gray-600">
+                      <label className="flex items-center space-x-2 cursor-pointer text-sm text-gray-600 sm:ml-4">
                         <input
                           type="radio"
                           name="defaultRoute"

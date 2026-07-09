@@ -11,6 +11,7 @@ export const ROUTES = {
   SHIPMENTS: '/mshipping/shipments',
   SHIPMENT_DETAIL: (id: string) => `/mshipping/shipments/${id}`,
   SHIPMENT_BATCHES: '/mshipping/shipment-batches',
+  SHIPMENTS_LIST: '/mshipping/shipments/list',
   DELIVERY_ORDERS: '/mshipping/delivery-orders',
   DELIVERY_DETAIL: (id: string) => `/mshipping/delivery-orders/${id}`,
   BILLING: '/mshipping/billing',

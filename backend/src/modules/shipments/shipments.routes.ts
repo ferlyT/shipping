@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { authMiddleware, requirePermission } from '../../middleware/auth'
-import { getShipments, getShipmentById, getShipmentDimensions, getShipmentsKPIs } from './shipments.service'
+import { getShipments, getShipmentById, getShipmentDimensions, getShipmentsKPIs, getShipmentBranches } from './shipments.service'
 import { successResponse, errorResponse } from '../../utils/response'
 
 const shipmentsRoutes = new Hono()
@@ -18,6 +18,11 @@ shipmentsRoutes.get('/kpi', async (c) => {
   const query = c.req.query()
   const result = await getShipmentsKPIs(query)
   return successResponse(c, result)
+})
+
+shipmentsRoutes.get('/branches', async (c) => {
+  const branches = await getShipmentBranches()
+  return successResponse(c, branches)
 })
 
 shipmentsRoutes.get('/:id', async (c) => {

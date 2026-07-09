@@ -29,7 +29,8 @@ export async function getBillings(query: Record<string, string | undefined>) {
         fdDescr: true,
         fdJumlah1: true,
         fdTypeBilling: true,
-        customer: { select: { fdCustName: true } }
+        customer: { select: { fdCustName: true } },
+        employee: { select: { fdEmpName: true } }
       }
     }),
     prisma.tbBilling.count({ where }),
@@ -43,7 +44,8 @@ export async function getBillingById(id: string) {
     where: { fdInvNo: id },
     include: {
       details: true,
-      customer: { select: { fdCustName: true, fdContact: true, fdAddr1: true } }
+      customer: { select: { fdCustName: true, fdContact: true, fdAddr1: true } },
+      employee: { select: { fdEmpName: true } }
     }
   })
 }

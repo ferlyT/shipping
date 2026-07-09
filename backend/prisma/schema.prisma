@@ -224,6 +224,7 @@ model TbBilling {
 
   // Relations
   customer       TbCustomers? @relation(fields: [fdCustCode], references: [fdCustCode])
+  employee       TbEmployees? @relation(fields: [fdEmpCode], references: [fdEmpCode])
   details        TbBillingDetail[]
 
   @@map("tbBilling")
@@ -280,9 +281,11 @@ model VwShipment {
   fdListType        Int?
   fdDesc            String?   @db.Char(2000)
   fdComodity        String?   @db.Char(200)
+  fdComodityName    String?   @db.VarChar(50)
   fdM3              Decimal?  @db.Decimal(18, 4)
   fdCancel          Int?
   fdMarkingCodeAsal String?   @db.Char(20)
+  fdLocalTrackingNo String?   @db.VarChar(50)
 
   @@map("vwShipment")
 }
@@ -292,4 +295,14 @@ model tbCabang {
   fdBranchName String? @db.NVarChar(50)
 
   @@map("tbCabang")
+}
+
+model TbEmployees {
+  fdEmpCode String @id @db.Char(7)
+  fdEmpName String @db.VarChar(50)
+
+  // Relations
+  billings  TbBilling[]
+
+  @@map("tbEmployees")
 }

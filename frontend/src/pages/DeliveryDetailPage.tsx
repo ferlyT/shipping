@@ -51,8 +51,9 @@ export default function DeliveryDetailPage() {
 
   if (isLoading) {
     return (
-      <div className="p-6 flex justify-center">
-        <span className="w-8 h-8 border-4 border-[var(--color-tertiary)] border-t-transparent rounded-full animate-spin" />
+      <div className="p-6 h-full flex flex-col justify-center items-center gap-4">
+        <span className="w-10 h-10 border-4 border-[var(--color-tertiary)] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[var(--color-secondary)] text-sm animate-pulse">Memuat detail surat jalan...</p>
       </div>
     )
   }

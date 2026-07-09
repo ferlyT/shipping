@@ -59,7 +59,7 @@ export default function RegisterPage() {
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[var(--color-tertiary)] rounded-full blur-[120px] opacity-20 translate-x-1/2 -translate-y-1/2" />
         
         <div className="relative z-10">
-          <h1 className="text-2xl font-bold tracking-tight font-[var(--font-display)]">
+          <h1 className="font-[var(--font-display)] font-medium text-[40px] m-0 mb-1 tracking-[-0.02em] text-[var(--color-primary)]">
             mshipping<span className="text-[var(--color-tertiary)]">.</span>
           </h1>
         </div>

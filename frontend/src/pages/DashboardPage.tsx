@@ -122,7 +122,7 @@ export default function DashboardPage() {
   return (
     <div className="p-6 w-full space-y-8 animate-fadeIn pb-24">
       <div>
-        <h1 className="text-3xl font-semibold text-[var(--color-primary)] font-[var(--font-display)]">Dashboard</h1>
+        <h1 className="font-[var(--font-display)] font-medium text-[40px] m-0 mb-1 tracking-[-0.02em] text-[var(--color-primary)]">Dashboard</h1>
         <p className="text-[var(--color-secondary)] mt-1">
           Ringkasan operasional
         </p>

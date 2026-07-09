@@ -12,7 +12,8 @@ const LoginPage          = lazy(() => import('@/pages/LoginPage'))
 const RegisterPage       = lazy(() => import('@/pages/RegisterPage'))
 const DashboardPage      = lazy(() => import('@/pages/DashboardPage'))
 const CustomersPage      = lazy(() => import('@/pages/CustomersPage'))
-const ShipmentsPage      = lazy(() => import('@/pages/ShipmentsPage'))
+const ShipmentsDashboardPage = lazy(() => import('@/pages/ShipmentsDashboardPage'))
+const ShipmentsListPage  = lazy(() => import('@/pages/ShipmentsListPage'))
 const ShipmentBatchesPage = lazy(() => import('@/pages/ShipmentBatchesPage'))
 const DeliveryOrdersPage = lazy(() => import('@/pages/DeliveryOrdersPage'))
 const DeliveryDetailPage = lazy(() => import('@/pages/DeliveryDetailPage'))
@@ -34,7 +35,8 @@ export function AppRouter() {
               <Route element={<PermissionGuard />}>
                 <Route path={ROUTES.DASHBOARD}         element={<DashboardPage />} />
                 <Route path={ROUTES.CUSTOMERS}         element={<CustomersPage />} />
-                <Route path={ROUTES.SHIPMENTS}         element={<ShipmentsPage />} />
+                <Route path={ROUTES.SHIPMENTS}         element={<ShipmentsDashboardPage />} />
+                <Route path={ROUTES.SHIPMENTS_LIST}    element={<ShipmentsListPage />} />
                 <Route path={ROUTES.SHIPMENT_BATCHES}  element={<ShipmentBatchesPage />} />
                 <Route path={ROUTES.DELIVERY_ORDERS}   element={<DeliveryOrdersPage />} />
                 <Route path={ROUTES.DELIVERY_DETAIL(':id')} element={<DeliveryDetailPage />} />

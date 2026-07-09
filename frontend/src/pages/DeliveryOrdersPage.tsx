@@ -14,11 +14,12 @@ import {
   CheckCircle2,
   Clock,
   ListFilter,
-  Truck,
+  Eye,
 } from 'lucide-react'
 import { usePagination } from '@/hooks/usePagination'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Pagination } from '@/components/ui/Pagination'
+import { cn } from '@/lib/utils'
 
 type ListType = 'air' | 'sea'
 type GroupMode = 'marking' | 'branch' | 'none'
@@ -56,46 +57,46 @@ function DeliveryOrderDetails({ listCode }: { listCode: string }) {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center gap-2 bg-slate-50/70 py-6 text-sm text-slate-400">
-        <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-300 border-t-transparent" />
-        Memuat surat jalan...
+      <div className="flex flex-col justify-center items-center py-8 bg-slate-50 gap-4">
+        <span className="w-10 h-10 border-4 border-[var(--color-tertiary)] border-t-transparent rounded-full animate-spin" />
+        <p className="text-[var(--color-secondary)] text-sm animate-pulse">Memuat delivery orders...</p>
       </div>
     )
   }
   if (!data?.data?.length) {
     return (
-      <div className="bg-slate-50/70 px-4 py-6 text-center text-sm text-slate-400">
-        Belum ada surat jalan untuk list code ini.
+      <div className="bg-slate-50 px-6 py-8 text-center text-sm text-slate-500">
+        No delivery orders found for this list code.
       </div>
     )
   }
 
   return (
-    <div className="bg-slate-50/70 p-4">
-      <h4 className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-        Daftar Surat Jalan
-        <span className="rounded-full bg-slate-200/70 px-1.5 py-0.5 text-[10px] font-medium normal-case tracking-normal text-slate-500">
+    <div className="bg-slate-50 p-6 border-t border-slate-100">
+      <div className="flex items-center gap-2 mb-4">
+        <h4 className="text-sm font-semibold text-slate-700">Delivery Orders</h4>
+        <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium text-slate-600">
           {data.data.length}
         </span>
-      </h4>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8">
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {data.data.map((sj: any) => (
           <div 
             key={sj.fdSJNo}
             onClick={() => navigate(ROUTES.DELIVERY_DETAIL(sj.fdSJNo))}
-            className="group cursor-pointer rounded-lg border border-slate-200 bg-white px-3 py-2.5 transition hover:border-slate-300 hover:shadow-sm"
+            className="group cursor-pointer rounded-xl border border-slate-200 bg-white p-4 transition-all duration-200 hover:border-blue-300 hover:shadow-sm hover:bg-blue-50/30"
           >
-            <div className="flex items-center justify-between gap-1.5">
-              <p className="truncate text-xs font-semibold text-slate-900">{sj.fdSJNo}</p>
-              <span className="flex-shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-slate-600">
+            <div className="flex items-center justify-between gap-2 mb-2">
+              <p className="truncate text-sm font-semibold text-slate-900 group-hover:text-blue-700 transition-colors">{sj.fdSJNo}</p>
+              <span className="flex-shrink-0 rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold tabular-nums text-slate-600">
                 {sj.fdJmlPackSJ} qty
               </span>
             </div>
-            <p className="mt-1 truncate text-[11px] text-slate-500" title={sj.fdCustNameSJ || sj.fdCustCode || ''}>
-              {sj.fdCustNameSJ || sj.fdCustCode || 'Tanpa Customer'}
+            <p className="truncate text-xs text-slate-500 mb-3" title={sj.fdCustNameSJ || sj.fdCustCode || ''}>
+              {sj.fdCustNameSJ || sj.fdCustCode || 'No Customer'}
             </p>
-            <div className="mt-1.5 flex items-center justify-between gap-1 border-t border-slate-100 pt-1.5 text-[10px] text-slate-400">
-              <span className="truncate" title={sj.fdSupir || undefined}>{sj.fdSupir || '—'}</span>
+            <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500">
+              <span className="truncate font-medium text-slate-600" title={sj.fdSupir || undefined}>{sj.fdSupir || '—'}</span>
               <span className="flex-shrink-0 tabular-nums">
                 {new Date(sj.fdSJDate).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}
               </span>
@@ -110,16 +111,14 @@ function DeliveryOrderDetails({ listCode }: { listCode: string }) {
 function StatusPill({ isSent }: { isSent: number }) {
   if (isSent === 1) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-        Sudah
+      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-xs font-medium whitespace-nowrap">
+        Delivered
       </span>
     )
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
-      <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
-      Belum
+    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-700 text-xs font-medium whitespace-nowrap">
+      Pending
     </span>
   )
 }
@@ -128,64 +127,85 @@ function BatchRow({ row, expanded, onToggle }: { row: GroupedDataRow, expanded: 
   return (
     <Fragment>
       <tr 
-        className="group cursor-pointer border-b border-slate-100 transition hover:bg-slate-50/80 last:border-0"
+        className={cn(
+          "group cursor-pointer border-b border-slate-100 transition-colors duration-200 hover:bg-[#EFF6FF]",
+          expanded && "bg-[#EFF6FF]"
+        )}
         onClick={onToggle}
       >
-        <td className="py-3.5 pl-4 pr-3">
-          <div className="flex items-center gap-2.5">
-            <ChevronRight className={`h-4 w-4 flex-shrink-0 text-slate-300 transition-transform group-hover:text-slate-400 ${expanded ? 'rotate-90' : ''}`} />
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-sm font-semibold text-slate-900">{row.listCode}</p>
+        <td className="py-4 pl-6 pr-4">
+          <div className="flex items-center gap-3">
+            <ChevronRight className={cn(
+              "h-4 w-4 flex-shrink-0 text-slate-400 transition-transform duration-200",
+              expanded && "rotate-90 text-blue-600"
+            )} />
+            <div className="flex flex-col gap-0.5">
+              <div className="flex items-center gap-2">
+                <p className="text-sm font-medium text-slate-900 leading-tight">{row.listCode}</p>
                 {row.branchCode && (
-                  <span className="flex-shrink-0 rounded-md bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-blue-600" title={row.branchName || row.branchCode}>
+                  <span className="flex-shrink-0 rounded border border-blue-100 bg-blue-50 px-1.5 py-0.5 text-[10px] font-semibold text-blue-600 uppercase" title={row.branchName || row.branchCode}>
                     {row.branchCode}
                   </span>
                 )}
               </div>
-              <span className="mt-1 inline-block max-w-[150px] truncate rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-slate-500" title={row.markingCode}>
+              <span className="text-xs text-slate-500" title={row.markingCode}>
                 {row.markingCode}
               </span>
             </div>
           </div>
         </td>
-        <td className="py-3.5 px-3">
-          <p className="max-w-[150px] truncate text-sm text-slate-700" title={row.customerName || '-'}>{row.customerName || '-'}</p>
-          <p className="mt-0.5 max-w-[150px] truncate text-xs text-slate-400" title={row.resiNo || '-'}>
-            {row.resiNo || '-'}
+        <td className="py-4 px-4">
+          <div className="flex flex-col gap-0.5">
+            <p className="max-w-[180px] truncate text-sm font-medium text-slate-900 leading-tight" title={row.customerName || '-'}>{row.customerName || '-'}</p>
+            <p className="max-w-[180px] truncate text-xs text-slate-500" title={row.resiNo || '-'}>
+              {row.resiNo || '-'}
+            </p>
+          </div>
+        </td>
+        <td className="py-4 px-4">
+          <p className="max-w-[150px] truncate text-sm text-slate-600" title={row.comodity || '-'}>
+            {row.comodity || <span className="text-slate-300">—</span>}
           </p>
         </td>
-        <td className="max-w-[150px] truncate py-3.5 px-3 text-sm text-slate-500" title={row.comodity || '-'}>
-          {row.comodity || <span className="text-slate-300">—</span>}
+        <td className="py-4 px-4">
+          <div className="flex flex-col gap-0.5">
+            <p className="text-sm font-medium tabular-nums text-slate-900 leading-tight">{Number(row.totalQty || 0).toLocaleString('id-ID')} pkgs</p>
+            <p className="text-xs tabular-nums text-slate-500">
+              {Number(row.totalTerkirim || 0).toLocaleString('id-ID')} delivered
+            </p>
+          </div>
         </td>
-        <td className="py-3.5 px-3">
-          <p className="text-sm font-medium tabular-nums text-slate-800">{Number(row.totalQty || 0).toLocaleString('id-ID')} pkgs</p>
-          <p className="mt-0.5 text-xs tabular-nums text-slate-400">
-            {Number(row.totalTerkirim || 0).toLocaleString('id-ID')} terkirim
-          </p>
-        </td>
-        <td className="py-3.5 px-3 text-sm tabular-nums">
+        <td className="py-4 px-4 tabular-nums">
           {Number(row.sisa || 0) > 0 ? (
-            <span className="font-semibold text-red-500">{Number(row.sisa || 0).toLocaleString('id-ID')} sisa</span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-50 text-red-600 border border-red-100">
+              {Number(row.sisa || 0).toLocaleString('id-ID')} left
+            </span>
           ) : (
-            <span className="font-semibold text-emerald-500">0 sisa</span>
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-emerald-50 text-emerald-600 border border-emerald-100">
+              0 left
+            </span>
           )}
         </td>
-        <td className="py-3.5 px-3">
+        <td className="py-4 px-4">
           <StatusPill isSent={row.isSent} />
         </td>
-        <td className="py-3.5 pr-4 pl-3 text-right">
+        <td className="py-4 pr-6 pl-4 text-right">
           <button
             onClick={(e) => { e.stopPropagation(); onToggle(); }}
-            className="rounded-lg px-2.5 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-slate-100 hover:text-slate-900"
+            className={cn(
+              "inline-flex items-center justify-center p-2 text-slate-400 rounded-lg transition-all duration-200",
+              expanded 
+                ? "text-blue-600 bg-blue-50" 
+                : "hover:text-blue-600 hover:bg-blue-50"
+            )}
           >
-            {expanded ? 'Tutup' : 'Detail'}
+            <Eye className="w-4 h-4" />
           </button>
         </td>
       </tr>
       {expanded && (
-        <tr className="border-b border-slate-100">
-          <td colSpan={7} className="p-0">
+        <tr>
+          <td colSpan={7} className="p-0 border-b border-slate-100">
             <DeliveryOrderDetails listCode={row.listCode} />
           </td>
         </tr>
@@ -197,17 +217,17 @@ function BatchRow({ row, expanded, onToggle }: { row: GroupedDataRow, expanded: 
 function BatchTable({ rows }: { rows: GroupedDataRow[] }) {
   const [expandedRow, setExpandedRow] = useState<string | null>(null)
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full min-w-[780px] border-collapse bg-white">
+    <div className="overflow-x-auto w-full border-t border-slate-100">
+      <table className="w-full min-w-[800px] border-collapse bg-white">
         <thead>
-          <tr className="border-b border-slate-100 text-left text-[10.5px] font-semibold uppercase tracking-wider text-slate-400">
-            <th className="py-2.5 pl-4 pr-3">List / Marking Code</th>
-            <th className="py-2.5 px-3">Customer / Resi</th>
-            <th className="py-2.5 px-3">Comodity</th>
-            <th className="py-2.5 px-3">Total Qty</th>
-            <th className="py-2.5 px-3">Sisa</th>
-            <th className="py-2.5 px-3">Status</th>
-            <th className="py-2.5 pr-4 pl-3 text-right">Aksi</th>
+          <tr className="bg-[#F8FAFC] border-b border-slate-200 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">
+            <th className="py-3 pl-6 pr-4">List / Marking Code</th>
+            <th className="py-3 px-4">Customer / Resi</th>
+            <th className="py-3 px-4">Commodity</th>
+            <th className="py-3 px-4">Total Qty</th>
+            <th className="py-3 px-4">Remaining</th>
+            <th className="py-3 px-4">Status</th>
+            <th className="py-3 pr-6 pl-4 text-right">Details</th>
           </tr>
         </thead>
         <tbody>
@@ -242,13 +262,13 @@ function TableFooter({
 }) {
   const totalPages = Math.max(1, Math.ceil(total / limit))
   return (
-    <div className="flex flex-col gap-3 border-t border-slate-100 bg-slate-50/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-        Rows per page
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 border-t border-slate-200 bg-white px-6 py-4">
+      <div className="flex items-center gap-2 text-sm text-slate-500">
+        Rows:
         <select
           value={limit}
           onChange={(e) => onLimitChange(Number(e.target.value))}
-          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 focus:border-slate-400 focus:outline-none"
+          className="bg-transparent font-medium text-slate-900 focus:outline-none cursor-pointer"
         >
           <option value={10}>10</option>
           <option value={20}>20</option>
@@ -316,29 +336,32 @@ function DataGroupSection({
   const total = data?.meta?.total ?? groupTotal
 
   return (
-    <div className="border-b border-slate-100 last:border-0">
+    <div className="border-t border-slate-100 first:border-t-0">
       <button
         onClick={() => setOpen(!open)}
-        className="flex w-full items-center justify-between gap-3 bg-slate-50/50 px-4 py-2.5 text-left transition hover:bg-slate-100/60"
+        className="flex w-full items-center justify-between gap-4 bg-slate-50/50 hover:bg-slate-100/70 px-6 py-4 text-left transition-colors duration-200"
       >
-        <span className="flex items-center gap-2">
-          {open ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
-          <span className="text-sm font-semibold text-slate-700">{label}</span>
-          <span className="rounded-full bg-slate-200/70 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+        <div className="flex items-center gap-3">
+          {open ? <ChevronDown className="h-4 w-4 text-slate-400" /> : <ChevronRight className="h-4 w-4 text-slate-400" />}
+          <span className={cn(
+            "text-sm font-medium",
+            open ? "text-slate-900" : "text-slate-700"
+          )}>{label}</span>
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-700">
             {groupTotal}
           </span>
-        </span>
+        </div>
       </button>
       {open && (
         isLoading ? (
-          <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-400">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-transparent" />
-            Memuat data...
+          <div className="flex flex-col justify-center items-center py-12 bg-white gap-4">
+            <span className="w-10 h-10 border-4 border-[var(--color-tertiary)] border-t-transparent rounded-full animate-spin" />
+            <p className="text-[var(--color-secondary)] text-sm animate-pulse">Memuat group data...</p>
           </div>
         ) : rows.length === 0 ? (
-          <p className="px-5 py-8 text-center text-sm text-slate-400">Tidak ada data pada grup ini.</p>
+          <p className="px-6 py-12 text-center text-sm text-slate-500 bg-white">No data in this group.</p>
         ) : (
-          <>
+          <div className="bg-white">
             <BatchTable rows={rows} />
             <TableFooter
               page={pg.page}
@@ -347,7 +370,7 @@ function DataGroupSection({
               onPageChange={pg.goToPage}
               onLimitChange={pg.setLimit}
             />
-          </>
+          </div>
         )
       )}
     </div>
@@ -356,8 +379,8 @@ function DataGroupSection({
 
 const statusMeta = {
   open: {
-    label: "Belum terkirim",
-    hint: "Surat jalan belum terkirim semua — masih ada sisa.",
+    label: "Pending",
+    hint: "Shipments with pending deliveries.",
     icon: Clock,
     accent: "text-amber-600",
     chip: "bg-amber-100",
@@ -365,8 +388,8 @@ const statusMeta = {
     badgeText: "text-amber-700",
   },
   closed: {
-    label: "Sudah terkirim",
-    hint: "Semua surat jalan untuk list code ini telah terkirim.",
+    label: "Delivered",
+    hint: "All deliveries completed for these shipments.",
     icon: CheckCircle2,
     accent: "text-emerald-600",
     chip: "bg-emerald-100",
@@ -419,64 +442,66 @@ function StatusBlock({
   const filterField: 'markingCode' | 'branch' = groupMode === 'branch' ? 'branch' : 'markingCode'
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center justify-between gap-3 px-5 py-4 text-left transition hover:bg-slate-50/70"
+        className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left transition-colors duration-200 hover:bg-slate-50"
       >
-        <span className="flex items-center gap-3">
-          <span className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl ${meta.chip}`}>
-            <Icon className={`h-4.5 w-4.5 ${meta.accent}`} />
-          </span>
-          <span>
-            <span className="flex items-center gap-2">
-              <span className="text-sm font-semibold text-slate-900">{meta.label}</span>
-              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${meta.badgeBg} ${meta.badgeText}`}>
-                {badgeTotal} list code
+        <div className="flex items-center gap-4">
+          <div className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl ${meta.chip}`}>
+            <Icon className={`h-5 w-5 ${meta.accent}`} />
+          </div>
+          <div>
+            <div className="flex items-center gap-3 mb-1">
+              <span className="text-base font-semibold text-slate-900">{meta.label}</span>
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${meta.badgeBg} ${meta.badgeText}`}>
+                {badgeTotal} lists
               </span>
-            </span>
-            <span className="mt-0.5 block text-xs text-slate-400">{meta.hint}</span>
-          </span>
-        </span>
+            </div>
+            <span className="block text-sm text-slate-500">{meta.hint}</span>
+          </div>
+        </div>
         {expanded ? (
-          <ChevronDown className="h-4 w-4 flex-shrink-0 text-slate-400" />
+          <ChevronDown className="h-5 w-5 flex-shrink-0 text-slate-400" />
         ) : (
-          <ChevronRight className="h-4 w-4 flex-shrink-0 text-slate-400" />
+          <ChevronRight className="h-5 w-5 flex-shrink-0 text-slate-400" />
         )}
       </button>
       {expanded && (
-        <div className="border-t border-slate-100">
+        <div className="border-t border-slate-100 bg-white">
           {isGroupedMode ? (
             isGroupsLoading ? (
-              <div className="flex items-center justify-center gap-2 py-14 text-sm text-slate-400">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-transparent" />
-                Memuat grup...
+              <div className="flex flex-col justify-center items-center py-16 gap-4">
+                <span className="w-10 h-10 border-4 border-[var(--color-tertiary)] border-t-transparent rounded-full animate-spin" />
+                <p className="text-[var(--color-secondary)] text-sm animate-pulse">Memuat groups...</p>
               </div>
             ) : groups.length === 0 ? (
-              <p className="px-5 py-10 text-center text-sm text-slate-400">Tidak ada data pada status ini.</p>
+              <p className="px-6 py-16 text-center text-sm text-slate-500">No data available for this status.</p>
             ) : (
-              groups.map((g) => (
-                <DataGroupSection
-                  key={`${listTypeValue}-${sentValue}-${filterField}-${g.code}`}
-                  filterField={filterField}
-                  code={g.code}
-                  label={g.label}
-                  groupTotal={g.total}
-                  listTypeValue={listTypeValue}
-                  sentValue={sentValue}
-                  search={search}
-                />
-              ))
+              <div className="flex flex-col">
+                {groups.map((g) => (
+                  <DataGroupSection
+                    key={`${listTypeValue}-${sentValue}-${filterField}-${g.code}`}
+                    filterField={filterField}
+                    code={g.code}
+                    label={g.label}
+                    groupTotal={g.total}
+                    listTypeValue={listTypeValue}
+                    sentValue={sentValue}
+                    search={search}
+                  />
+                ))}
+              </div>
             )
           ) : isLoading ? (
-            <div className="flex items-center justify-center gap-2 py-14 text-sm text-slate-400">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-transparent" />
-              Memuat data...
+            <div className="flex flex-col justify-center items-center py-16 gap-4">
+              <span className="w-10 h-10 border-4 border-[var(--color-tertiary)] border-t-transparent rounded-full animate-spin" />
+              <p className="text-[var(--color-secondary)] text-sm animate-pulse">Memuat data...</p>
             </div>
           ) : rows.length === 0 ? (
-            <p className="px-5 py-10 text-center text-sm text-slate-400">Tidak ada data pada status ini.</p>
+            <p className="px-6 py-16 text-center text-sm text-slate-500">No data available for this status.</p>
           ) : (
-            <>
+            <div className="flex flex-col">
               <BatchTable rows={rows} />
               <TableFooter
                 page={page}
@@ -485,7 +510,7 @@ function StatusBlock({
                 onPageChange={onPageChange}
                 onLimitChange={onLimitChange}
               />
-            </>
+            </div>
           )}
         </div>
       )}
@@ -496,8 +521,8 @@ function StatusBlock({
 const kpiTokens = [
   { key: 'totalSJ', label: 'Total SJ', icon: FileText, accent: 'text-blue-600', chip: 'bg-blue-50' },
   { key: 'totalPackages', label: 'Total Packages', icon: Package, accent: 'text-emerald-600', chip: 'bg-emerald-50' },
-  { key: 'totalWeight', label: 'Total Berat', icon: Weight, accent: 'text-purple-600', chip: 'bg-purple-50' },
-  { key: 'sjBulanIni', label: 'SJ Bulan Ini', icon: CalendarClock, accent: 'text-rose-600', chip: 'bg-rose-50' },
+  { key: 'totalWeight', label: 'Total Weight', icon: Weight, accent: 'text-purple-600', chip: 'bg-purple-50' },
+  { key: 'sjBulanIni', label: 'This Month', icon: CalendarClock, accent: 'text-rose-600', chip: 'bg-rose-50' },
 ] as const
 
 export default function DeliveryOrdersPage() {
@@ -624,10 +649,10 @@ export default function DeliveryOrdersPage() {
   const closedRows = closedRes?.data || []
   const closedTotal = closedRes?.meta?.total || 0
   
-  const openMarkingGroups = openMarkingGroupsRes?.data || []
-  const closedMarkingGroups = closedMarkingGroupsRes?.data || []
-  const openBranchGroups = openBranchGroupsRes?.data || []
-  const closedBranchGroups = closedBranchGroupsRes?.data || []
+  const openMarkingGroups = openMarkingGroupsRes?.data
+  const closedMarkingGroups = closedMarkingGroupsRes?.data
+  const openBranchGroups = openBranchGroupsRes?.data
+  const closedBranchGroups = closedBranchGroupsRes?.data
   
   const isGroupsLoading = groupMode === 'marking'
     ? { open: isOpenMarkingGroupsLoading, closed: isClosedMarkingGroupsLoading }
@@ -635,20 +660,20 @@ export default function DeliveryOrdersPage() {
   
   const openGroups: GroupMeta[] = useMemo(() => {
     if (groupMode === 'marking') {
-      return openMarkingGroups.map(g => ({ code: g.markingCode, label: g.markingCode, total: g.total }))
+      return (openMarkingGroups || []).map(g => ({ code: g.markingCode, label: g.markingCode, total: g.total }))
     }
     if (groupMode === 'branch') {
-      return openBranchGroups.map(g => ({ code: g.branchCode, label: g.branchName ? `${g.branchCode} — ${g.branchName}` : g.branchCode, total: g.total }))
+      return (openBranchGroups || []).map(g => ({ code: g.branchCode, label: g.branchName ? `${g.branchCode} — ${g.branchName}` : g.branchCode, total: g.total }))
     }
     return []
   }, [groupMode, openMarkingGroups, openBranchGroups])
   
   const closedGroups: GroupMeta[] = useMemo(() => {
     if (groupMode === 'marking') {
-      return closedMarkingGroups.map(g => ({ code: g.markingCode, label: g.markingCode, total: g.total }))
+      return (closedMarkingGroups || []).map(g => ({ code: g.markingCode, label: g.markingCode, total: g.total }))
     }
     if (groupMode === 'branch') {
-      return closedBranchGroups.map(g => ({ code: g.branchCode, label: g.branchName ? `${g.branchCode} — ${g.branchName}` : g.branchCode, total: g.total }))
+      return (closedBranchGroups || []).map(g => ({ code: g.branchCode, label: g.branchName ? `${g.branchCode} — ${g.branchName}` : g.branchCode, total: g.total }))
     }
     return []
   }, [groupMode, closedMarkingGroups, closedBranchGroups])
@@ -662,96 +687,98 @@ export default function DeliveryOrdersPage() {
   }, [debouncedSearch, activeTab]) // eslint-disable-line react-hooks/exhaustive-deps
   
   return (
-    <div className="flex h-full flex-col overflow-y-auto bg-[#F4F1EA] px-4 py-6 sm:px-6 sm:py-8">
-      <div className="w-full">
+    <div className="flex flex-col h-full overflow-y-auto bg-[#F8FAFC] px-6 py-6 lg:px-8 lg:py-8 gap-8">
+      {/* Page heading */}
+      <div className="flex flex-shrink-0 flex-col gap-1">
+        <h1 className="font-[var(--font-display)] font-medium text-[40px] m-0 mb-1 tracking-[-0.02em] text-[var(--color-primary)]">Delivery Orders</h1>
+        <p className="text-sm text-slate-500">
+          Monitor shipment delivery status per list code.
+        </p>
+      </div>
 
-        {/* Page heading */}
-        <div className="mb-6 flex items-center gap-3">
-          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-900">
-            <Truck className="h-5 w-5 text-white" />
-          </span>
-          <div>
-            <h1 className="text-lg font-semibold text-slate-900">Delivery Orders</h1>
-            <p className="text-xs text-slate-400">Pantau status pengiriman surat jalan per list code</p>
-          </div>
-        </div>
-
-        {/* KPI strip */}
-        <div className="mb-6 grid grid-cols-2 divide-y divide-slate-100 overflow-hidden rounded-2xl border border-slate-200 bg-white sm:grid-cols-4 sm:divide-x sm:divide-y-0">
-          {kpiTokens.map(({ key, label, icon: Icon, accent, chip }) => (
-            <div key={key} className="p-5">
-              <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-lg ${chip}`}>
-                <Icon className={`h-4.5 w-4.5 ${accent}`} />
-              </div>
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">{label}</p>
-              {isLoadingKpi ? (
-                <div className="mt-2 h-7 w-16 animate-pulse rounded bg-slate-100" />
-              ) : (
-                <h3 className="mt-1 font-[var(--font-display)] text-2xl font-semibold tabular-nums text-slate-900">
-                  {Number(kpis?.[key] || 0).toLocaleString('id-ID')}
-                </h3>
-              )}
+      {/* KPI strip */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        {kpiTokens.map(({ key, label, icon: Icon, accent, chip }) => (
+          <div key={key} className="flex flex-col bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+            <div className={`mb-4 flex h-12 w-12 items-center justify-center rounded-xl ${chip}`}>
+              <Icon className={`h-6 w-6 ${accent}`} />
             </div>
-          ))}
-        </div>
+            <p className="text-sm font-medium text-slate-500">{label}</p>
+            {isLoadingKpi ? (
+              <div className="mt-1 h-8 w-24 animate-pulse rounded bg-slate-100" />
+            ) : (
+              <h3 className="mt-1 text-3xl font-semibold tabular-nums text-slate-900 leading-none">
+                {Number(kpis?.[key] || 0).toLocaleString('id-ID')}
+              </h3>
+            )}
+          </div>
+        ))}
+      </div>
 
-        {/* Toolbar: freight mode, search, group by */}
-        <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 sm:flex-row sm:items-center">
-          <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1">
+      <div className="flex flex-col gap-6">
+        {/* Toolbar */}
+        <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-6 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+          <div className="flex items-center bg-slate-100 p-1 rounded-lg">
             {(['sea', 'air'] as ListType[]).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`rounded-lg px-3.5 py-1.5 text-sm font-medium transition ${
+                className={cn(
+                  "px-6 py-2 text-sm font-medium rounded-md transition-all duration-200",
                   activeTab === tab
                     ? "bg-white text-slate-900 shadow-sm"
-                    : "text-slate-500 hover:text-slate-800"
-                }`}
+                    : "text-slate-500 hover:text-slate-900 hover:bg-slate-200/50"
+                )}
               >
-                {tab === 'sea' ? 'Sea Freight' : 'Air Freight'}
+                {tab === 'sea' ? 'SEA' : 'AIR'}
               </button>
             ))}
           </div>
 
-          <div className="relative flex-1">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Cari list code, marking, customer..."
-              className="w-full rounded-xl border border-slate-200 bg-slate-50/60 py-2.5 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:border-slate-400 focus:bg-white focus:outline-none"
-            />
-          </div>
-
-          <div className="flex items-center gap-2">
-            <span className="hidden items-center gap-1 text-xs font-medium text-slate-500 sm:flex">
-              <ListFilter className="h-3.5 w-3.5" /> Group
-            </span>
-            <div className="flex rounded-xl bg-slate-100 p-1">
-              {([
-                { key: 'none', label: 'Tidak ada' },
-                { key: 'marking', label: 'Marking Code' },
-                { key: 'branch', label: 'Cabang' },
-              ] as { key: GroupMode; label: string }[]).map((opt) => (
-                <button
-                  key={opt.key}
-                  onClick={() => setGroupMode(opt.key)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-medium transition ${
-                    groupMode === opt.key
-                      ? 'bg-white text-slate-900 shadow-sm'
-                      : 'text-slate-500 hover:text-slate-800'
-                  }`}
-                >
-                  {opt.label}
-                </button>
-              ))}
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full xl:w-auto">
+            <div className="relative w-full sm:w-80">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search className="h-4 w-4 text-slate-400" />
+              </div>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search delivery orders..."
+                className="block w-full h-11 pl-10 pr-3 py-2 border border-slate-200 rounded-xl leading-5 bg-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-all duration-200"
+              />
+            </div>
+            
+            <div className="flex items-center gap-3 w-full sm:w-auto">
+              <span className="hidden lg:flex items-center gap-2 text-sm font-medium text-slate-500">
+                <ListFilter className="h-4 w-4" /> Group By
+              </span>
+              <div className="flex flex-1 sm:flex-initial rounded-xl bg-slate-100 p-1">
+                {([
+                  { key: 'none', label: 'None' },
+                  { key: 'marking', label: 'Marking' },
+                  { key: 'branch', label: 'Branch' },
+                ] as { key: GroupMode; label: string }[]).map((opt) => (
+                  <button
+                    key={opt.key}
+                    onClick={() => setGroupMode(opt.key)}
+                    className={cn(
+                      "flex-1 sm:flex-initial px-4 py-2 text-sm font-medium rounded-lg transition-all duration-200 whitespace-nowrap",
+                      groupMode === opt.key
+                        ? 'bg-white text-slate-900 shadow-sm'
+                        : 'text-slate-500 hover:text-slate-900 hover:bg-slate-200/50'
+                    )}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Status Blocks - flat mode has one pagination per status; grouped
-            mode has one independent pagination per marking-code/branch group */}
-        <div className="mt-4 space-y-4">
+        {/* Status Blocks */}
+        <div className="flex flex-col gap-6">
           <StatusBlock 
             status="open" 
             defaultOpen={true} 

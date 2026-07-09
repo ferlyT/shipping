@@ -23,6 +23,9 @@ interface Billing {
   customer?: {
     fdCustName: string | null
   } | null
+  employee?: {
+    fdEmpName: string | null
+  } | null
 }
 
 export default function BillingPage() {
@@ -95,13 +98,18 @@ export default function BillingPage() {
       header: 'Total Tagihan',
       render: (row: Billing) => formatCurrency(row.fdJumlah1)
     },
+    {
+      key: 'createdBy',
+      header: 'Created By',
+      render: (row: Billing) => row.employee?.fdEmpName || '—'
+    },
   ]
 
   return (
     <div className="flex flex-col h-[calc(100vh-var(--topbar-height)-2rem)] bg-[var(--color-background)] p-4 sm:p-6 space-y-4 animate-fadeIn overflow-hidden">
       <div className="flex flex-shrink-0 flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col gap-0.5">
-          <h1 className="text-xl font-bold font-[var(--font-display)] text-[var(--color-primary)]">Billing / Invoices</h1>
+          <h1 className="font-[var(--font-display)] font-medium text-[40px] m-0 mb-1 tracking-[-0.02em] text-[var(--color-primary)]">Billing / Invoices</h1>
           <p className="text-xs text-[var(--color-secondary)] font-[var(--font-label)]">
             Kelola daftar invoice dan tagihan pelanggan.
           </p>

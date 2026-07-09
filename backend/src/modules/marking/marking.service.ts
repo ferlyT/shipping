@@ -27,7 +27,7 @@ export async function getMarkings(query: Record<string, string | undefined>) {
       ]
     }
 
-    if (listType !== undefined && listType !== '') {
+    if (listType !== undefined && listType !== '' && listType !== 'ALL') {
       where.fdListType = parseInt(listType, 10)
     }
 
@@ -117,7 +117,7 @@ export async function getMarkingGroups(query: Record<string, string | undefined>
       ]
     }
 
-    if (listType !== undefined && listType !== '') {
+    if (listType !== undefined && listType !== '' && listType !== 'ALL') {
       where.fdListType = parseInt(listType, 10)
     }
 
@@ -209,6 +209,108 @@ export async function getManifestByMarkingCode(fdMarkingCode: string) {
   }
 }
 
+interface PrediksiExitItem {
+  fdMarkingCode: string
+  fdConsignee: string | null
+  fdBranchCode: string | null
+  fdListType: number | null
+  fdETA: Date
+  predictedExitDate: Date
+  daysUntil: number
+  avgDelayDays: number
+  sampleSize: number
+  category: 'terlambat' | 'segera' | 'dekat' | 'normal'
+  fdGudang?: string | null
+  fdKet?: string | null
+}
+
+async function computeExitPrediction(where: any): Promise<{
+  prediksiTerlambatCount: number
+  prediksiSegeraCount: number
+  prediksiDekatCount: number
+  prediksiExitList: PrediksiExitItem[]
+}> {
+  const today = new Date()
+
+  const [closedBatches, openBatches] = await Promise.all([
+    prisma.tbMarking.findMany({
+      where: { ...where, fdExitDate: { not: null }, fdETA: { not: null } },
+      select: { fdConsignee: true, fdETA: true, fdExitDate: true },
+    }),
+    prisma.tbMarking.findMany({
+      where: { ...where, fdExitDate: null, fdETA: { not: null } },
+      select: {
+        fdMarkingCode: true,
+        fdConsignee: true,
+        fdBranchCode: true,
+        fdListType: true,
+        fdETA: true,
+        fdGudang: true,
+        fdKet: true,
+      },
+    }),
+  ])
+
+  const delayByConsignee: Record<string, number[]> = {}
+  for (const b of closedBatches) {
+    if (!b.fdETA || !b.fdExitDate) continue
+    const consignee = b.fdConsignee?.trim() || 'Unknown'
+    const delay = Math.round((b.fdExitDate.getTime() - b.fdETA.getTime()) / (1000 * 60 * 60 * 24))
+    if (!delayByConsignee[consignee]) delayByConsignee[consignee] = []
+    delayByConsignee[consignee].push(delay)
+  }
+
+  const avgByConsignee: Record<string, number> = {}
+  Object.entries(delayByConsignee).forEach(([k, arr]) => {
+    avgByConsignee[k] = arr.reduce((a, b) => a + b, 0) / arr.length
+  })
+
+  const allDelays = closedBatches
+    .filter((b) => b.fdETA && b.fdExitDate)
+    .map((b) => Math.round((b.fdExitDate!.getTime() - b.fdETA!.getTime()) / (1000 * 60 * 60 * 24)))
+  const globalAvgDelay = allDelays.length > 0 ? allDelays.reduce((a, b) => a + b, 0) / allDelays.length : 0
+
+  const MIN_SAMPLE = 2
+
+  const prediksiExitList: PrediksiExitItem[] = openBatches
+    .filter((b) => b.fdETA)
+    .map((b) => {
+      const consignee = b.fdConsignee?.trim() || 'Unknown'
+      const sampleSize = delayByConsignee[consignee]?.length || 0
+      const avgDelayDays = sampleSize >= MIN_SAMPLE ? avgByConsignee[consignee] : globalAvgDelay
+
+      const predictedExitDate = new Date(b.fdETA!)
+      predictedExitDate.setDate(predictedExitDate.getDate() + Math.round(avgDelayDays))
+
+      const daysUntil = Math.round((predictedExitDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+      const category: PrediksiExitItem['category'] =
+        daysUntil < 0 ? 'terlambat' : daysUntil <= 3 ? 'segera' : daysUntil <= 7 ? 'dekat' : 'normal'
+
+      return {
+        fdMarkingCode: b.fdMarkingCode.trim(),
+        fdConsignee: b.fdConsignee,
+        fdBranchCode: b.fdBranchCode,
+        fdListType: b.fdListType,
+        fdETA: b.fdETA!,
+        predictedExitDate,
+        daysUntil,
+        avgDelayDays: Math.round(avgDelayDays * 10) / 10,
+        sampleSize,
+        category,
+        fdGudang: b.fdGudang,
+        fdKet: b.fdKet
+      }
+    })
+    .sort((a, b) => a.daysUntil - b.daysUntil)
+
+  return {
+    prediksiTerlambatCount: prediksiExitList.filter((p) => p.category === 'terlambat').length,
+    prediksiSegeraCount: prediksiExitList.filter((p) => p.category === 'segera').length,
+    prediksiDekatCount: prediksiExitList.filter((p) => p.category === 'dekat').length,
+    prediksiExitList: prediksiExitList.slice(0, 200),
+  }
+}
+
 export async function getMarkingKPIs(query: Record<string, string | undefined>) {
   const search = query.search?.trim() || ''
   const listType = query.listType // 1 for AIR, 2 for SEA
@@ -226,18 +328,28 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
       ]
     }
 
-    if (listType !== undefined && listType !== '') {
+    if (listType !== undefined && listType !== '' && listType !== 'ALL') {
       where.fdListType = parseInt(listType, 10)
     }
 
     const today = new Date()
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+    const tomorrowStart = new Date(todayStart)
+    tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+    const yesterdayStart = new Date(todayStart)
+    yesterdayStart.setDate(yesterdayStart.getDate() - 1)
+    const dayAfterTomorrowStart = new Date(tomorrowStart)
+    dayAfterTomorrowStart.setDate(dayAfterTomorrowStart.getDate() + 1)
 
     const [
       totalBatches,
       activeBatches,
       etaNotExitBatches,
       batchesWithTransitTime,
-      etaNotExitList
+      etaNotExitList,
+      prediksiExit,
+      exitTodayList,
+      exitYesterdayList
     ] = await Promise.all([
       prisma.tbMarking.count({ where }),
       prisma.tbMarking.count({ where: { ...where, fdExitDate: null } }),
@@ -273,8 +385,35 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
           fdMarkingCode: true,
           fdETA: true
         }
+      }),
+      computeExitPrediction(where),
+      prisma.tbMarking.findMany({
+        where: {
+          ...where,
+          fdExitDate: {
+            gte: todayStart,
+            lt: tomorrowStart
+          }
+        },
+        select: { fdMarkingCode: true, fdConsignee: true, fdExitDate: true, fdGudang: true, fdListType: true, fdKet: true }
+      }),
+      prisma.tbMarking.findMany({
+        where: {
+          ...where,
+          fdExitDate: {
+            gte: yesterdayStart,
+            lt: todayStart
+          }
+        },
+        select: { fdMarkingCode: true, fdConsignee: true, fdExitDate: true, fdGudang: true, fdListType: true, fdKet: true }
       })
     ])
+
+    const expectedExitTomorrowList = prediksiExit.prediksiExitList.filter(p => {
+      const pDate = new Date(p.predictedExitDate)
+      return pDate >= tomorrowStart && pDate < dayAfterTomorrowStart
+    })
+    const expectedExitTomorrowCount = expectedExitTomorrowList.length
 
     // Compute ETA Not Exit Consignee Summary
     const etaNotExitSummary: Record<string, { count: number, codes: { code: string, aging: number }[] }> = {}
@@ -350,7 +489,17 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
       etaNotExitSummary: etaNotExitSummaryArray,
       missedTargetBatches,
       missedTargetSummary: missedTargetSummaryArray,
-      avgTransitTime
+      avgTransitTime,
+      prediksiTerlambatCount: prediksiExit.prediksiTerlambatCount,
+      prediksiSegeraCount: prediksiExit.prediksiSegeraCount,
+      prediksiDekatCount: prediksiExit.prediksiDekatCount,
+      prediksiExitList: prediksiExit.prediksiExitList,
+      exitTodayCount: exitTodayList.length,
+      exitYesterdayCount: exitYesterdayList.length,
+      expectedExitTomorrowCount,
+      exitTodayList,
+      exitYesterdayList,
+      expectedExitTomorrowList
     }
   } catch (error) {
     logger.error('Error fetching marking KPIs:', error)

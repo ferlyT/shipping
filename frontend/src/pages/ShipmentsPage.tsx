@@ -6,7 +6,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Table } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { SearchBar } from '@/components/ui/SearchBar'
-import { Package, Weight, Box, X, Info, Layers, Receipt } from 'lucide-react'
+import { Package, Weight, Box, X, Info, Layers, Receipt, Eye, Truck, CheckCircle2, Circle, ChevronDown, ChevronRight, Rows3 } from 'lucide-react'
 import { cn, formatDate, formatNumber } from '@/lib/utils'
 
 interface ShipmentDimension {
@@ -17,6 +17,16 @@ interface ShipmentDimension {
   fdLbr: number | null
   fdTng: number | null
   fdQty: number | null
+}
+
+interface ShipmentStatus {
+  fdLoadDate: string | null
+  fdETD: string | null
+  fdETA: string | null
+  fdExitDate: string | null
+  fdGudang: string | null
+  statusLabel: string
+  statusStep: number // 0=menunggu loading .. 4=keluar gudang, 5=dalam pengiriman, 6=terkirim
 }
 
 interface Shipment {
@@ -30,6 +40,34 @@ interface Shipment {
   fdJmlPack: number | null
   fdJmlBerat: number | null
   fdM3: number | null
+  shipmentStatus?: ShipmentStatus
+}
+
+// Konfigurasi tampilan badge status kirim berdasarkan statusStep dari tbMarking + tbDelivery
+const STATUS_STYLES: Record<number, { label: string; className: string }> = {
+  0: { label: 'Menunggu Loading', className: 'bg-gray-100 text-gray-600 border-gray-200' },
+  1: { label: 'Sudah Loading', className: 'bg-blue-50 text-blue-700 border-blue-200' },
+  2: { label: 'Dalam Perjalanan (ETD)', className: 'bg-indigo-50 text-indigo-700 border-indigo-200' },
+  3: { label: 'Tiba (ETA)', className: 'bg-amber-50 text-amber-700 border-amber-200' },
+  4: { label: 'Keluar Gudang', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  5: { label: 'Dalam Pengiriman', className: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
+  6: { label: 'Terkirim', className: 'bg-green-100 text-green-700 border-green-300' },
+}
+
+// Urutan tampilan grup: dari yang paling awal proses ke paling akhir
+const STATUS_ORDER = [0, 1, 2, 3, 4, 5, 6]
+
+function StatusBadge({ status }: { status?: ShipmentStatus }) {
+  const step = status?.statusStep ?? 0
+  const style = STATUS_STYLES[step] || STATUS_STYLES[0]
+  return (
+    <span className={cn(
+      'inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium whitespace-nowrap',
+      style.className
+    )}>
+      {status?.statusLabel || style.label}
+    </span>
+  )
 }
 
 export default function ShipmentsPage() {
@@ -42,28 +80,30 @@ export default function ShipmentsPage() {
   const [selectedRow, setSelectedRow] = useState<Shipment | null>(null)
   const [activeTab, setActiveTab] = useState<'info' | 'dimensi'>('info')
   const [listTypeFilter, setListTypeFilter] = useState<'ALL' | '1' | '2'>('ALL')
+  const [groupByStatus, setGroupByStatus] = useState(false)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<number>>(new Set())
 
   const { data: shipmentsData, isLoading } = useQuery({
     queryKey: ['shipments', page, limit, debouncedSearch, listTypeFilter],
     queryFn: async () => {
-      const res = await shipmentsApi.list({
+      const res = await shipmentsApi.getList({
         page,
         limit,
         ...(debouncedSearch && { search: debouncedSearch }),
         ...(listTypeFilter !== 'ALL' && { listType: listTypeFilter }),
       })
-      return res.data
+      return res
     }
   })
 
   const { data: kpiData, isLoading: isLoadingKpi } = useQuery({
     queryKey: ['shipmentsKpi', debouncedSearch, listTypeFilter],
     queryFn: async () => {
-      const res = await shipmentsApi.getKPIs({ 
+      const res = await shipmentsApi.getKpis({ 
         ...(debouncedSearch && { search: debouncedSearch }),
         ...(listTypeFilter !== 'ALL' && { listType: listTypeFilter })
       })
-      return res.data as { data: { totalResi: number, totalPackages: number, totalBerat: number, totalVolume: number } }
+      return { data: res }
     }
   })
 
@@ -71,8 +111,8 @@ export default function ShipmentsPage() {
     queryKey: ['shipmentDetail', selectedRow?.fdListCode],
     queryFn: async () => {
       if (!selectedRow) return null
-      const res = await shipmentsApi.detail(selectedRow.fdListCode)
-      return res.data as { data: Shipment }
+      const res = await shipmentsApi.getById(selectedRow.fdListCode)
+      return { data: res }
     },
     enabled: !!selectedRow
   })
@@ -81,8 +121,8 @@ export default function ShipmentsPage() {
     queryKey: ['shipmentDimensions', selectedRow?.fdListCode],
     queryFn: async () => {
       if (!selectedRow) return []
-      const res = await shipmentsApi.dimensions(selectedRow.fdListCode)
-      return (res.data.data || []) as ShipmentDimension[]
+      const res = await shipmentsApi.getDimensions(selectedRow.fdListCode)
+      return res || []
     },
     enabled: !!selectedRow
   })
@@ -92,6 +132,43 @@ export default function ShipmentsPage() {
   const kpis = kpiData?.data
   const selectedShipment = detailData?.data || selectedRow
   const dimensions = dimensionsData || []
+
+  // Total volume (m3) dihitung dari dimensi yang ada: (P x L x T x Qty) / 1.000.000, satuan cm -> m3
+  const totalDimensiM3 = dimensions.reduce((sum, dim) => {
+    const p = Number(dim.fdPjg || 0)
+    const l = Number(dim.fdLbr || 0)
+    const t = Number(dim.fdTng || 0)
+    const qty = Number(dim.fdQty || 0)
+    return sum + (p * l * t * qty) / 1_000_000
+  }, 0)
+
+  // Grouping shipment berdasarkan status kirim (dihitung dari data halaman saat ini)
+  const groupedByStatus = (() => {
+    if (!groupByStatus) return null
+    const groups = new Map<number, Shipment[]>()
+    for (const row of dataList) {
+      const step = row.shipmentStatus?.statusStep ?? 0
+      if (!groups.has(step)) groups.set(step, [])
+      groups.get(step)!.push(row)
+    }
+    return STATUS_ORDER
+      .filter((step) => groups.has(step))
+      .map((step) => ({
+        step,
+        label: STATUS_STYLES[step]?.label || 'Lainnya',
+        className: STATUS_STYLES[step]?.className || STATUS_STYLES[0].className,
+        rows: groups.get(step)!,
+      }))
+  })()
+
+  const toggleGroupCollapse = (step: number) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev)
+      if (next.has(step)) next.delete(step)
+      else next.add(step)
+      return next
+    })
+  }
 
   useEffect(() => {
     reset()
@@ -117,16 +194,40 @@ export default function ShipmentsPage() {
       header: 'Volume (m3)',
       render: (row: Shipment) => Number(row.fdM3 || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })
     },
+    {
+      key: 'shipmentStatus',
+      header: 'Status Kirim',
+      render: (row: Shipment) => <StatusBadge status={row.shipmentStatus} />
+    },
+    {
+      key: 'aksi',
+      header: 'Aksi',
+      render: (row: Shipment) => (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            setSelectedRow(row)
+          }}
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md border border-[var(--color-border)] text-[var(--color-primary)] bg-white hover:bg-[var(--color-primary)] hover:text-white hover:border-[var(--color-primary)] transition-colors"
+        >
+          <Eye className="w-3.5 h-3.5" />
+          View
+        </button>
+      )
+    },
   ]
 
   const dimColumns = [
-    { key: 'fdListDCode', header: 'DCode' },
     { key: 'fdDescr', header: 'Deskripsi' },
     { key: 'fdPjg', header: 'P (cm)', render: (row: ShipmentDimension) => formatNumber(row.fdPjg) },
     { key: 'fdLbr', header: 'L (cm)', render: (row: ShipmentDimension) => formatNumber(row.fdLbr) },
     { key: 'fdTng', header: 'T (cm)', render: (row: ShipmentDimension) => formatNumber(row.fdTng) },
     { key: 'fdQty', header: 'Qty', render: (row: ShipmentDimension) => formatNumber(row.fdQty) },
   ]
+
+  // Kolom list; saat grouping aktif, kolom Status Kirim disembunyikan karena sudah terwakili oleh header grup
+  const listColumns = groupByStatus ? columns.filter((c) => c.key !== 'shipmentStatus') : columns
 
   return (
     <div className="flex h-[calc(100vh-var(--topbar-height)-2rem)] gap-6 relative overflow-hidden bg-[var(--color-background)] p-4 sm:p-6">
@@ -136,7 +237,7 @@ export default function ShipmentsPage() {
         
         {/* Header Container */}
         <div className="flex flex-shrink-0 flex-col gap-0.5">
-          <h1 className="text-xl font-bold tracking-tight font-[var(--font-display)] text-[var(--color-primary)]">Shipments</h1>
+          <h1 className="font-[var(--font-display)] font-medium text-[40px] m-0 mb-1 tracking-[-0.02em] text-[var(--color-primary)]">Shipments</h1>
           <p className="text-xs text-[var(--color-secondary)] font-[var(--font-label)]">
             Kelola daftar resi pengiriman (Entry List).
           </p>
@@ -274,6 +375,20 @@ export default function ShipmentsPage() {
                 placeholder="Cari list code, customer, marking, deskripsi..." 
               />
             </div>
+            <button
+              type="button"
+              onClick={() => setGroupByStatus((prev) => !prev)}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md border transition-colors whitespace-nowrap",
+                groupByStatus
+                  ? "bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-sm"
+                  : "bg-transparent text-gray-500 border-[var(--color-border)] hover:text-gray-900"
+              )}
+              title="Kelompokkan daftar berdasarkan status pengiriman"
+            >
+              <Rows3 className="w-4 h-4" />
+              <span className="hidden lg:inline">Group by Status</span>
+            </button>
             <div className="flex items-center gap-2 text-sm text-[var(--color-secondary)] whitespace-nowrap">
               <span className="hidden lg:inline">Rows per page:</span>
               <select
@@ -296,18 +411,71 @@ export default function ShipmentsPage() {
         {/* Table Container */}
         <div className="flex-1 min-h-0 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-sm flex flex-col overflow-hidden">
           <div className="flex-1 overflow-auto">
-            <Table
-              columns={columns}
-              data={dataList}
-              keyExtractor={(row) => row.fdListCode}
-              isLoading={isLoading}
-              onRowClick={(row) => setSelectedRow(row)}
-              emptyMessage="Tidak ada data shipment ditemukan."
-              getRowClassName={(row) => cn(
-                'bg-white hover:bg-gray-50 border-l-4 border-l-gray-200 cursor-pointer',
-                selectedRow?.fdListCode === row.fdListCode && 'bg-blue-50/50 border-l-blue-500'
-              )}
-            />
+            {groupByStatus ? (
+              <div className="divide-y divide-[var(--color-border)]">
+                {groupedByStatus && groupedByStatus.length > 0 ? (
+                  groupedByStatus.map((group) => {
+                    const isCollapsed = collapsedGroups.has(group.step)
+                    return (
+                      <div key={group.step}>
+                        <button
+                          type="button"
+                          onClick={() => toggleGroupCollapse(group.step)}
+                          className="w-full flex items-center justify-between gap-2 px-4 py-2.5 bg-gray-50/70 hover:bg-gray-100/70 transition-colors text-left"
+                        >
+                          <div className="flex items-center gap-2">
+                            {isCollapsed ? (
+                              <ChevronRight className="w-4 h-4 text-gray-400" />
+                            ) : (
+                              <ChevronDown className="w-4 h-4 text-gray-400" />
+                            )}
+                            <span className={cn(
+                              'inline-flex items-center gap-1 px-2 py-0.5 rounded-full border text-[11px] font-medium',
+                              group.className
+                            )}>
+                              {group.label}
+                            </span>
+                          </div>
+                          <span className="text-xs text-gray-400 font-medium">
+                            {group.rows.length.toLocaleString('id-ID')} resi
+                          </span>
+                        </button>
+                        {!isCollapsed && (
+                          <Table
+                            columns={listColumns}
+                            data={group.rows}
+                            keyExtractor={(row) => row.fdListCode}
+                            onRowClick={(row) => setSelectedRow(row)}
+                            emptyMessage="Tidak ada data."
+                            getRowClassName={(row) => cn(
+                              'bg-white hover:bg-gray-50 border-l-4 border-l-gray-200 cursor-pointer',
+                              selectedRow?.fdListCode === row.fdListCode && 'bg-blue-50/50 border-l-blue-500'
+                            )}
+                          />
+                        )}
+                      </div>
+                    )
+                  })
+                ) : (
+                  <div className="text-center text-sm text-[var(--color-secondary)] py-10">
+                    Tidak ada data shipment ditemukan.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <Table
+                columns={listColumns}
+                data={dataList}
+                keyExtractor={(row) => row.fdListCode}
+                isLoading={isLoading}
+                onRowClick={(row) => setSelectedRow(row)}
+                emptyMessage="Tidak ada data shipment ditemukan."
+                getRowClassName={(row) => cn(
+                  'bg-white hover:bg-gray-50 border-l-4 border-l-gray-200 cursor-pointer',
+                  selectedRow?.fdListCode === row.fdListCode && 'bg-blue-50/50 border-l-blue-500'
+                )}
+              />
+            )}
           </div>
           <div className="flex items-center justify-between gap-4 border-t border-[var(--color-border)]">
             <Pagination
@@ -445,6 +613,74 @@ export default function ShipmentsPage() {
                       </div>
                     </div>
 
+                    {/* Status Kirim Card */}
+                    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+                      <div className="flex items-center justify-between gap-2 px-5 py-4 border-b border-gray-100 bg-gray-50/50">
+                        <div className="flex items-center gap-2">
+                          <Truck className="w-4 h-4 text-indigo-600" />
+                          <span className="text-sm font-semibold text-gray-900">Status Pengiriman</span>
+                        </div>
+                        <StatusBadge status={selectedShipment.shipmentStatus} />
+                      </div>
+                      <div className="p-5">
+                        {(() => {
+                          const status = selectedShipment.shipmentStatus
+                          const gudang = status?.fdGudang?.trim()
+                          const steps = [
+                            { label: 'Load Date', date: status?.fdLoadDate, stepValue: 1 },
+                            { label: 'ETD', date: status?.fdETD, stepValue: 2 },
+                            { label: 'ETA', date: status?.fdETA, stepValue: 3 },
+                            { label: 'Keluar Gudang', date: status?.fdExitDate, stepValue: 4, sub: gudang ? `Gudang: ${gudang}` : undefined },
+                            { label: 'Dalam Pengiriman', date: null, stepValue: 5, noDate: true },
+                            { label: 'Terkirim', date: null, stepValue: 6, noDate: true },
+                          ]
+                          const currentStep = status?.statusStep ?? 0
+                          return (
+                            <div className="flex flex-col">
+                              {steps.map((step, idx) => {
+                                const isDone = currentStep >= step.stepValue
+                                const isLast = idx === steps.length - 1
+                                const StepIcon = isDone ? CheckCircle2 : Circle
+                                return (
+                                  <div key={step.label} className="flex gap-3">
+                                    {/* Icon + connector line */}
+                                    <div className="flex flex-col items-center">
+                                      <StepIcon className={cn('w-5 h-5 shrink-0', isDone ? 'text-emerald-500' : 'text-gray-300')} />
+                                      {!isLast && (
+                                        <div className={cn(
+                                          'w-0.5 flex-1 my-1 rounded-full',
+                                          currentStep > step.stepValue ? 'bg-emerald-400' : 'bg-gray-200'
+                                        )} style={{ minHeight: '20px' }} />
+                                      )}
+                                    </div>
+                                    {/* Label + date */}
+                                    <div className={cn('flex-1 flex items-center justify-between gap-2', isLast ? 'pb-0' : 'pb-5')}>
+                                      <div>
+                                        <p className={cn('text-sm font-medium', isDone ? 'text-gray-900' : 'text-gray-400')}>
+                                          {step.label}
+                                        </p>
+                                        {step.sub && isDone && (
+                                          <p className="text-xs text-gray-400 mt-0.5">{step.sub}</p>
+                                        )}
+                                      </div>
+                                      <p className={cn(
+                                        'text-xs font-medium whitespace-nowrap',
+                                        isDone ? 'text-gray-600' : 'text-gray-300'
+                                      )}>
+                                        {step.noDate
+                                          ? (isDone ? 'Tercapai' : 'Belum')
+                                          : (step.date ? formatDate(step.date) : 'Belum')}
+                                      </p>
+                                    </div>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          )
+                        })()}
+                      </div>
+                    </div>
+
                     {/* Fisik Info Card */}
                     <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
                       <div className="flex items-center gap-2 px-5 py-4 border-b border-gray-100 bg-gray-50/50">
@@ -483,6 +719,19 @@ export default function ShipmentsPage() {
                       keyExtractor={(row) => `${row.fdListCode}-${row.fdListDCode}`}
                       emptyMessage="Tidak ada data dimensi (WH) untuk resi ini."
                     />
+                    {dimensions.length > 0 && (
+                      <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 bg-gray-50/50">
+                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                          Total Volume ({dimensions.length} dimensi)
+                        </span>
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-base font-bold text-gray-900 tabular-nums">
+                            {totalDimensiM3.toLocaleString('id-ID', { maximumFractionDigits: 4 })}
+                          </span>
+                          <span className="text-xs text-gray-500 font-medium">m³</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
                 

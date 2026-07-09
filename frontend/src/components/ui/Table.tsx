@@ -7,6 +7,7 @@ interface Column<T> {
   render?: (row: T, index: number) => React.ReactNode
   className?: string
   sortable?: boolean
+  fixed?: boolean
 }
 
 interface TableProps<T> {
@@ -20,26 +21,28 @@ interface TableProps<T> {
   onSort?: (key: string) => void
   sortColumn?: string
   sortDirection?: 'asc' | 'desc'
+  tableClassName?: string
 }
 
 export function Table<T>({ 
   columns, data, onRowClick, keyExtractor, isLoading, emptyMessage, getRowClassName,
-  onSort, sortColumn, sortDirection
+  onSort, sortColumn, sortDirection, tableClassName
 }: TableProps<T>) {
   if (isLoading) return <TableSkeleton columns={columns.length} />
   if (!data.length) return <EmptyTableState message={emptyMessage} />
 
   return (
-    <div className="w-full overflow-x-auto">
-      <table className="w-full text-sm table-fixed">
-        <thead>
-          <tr className="border-b border-[var(--color-border)] bg-[var(--color-neutral)]">
+    <div className="w-full relative">
+      <table className={cn("w-full text-xs sm:text-sm table-fixed", tableClassName)}>
+        <thead className="sticky top-0 z-20 shadow-[0_1px_0_0_var(--color-border)]">
+          <tr className="bg-[var(--color-neutral)] border-b border-[#E4E1DA]">
             {columns.map((col) => (
               <th 
                 key={col.key} 
                 className={cn(
-                  'px-4 py-3 text-left font-medium text-[var(--color-secondary)] font-[var(--font-label)] text-[10px] tracking-wider uppercase',
+                  'px-5 py-[14px] text-left font-medium text-[var(--color-secondary)] font-[var(--font-label)] text-[11px] tracking-[0.08em] uppercase',
                   col.sortable && 'cursor-pointer hover:bg-black/5 transition-colors',
+                  col.fixed && 'sticky left-0 z-30 bg-[var(--color-neutral)] shadow-[1px_0_0_0_var(--color-border)]',
                   col.className
                 )}
                 onClick={() => col.sortable && onSort?.(col.key)}
@@ -68,13 +71,17 @@ export function Table<T>({
                 key={keyExtractor(row)}
                 onClick={() => onRowClick?.(row)}
                 className={cn(
-                  'border-b border-[var(--color-border)] transition-colors duration-100',
+                  'border-b border-[#EFEDE7] transition-colors duration-100 last:border-0 bg-white',
                   onRowClick && 'cursor-pointer',
                   customRowClass || 'hover:bg-[var(--color-neutral)]'
                 )}
               >
                 {columns.map((col) => (
-                  <td key={col.key} className={cn('px-4 py-3 text-[var(--color-primary)] overflow-hidden', col.className)}>
+                  <td key={col.key} className={cn(
+                    'px-5 py-[18px] align-top text-[var(--color-primary)] text-[14px] overflow-hidden',
+                    col.fixed && 'sticky left-0 z-10 bg-inherit shadow-[1px_0_0_0_var(--color-border)]',
+                    col.className
+                  )}>
                     {col.render ? col.render(row, index) : String((row as Record<string, unknown>)[col.key] ?? '—')}
                   </td>
                 ))}

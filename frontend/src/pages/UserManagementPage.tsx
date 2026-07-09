@@ -93,6 +93,7 @@ export default function UserManagementPage() {
     {
       key: 'username',
       header: 'Username',
+      fixed: true,
       render: (user: User) => <span className="font-medium">{user.username}</span>,
     },
     {
@@ -154,13 +155,13 @@ export default function UserManagementPage() {
   ]
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex justify-between items-center">
+    <div className="p-4 md:p-8 space-y-6">
+      <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-[var(--color-primary)] font-[var(--font-display)]">User Management</h1>
+          <h1 className="font-[var(--font-display)] font-medium text-[40px] m-0 mb-1 tracking-[-0.02em] text-[var(--color-primary)]">User Management</h1>
           <p className="text-[var(--color-secondary)]">Kelola akses dan peran pengguna sistem.</p>
         </div>
-        <Button variant="secondary" onClick={fetchData}>Refresh</Button>
+        <Button variant="secondary" onClick={fetchData} className="w-full sm:w-auto">Refresh</Button>
       </div>
 
       {error && (
@@ -169,13 +170,14 @@ export default function UserManagementPage() {
         </div>
       )}
 
-      <div className="bg-white rounded-[var(--radius-lg)] shadow-sm border border-[var(--color-border)] overflow-hidden">
+      <div className="bg-white rounded-[var(--radius-lg)] shadow-sm border border-[var(--color-border)] overflow-x-auto">
         <Table
           columns={columns}
           data={users}
           keyExtractor={(user) => user.id}
           isLoading={isLoading}
           emptyMessage="Tidak ada data pengguna."
+          tableClassName="min-w-[800px]"
         />
       </div>
 

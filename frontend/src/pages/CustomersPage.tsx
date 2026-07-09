@@ -7,7 +7,7 @@ import { usePagination } from '@/hooks/usePagination'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useQuery } from '@tanstack/react-query'
 import { customersApi } from '@/api/endpoints'
-import { X, Building2, MapPin, Phone, Mail, User, Eye, DollarSign, Edit3, ShieldAlert, Truck, Info, Calendar } from 'lucide-react'
+import { X, Building2, MapPin, Phone, Mail, User, Eye, DollarSign, ShieldAlert, Truck, Info, Calendar, Rows3, LayoutGrid } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface CustomerAddress {
@@ -99,6 +99,12 @@ function formatCustomerTenure(dateStr?: string | null): string | null {
 export default function CustomersPage() {
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 400)
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 640 ? 'grid' : 'table'
+    }
+    return 'table'
+  })
   const { page, limit, setLimit, goToPage } = usePagination(10)
   
   const [sortField, setSortField] = useState('fdCustName')
@@ -250,7 +256,7 @@ export default function CustomersPage() {
     {
       key: 'actions',
       header: 'Actions',
-      className: 'w-[100px] text-center',
+      className: 'w-[60px] text-center',
       render: (row: Customer) => (
         <div className="flex items-center justify-center gap-1.5" onClick={(e) => e.stopPropagation()}>
           <button
@@ -260,32 +266,20 @@ export default function CustomersPage() {
           >
             <Eye className="w-3.5 h-3.5" />
           </button>
-          <button
-            className="p-1.5 text-[var(--color-secondary)] hover:text-green-600 hover:bg-green-50 rounded"
-            title="Contract Price"
-          >
-            <DollarSign className="w-3.5 h-3.5" />
-          </button>
-          <button
-            className="p-1.5 text-[var(--color-secondary)] hover:text-blue-600 hover:bg-blue-50 rounded"
-            title="Change Status"
-          >
-            <Edit3 className="w-3.5 h-3.5" />
-          </button>
         </div>
       )
     }
   ]
 
   return (
-    <div className="flex h-[calc(100vh-var(--topbar-height)-2rem)] gap-6 relative overflow-hidden">
+    <div className="flex h-[calc(100vh-var(--topbar-height)-2rem)] gap-6 relative overflow-hidden p-4 sm:p-6 lg:p-8">
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col gap-4 min-w-0 h-full">
         
         {/* Header & Status Legend */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex flex-col gap-0.5">
-            <h1 className="text-xl font-bold font-[var(--font-display)] text-[var(--color-primary)]">Customer Information List</h1>
+            <h1 className="font-[var(--font-display)] font-medium text-[40px] m-0 mb-1 tracking-[-0.02em] text-[var(--color-primary)]">Customer Information List</h1>
             <p className="text-xs text-[var(--color-secondary)] font-[var(--font-label)]">Total Registered Customers: {total}</p>
           </div>
           
@@ -345,15 +339,36 @@ export default function CustomersPage() {
               placeholder="Search name, code, contact, phone, email..." 
             />
           </div>
-          <div className="flex items-center gap-2 text-sm text-[var(--color-secondary)] whitespace-nowrap">
-            <span className="hidden sm:inline">Rows per page:</span>
+          
+          <div className="flex items-center gap-2.5 shrink-0 text-[13.6px] text-[var(--color-secondary)]">
+            <div className="flex items-center gap-1 bg-[#F7F5F2] rounded-lg p-0.5 border border-[#E4E1DA]">
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={cn('p-1.5 rounded-md transition-all', viewMode === 'table' ? 'bg-white shadow-sm text-[var(--color-primary)]' : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]')}
+              >
+                <Rows3 size={16} />
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('grid')}
+                className={cn('p-1.5 rounded-md transition-all', viewMode === 'grid' ? 'bg-white shadow-sm text-[var(--color-primary)]' : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]')}
+              >
+                <LayoutGrid size={16} />
+              </button>
+            </div>
+
+            <div className="w-px h-5 bg-[#E4E1DA] mx-1 hidden sm:block"></div>
+
+            <div className="items-center gap-2 text-sm text-[var(--color-secondary)] whitespace-nowrap hidden sm:flex">
+              <span>Rows:</span>
               <select
                 value={limit}
                 onChange={(e) => {
                   setLimit(Number(e.target.value))
                   goToPage(1)
                 }}
-                className="bg-transparent border border-[var(--color-border)] rounded px-2 py-1 focus:outline-none focus:border-[var(--color-primary)]"
+                className="bg-transparent border border-[var(--color-border)] rounded px-2 py-1 focus:outline-none focus:border-[var(--color-primary)] cursor-pointer"
               >
                 <option value={10}>10</option>
                 <option value={25}>25</option>
@@ -361,27 +376,100 @@ export default function CustomersPage() {
                 <option value={100}>100</option>
               </select>
             </div>
+          </div>
         </div>
 
         {/* Table Container */}
         <div className="flex-1 min-h-0 bg-[var(--color-surface)] rounded-[var(--radius-lg)] border border-[var(--color-border)] shadow-sm flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-auto">
-            <Table
-              columns={columns}
-              data={customersList}
-              isLoading={isLoading}
-              keyExtractor={(row) => row.fdCustCode}
-              onRowClick={(row) => setSelectedRow(row)}
-              getRowClassName={(row) => cn(
-                'bg-white hover:bg-gray-50 border-l-4',
-                statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]?.accentClass || 'border-l-gray-200'
-              )}
-              onSort={handleSort}
-              sortColumn={sortField}
-              sortDirection={sortDir}
-            />
+          <div className={cn("flex-1 overflow-auto", viewMode === 'grid' && "p-4 bg-[#F8FAFC]")}>
+            {isLoading ? (
+              <div className="flex flex-col justify-center items-center h-full min-h-[200px] gap-4 p-6">
+                <span className="w-10 h-10 border-4 border-[var(--color-tertiary)] border-t-transparent rounded-full animate-spin" />
+                <p className="text-[var(--color-secondary)] text-sm animate-pulse">Memuat data pelanggan...</p>
+              </div>
+            ) : customersList.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-full text-center p-6 min-h-[200px]">
+                <p className="text-[var(--color-secondary)] text-sm font-medium">Tidak ada data customer yang ditemukan.</p>
+              </div>
+            ) : viewMode === 'table' ? (
+              <Table
+                columns={columns}
+                data={customersList}
+                isLoading={false}
+                keyExtractor={(row) => row.fdCustCode}
+                onRowClick={(row) => setSelectedRow(row)}
+                getRowClassName={(row) => cn(
+                  'bg-white hover:bg-gray-50 border-l-4',
+                  statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]?.accentClass || 'border-l-gray-200'
+                )}
+                onSort={handleSort}
+                sortColumn={sortField}
+                sortDirection={sortDir}
+              />
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {customersList.map((row) => (
+                  <div
+                    key={row.fdCustCode}
+                    onClick={() => setSelectedRow(row)}
+                    className={cn(
+                      "bg-[var(--color-surface)] border rounded-xl overflow-hidden hover:shadow-md transition-shadow cursor-pointer flex flex-col group relative",
+                      statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]?.accentClass ? "border-l-4 " + statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]?.accentClass : "border-l-4 border-l-gray-200"
+                    )}
+                  >
+                    <div className="p-4 border-b border-[var(--color-border)]">
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="min-w-0">
+                          <h3 className="font-bold text-[14px] text-[var(--color-primary)] truncate" title={row.fdCustName}>{row.fdCustName || '-'}</h3>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <span className="text-[11px] text-[var(--color-secondary)] font-mono bg-slate-100 px-1.5 py-0.5 rounded">{row.fdCustCode}</span>
+                            {formatCustomerTenure(row.fdCreatedDate) && (
+                              <span className="text-[10px] text-slate-500 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-100" title={`Customer since ${formatCustomerSince(row.fdCreatedDate)}`}>
+                                {formatCustomerTenure(row.fdCreatedDate)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <Badge variant={statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]?.badgeVariant || 'default'} className="shrink-0 text-[10px] px-1.5 py-0.5 h-auto">
+                          {statusConfig[(row.fdBlocked || 0) as keyof typeof statusConfig]?.label || 'UNKNOWN'}
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex items-center gap-1.5 mt-3 text-[12.5px] text-[var(--color-primary)] font-medium">
+                        <User className="w-3.5 h-3.5 text-[var(--color-muted)]" />
+                        <span className="truncate">{row.fdContact || '-'}</span>
+                      </div>
+                    </div>
+                    
+                    <div className="p-4 bg-slate-50/50 flex-1 flex flex-col gap-2.5 text-[12px]">
+                      <div className="flex items-start gap-2 text-[var(--color-secondary)]">
+                        <MapPin className="w-3.5 h-3.5 mt-0.5 text-[var(--color-muted)] shrink-0" />
+                        <span className="line-clamp-2">{row.fdCityName || '-'}</span>
+                      </div>
+                      
+                      {(row.fdHP || row.fdTelp) && (
+                        <div className="flex items-center gap-2 text-[var(--color-secondary)]">
+                          <Phone className="w-3.5 h-3.5 text-[var(--color-muted)] shrink-0" />
+                          <span className="truncate">{row.fdHP || row.fdTelp}</span>
+                        </div>
+                      )}
+                      
+                      <div className="mt-auto pt-3 flex items-center justify-between">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {row.fdBroker === 1 && <span className="bg-blue-100 text-blue-700 text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider border border-blue-200">BROKER</span>}
+                          {row.fdDiscontinued === 1 && <span className="bg-gray-100 text-gray-500 text-[9px] px-1.5 py-0.5 rounded font-bold tracking-wider border border-gray-200">DISCONTINUED</span>}
+                        </div>
+                        <div className="text-[11px] font-medium text-[var(--color-muted)] shrink-0">
+                          Sales: <span className="text-[var(--color-secondary)]">{row.fdSalesNM || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-          <div className="flex items-center justify-between gap-4 border-t border-[var(--color-border)]">
+          <div className="flex items-center justify-between gap-4 border-t border-[var(--color-border)] p-4">
             <Pagination
               page={page}
               limit={limit}
@@ -414,17 +502,17 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Detail Panel Slider & Backdrop */}
+      {/* Detail Modal */}
       {selectedRow && (
-        <>
-          {/* Backdrop (Aktif di semua layar) */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+          {/* Backdrop */}
           <div 
-            className="fixed inset-0 z-40 bg-black/20 backdrop-blur-sm transition-opacity"
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm transition-opacity"
             onClick={() => setSelectedRow(null)}
           />
 
-          {/* Panel Detail (Meluncur dari kanan menutupi layar penuh vertikal) */}
-          <div className="fixed inset-y-0 right-0 z-50 w-full max-w-[420px] bg-[var(--color-surface)] border-l border-[var(--color-border)] shadow-2xl flex flex-col animate-slideInRight h-full overflow-hidden">
+          {/* Modal Container */}
+          <div className="relative z-50 w-full max-w-3xl bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-2xl flex flex-col max-h-[90vh] overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="flex flex-shrink-0 items-center justify-between p-5 border-b border-[var(--color-border)] bg-[var(--color-neutral)]">
               <div className="min-w-0">
@@ -720,7 +808,7 @@ export default function CustomersPage() {
               </div>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   )
