@@ -16,8 +16,8 @@ export function Pagination({ page, totalPages, onPageChange, total, limit }: Pag
   const end = Math.min(page * limit, total)
   
   return (
-    <div className="flex items-center justify-between px-4 py-3 border-t border-[var(--color-border)]">
-      <p className="text-xs text-[var(--color-secondary)] font-[var(--font-label)]">
+    <div className="flex flex-wrap items-center justify-between w-full sm:w-auto gap-3">
+      <p className="text-xs text-[var(--color-secondary)] font-[var(--font-label)] whitespace-nowrap">
         {start}–{end} of {total} entries
       </p>
       <div className="flex items-center gap-2">

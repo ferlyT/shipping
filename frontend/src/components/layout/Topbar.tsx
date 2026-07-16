@@ -14,7 +14,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         >
           <Menu className="w-5 h-5" />
         </button>
-        <h1 className="text-lg font-medium hidden sm:block">Logistics View</h1>
+        <h1 className="text-lg font-medium hidden sm:block">mshipping</h1>
       </div>
 
       <div className="flex items-center gap-4">

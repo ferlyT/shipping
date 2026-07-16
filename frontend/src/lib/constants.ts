@@ -2,16 +2,21 @@
 // DILARANG: string literal route/path di komponen manapun
 
 export const ROUTES = {
-  LOGIN: '/shipping/login',
-  DASHBOARD: '/shipping/dashboard',
-  CUSTOMERS: '/shipping/customers',
-  SHIPMENTS: '/shipping/shipments',
-  SHIPMENT_DETAIL: (id: string) => `/shipping/shipments/${id}`,
-  SHIPMENT_BATCHES: '/shipping/shipment-batches',
-  DELIVERY_ORDERS: '/shipping/delivery-orders',
-  DELIVERY_DETAIL: (id: string) => `/shipping/delivery-orders/${id}`,
-  BILLING: '/shipping/billing',
-  BILLING_DETAIL: (id: string) => `/shipping/billing/${id}`,
+  LOGIN: '/mshipping/login',
+  REGISTER: '/mshipping/register',
+  DASHBOARD: '/mshipping/dashboard',
+  CUSTOMERS: '/mshipping/customers',
+  USERS: '/mshipping/users',
+  ROLES: '/mshipping/roles',
+  SHIPMENTS: '/mshipping/shipments',
+  SHIPMENT_DETAIL: (id: string) => `/mshipping/shipments/${id}`,
+  SHIPMENTS_LIST: '/mshipping/shipments/list',
+  SHIPMENT_BATCHES: '/mshipping/shipment-batches',
+  SHIPMENT_BATCHES_LIST: '/mshipping/shipment-batches/list',
+  DELIVERY_ORDERS: '/mshipping/delivery-orders',
+  DELIVERY_DETAIL: (id: string) => `/mshipping/delivery-orders/${id}`,
+  BILLING: '/mshipping/billing',
+  BILLING_DETAIL: (id: string) => `/mshipping/billing/${id}`,
 } as const
 
 export const PAGE_SIZES = [10, 20, 50, 100] as const

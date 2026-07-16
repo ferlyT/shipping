@@ -21,7 +21,10 @@ apiClient.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
-      window.location.href = import.meta.env.VITE_APP_BASE + '/login'
+      // Hindari redirect (refresh) saat API login mengembalikan 401 (misal karena salah password / belum disetujui)
+      if (!error.config?.url?.includes('/auth/login')) {
+        window.location.href = import.meta.env.VITE_APP_BASE + '/login'
+      }
     }
     return Promise.reject(error)
   }

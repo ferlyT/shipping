@@ -1,0 +1,148 @@
+
+> frontend@0.0.0 build
+> tsc -b && vite build
+
+src/components/ui/ConfirmModal.tsx(67,13): error TS2322: Type '"outline"' is not assignable to type '"primary" | "secondary" | "ghost" | "danger" | undefined'.
+src/components/ui/EtaSummaryModal.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/ui/MissedTargetModal.tsx(1,8): error TS6133: 'React' is declared but its value is never read.
+src/components/ui/Toast.tsx(1,10): error TS6133: 'useEffect' is declared but its value is never read.
+src/pages/BillingDetailPage.tsx(54,9): error TS2353: Object literal may only specify known properties, and 'title' does not exist in type 'Omit<ToastMessage, "id">'.
+src/pages/BillingPage.tsx(73,9): error TS2353: Object literal may only specify known properties, and 'title' does not exist in type 'Omit<ToastMessage, "id">'.
+src/pages/CustomersPage.tsx(126,9): error TS2322: Type 'string | undefined' is not assignable to type 'string | number'.
+  Type 'undefined' is not assignable to type 'string | number'.
+src/pages/CustomersPage.tsx(133,40): error TS6133: 'isLoadingDetail' is declared but its value is never read.
+src/pages/CustomersPage.tsx(432,96): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(432,132): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(433,49): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(434,36): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(436,20): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(440,81): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(475,20): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(475,50): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(477,24): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(499,28): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(502,28): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(506,61): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(507,46): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(515,77): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(519,77): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(523,77): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(527,92): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(527,119): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(531,93): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(532,28): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(533,74): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(538,78): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(545,97): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(561,81): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(561,118): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(566,32): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(566,71): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(568,74): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(568,111): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(572,79): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(572,114): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(573,31): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(573,67): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(574,96): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(574,132): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(589,81): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(589,98): error TS2339: Property 'fdBillTo' does not exist on type 'Customer'.
+src/pages/CustomersPage.tsx(589,110): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(594,32): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(594,49): error TS2339: Property 'fdBillAddr1' does not exist on type 'Customer'.
+src/pages/CustomersPage.tsx(594,64): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(596,74): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(596,91): error TS2551: Property 'fdBillCityName' does not exist on type 'Customer'. Did you mean 'fdCityName'?
+src/pages/CustomersPage.tsx(596,109): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(601,65): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(601,102): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(601,136): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(601,173): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(605,38): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(613,23): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(617,67): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(627,22): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(627,52): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(638,26): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(638,56): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage.tsx(645,44): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(87,9): error TS2322: Type 'string | undefined' is not assignable to type 'string | number'.
+  Type 'undefined' is not assignable to type 'string | number'.
+src/pages/CustomersPage1.tsx(94,40): error TS6133: 'isLoadingDetail' is declared but its value is never read.
+src/pages/CustomersPage1.tsx(331,96): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(331,132): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(333,22): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(334,22): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(335,22): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(336,22): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(338,36): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(340,20): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(344,81): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(379,20): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(379,50): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(381,24): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(403,28): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(406,28): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(410,30): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(411,30): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(412,30): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(413,30): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(415,46): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(423,77): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(427,77): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(431,77): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(435,92): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(435,119): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(439,93): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(440,28): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(441,74): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(446,78): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(462,81): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(462,118): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(467,32): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(467,71): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(469,74): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(469,111): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(473,79): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(473,114): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(474,31): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(474,67): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(475,96): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(475,132): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(490,81): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(490,98): error TS2339: Property 'fdBillTo' does not exist on type 'Customer'.
+src/pages/CustomersPage1.tsx(490,110): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(495,32): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(495,49): error TS2339: Property 'fdBillAddr1' does not exist on type 'Customer'.
+src/pages/CustomersPage1.tsx(495,64): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(497,74): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(497,91): error TS2551: Property 'fdBillCityName' does not exist on type 'Customer'. Did you mean 'fdCityName'?
+src/pages/CustomersPage1.tsx(497,109): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(502,65): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(502,102): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(502,136): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(502,173): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(506,38): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(514,23): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(518,67): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(528,22): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(528,52): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(539,26): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(539,56): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/CustomersPage1.tsx(546,44): error TS18047: 'selectedCustomer' is possibly 'null'.
+src/pages/DashboardPage.tsx(8,22): error TS6133: 'formatCurrency' is declared but its value is never read.
+src/pages/DashboardPage.tsx(64,9): error TS2353: Object literal may only specify known properties, and 'title' does not exist in type 'Omit<ToastMessage, "id">'.
+src/pages/DeliveryDetailPage.tsx(3,21): error TS6133: 'FileText' is declared but its value is never read.
+src/pages/DeliveryDetailPage.tsx(44,9): error TS2353: Object literal may only specify known properties, and 'title' does not exist in type 'Omit<ToastMessage, "id">'.
+src/pages/DeliveryOrdersPage.tsx(72,9): error TS2353: Object literal may only specify known properties, and 'title' does not exist in type 'Omit<ToastMessage, "id">'.
+src/pages/RegisterPage.tsx(18,9): error TS6133: 'navigate' is declared but its value is never read.
+src/pages/RoleManagementPage.tsx(4,1): error TS6133: 'Table' is declared but its value is never read.
+src/pages/ShipmentBatchesPage.tsx(1,20): error TS6133: 'useMemo' is declared but its value is never read.
+src/pages/ShipmentBatchesPage.tsx(38,10): error TS6133: 'getYearMonthKey' is declared but its value is never read.
+src/pages/ShipmentsPage.tsx(10,10): error TS6133: 'FileText' is declared but its value is never read.
+src/pages/ShipmentsPage.tsx(37,9): error TS6133: 'addToast' is declared but its value is never read.
+src/pages/UserManagementPage.tsx(163,17): error TS2322: Type '"outline"' is not assignable to type '"primary" | "secondary" | "ghost" | "danger" | undefined'.
+src/routes/AppRouter.tsx(1,40): error TS6133: 'Navigate' is declared but its value is never read.
+src/routes/PermissionGuard.tsx(1,10): error TS6133: 'Navigate' is declared but its value is never read.
+src/routes/PermissionGuard.tsx(3,1): error TS6133: 'ROUTES' is declared but its value is never read.

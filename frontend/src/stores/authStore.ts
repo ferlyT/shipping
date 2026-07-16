@@ -6,6 +6,8 @@ interface User {
   username: string
   fullName: string
   role: string
+  permissions?: string[]
+  defaultRoute?: string | null
 }
 
 interface AuthState {
@@ -33,6 +35,6 @@ export const useAuthStore = create<AuthState>()(
         set({ token: null, user: null, isAuthenticated: false })
       },
     }),
-    { name: 'auth-storage', partialize: (s) => ({ token: s.token, user: s.user }) }
+    { name: 'auth-storage', partialize: (s) => ({ token: s.token, user: s.user, isAuthenticated: s.isAuthenticated }) }
   )
 )
