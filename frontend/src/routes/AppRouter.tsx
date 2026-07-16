@@ -14,7 +14,8 @@ const DashboardPage      = lazy(() => import('@/pages/DashboardPage'))
 const CustomersPage      = lazy(() => import('@/pages/CustomersPage'))
 const ShipmentsDashboardPage = lazy(() => import('@/pages/ShipmentsDashboardPage'))
 const ShipmentsListPage  = lazy(() => import('@/pages/ShipmentsListPage'))
-const ShipmentBatchesPage = lazy(() => import('@/pages/ShipmentBatchesPage'))
+const ShipmentBatchesDashboardPage = lazy(() => import('@/pages/ShipmentBatchesDashboardPage'))
+const ShipmentBatchesListPage = lazy(() => import('@/pages/ShipmentBatchesListPage'))
 const DeliveryOrdersPage = lazy(() => import('@/pages/DeliveryOrdersPage'))
 const DeliveryDetailPage = lazy(() => import('@/pages/DeliveryDetailPage'))
 const BillingPage        = lazy(() => import('@/pages/BillingPage'))
@@ -37,7 +38,8 @@ export function AppRouter() {
                 <Route path={ROUTES.CUSTOMERS}         element={<CustomersPage />} />
                 <Route path={ROUTES.SHIPMENTS}         element={<ShipmentsDashboardPage />} />
                 <Route path={ROUTES.SHIPMENTS_LIST}    element={<ShipmentsListPage />} />
-                <Route path={ROUTES.SHIPMENT_BATCHES}  element={<ShipmentBatchesPage />} />
+                <Route path={ROUTES.SHIPMENT_BATCHES}  element={<ShipmentBatchesDashboardPage />} />
+                <Route path={ROUTES.SHIPMENT_BATCHES_LIST}  element={<ShipmentBatchesListPage />} />
                 <Route path={ROUTES.DELIVERY_ORDERS}   element={<DeliveryOrdersPage />} />
                 <Route path={ROUTES.DELIVERY_DETAIL(':id')} element={<DeliveryDetailPage />} />
                 <Route path={ROUTES.BILLING}           element={<BillingPage />} />

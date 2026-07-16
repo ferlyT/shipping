@@ -193,8 +193,8 @@ model TbBilling {
   fdTypeBilling  Int?
   fdListType     Int?
   fdListCode     String?   @db.Char(7)
-  fdMarkingCode  String    @db.Char(30)
-  fdMarkingNo    String    @db.Char(50)
+  fdMarkingCode  String?   @db.Char(30)
+  fdMarkingNo    String?   @db.Char(50)
   fdHarga1       Decimal?  @db.Decimal(18, 2)
   fdHarga2       Decimal?  @db.Decimal(18, 2)
   fdPayTerm      Int?
@@ -211,12 +211,12 @@ model TbBilling {
   fdTakeDate2    DateTime? @db.SmallDateTime
   fdAjpDate      DateTime? @db.SmallDateTime
   fdpost         Int?
-  fdDescr2       String    @db.VarChar(2000)
+  fdDescr2       String?   @db.VarChar(2000)
   fdLoad         DateTime? @db.SmallDateTime
   fdEmp2Code     String?   @db.Char(7)
   fdGive3        Int?
   fdGive3Date    DateTime? @db.SmallDateTime
-  fdGive3Emp     String    @db.Char(50)
+  fdGive3Emp     String?   @db.Char(50)
   fdBillTambahan Int?
   fdInvSg        String?   @db.Char(20)
   fdCekDate      DateTime? @db.SmallDateTime
@@ -226,9 +226,27 @@ model TbBilling {
   customer       TbCustomers? @relation(fields: [fdCustCode], references: [fdCustCode])
   employee       TbEmployees? @relation(fields: [fdEmpCode], references: [fdEmpCode])
   details        TbBillingDetail[]
+  totals         TbBillingTotal[]
 
   @@map("tbBilling")
 }
+
+model TbBillingTotal {
+  fdInvNo    String   @db.Char(20)
+  fdID       String   @db.Char(2)
+  fdCCYCode  String?  @db.Char(3)
+  fdJumlah   Decimal? @db.Decimal(18, 2)
+  fdBayar    Decimal? @db.Decimal(18, 2)
+  fdSLunas   Int?
+  fdFinish   DateTime? @db.SmallDateTime
+
+  // Relations
+  billing    TbBilling @relation(fields: [fdInvNo], references: [fdInvNo], onDelete: Cascade)
+
+  @@id([fdInvNo, fdID])
+  @@map("tbBillingTotal")
+}
+
 
 model TbBillingDetail {
   fdInvNo        String    @db.Char(20)

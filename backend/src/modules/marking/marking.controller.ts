@@ -1,5 +1,5 @@
 import { Context } from 'hono'
-import { getMarkings, getMarkingDetail, getMarkingGroups, getManifestByMarkingCode, getMarkingKPIs } from './marking.service'
+import { getMarkings, getMarkingDetail, getMarkingGroups, getManifestByMarkingCode, getMarkingKPIs, getMarkingExitHistory } from './marking.service'
 
 export async function listMarkings(c: Context) {
   try {
@@ -101,6 +101,26 @@ export async function getMarkingKPIsController(c: Context) {
     return c.json({
       success: true,
       data: kpis,
+    })
+  } catch (error: any) {
+    return c.json(
+      {
+        success: false,
+        message: error.message || 'Terjadi kesalahan pada server',
+      },
+      500
+    )
+  }
+}
+
+export async function getMarkingExitHistoryController(c: Context) {
+  try {
+    const query = c.req.query()
+    const history = await getMarkingExitHistory(query)
+
+    return c.json({
+      success: true,
+      data: history,
     })
   } catch (error: any) {
     return c.json(

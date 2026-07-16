@@ -49,7 +49,7 @@ interface Shipment {
   shipmentStatus?: ShipmentStatus
 }
 
-// Konfigurasi tampilan badge status kirim berdasarkan statusStep dari tbMarking + tbDelivery
+// Konfigurasi tampilan badge status kirim berdasarkan statusStep dari tbMarking + tbDelivery + tbBilling
 const STATUS_STYLES: Record<number, { label: string; bg: string; text: string; dot: string }> = {
   0: { label: 'Waiting', bg: 'bg-[#F1F3F5]', text: 'text-[#495057]', dot: 'bg-[#495057]' },
   1: { label: 'Loading', bg: 'bg-[#E7F5FF]', text: 'text-[#1971C2]', dot: 'bg-[#1971C2]' },
@@ -58,6 +58,9 @@ const STATUS_STYLES: Record<number, { label: string; bg: string; text: string; d
   4: { label: 'Warehouse', bg: 'bg-[#EBFBEE]', text: 'text-[#2B8A3E]', dot: 'bg-[#2B8A3E]' },
   5: { label: 'Delivery', bg: 'bg-[#E3FAFC]', text: 'text-[#0B7285]', dot: 'bg-[#0B7285]' },
   6: { label: 'Delivered', bg: 'bg-[#F3E4E0]', text: 'text-[var(--color-tertiary)]', dot: 'bg-[var(--color-tertiary)]' },
+  7: { label: 'Billed', bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-700' },
+  8: { label: 'Partially Paid', bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-700' },
+  9: { label: 'Paid', bg: 'bg-teal-50', text: 'text-teal-700', dot: 'bg-teal-700' },
 }
 
 const getCommodityIcon = (name: string | null | undefined) => {
@@ -76,9 +79,9 @@ const getCommodityIcon = (name: string | null | undefined) => {
 }
 
 // Urutan tampilan grup: dari yang paling awal proses ke paling akhir
-const STATUS_ORDER = [0, 1, 2, 3, 4, 5, 6]
+const STATUS_ORDER = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
-// Mengelompokkan data per statusStep, mempertahankan urutan STATUS_ORDER (Waiting -> Delivered)
+// Mengelompokkan data per statusStep, mempertahankan urutan STATUS_ORDER (Waiting -> Paid)
 function groupByStatus(rows: Shipment[]) {
   const buckets = new Map<number, Shipment[]>()
   for (const row of rows) {
@@ -226,6 +229,15 @@ export default function ShipmentsListPage() {
 
   const { page, limit, setLimit, goToPage, reset } = usePagination(20)
   const [jumpPage, setJumpPage] = useState('')
+
+  useEffect(() => {
+    reset()
+    if (debouncedSearch) {
+      setLimit(100)
+    } else {
+      setLimit(20)
+    }
+  }, [debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const [selectedRow, setSelectedRow] = useState<Shipment | null>(null)
   const [infoOpen, setInfoOpen] = useState(true)
@@ -541,8 +553,8 @@ export default function ShipmentsListPage() {
         <div className="sticky top-4 lg:top-8 z-10 flex flex-col h-[calc(100vh-var(--topbar-height)-32px)] lg:h-[calc(100vh-var(--topbar-height)-64px)] shadow-sm">
           {/* Toolbar */}
           <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-5 bg-[var(--color-surface)] border border-[#E4E1DA] border-b-0 rounded-t-[var(--radius-lg)] px-3 sm:px-6 py-3 sm:py-[14px] flex-shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="relative flex-1 sm:max-w-[320px]">
+            <div className="flex items-center gap-2.5 flex-1 sm:flex-none">
+              <div className="relative flex-1 sm:w-[380px] lg:w-[450px]">
                 <Search size={17} className="absolute left-3 sm:left-[14px] top-1/2 -translate-y-1/2 text-[var(--color-secondary)]" />
                 <input
                   value={search} onChange={(e) => setSearch(e.target.value)}

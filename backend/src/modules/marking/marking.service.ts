@@ -100,10 +100,6 @@ export async function getMarkingGroups(query: Record<string, string | undefined>
   const isClosed = query.isClosed
   const groupMode = query.groupMode
 
-  if (!groupMode || groupMode === 'none') {
-    return [{ groupValue: 'Semua batch', count: 0, totalPkgs: 0, totalWeight: 0 }]
-  }
-
   try {
     const where: any = {}
 
@@ -125,6 +121,25 @@ export async function getMarkingGroups(query: Record<string, string | undefined>
       where.fdExitDate = { not: null }
     } else if (isClosed === 'false') {
       where.fdExitDate = null
+    }
+
+    // BUG FIX: sebelumnya cabang ini langsung `return [{ ..., count: 0, totalPkgs: 0, totalWeight: 0 }]`
+    // tanpa pernah query DB, jadi badge "Semua batch" di dashboard selalu nampilin 0 walau
+    // data sebenarnya ada (row-level list tetap query beneran lewat getMarkings/where yang sama).
+    // Sekarang dihitung dari where yang sama persis dengan getMarkings, jadi angkanya konsisten.
+    if (!groupMode || groupMode === 'none') {
+      const agg = await prisma.tbMarking.aggregate({
+        where,
+        _count: { _all: true },
+        _sum: { fdJmlPack: true, fdJmlBerat: true },
+      })
+
+      return [{
+        groupValue: 'Semua batch',
+        count: agg._count._all,
+        totalPkgs: Number(agg._sum.fdJmlPack || 0),
+        totalWeight: Number(agg._sum.fdJmlBerat || 0),
+      }]
     }
 
     const data = await prisma.tbMarking.findMany({
@@ -308,6 +323,79 @@ async function computeExitPrediction(where: any): Promise<{
     prediksiSegeraCount: prediksiExitList.filter((p) => p.category === 'segera').length,
     prediksiDekatCount: prediksiExitList.filter((p) => p.category === 'dekat').length,
     prediksiExitList: prediksiExitList.slice(0, 200),
+  }
+}
+
+export async function getMarkingExitHistory(query: Record<string, string | undefined>) {
+  const search = query.search?.trim() || ''
+  const listType = query.listType // 1 for AIR, 2 for SEA
+  const month = query.month // 'YYYY-MM'
+
+  try {
+    const where: any = {}
+
+    if (search) {
+      where.OR = [
+        { fdMarkingCode: { contains: search } },
+        { fdBLNo: { contains: search } },
+        { fdAWB: { contains: search } },
+        { fdConsignee: { contains: search } },
+        { fdContNo: { contains: search } },
+      ]
+    }
+
+    if (listType !== undefined && listType !== '' && listType !== 'ALL') {
+      where.fdListType = parseInt(listType, 10)
+    }
+
+    let rangeStart: Date
+    let rangeEnd: Date
+    if (month && /^\d{4}-\d{2}$/.test(month)) {
+      const [year, mon] = month.split('-').map(Number)
+      rangeStart = new Date(year, mon - 1, 1)
+      rangeEnd = new Date(year, mon, 1)
+    } else {
+      const now = new Date()
+      rangeStart = new Date(now.getFullYear(), now.getMonth(), 1)
+      rangeEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    }
+
+    where.fdExitDate = {
+      gte: rangeStart,
+      lt: rangeEnd,
+    }
+
+    const batches = await prisma.tbMarking.findMany({
+      where,
+      select: {
+        fdMarkingCode: true,
+        fdConsignee: true,
+        fdExitDate: true,
+        fdGudang: true,
+        fdListType: true,
+        fdKet: true,
+      },
+      orderBy: { fdExitDate: 'asc' },
+    })
+
+    const history: Record<string, { count: number; items: typeof batches }> = {}
+
+    for (const batch of batches) {
+      if (!batch.fdExitDate) continue
+      const d = batch.fdExitDate
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+
+      if (!history[key]) {
+        history[key] = { count: 0, items: [] }
+      }
+      history[key].count += 1
+      history[key].items.push(batch)
+    }
+
+    return history
+  } catch (error) {
+    logger.error('Error fetching marking exit history:', error)
+    throw new Error('Gagal mengambil data history exit marking')
   }
 }
 

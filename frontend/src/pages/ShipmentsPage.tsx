@@ -26,7 +26,7 @@ interface ShipmentStatus {
   fdExitDate: string | null
   fdGudang: string | null
   statusLabel: string
-  statusStep: number // 0=menunggu loading .. 4=keluar gudang, 5=dalam pengiriman, 6=terkirim
+  statusStep: number // 0=menunggu loading .. 4=keluar gudang, 5=dalam pengiriman, 6=terkirim, 7=billed, 8=partially paid, 9=paid
 }
 
 interface Shipment {
@@ -43,7 +43,7 @@ interface Shipment {
   shipmentStatus?: ShipmentStatus
 }
 
-// Konfigurasi tampilan badge status kirim berdasarkan statusStep dari tbMarking + tbDelivery
+// Konfigurasi tampilan badge status kirim berdasarkan statusStep dari tbMarking + tbDelivery + tbBilling
 const STATUS_STYLES: Record<number, { label: string; className: string }> = {
   0: { label: 'Menunggu Loading', className: 'bg-gray-100 text-gray-600 border-gray-200' },
   1: { label: 'Sudah Loading', className: 'bg-blue-50 text-blue-700 border-blue-200' },
@@ -52,10 +52,13 @@ const STATUS_STYLES: Record<number, { label: string; className: string }> = {
   4: { label: 'Keluar Gudang', className: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
   5: { label: 'Dalam Pengiriman', className: 'bg-cyan-50 text-cyan-700 border-cyan-200' },
   6: { label: 'Terkirim', className: 'bg-green-100 text-green-700 border-green-300' },
+  7: { label: 'Ditagih (Billed)', className: 'bg-purple-50 text-purple-700 border-purple-200' },
+  8: { label: 'Dibayar Sebagian', className: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
+  9: { label: 'Lunas (Paid)', className: 'bg-teal-50 text-teal-700 border-teal-200' },
 }
 
 // Urutan tampilan grup: dari yang paling awal proses ke paling akhir
-const STATUS_ORDER = [0, 1, 2, 3, 4, 5, 6]
+const STATUS_ORDER = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 function StatusBadge({ status }: { status?: ShipmentStatus }) {
   const step = status?.statusStep ?? 0
@@ -172,6 +175,11 @@ export default function ShipmentsPage() {
 
   useEffect(() => {
     reset()
+    if (debouncedSearch) {
+      setLimit(100)
+    } else {
+      setLimit(20)
+    }
   }, [debouncedSearch]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const columns = [

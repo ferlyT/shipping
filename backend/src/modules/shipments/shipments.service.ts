@@ -24,7 +24,13 @@ type DeliveryInfo = {
 
 export type ShipmentStatus = MarkingDates & {
   statusLabel: string
-  statusStep: number // 0=menunggu loading .. 4=keluar gudang, 5=dalam pengiriman, 6=terkirim
+  statusStep: number // 0=menunggu loading .. 4=keluar gudang, 5=dalam pengiriman, 6=terkirim, 7=billed, 8=partially paid, 9=paid
+}
+
+type BillingInfo = {
+  isBilled: boolean
+  isPartiallyPaid: boolean
+  isPaid: boolean
 }
 
 const MARKING_STATUS_SELECT = {
@@ -46,7 +52,8 @@ const EMPTY_MARKING: MarkingDates = {
 
 function resolveShipmentStatus(
   marking: MarkingDates | null | undefined,
-  delivery: DeliveryInfo | null | undefined
+  delivery: DeliveryInfo | null | undefined,
+  billing: BillingInfo | null | undefined
 ): ShipmentStatus {
   if (!marking) {
     return { ...EMPTY_MARKING, statusLabel: 'Belum Ada Data Marking', statusStep: 0 }
@@ -55,6 +62,15 @@ function resolveShipmentStatus(
   const { fdLoadDate, fdETD, fdETA, fdExitDate } = marking
 
   if (fdExitDate) {
+    if (billing?.isPaid) {
+      return { ...marking, statusLabel: 'Paid', statusStep: 9 }
+    }
+    if (billing?.isPartiallyPaid) {
+      return { ...marking, statusLabel: 'Partially Paid', statusStep: 8 }
+    }
+    if (billing?.isBilled) {
+      return { ...marking, statusLabel: 'Billed', statusStep: 7 }
+    }
     if (delivery?.isSent) {
       return { ...marking, statusLabel: 'Delivered', statusStep: 6 }
     }
@@ -116,6 +132,53 @@ async function getDeliveryStatusMap(listCodes: string[]) {
   return map
 }
 
+async function getBillingStatusMap(listCodes: string[]) {
+  const normalizedCodes = listCodes.map((c) => c.trim()).filter(Boolean)
+  const uniqueCodes = [...new Set(normalizedCodes)]
+  if (uniqueCodes.length === 0) return new Map<string, BillingInfo>()
+
+  const billings = await prisma.tbBilling.findMany({
+    where: { 
+      fdListCode: { in: uniqueCodes },
+      fdGive: 1 
+    },
+    include: {
+      totals: true
+    }
+  })
+
+  const map = new Map<string, BillingInfo>()
+  for (const b of billings) {
+    const code = (b.fdListCode ?? '').trim()
+    if (!code) continue
+
+    const totals = b.totals || []
+    
+    let isPaid = false
+    let isPartiallyPaid = false
+
+    if (totals.length > 0) {
+      const isAllPaid = totals.every(t => Number(t.fdBayar || 0) >= Number(t.fdJumlah || 0))
+      if (isAllPaid) {
+        isPaid = true
+      } else {
+        const hasSomePayment = totals.some(t => Number(t.fdBayar || 0) > 0)
+        if (hasSomePayment) {
+          isPartiallyPaid = true
+        }
+      }
+    }
+
+    const existing = map.get(code)
+    map.set(code, {
+      isBilled: true,
+      isPartiallyPaid: existing?.isPartiallyPaid || isPartiallyPaid,
+      isPaid: existing?.isPaid || isPaid,
+    })
+  }
+  return map
+}
+
 import { Prisma } from '@prisma/client'
 
 // ---------------------------------------------------------------------------
@@ -132,16 +195,15 @@ export async function getShipments(query: Record<string, string | undefined>) {
   const conditions: Prisma.Sql[] = []
 
   if (search) {
-    // Kita gunakan SUBQUERY ke tbEntryList agar SQL Server memfilter data DULU
-    // sebelum melakukan LEFT JOIN yang sangat berat di dalam vwShipment.
-    if (/\\d/.test(search) && !/\\s/.test(search)) {
-      conditions.push(Prisma.sql`fdListCode IN (SELECT fdListCode FROM tbEntryList WHERE fdListCode LIKE ${search + '%'} OR fdMarkingCode LIKE ${search + '%'} OR fdTerima LIKE ${search + '%'} OR fdTrackingNo LIKE ${search + '%'})`)
-    } else {
-      conditions.push(Prisma.sql`(
-        fdListCode IN (SELECT fdListCode FROM tbEntryList WHERE fdListCode LIKE ${search + '%'} OR fdMarkingCode LIKE ${search + '%'} OR fdTerima LIKE ${search + '%'} OR fdTrackingNo LIKE ${search + '%'} OR fdDesc LIKE ${'%' + search + '%'})
-        OR fdListCode IN (SELECT e.fdListCode FROM tbEntryList e JOIN tbCustomers c ON e.fdCustCode = c.fdCustCode WHERE c.fdCustName LIKE ${'%' + search + '%'})
-      )`)
-    }
+    const searchStarts = `${search}%`
+    const searchLike = `%${search}%`
+    conditions.push(Prisma.sql`(
+      fdListCode LIKE ${searchStarts} OR 
+      fdMarkingCode LIKE ${searchStarts} OR 
+      fdTerima LIKE ${searchStarts} OR 
+      fdLocalTrackingNo LIKE ${searchStarts} OR 
+      fdCustName LIKE ${searchLike}
+    )`)
   }
 
   if (listType !== undefined && listType !== '' && listType !== 'ALL') {
@@ -172,6 +234,16 @@ export async function getShipments(query: Record<string, string | undefined>) {
     } else if (status === 6) {
       conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL)`)
       conditions.push(Prisma.sql`fdListCode IN (SELECT fdListCode FROM tbDelivery WHERE fdSent = 1)`)
+      conditions.push(Prisma.sql`fdListCode NOT IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1)`)
+    } else if (status === 7) {
+      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL)`)
+      conditions.push(Prisma.sql`fdListCode IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1 AND fdInvNo NOT IN (SELECT fdInvNo FROM tbBillingTotal WHERE ISNULL(fdBayar, 0) > 0))`)
+    } else if (status === 8) {
+      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL)`)
+      conditions.push(Prisma.sql`fdListCode IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1 AND fdInvNo IN (SELECT fdInvNo FROM tbBillingTotal WHERE ISNULL(fdBayar, 0) > 0 AND ISNULL(fdBayar, 0) < ISNULL(fdJumlah, 0)))`)
+    } else if (status === 9) {
+      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL)`)
+      conditions.push(Prisma.sql`fdListCode IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1 AND fdInvNo IN (SELECT fdInvNo FROM tbBillingTotal) AND fdInvNo NOT IN (SELECT fdInvNo FROM tbBillingTotal WHERE ISNULL(fdBayar, 0) < ISNULL(fdJumlah, 0)))`)
     }
   }
 
@@ -196,18 +268,20 @@ export async function getShipments(query: Record<string, string | undefined>) {
   const data = rawData
   const total = Number(countRes[0]?.count || 0)
 
-  // Ambil status kirim (loaddate, etd, eta, exit, gudang) dari tbMarking + status lanjutan dari tbDelivery
+  // Ambil status kirim (loaddate, etd, eta, exit, gudang) dari tbMarking + status lanjutan dari tbDelivery + status billing
   // untuk semua baris pada halaman ini sekaligus (batch, hindari N+1 query)
-  const [markingMap, deliveryMap] = await Promise.all([
+  const [markingMap, deliveryMap, billingMap] = await Promise.all([
     getMarkingStatusMap(data.map((d) => d.fdMarkingCode ?? '')),
     getDeliveryStatusMap(data.map((d) => d.fdListCode ?? '')),
+    getBillingStatusMap(data.map((d) => d.fdListCode ?? '')),
   ])
 
   const dataWithStatus = data.map((row) => ({
     ...row,
     shipmentStatus: resolveShipmentStatus(
       row.fdMarkingCode ? markingMap.get(row.fdMarkingCode.trim()) : null,
-      row.fdListCode ? deliveryMap.get(row.fdListCode.trim()) : null
+      row.fdListCode ? deliveryMap.get(row.fdListCode.trim()) : null,
+      row.fdListCode ? billingMap.get(row.fdListCode.trim()) : null
     ),
   }))
 
@@ -228,9 +302,8 @@ export async function getShipmentById(id: string) {
     })
     : null
 
-  // Status lanjutan (Dalam Pengiriman / Terkirim) hanya relevan setelah fdExitDate terisi,
-  // tapi query-nya murah (per fdListCode) jadi cukup dijalankan setiap kali ada marking.
   let delivery: DeliveryInfo | null = null
+  let billing: BillingInfo | null = null
   if (marking?.fdExitDate) {
     const deliveries = await prisma.tbDelivery.findMany({
       where: { fdListCode: shipment.fdListCode.trim() },
@@ -240,11 +313,34 @@ export async function getShipmentById(id: string) {
       hasDelivery: deliveries.length > 0,
       isSent: deliveries.some((d) => d.fdSent === 1),
     }
+
+    const billings = await prisma.tbBilling.findMany({
+      where: { fdListCode: shipment.fdListCode.trim(), fdGive: 1 },
+      include: { totals: true },
+    })
+    
+    if (billings.length > 0) {
+      billing = { isBilled: true, isPartiallyPaid: false, isPaid: false }
+      for (const b of billings) {
+        const totals = b.totals || []
+        if (totals.length > 0) {
+          const isAllPaid = totals.every(t => Number(t.fdBayar || 0) >= Number(t.fdJumlah || 0))
+          if (isAllPaid) {
+            billing.isPaid = true
+          } else {
+            const hasSomePayment = totals.some(t => Number(t.fdBayar || 0) > 0)
+            if (hasSomePayment) {
+              billing.isPartiallyPaid = true
+            }
+          }
+        }
+      }
+    }
   }
 
   return {
     ...shipment,
-    shipmentStatus: resolveShipmentStatus(marking, delivery),
+    shipmentStatus: resolveShipmentStatus(marking, delivery, billing),
   }
 }
 
@@ -262,10 +358,11 @@ export async function getShipmentsKPIs(query: Record<string, string | undefined>
   const where: any = search
     ? {
       OR: [
-        { fdListCode: { contains: search } },
+        { fdListCode: { startsWith: search } },
         { fdCustName: { contains: search } },
-        { fdMarkingCode: { contains: search } },
-        { fdDesc: { contains: search } },
+        { fdMarkingCode: { startsWith: search } },
+        { fdTerima: { startsWith: search } },
+        { fdLocalTrackingNo: { startsWith: search } },
       ],
     }
     : {}

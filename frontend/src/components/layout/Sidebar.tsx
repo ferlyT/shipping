@@ -43,7 +43,14 @@ const getNavItems = (role?: string, permissions?: string[]): { group: string; it
         { label: 'Daftar Resi', path: ROUTES.SHIPMENTS_LIST, icon: ClipboardList },
       ],
     },
-    { label: 'Batch Marking', path: ROUTES.SHIPMENT_BATCHES, icon: Layers },
+    {
+      label: 'Batch Marking',
+      icon: Layers,
+      children: [
+        { label: 'Dashboard', path: ROUTES.SHIPMENT_BATCHES, icon: BarChart2 },
+        { label: 'Daftar Batch', path: ROUTES.SHIPMENT_BATCHES_LIST, icon: ClipboardList },
+      ],
+    },
     { label: 'Delivery Order', path: ROUTES.DELIVERY_ORDERS, icon: Truck },
     { label: 'Billing', path: ROUTES.BILLING, icon: FileText },
   ]
@@ -126,7 +133,7 @@ function NavLeaf({
 }
 
 const checkIsActive = (pathname: string, path: string) => {
-  if (path === ROUTES.DASHBOARD || path === ROUTES.SHIPMENTS || path === ROUTES.CUSTOMERS) {
+  if (path === ROUTES.DASHBOARD || path === ROUTES.SHIPMENTS || path === ROUTES.CUSTOMERS || path === ROUTES.SHIPMENT_BATCHES) {
     return pathname === path
   }
   return pathname.startsWith(path)
