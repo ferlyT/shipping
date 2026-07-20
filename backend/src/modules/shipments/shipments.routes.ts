@@ -6,7 +6,7 @@ import { successResponse, errorResponse } from '../../utils/response'
 const shipmentsRoutes = new Hono()
 
 // Semua route shipments memerlukan auth dan permission
-shipmentsRoutes.use('/*', authMiddleware, requirePermission('/shipping/shipments'))
+shipmentsRoutes.use('/*', authMiddleware, requirePermission('/mshipping/shipments'))
 
 shipmentsRoutes.get('/', async (c) => {
   const query = c.req.query()

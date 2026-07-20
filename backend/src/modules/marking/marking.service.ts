@@ -224,6 +224,54 @@ export async function getManifestByMarkingCode(fdMarkingCode: string) {
   }
 }
 
+export async function searchManifestSuggestions(fdMarkingCode: string, query: string): Promise<string[]> {
+  try {
+    const q = query.trim()
+    if (!q || q.length < 2) return []
+
+    const results = await prisma.vwShipment.findMany({
+      where: {
+        fdMarkingCode,
+        OR: [
+          { fdListCode: { contains: q } },
+          { fdCustName: { contains: q } },
+          { fdMarkingNo: { contains: q } },
+          { fdComodity: { contains: q } },
+        ],
+      },
+      select: {
+        fdListCode: true,
+        fdCustName: true,
+        fdMarkingNo: true,
+        fdComodity: true,
+      },
+      take: 30,
+    })
+
+    // Kumpulkan semua nilai yang mengandung query, lalu deduplicate
+    const seen = new Set<string>()
+    const suggestions: string[] = []
+
+    for (const row of results) {
+      const candidates = [row.fdListCode, row.fdCustName, row.fdMarkingNo, row.fdComodity]
+      for (const val of candidates) {
+        if (val && val.toLowerCase().includes(q.toLowerCase()) && !seen.has(val)) {
+          seen.add(val)
+          suggestions.push(val)
+          if (suggestions.length >= 10) break
+        }
+      }
+      if (suggestions.length >= 10) break
+    }
+
+    return suggestions
+  } catch (error) {
+    logger.error(`Error searching manifest suggestions for ${fdMarkingCode}:`, error)
+    throw new Error('Gagal mengambil suggestions manifest')
+  }
+}
+
+
 interface PrediksiExitItem {
   fdMarkingCode: string
   fdConsignee: string | null

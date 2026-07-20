@@ -1,10 +1,14 @@
 import { Menu, LogOut } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
+import { useLangStore } from '@/stores/langStore'
+import { useTranslation } from '@/hooks/useTranslation'
 import { getInitials } from '@/lib/utils'
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const { user, logout } = useAuthStore()
-  
+  const { lang, toggleLang } = useLangStore()
+  const { t } = useTranslation()
+
   return (
     <header className="sticky top-0 z-30 flex h-[var(--topbar-height)] items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 lg:px-8">
       <div className="flex items-center gap-4">
@@ -17,8 +21,19 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         <h1 className="text-lg font-medium hidden sm:block">mshipping</h1>
       </div>
 
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
+        {/* Language Toggle */}
+        <button
+          onClick={toggleLang}
+          title={t('topbar.language')}
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-semibold text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/30 transition-all duration-200 select-none"
+        >
+          <span className="text-sm leading-none">{lang === 'id' ? '🇮🇩' : '🇬🇧'}</span>
+          <span className="uppercase tracking-wide">{lang}</span>
+        </button>
+
         <div className="hidden sm:flex items-center gap-3 text-sm">
+          <div className="h-6 w-px bg-[var(--color-border)]" />
           <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-primary)] text-white font-medium text-xs">
             {user?.fullName ? getInitials(user.fullName) : 'AD'}
           </div>
@@ -27,15 +42,15 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
             <span className="text-xs text-[var(--color-muted)] mt-1 leading-none">{user?.role || 'Admin'}</span>
           </div>
         </div>
-        
+
         <div className="h-6 w-px bg-[var(--color-border)] hidden sm:block" />
-        
+
         <button
           onClick={logout}
           className="flex items-center gap-2 p-2 text-sm font-medium text-[var(--color-secondary)] hover:text-[var(--color-tertiary)] transition-colors"
         >
           <LogOut className="w-4 h-4" />
-          <span className="hidden sm:inline">Logout</span>
+          <span className="hidden sm:inline">{t('topbar.logout')}</span>
         </button>
       </div>
     </header>

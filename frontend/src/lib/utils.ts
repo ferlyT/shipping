@@ -1,5 +1,6 @@
 // ATURAN: Semua formatter dan helper didefinisikan di sini
 // DILARANG: format date/currency inline di komponen
+// CATATAN: formatDate() = locale id-ID (default), formatDateShort() = locale en-GB (untuk komponen marking & dual-bahasa)
 
 import { clsx, type ClassValue } from 'clsx'
 import { twMerge } from 'tailwind-merge'
@@ -39,4 +40,22 @@ export function truncate(str: string, maxLength: number): string {
 // Get initials dari nama
 export function getInitials(name: string): string {
   return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
+}
+
+// Format tanggal singkat ke "12 Jan 2024" (en-GB) — dipakai di komponen marking
+// Terpisah dari formatDate() agar mendukung fitur dual bahasa
+export function formatDateShort(value: string | Date | null | undefined): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
+}
+
+// Format key grup marking "YYYY-MM" menjadi label bulan, misal: "July 2024"
+export function formatYearMonthKey(key: string): string {
+  if (key === 'Tidak diketahui' || key === 'Unknown') return key
+  const [year, month] = key.split('-')
+  if (!year || !month) return key
+  const d = new Date(Number(year), Number(month) - 1, 1)
+  return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 }

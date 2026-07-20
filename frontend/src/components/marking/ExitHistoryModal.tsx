@@ -1,7 +1,7 @@
 import { createPortal } from 'react-dom'
 import { X, CalendarDays, ChevronLeft, ChevronRight, TrendingUp, Flame, CalendarCheck2, Plane, Ship } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { ExitListItem } from '@/components/ui/ExitListModal'
+import type { ExitListItem } from '@/components/marking/ExitListModal'
 import type { ExitHistoryDay } from '@/api/endpoints/marking'
 
 // ---------------------------------------------------------------------------

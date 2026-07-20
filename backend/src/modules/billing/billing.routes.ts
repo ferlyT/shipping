@@ -7,7 +7,7 @@ import { ROUTES } from '../../../../frontend/src/lib/constants'
 const billingRoutes = new Hono()
 
 // Semua route billing memerlukan auth dan permission
-billingRoutes.use('/*', authMiddleware, requirePermission('/shipping/billing'))
+billingRoutes.use('/*', authMiddleware, requirePermission('/mshipping/billing'))
 
 billingRoutes.get('/', async (c) => {
   const query = c.req.query()

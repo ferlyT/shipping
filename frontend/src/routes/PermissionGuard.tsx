@@ -19,7 +19,7 @@ export function PermissionGuard() {
   
   const hasAccess = user?.permissions?.some(p => {
     if (p === '/*') return true
-    // If permission is /shipping/shipments, it should allow /shipping/shipments/123
+    // If permission is /mshipping/shipments, it should allow /mshipping/shipments/123
     return pathname === p || pathname.startsWith(p + '/')
   })
 

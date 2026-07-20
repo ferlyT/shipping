@@ -5,7 +5,7 @@ import { successResponse, errorResponse } from '../../utils/response'
 
 const dashboardRoutes = new Hono()
 
-dashboardRoutes.use('/*', authMiddleware, requirePermission('/shipping/dashboard'))
+dashboardRoutes.use('/*', authMiddleware, requirePermission('/mshipping/dashboard'))
 
 dashboardRoutes.get('/stats', async (c) => {
   try {

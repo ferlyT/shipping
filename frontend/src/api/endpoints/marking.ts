@@ -1,5 +1,5 @@
 import apiClient from '../client'
-import type { ExitListItem } from '@/components/ui/ExitListModal'
+import type { ExitListItem } from '@/components/marking/ExitListModal'
 
 export const markingApi = {
   list: (params: { page: number; limit: number; search?: string; sortBy?: string; sortDir?: string; listType?: string; isClosed?: string; groupMode?: string; groupValue?: string }) => {
@@ -21,7 +21,11 @@ export const markingApi = {
   // Exit Metrics calendar. `month` is formatted as 'YYYY-MM'.
   getExitHistory: (params: { month: string; listType?: string; search?: string }) => {
     return apiClient.get('/marking/exit-history', { params })
-  }
+  },
+  // Server-side autocomplete untuk pencarian manifest. Min 2 karakter.
+  searchManifest: (id: string, q: string) => {
+    return apiClient.get(`/marking/${id}/manifest/search`, { params: { q } })
+  },
 }
 
 export interface ExitHistoryDay {

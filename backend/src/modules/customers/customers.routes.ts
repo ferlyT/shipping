@@ -6,7 +6,7 @@ import { successResponse, errorResponse } from '../../utils/response'
 const customersRoutes = new Hono()
 
 // Semua route customers memerlukan auth
-customersRoutes.use('/*', authMiddleware, requirePermission('/shipping/customers'))
+customersRoutes.use('/*', authMiddleware, requirePermission('/mshipping/customers'))
 
 customersRoutes.get('/', async (c) => {
   try {
