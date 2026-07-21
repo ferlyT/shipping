@@ -8,8 +8,8 @@ import { ROUTES } from '@/lib/constants'
 
 // Lazy load pages
 import { lazy, Suspense } from 'react'
-const LoginPage          = lazy(() => import('@/pages/LoginPage'))
-const RegisterPage       = lazy(() => import('@/pages/RegisterPage'))
+const LoginPage          = lazy(() => import('@/features/auth').then(m => ({ default: m.LoginPage })))
+const RegisterPage       = lazy(() => import('@/features/auth').then(m => ({ default: m.RegisterPage })))
 const DashboardPage      = lazy(() => import('@/pages/DashboardPage'))
 const CustomersPage      = lazy(() => import('@/features/customers').then(m => ({ default: m.CustomersPage })))
 const ShipmentsDashboardPage = lazy(() => import('@/features/shipments').then(m => ({ default: m.ShipmentsDashboardPage })))
