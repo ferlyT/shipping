@@ -1,13 +1,75 @@
-import { BrowserRouter, Routes, Route } from 'react-router-dom'
-import { ProtectedRoute } from './ProtectedRoute'
-import { AdminGuard } from './AdminGuard'
-import { PermissionGuard } from './PermissionGuard'
-import { DefaultRouteRedirect } from './DefaultRouteRedirect'
-import { AppLayout } from '@/components/layout/AppLayout'
+import { lazy, Suspense } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom'
+import { useAuthStore } from '@/stores/authStore'
 import { ROUTES } from '@/lib/constants'
+import { AppLayout } from '@/components/layout/AppLayout'
+
+export function AdminGuard() {
+  const { user } = useAuthStore()
+
+  if (user?.role !== 'admin') {
+    return <Navigate to={ROUTES.DASHBOARD} replace />
+  }
+
+  return <Outlet />
+}
+
+export function PermissionGuard() {
+  const { user } = useAuthStore()
+  const { pathname } = useLocation()
+
+  // Always allow admin to pass, or check strictly
+  if (user?.role === 'admin') {
+    return <Outlet />
+  }
+
+  // Check if current path is in the user's permissions
+  const hasAccess = user?.permissions?.some(p => {
+    if (p === '/*') return true
+    return pathname === p || pathname.startsWith(p + '/')
+  })
+
+  if (!hasAccess) {
+    return <DefaultRouteRedirect />
+  }
+
+  return <Outlet />
+}
+
+export function ProtectedRoute() {
+  const { isAuthenticated } = useAuthStore()
+  return isAuthenticated ? <Outlet /> : <Navigate to={ROUTES.LOGIN} replace />
+}
+
+export function DefaultRouteRedirect() {
+  const { user } = useAuthStore()
+
+  if (!user) {
+    return <Navigate to={ROUTES.LOGIN} replace />
+  }
+
+  if (user.role === 'admin') {
+    return <Navigate to={ROUTES.DASHBOARD} replace />
+  }
+
+  if (user.defaultRoute) {
+    return <Navigate to={user.defaultRoute} replace />
+  }
+
+  // Fallback if no default route is set
+  if (user.permissions && user.permissions.length > 0) {
+    return <Navigate to={user.permissions[0]} replace />
+  }
+
+  // If no permissions at all, stay on a blank or unauthorized page
+  return (
+    <div className="flex h-screen items-center justify-center text-gray-500">
+      Anda tidak memiliki izin untuk melihat halaman manapun. Silakan hubungi Administrator.
+    </div>
+  )
+}
 
 // Lazy load pages
-import { lazy, Suspense } from 'react'
 const LoginPage          = lazy(() => import('@/features/auth').then(m => ({ default: m.LoginPage })))
 const RegisterPage       = lazy(() => import('@/features/auth').then(m => ({ default: m.RegisterPage })))
 const DashboardPage      = lazy(() => import('@/pages/DashboardPage'))
