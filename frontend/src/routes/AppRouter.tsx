@@ -18,8 +18,8 @@ const ShipmentBatchesDashboardPage = lazy(() => import('@/features/shipment-batc
 const ShipmentBatchesListPage = lazy(() => import('@/features/shipment-batches').then(m => ({ default: m.ShipmentBatchesListPage })))
 const DeliveryOrdersPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryOrdersPage })))
 const DeliveryDetailPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryDetailPage })))
-const BillingPage        = lazy(() => import('@/pages/BillingPage'))
-const BillingDetailPage  = lazy(() => import('@/pages/BillingDetailPage'))
+const BillingPage        = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingPage })))
+const BillingDetailPage  = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingDetailPage })))
 const UserManagementPage = lazy(() => import('@/pages/UserManagementPage'))
 const RoleManagementPage = lazy(() => import('@/pages/RoleManagementPage'))
 
