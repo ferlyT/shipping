@@ -11,7 +11,7 @@ import { lazy, Suspense } from 'react'
 const LoginPage          = lazy(() => import('@/pages/LoginPage'))
 const RegisterPage       = lazy(() => import('@/pages/RegisterPage'))
 const DashboardPage      = lazy(() => import('@/pages/DashboardPage'))
-const CustomersPage      = lazy(() => import('@/pages/CustomersPage'))
+const CustomersPage      = lazy(() => import('@/features/customers').then(m => ({ default: m.CustomersPage })))
 const ShipmentsDashboardPage = lazy(() => import('@/features/shipments').then(m => ({ default: m.ShipmentsDashboardPage })))
 const ShipmentsListPage  = lazy(() => import('@/features/shipments').then(m => ({ default: m.ShipmentsListPage })))
 const ShipmentBatchesDashboardPage = lazy(() => import('@/features/shipment-batches').then(m => ({ default: m.ShipmentBatchesDashboardPage })))
