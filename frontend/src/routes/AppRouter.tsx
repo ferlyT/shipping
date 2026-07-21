@@ -20,8 +20,8 @@ const DeliveryOrdersPage = lazy(() => import('@/features/delivery-orders').then(
 const DeliveryDetailPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryDetailPage })))
 const BillingPage        = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingPage })))
 const BillingDetailPage  = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingDetailPage })))
-const UserManagementPage = lazy(() => import('@/pages/UserManagementPage'))
-const RoleManagementPage = lazy(() => import('@/pages/RoleManagementPage'))
+const UserManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.UserManagementPage })))
+const RoleManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.RoleManagementPage })))
 
 export function AppRouter() {
   return (
