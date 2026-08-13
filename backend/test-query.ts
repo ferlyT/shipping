@@ -3,39 +3,34 @@ import { PrismaClient, Prisma } from '@prisma/client'
 const prisma = new PrismaClient()
 
 async function test() {
-  const search = 'SG260610-007'
-  const conditions = [
-    Prisma.sql`(
-      fdListCode IN (SELECT fdListCode FROM tbEntryList WHERE fdListCode LIKE ${search + '%'} OR fdMarkingCode LIKE ${search + '%'} OR fdTerima LIKE ${search + '%'} OR fdTrackingNo LIKE ${search + '%'} OR fdDesc LIKE ${'%' + search + '%'})
-      OR fdCustName IN (SELECT fdCustName FROM tbCustomers WHERE fdCustName LIKE ${'%' + search + '%'})
-    )`
-  ]
-  const skip = 0
-  const take = 20
-  
-  console.time('QueryTime')
+  const search = 'pricila'
   try {
-    const data = await prisma.$queryRaw`
-      SELECT COUNT(*) as count 
-      FROM vwShipment
-      WHERE ${Prisma.join(conditions, ' AND ')}
+    const query = Prisma.sql`
+      SELECT TOP 1 * FROM vwShipment 
+      WHERE (
+        fdListCode IN (SELECT fdListCode FROM tbEntryList WHERE fdListCode LIKE ${search + '%'} OR fdMarkingCode LIKE ${search + '%'} OR fdTerima LIKE ${search + '%'} OR fdTrackingNo LIKE ${search + '%'} OR fdDesc LIKE ${'%' + search + '%'})
+        OR fdListCode IN (SELECT e.fdListCode FROM tbEntryList e JOIN tbCustomers c ON e.fdCustCode = c.fdCustCode WHERE c.fdCustName LIKE ${'%' + search + '%'})
+      )
     `
-    console.log("Count:", data)
-    
-    const data2 = await prisma.$queryRaw`
-      SELECT * 
-      FROM vwShipment
-      WHERE ${Prisma.join(conditions, ' AND ')}
-      ORDER BY fdTglAgent DESC
-      OFFSET ${skip} ROWS FETCH NEXT ${take} ROWS ONLY
+    const res = await prisma.$queryRaw(query)
+    console.log("Success Query 1:", res)
+  } catch (err: any) {
+    console.error("Query 1 failed:", err.message)
+  }
+
+  try {
+    const query = Prisma.sql`
+      SELECT TOP 1 * FROM vwShipment 
+      WHERE (
+        fdListCode IN (SELECT fdListCode FROM tbEntryList WHERE fdListCode LIKE ${search + '%'} OR fdMarkingCode LIKE ${search + '%'} OR fdTerima LIKE ${search + '%'} OR fdTrackingNo LIKE ${search + '%'})
+        OR fdListCode IN (SELECT e.fdListCode FROM tbEntryList e JOIN tbCustomers c ON e.fdCustCode = c.fdCustCode WHERE c.fdCustName LIKE ${'%' + search + '%'})
+      )
     `
-    console.log("Data length:", data2.length)
-  } catch (e) {
-    console.error("Prisma Error:", e)
-  } finally {
-    console.timeEnd('QueryTime')
-    await prisma.$disconnect()
+    const res = await prisma.$queryRaw(query)
+    console.log("Success Query 2 (without fdDesc):", res)
+  } catch (err: any) {
+    console.error("Query 2 failed:", err.message)
   }
 }
 
-test()
+test().finally(() => prisma.$disconnect())

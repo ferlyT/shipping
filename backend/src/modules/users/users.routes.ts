@@ -72,7 +72,7 @@ usersRoutes.patch('/:id/restore', async (c) => {
   try {
     const id = c.req.param('id')
     const user = await restoreUser(id)
-    return successResponse(c, user, 'User restored successfully')
+    return successResponse(c, user)
   } catch (err) {
     return errorResponse(c, (err as Error).message, 500)
   }
@@ -82,7 +82,7 @@ usersRoutes.delete('/:id/permanent', async (c) => {
   try {
     const id = c.req.param('id')
     const user = await hardDeleteUser(id)
-    return successResponse(c, user, 'User permanently deleted')
+    return successResponse(c, user)
   } catch (err) {
     return errorResponse(c, (err as Error).message, 500)
   }

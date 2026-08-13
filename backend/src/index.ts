@@ -16,6 +16,9 @@ import { billingRoutes } from './modules/billing/billing.routes'
 import { deliveryOrdersRoutes } from './modules/delivery-orders/deliveryOrders.routes'
 import { shipmentsRoutes } from './modules/shipments/shipments.routes'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
+import { priceListRoutes } from './modules/price-list/price-list.routes'
+import { customerPriceListRoutes } from './modules/customer-price-list/customer-price-list.routes'
+
 
 const app = new Hono().basePath(ENV.APP_BASE_PATH)
 
@@ -28,8 +31,8 @@ app.use('*', cors({
 app.use('*', honoLogger())
 app.use('/api/*', rateLimiter({
   windowMs: 15 * 60 * 1000, // 15 menit
-  limit: 200,
-  keyGenerator: (c) => c.req.header('x-forwarded-for') ?? 'unknown',
+  limit: ENV.IS_PRODUCTION ? 1000 : 10000,
+  keyGenerator: (c) => c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'local-dev',
 }))
 
 // Mount routes
@@ -42,6 +45,9 @@ app.route('/api/billing', billingRoutes)
 app.route('/api/delivery-orders', deliveryOrdersRoutes)
 app.route('/api/shipments', shipmentsRoutes)
 app.route('/api/dashboard', dashboardRoutes)
+app.route('/api/price-list', priceListRoutes)
+app.route('/api/customer-price-list', customerPriceListRoutes)
+
 
 // Health check
 app.get('/api/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))

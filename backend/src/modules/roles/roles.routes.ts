@@ -49,7 +49,7 @@ rolesRoutes.put('/:role', async (c) => {
   }
 
   const data = await rolesService.updateRolePermissions(role, body.permissions)
-  return successResponse(c, data, 'Permissions updated successfully')
+  return successResponse(c, data)
 })
 
 rolesRoutes.post('/:role', async (c) => {
@@ -61,7 +61,7 @@ rolesRoutes.post('/:role', async (c) => {
 
   try {
     const data = await rolesService.createRole(role)
-    return successResponse(c, data, 'Role created successfully')
+    return successResponse(c, data)
   } catch (err: any) {
     if (err?.message === 'Role already exists') {
       return errorResponse(c, err.message, 409)

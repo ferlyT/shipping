@@ -41,29 +41,50 @@ export async function getMarkings(query: Record<string, string | undefined>) {
       if (groupMode === 'branch') {
         where.fdBranchCode = groupValue
       } else if (groupMode === 'year') {
-        const year = parseInt(groupValue)
-        where.fdLoadDate = {
-          gte: new Date(`${year}-01-01T00:00:00.000Z`),
-          lt: new Date(`${year + 1}-01-01T00:00:00.000Z`)
-        }
+        const year = parseInt(groupValue, 10)
+        const startDate = new Date(`${year}-01-01T00:00:00.000Z`)
+        const endDate = new Date(`${year + 1}-01-01T00:00:00.000Z`)
+        where.AND = [
+          ...(where.AND || []),
+          {
+            OR: [
+              { fdLoadDate: { gte: startDate, lt: endDate } },
+              { fdLoadDate: null, fdSysDate: { gte: startDate, lt: endDate } },
+            ],
+          },
+        ]
       } else if (['load', 'etd', 'eta'].includes(groupMode)) {
-        const [year, month] = groupValue.split('-')
-        if (year && month) {
-          const startDate = new Date(parseInt(year), parseInt(month) - 1, 1)
-          const endDate = new Date(parseInt(year), parseInt(month), 1)
-          const field = groupMode === 'load' ? 'fdLoadDate' : groupMode === 'etd' ? 'fdETD' : 'fdETA'
-          where[field] = {
-            gte: startDate,
-            lt: endDate
+        const [yearStr, monthStr] = groupValue.split('-')
+        if (yearStr && monthStr) {
+          const year = parseInt(yearStr, 10)
+          const month = parseInt(monthStr, 10)
+          const startDate = new Date(year, month - 1, 1)
+          const endDate = new Date(year, month, 1)
+
+          if (groupMode === 'load') {
+            where.AND = [
+              ...(where.AND || []),
+              {
+                OR: [
+                  { fdLoadDate: { gte: startDate, lt: endDate } },
+                  { fdLoadDate: null, fdSysDate: { gte: startDate, lt: endDate } },
+                ],
+              },
+            ]
+          } else {
+            const field = groupMode === 'etd' ? 'fdETD' : 'fdETA'
+            where[field] = { gte: startDate, lt: endDate }
           }
         }
       }
     } else if (groupMode && groupValue === 'Tidak diketahui') {
       if (groupMode === 'branch') {
-        // Asumsi null atau kosong
         where.fdBranchCode = { in: ['', null] }
+      } else if (groupMode === 'year' || groupMode === 'load') {
+        where.fdLoadDate = null
+        where.fdSysDate = null
       } else {
-        const field = groupMode === 'year' || groupMode === 'load' ? 'fdLoadDate' : groupMode === 'etd' ? 'fdETD' : 'fdETA'
+        const field = groupMode === 'etd' ? 'fdETD' : 'fdETA'
         where[field] = null
       }
     }
@@ -147,34 +168,36 @@ export async function getMarkingGroups(query: Record<string, string | undefined>
       select: {
         fdBranchCode: true,
         fdLoadDate: true,
+        fdSysDate: true,
         fdETD: true,
         fdETA: true,
         fdJmlPack: true,
-        fdJmlBerat: true
-      }
+        fdJmlBerat: true,
+      },
     })
 
-    const groups: Record<string, { count: number, totalPkgs: number, totalWeight: number }> = {}
+    const groups: Record<string, { count: number; totalPkgs: number; totalWeight: number }> = {}
 
-    data.forEach(row => {
-      let key = "Tidak diketahui"
+    data.forEach((row) => {
+      let key = 'Tidak diketahui'
       if (groupMode === 'branch') {
-        key = row.fdBranchCode ? row.fdBranchCode.trim() : "Tidak diketahui"
-        if (key === '') key = "Tidak diketahui"
+        key = row.fdBranchCode ? row.fdBranchCode.trim() : 'Tidak diketahui'
+        if (key === '') key = 'Tidak diketahui'
       } else if (groupMode === 'year') {
-        key = row.fdLoadDate ? String(row.fdLoadDate.getFullYear()) : "Tidak diketahui"
+        const dateField = row.fdLoadDate || row.fdSysDate
+        key = dateField ? String(dateField.getFullYear()) : 'Tidak diketahui'
       } else {
-        const dateField = groupMode === 'load' ? row.fdLoadDate : groupMode === 'etd' ? row.fdETD : row.fdETA
+        const dateField = groupMode === 'load' ? (row.fdLoadDate || row.fdSysDate) : groupMode === 'etd' ? row.fdETD : row.fdETA
         if (dateField) {
           const m = String(dateField.getMonth() + 1).padStart(2, '0')
           key = `${dateField.getFullYear()}-${m}`
         }
       }
 
-      if (!groups[key]) groups[key] = { count: 0, totalPkgs: 0, totalWeight: 0 }
-      groups[key].count += 1
-      groups[key].totalPkgs += Number(row.fdJmlPack || 0)
-      groups[key].totalWeight += Number(row.fdJmlBerat || 0)
+      const group = (groups[key] = groups[key] || { count: 0, totalPkgs: 0, totalWeight: 0 })
+      group.count += 1
+      group.totalPkgs += Number(row.fdJmlPack || 0)
+      group.totalWeight += Number(row.fdJmlBerat || 0)
     })
 
     const sortedKeys = Object.keys(groups).sort((a, b) => {
@@ -340,7 +363,7 @@ async function computeExitPrediction(where: any): Promise<{
     .map((b) => {
       const consignee = b.fdConsignee?.trim() || 'Unknown'
       const sampleSize = delayByConsignee[consignee]?.length || 0
-      const avgDelayDays = sampleSize >= MIN_SAMPLE ? avgByConsignee[consignee] : globalAvgDelay
+      const avgDelayDays = (sampleSize >= MIN_SAMPLE ? avgByConsignee[consignee] : globalAvgDelay) ?? globalAvgDelay
 
       const predictedExitDate = new Date(b.fdETA!)
       predictedExitDate.setDate(predictedExitDate.getDate() + Math.round(avgDelayDays))
@@ -400,8 +423,8 @@ export async function getMarkingExitHistory(query: Record<string, string | undef
     let rangeEnd: Date
     if (month && /^\d{4}-\d{2}$/.test(month)) {
       const [year, mon] = month.split('-').map(Number)
-      rangeStart = new Date(year, mon - 1, 1)
-      rangeEnd = new Date(year, mon, 1)
+      rangeStart = new Date(year!, mon! - 1, 1)
+      rangeEnd = new Date(year!, mon!, 1)
     } else {
       const now = new Date()
       rangeStart = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -427,8 +450,13 @@ export async function getMarkingExitHistory(query: Record<string, string | undef
     })
 
     const history: Record<string, { count: number; items: typeof batches }> = {}
+    let airCount = 0
+    let seaCount = 0
 
     for (const batch of batches) {
+      if (batch.fdListType === 1) airCount++
+      if (batch.fdListType === 2) seaCount++
+
       if (!batch.fdExitDate) continue
       const d = batch.fdExitDate
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -440,7 +468,12 @@ export async function getMarkingExitHistory(query: Record<string, string | undef
       history[key].items.push(batch)
     }
 
-    return history
+    return {
+      historyMap: history,
+      totalCount: batches.length,
+      airCount,
+      seaCount,
+    }
   } catch (error) {
     logger.error('Error fetching marking exit history:', error)
     throw new Error('Gagal mengambil data history exit marking')
@@ -479,7 +512,11 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
 
     const [
       totalBatches,
+      totalBatchesAir,
+      totalBatchesSea,
       activeBatches,
+      activeBatchesAir,
+      activeBatchesSea,
       etaNotExitBatches,
       batchesWithTransitTime,
       etaNotExitList,
@@ -488,7 +525,11 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
       exitYesterdayList
     ] = await Promise.all([
       prisma.tbMarking.count({ where }),
+      prisma.tbMarking.count({ where: { ...where, fdListType: 1 } }),
+      prisma.tbMarking.count({ where: { ...where, fdListType: 2 } }),
       prisma.tbMarking.count({ where: { ...where, fdExitDate: null } }),
+      prisma.tbMarking.count({ where: { ...where, fdExitDate: null, fdListType: 1 } }),
+      prisma.tbMarking.count({ where: { ...where, fdExitDate: null, fdListType: 2 } }),
       prisma.tbMarking.count({
         where: {
           ...where,
@@ -519,7 +560,8 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
         select: {
           fdConsignee: true,
           fdMarkingCode: true,
-          fdETA: true
+          fdETA: true,
+          fdListType: true
         }
       }),
       computeExitPrediction(where),
@@ -550,6 +592,21 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
       return pDate >= tomorrowStart && pDate < dayAfterTomorrowStart
     })
     const expectedExitTomorrowCount = expectedExitTomorrowList.length
+    const expectedExitTomorrowAir = expectedExitTomorrowList.filter(b => b.fdListType === 1).length
+    const expectedExitTomorrowSea = expectedExitTomorrowList.filter(b => b.fdListType === 2).length
+
+    const etaNotExitBatchesAir = etaNotExitList.filter(b => b.fdListType === 1).length
+    const etaNotExitBatchesSea = etaNotExitList.filter(b => b.fdListType === 2).length
+
+    const exitTodayAir = exitTodayList.filter(b => b.fdListType === 1).length
+    const exitTodaySea = exitTodayList.filter(b => b.fdListType === 2).length
+
+    const exitYesterdayAir = exitYesterdayList.filter(b => b.fdListType === 1).length
+    const exitYesterdaySea = exitYesterdayList.filter(b => b.fdListType === 2).length
+
+    const prediksiAttentionList = prediksiExit.prediksiExitList.filter(p => p.category === 'terlambat' || p.category === 'segera')
+    const prediksiAttentionAir = prediksiAttentionList.filter(p => p.fdListType === 1).length
+    const prediksiAttentionSea = prediksiAttentionList.filter(p => p.fdListType === 2).length
 
     // Compute ETA Not Exit Consignee Summary
     const etaNotExitSummary: Record<string, { count: number, codes: { code: string, aging: number }[] }> = {}
@@ -575,6 +632,14 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
     let totalTransitDays = 0
     let validTransitCount = 0
     let missedTargetBatches = 0
+
+    let totalTransitDaysAir = 0
+    let validTransitCountAir = 0
+    let missedTargetBatchesAir = 0
+
+    let totalTransitDaysSea = 0
+    let validTransitCountSea = 0
+    let missedTargetBatchesSea = 0
     
     const missedTargetMap: Record<string, { count: number, codes: { code: string, transit: number, target: number }[] }> = {}
 
@@ -584,6 +649,14 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
         totalTransitDays += diffDays
         validTransitCount++
+
+        if (batch.fdListType === 1) {
+          totalTransitDaysAir += diffDays
+          validTransitCountAir++
+        } else if (batch.fdListType === 2) {
+          totalTransitDaysSea += diffDays
+          validTransitCountSea++
+        }
 
         // Check if missed target
         let maxTarget = 0
@@ -600,6 +673,8 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
 
         if (maxTarget > 0 && diffDays > maxTarget) {
           missedTargetBatches++
+          if (batch.fdListType === 1) missedTargetBatchesAir++
+          if (batch.fdListType === 2) missedTargetBatchesSea++
           
           const consignee = batch.fdConsignee?.trim() || 'Unknown'
           if (!missedTargetMap[consignee]) {
@@ -616,25 +691,53 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
       .sort((a, b) => b.count - a.count)
 
     const avgTransitTime = validTransitCount > 0 ? Math.round(totalTransitDays / validTransitCount) : 0
+    const avgTransitTimeAir = validTransitCountAir > 0 ? Math.round(totalTransitDaysAir / validTransitCountAir) : 0
+    const avgTransitTimeSea = validTransitCountSea > 0 ? Math.round(totalTransitDaysSea / validTransitCountSea) : 0
 
     return {
       totalBatches,
+      totalBatchesAir,
+      totalBatchesSea,
+
       activeBatches,
-      delayedBatches: etaNotExitBatches, // keep backwards compatibility if needed
+      activeBatchesAir,
+      activeBatchesSea,
+
+      delayedBatches: etaNotExitBatches,
       etaNotExitBatches,
+      etaNotExitBatchesAir,
+      etaNotExitBatchesSea,
       etaNotExitSummary: etaNotExitSummaryArray,
+
       missedTargetBatches,
+      missedTargetBatchesAir,
+      missedTargetBatchesSea,
       missedTargetSummary: missedTargetSummaryArray,
+
       avgTransitTime,
+      avgTransitTimeAir,
+      avgTransitTimeSea,
+
       prediksiTerlambatCount: prediksiExit.prediksiTerlambatCount,
       prediksiSegeraCount: prediksiExit.prediksiSegeraCount,
       prediksiDekatCount: prediksiExit.prediksiDekatCount,
+      prediksiAttentionAir,
+      prediksiAttentionSea,
       prediksiExitList: prediksiExit.prediksiExitList,
+
       exitTodayCount: exitTodayList.length,
-      exitYesterdayCount: exitYesterdayList.length,
-      expectedExitTomorrowCount,
+      exitTodayAir,
+      exitTodaySea,
       exitTodayList,
+
+      exitYesterdayCount: exitYesterdayList.length,
+      exitYesterdayAir,
+      exitYesterdaySea,
       exitYesterdayList,
+
+      expectedExitTomorrowCount,
+      expectedExitTomorrowAir,
+      expectedExitTomorrowSea,
       expectedExitTomorrowList
     }
   } catch (error) {

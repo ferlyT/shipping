@@ -14,7 +14,7 @@ export async function listMarkings(c: Context) {
   try {
     const query = c.req.query()
     const result = await getMarkings(query)
-    return successResponse(c, result.data, result.meta)
+    return successResponse(c, result.data, result.meta as any)
   } catch (error: any) {
     return errorResponse(c, error.message || 'Terjadi kesalahan pada server', 500)
   }
@@ -22,7 +22,7 @@ export async function listMarkings(c: Context) {
 
 export async function getMarkingDetailController(c: Context) {
   try {
-    const fdMarkingCode = c.req.param('id')
+    const fdMarkingCode = c.req.param('id') || ''
     const marking = await getMarkingDetail(fdMarkingCode)
     return successResponse(c, marking)
   } catch (error: any) {
@@ -43,7 +43,7 @@ export async function getMarkingGroupsController(c: Context) {
 
 export async function getManifestController(c: Context) {
   try {
-    const fdMarkingCode = c.req.param('id')
+    const fdMarkingCode = c.req.param('id') || ''
     const manifest = await getManifestByMarkingCode(fdMarkingCode)
     return successResponse(c, manifest)
   } catch (error: any) {
@@ -53,7 +53,7 @@ export async function getManifestController(c: Context) {
 
 export async function getManifestSuggestionsController(c: Context) {
   try {
-    const fdMarkingCode = c.req.param('id')
+    const fdMarkingCode = c.req.param('id') || ''
     const q = c.req.query('q') || ''
     const suggestions = await searchManifestSuggestions(fdMarkingCode, q)
     return successResponse(c, suggestions)

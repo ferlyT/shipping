@@ -2,6 +2,8 @@ import { prisma } from '../../config/database'
 import { Prisma } from '@prisma/client'
 import { buildPagination, parsePagination } from '../../utils/pagination'
 
+const MIN_LOAD_DATE = new Date('2019-01-01T00:00:00.000Z')
+
 export async function getDeliveryOrders(query: Record<string, string | undefined>) {
   const { page, limit } = parsePagination(query)
   const { skip, take, meta } = buildPagination({ page, limit })
@@ -9,18 +11,25 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
   const search = query.search?.trim()
   const listCode = query.listCode?.trim()
 
-  const where: Prisma.TbDeliveryWhereInput = {}
+  const where: Prisma.TbDeliveryWhereInput = {
+    fdSJDate: { gte: MIN_LOAD_DATE },
+  }
 
   if (listCode) {
     where.fdListCode = listCode
   }
 
   if (search) {
-    where.OR = [
-      { fdSJNo: { contains: search } },
-      { fdDescr: { contains: search } },
-      { fdCustCode: { contains: search } },
-      { fdCustNameSJ: { contains: search } },
+    where.AND = [
+      { fdSJDate: { gte: MIN_LOAD_DATE } },
+      {
+        OR: [
+          { fdSJNo: { contains: search } },
+          { fdDescr: { contains: search } },
+          { fdCustCode: { contains: search } },
+          { fdCustNameSJ: { contains: search } },
+        ],
+      },
     ]
   }
 
@@ -39,7 +48,7 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
         fdSupir: true,
         fdCarID: true,
         fdJmlPackSJ: true,
-      }
+      },
     }),
     prisma.tbDelivery.count({ where }),
   ])
@@ -55,44 +64,45 @@ export async function getDeliveryOrderById(id: string) {
 
 export async function getDeliveryOrdersKPIs(query: Record<string, string | undefined>) {
   const search = query.search?.trim()
-  const where = search
+  const baseWhere: Prisma.TbDeliveryWhereInput = {
+    fdSJDate: { gte: MIN_LOAD_DATE },
+  }
+
+  const where: Prisma.TbDeliveryWhereInput = search
     ? {
-      OR: [
-        { fdSJNo: { contains: search } },
-        { fdDescr: { contains: search } },
-        { fdCustCode: { contains: search } },
-        { fdCustNameSJ: { contains: search } },
-      ],
-    }
-    : {}
+        ...baseWhere,
+        OR: [
+          { fdSJNo: { contains: search } },
+          { fdDescr: { contains: search } },
+          { fdCustCode: { contains: search } },
+          { fdCustNameSJ: { contains: search } },
+        ],
+      }
+    : baseWhere
 
   const now = new Date()
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 
-  const [
-    totalSJ,
-    totalAgg,
-    sjBulanIni
-  ] = await Promise.all([
+  const [totalSJ, totalAgg, sjBulanIni] = await Promise.all([
     prisma.tbDelivery.count({ where }),
     prisma.tbDelivery.aggregate({
       where,
-      _sum: { fdJmlPackSJ: true, fdJmlBeratSJ: true }
+      _sum: { fdJmlPackSJ: true, fdJmlBeratSJ: true },
     }),
     prisma.tbDelivery.count({
       where: {
         ...where,
-        fdSJDate: { gte: startOfMonth, lt: endOfMonth }
-      }
-    })
+        fdSJDate: { gte: startOfMonth, lt: endOfMonth },
+      },
+    }),
   ])
 
   return {
     totalSJ,
     totalPackages: totalAgg._sum.fdJmlPackSJ || 0,
     totalWeight: totalAgg._sum.fdJmlBeratSJ || 0,
-    sjBulanIni
+    sjBulanIni,
   }
 }
 
@@ -105,7 +115,7 @@ export async function getDeliveryGroupedByListCode(query: Record<string, string 
   const branch = query.branch?.trim()
   const listType = query.listType === '2' ? 2 : 1
 
-  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType}`
+  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) > '2018-12-31 23:59:59')`
   if (markingCode) {
     searchCondition = Prisma.sql`${searchCondition} AND el.fdMarkingCode = ${markingCode}`
   }
@@ -165,13 +175,13 @@ export async function getDeliveryGroupedByListCode(query: Record<string, string 
         GROUP BY el.fdListCode
         ${havingClause}
       ) as t
-    `
+    `,
   ])
 
   const total = Number((totalResult as any[])[0]?.count || 0)
 
   // Fix BigInt serialization issues before returning JSON
-  const serializedData = (data as any[]).map(row => {
+  const serializedData = (data as any[]).map((row) => {
     const newRow: any = { ...row }
     for (const key in newRow) {
       if (typeof newRow[key] === 'bigint') {
@@ -184,14 +194,11 @@ export async function getDeliveryGroupedByListCode(query: Record<string, string 
   return { data: serializedData, meta: meta(total) }
 }
 
-// Returns each distinct marking code (for the given listType/sent/search filters)
-// along with how many list codes belong to it. Used to render independent
-// per-group pagination when the frontend groups rows by marking code.
 export async function getDeliveryMarkingCodeGroups(query: Record<string, string | undefined>) {
   const search = query.search?.trim()
   const listType = query.listType === '2' ? 2 : 1
 
-  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType}`
+  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) > '2018-12-31 23:59:59')`
   if (search) {
     searchCondition = Prisma.sql`${searchCondition} AND (el.fdListCode LIKE ${'%' + search + '%'} OR el.fdMarkingCode LIKE ${'%' + search + '%'} OR c.fdCustName LIKE ${'%' + search + '%'})`
   }
@@ -209,6 +216,7 @@ export async function getDeliveryMarkingCodeGroups(query: Record<string, string 
       FROM tbEntryList el
       LEFT JOIN tbCustomers c ON c.fdCustCode = el.fdCustCode
       LEFT JOIN tbDelivery d ON d.fdListCode = el.fdListCode
+      LEFT JOIN tbMarking tm ON tm.fdMarkingCode = el.fdMarkingCode
       ${searchCondition}
       GROUP BY el.fdMarkingCode, el.fdListCode
       ${havingClause}
@@ -217,8 +225,7 @@ export async function getDeliveryMarkingCodeGroups(query: Record<string, string 
     ORDER BY t.markingCode ASC
   `
 
-  // Fix BigInt serialization issues before returning JSON
-  const data = (groups as any[]).map(row => ({
+  const data = (groups as any[]).map((row) => ({
     markingCode: row.markingCode,
     total: typeof row.total === 'bigint' ? Number(row.total) : row.total,
   }))
@@ -226,15 +233,11 @@ export async function getDeliveryMarkingCodeGroups(query: Record<string, string 
   return { data }
 }
 
-// Returns each distinct branch (cabang, via tbMarking -> tbCabang) for the
-// given listType/sent/search filters, along with how many list codes belong
-// to it. Used to render independent per-group pagination when the frontend
-// groups rows by branch.
 export async function getDeliveryBranchGroups(query: Record<string, string | undefined>) {
   const search = query.search?.trim()
   const listType = query.listType === '2' ? 2 : 1
 
-  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType}`
+  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) > '2018-12-31 23:59:59')`
   if (search) {
     searchCondition = Prisma.sql`${searchCondition} AND (el.fdListCode LIKE ${'%' + search + '%'} OR el.fdMarkingCode LIKE ${'%' + search + '%'} OR c.fdCustName LIKE ${'%' + search + '%'})`
   }
@@ -262,8 +265,7 @@ export async function getDeliveryBranchGroups(query: Record<string, string | und
     ORDER BY t.branchCode ASC
   `
 
-  // Fix BigInt serialization issues before returning JSON
-  const data = (groups as any[]).map(row => ({
+  const data = (groups as any[]).map((row) => ({
     branchCode: row.branchCode,
     branchName: row.branchName,
     total: typeof row.total === 'bigint' ? Number(row.total) : row.total,

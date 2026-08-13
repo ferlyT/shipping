@@ -12,7 +12,7 @@
  * Aman dijalankan berkali-kali (idempotent) karena selalu dicek existing dulu
  * sebelum insert.
  */
-import { prisma } from '../config/database'
+import { prisma } from './config/database'
 
 const PARENT_PATH = '/shipping/shipments'
 const NEW_CHILD_PATH = '/shipping/shipments/list'

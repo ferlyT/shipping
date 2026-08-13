@@ -37,7 +37,7 @@ export async function loginUser(input: LoginInput) {
   const token = jwt.sign(
     { userId: user.id, username: user.username, role: user.role, permissions },
     ENV.JWT_SECRET,
-    { expiresIn: ENV.JWT_EXPIRES_IN }
+    { expiresIn: ENV.JWT_EXPIRES_IN as any }
   )
 
   logger.info('User login berhasil', { username: input.username })

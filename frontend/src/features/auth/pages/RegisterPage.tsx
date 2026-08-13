@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-import { authApi } from '@/api/endpoints/auth'
+import { authApi } from '../services/auth.service'
 import { Button } from '@/components/ui/Button'
 import { ROUTES } from '@/lib/constants'
 

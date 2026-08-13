@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { authApi } from '@/api/endpoints/auth'
+import { authApi } from '../services/auth.service'
 import { Button } from '@/components/ui/Button'
 import { ROUTES } from '@/lib/constants'
 
@@ -17,7 +17,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
-    
+
     if (!username || !password) {
       setError('Username and Password are required.')
       return
@@ -41,9 +41,9 @@ export default function LoginPage() {
       <div className="hidden w-1/2 flex-col justify-between bg-[var(--color-primary)] p-12 text-white lg:flex relative overflow-hidden">
         {/* Accent background element */}
         <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-[var(--color-tertiary)] rounded-full blur-[120px] opacity-20 translate-x-1/2 -translate-y-1/2" />
-        
+
         <div className="relative z-10">
-          <h1 className="font-[var(--font-display)] font-medium text-[40px] m-0 mb-1 tracking-[-0.02em] text-[var(--color-primary)]">
+          <h1 className="font-[var(--font-display)] font-medium text-[40px] m-0 mb-1 tracking-[-0.02em] text-[var(--color-white)]">
             mshipping<span className="text-[var(--color-tertiary)]">.</span>
           </h1>
         </div>

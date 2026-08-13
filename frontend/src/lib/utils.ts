@@ -10,26 +10,71 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Format tanggal ke "12 Jan 2024"
+// Format tanggal ke "12 Jan 2024" (Waktu Indonesia / Jakarta sesuai database ERP)
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return '—'
+  const d = new Date(date)
+  if (Number.isNaN(d.getTime())) return String(date)
   return new Intl.DateTimeFormat('id-ID', {
     day: '2-digit', month: 'short', year: 'numeric',
-  }).format(new Date(date))
+    timeZone: 'UTC',
+  }).format(d)
 }
 
-// Format angka ke "Rp 1.500.000"
+// Format tanggal & jam ke "12 Jan 2024, 13:12 WIB"
+export function formatDateTime(date: string | Date | null | undefined): string {
+  if (!date) return '—'
+  const d = new Date(date)
+  if (Number.isNaN(d.getTime())) return String(date)
+  const formatted = new Intl.DateTimeFormat('id-ID', {
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: false,
+    timeZone: 'UTC',
+  }).format(d)
+  return `${formatted} WIB`
+}
+
+// Format angka ke "Rp. 1,500,000.00"
 export function formatCurrency(amount: number | null | undefined): string {
   if (amount == null) return '—'
-  return new Intl.NumberFormat('id-ID', {
-    style: 'currency', currency: 'IDR', maximumFractionDigits: 0,
+  const formatted = new Intl.NumberFormat('en-US', {
+    style: 'currency', currency: 'IDR', minimumFractionDigits: 2, maximumFractionDigits: 2,
   }).format(amount)
+  return formatted.replace(/^(IDR|Rp\.?|RP\.?)\s*/i, 'Rp. ')
 }
 
-// Format angka biasa ke "1.500"
+// Format angka ringkas ke "Rp 1.64 M" atau "Rp 500 Jt"
+export function formatCompactRupiah(amount: number | null | undefined): string {
+  if (amount == null || amount === 0) return 'Rp 0'
+  const val = Number(amount)
+  if (Math.abs(val) >= 1_000_000_000) {
+    return `Rp ${(val / 1_000_000_000).toFixed(2)} M`
+  }
+  if (Math.abs(val) >= 1_000_000) {
+    return `Rp ${(val / 1_000_000).toFixed(1)} Jt`
+  }
+  return formatCurrency(val)
+}
+
+// Format angka biasa ke "1,500"
 export function formatNumber(num: number | null | undefined): string {
   if (num == null) return '—'
-  return new Intl.NumberFormat('id-ID').format(num)
+  return new Intl.NumberFormat('en-US').format(num)
+}
+
+// Format angka desimal ke 2 desimal, mis. "12.50"
+export function formatDecimal(num: number | null | undefined, decimals = 2): string {
+  if (num == null) return '—'
+  return new Intl.NumberFormat('en-US', {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  }).format(num)
+}
+
+// Format berat Kg ke "12.50 Kg"
+export function formatWeight(num: number | null | undefined): string {
+  if (num == null) return '—'
+  return `${formatDecimal(num, 2)} Kg`
 }
 
 // Truncate string

@@ -1,8 +1,1 @@
-import apiClient from '../client'
-
-export const customersApi = {
-  list: (params: Record<string, string | number>) =>
-    apiClient.get('/customers', { params }),
-  
-  detail: (id: string) => apiClient.get(`/customers/${id}`),
-}
+export * from '@/features/customers/services/customers.service'

@@ -72,6 +72,7 @@ model TbCustomers {
   // Relations
   addresses      vwCustomerContacts[]
   billings       TbBilling[]
+  entryLists     TbEntryList[]
 
   @@map("tbCustomers")
 }
@@ -177,6 +178,9 @@ model TbDelivery {
   fdExp3          Int?
   fdKondisiBarang Int?
 
+  // Relations
+  entryList       TbEntryList? @relation(fields: [fdListCode], references: [fdListCode])
+
   @@map("tbDelivery")
 }
 
@@ -259,7 +263,7 @@ model TbBillingDetail {
   fdItemPrice    Decimal?  @db.Decimal(18, 2)
   fdTotal        Decimal?  @db.Decimal(18, 2)
   fdSatuan       String?   @db.Char(10)
-  fdComodity     String    @db.VarChar(100)
+  fdComodity     String?   @db.VarChar(100)
   fdTypeComodity Int?
 
   // Relations
@@ -323,4 +327,91 @@ model TbEmployees {
   billings  TbBilling[]
 
   @@map("tbEmployees")
+}
+
+model TbEntryList {
+  fdListCode     String @id @db.Char(7)
+  fdListType     Int
+  fdTypeComodity Int
+  fdMarkingCode  String? @db.Char(50)
+  fdMarkingNo    String? @db.Char(250)
+  fdJmlPack      Int?
+  fdSatuan       String? @db.Char(20)
+  fdJmlBerat     Decimal? @db.Decimal(18, 2)  
+  fdM3           Decimal? @db.Decimal(18, 4)  
+  fdCustCode     String?  @db.Char(7)
+  fdTglAgent     DateTime? @db.DateTime
+  fdTerima       String?  @db.Char(35)
+
+  // Relations
+  deliveries     TbDelivery[]
+  customer       TbCustomers? @relation(fields: [fdCustCode], references: [fdCustCode])
+
+  @@map("tbEntryList")
+}
+
+// ─── PRICE LIST MODULE ─────────────────────────────────────────────
+
+model TbPriceListUpload {
+  id            Int                 @id @default(autoincrement())
+  fileName      String              @db.NVarChar(500)
+  uploadedBy    String?             @db.NVarChar(100)
+  uploadedAt    DateTime            @default(now()) @db.DateTime2
+  priceDate     DateTime?           @db.DateTime2
+  effectiveDate DateTime            @db.DateTime2
+  status        String              @db.NVarChar(20)   // PARSED | PARTIAL | FAILED
+  warnings      String?             @db.NVarChar(Max)  // JSON string
+  rawSnapshot   String?             @db.NVarChar(Max)  // JSON string
+  isSuperseded  Boolean             @default(false)
+  items         TbPriceListItem[]
+
+  @@map("tbPriceListUpload")
+}
+
+model TbPriceListItem {
+  id            Int               @id @default(autoincrement())
+  uploadId      Int
+  sheetType     String            @db.NVarChar(20)    // CS | MKT
+  mode          String            @db.NVarChar(50)    // BY SEA | BY AIR
+  branch        String            @db.NVarChar(50)    // destinasi / tujuan
+  transitTime   String?           @db.NVarChar(50)
+  category      String            @db.NVarChar(200)   // kategori barang
+  price         Decimal           @db.Decimal(18, 2)
+  upload        TbPriceListUpload @relation(fields: [uploadId], references: [id])
+
+  @@map("tbPriceListItem")
+}
+
+// ─── CUSTOMER PRICE LIST MODULE ────────────────────────────────────
+
+model TbCustomerPriceListUpload {
+  id            Int                        @id @default(autoincrement())
+  fdCustCode    String                     @db.Char(7)
+  fileName      String                     @db.NVarChar(500)
+  uploadedBy    String?                    @db.NVarChar(100)
+  uploadedAt    DateTime                   @default(now()) @db.DateTime2
+  priceDate     DateTime?                  @db.DateTime2
+  effectiveDate DateTime                   @db.DateTime2
+  status        String                     @db.NVarChar(20)   // PARSED | PARTIAL | FAILED
+  warnings      String?                    @db.NVarChar(Max)  // JSON string
+  rawSnapshot   String?                    @db.NVarChar(Max)  // JSON string
+  isSuperseded  Boolean                    @default(false)
+  items         TbCustomerPriceListItem[]
+
+  @@map("tbCustomerPriceListUpload")
+}
+
+model TbCustomerPriceListItem {
+  id            Int                          @id @default(autoincrement())
+  uploadId      Int
+  fdCustCode    String                       @db.Char(7)
+  sheetType     String                       @db.NVarChar(20)
+  mode          String                       @db.NVarChar(50)
+  branch        String                       @db.NVarChar(50)
+  transitTime   String?                      @db.NVarChar(50)
+  category      String                       @db.NVarChar(200)
+  price         Decimal                      @db.Decimal(18, 2)
+  upload        TbCustomerPriceListUpload    @relation(fields: [uploadId], references: [id])
+
+  @@map("tbCustomerPriceListItem")
 }

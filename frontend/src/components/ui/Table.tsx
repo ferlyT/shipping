@@ -40,7 +40,7 @@ export function Table<T>({
               <th 
                 key={col.key} 
                 className={cn(
-                  'px-5 py-[14px] text-left font-medium text-[var(--color-secondary)] font-[var(--font-label)] text-[11px] tracking-[0.08em] uppercase',
+                  'px-5 py-[14px] text-left font-medium text-[var(--color-secondary)] font-[var(--font-label)] text-[11px] tracking-[0.08em] uppercase whitespace-nowrap',
                   col.sortable && 'cursor-pointer hover:bg-black/5 transition-colors',
                   col.fixed && 'sticky left-0 z-30 bg-[var(--color-neutral)] shadow-[1px_0_0_0_var(--color-border)]',
                   col.className
