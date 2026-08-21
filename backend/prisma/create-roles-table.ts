@@ -36,14 +36,14 @@ async function main() {
       
       // 2. Seed initial permissions
       const paths = [
-        '/shipping/dashboard',
-        '/shipping/customers',
-        '/shipping/shipments',
-        '/shipping/shipment-batches',
-        '/shipping/delivery-orders',
-        '/shipping/billing',
-        '/shipping/users',
-        '/shipping/roles'
+        '/mshipping/dashboard',
+        '/mshipping/customers',
+        '/mshipping/shipments',
+        '/mshipping/shipment-batches',
+        '/mshipping/delivery-orders',
+        '/mshipping/billing',
+        '/mshipping/users',
+        '/mshipping/roles'
       ]
 
       console.log('Seeding initial role permissions...')
@@ -58,12 +58,12 @@ async function main() {
 
       // Viewer gets limited paths
       const viewerPaths = [
-        '/shipping/dashboard',
-        '/shipping/customers',
-        '/shipping/shipments',
-        '/shipping/shipment-batches',
-        '/shipping/delivery-orders',
-        '/shipping/billing'
+        '/mshipping/dashboard',
+        '/mshipping/customers',
+        '/mshipping/shipments',
+        '/mshipping/shipment-batches',
+        '/mshipping/delivery-orders',
+        '/mshipping/billing'
       ]
       
       for (const path of viewerPaths) {

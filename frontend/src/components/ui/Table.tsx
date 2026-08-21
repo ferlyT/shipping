@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils'
 import { ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 
-interface Column<T> {
+export interface Column<T> {
   key: string
   header: string
   render?: (row: T, index: number) => React.ReactNode
@@ -35,13 +35,13 @@ export function Table<T>({
     <div className="w-full relative">
       <table className={cn("w-full text-xs sm:text-sm table-fixed", tableClassName)}>
         <thead className="sticky top-0 z-20 shadow-[0_1px_0_0_var(--color-border)]">
-          <tr className="bg-[var(--color-neutral)] border-b border-[#E4E1DA]">
+          <tr className="bg-[var(--color-neutral)] border-b border-[var(--color-border)]">
             {columns.map((col) => (
               <th 
                 key={col.key} 
                 className={cn(
-                  'px-5 py-[14px] text-left font-medium text-[var(--color-secondary)] font-[var(--font-label)] text-[11px] tracking-[0.08em] uppercase',
-                  col.sortable && 'cursor-pointer hover:bg-black/5 transition-colors',
+                  'px-5 py-[14px] text-left font-medium text-[var(--color-secondary)] font-[var(--font-label)] text-[11px] tracking-[0.08em] uppercase whitespace-nowrap',
+                  col.sortable && 'cursor-pointer hover:bg-[var(--color-surface)]/50 transition-colors',
                   col.fixed && 'sticky left-0 z-30 bg-[var(--color-neutral)] shadow-[1px_0_0_0_var(--color-border)]',
                   col.className
                 )}
@@ -50,7 +50,7 @@ export function Table<T>({
                 <div className="flex items-center gap-1.5">
                   {col.header}
                   {col.sortable && (
-                    <span className="text-gray-400">
+                    <span className="text-[var(--color-secondary)]">
                       {sortColumn === col.key ? (
                         sortDirection === 'asc' ? <ArrowUp className="w-3 h-3 text-[var(--color-primary)]" /> : <ArrowDown className="w-3 h-3 text-[var(--color-primary)]" />
                       ) : (
@@ -71,7 +71,7 @@ export function Table<T>({
                 key={keyExtractor(row)}
                 onClick={() => onRowClick?.(row)}
                 className={cn(
-                  'border-b border-[#EFEDE7] transition-colors duration-100 last:border-0 bg-white',
+                  'border-b border-[var(--color-border)] transition-colors duration-100 last:border-0 bg-[var(--color-surface)]',
                   onRowClick && 'cursor-pointer',
                   customRowClass || 'hover:bg-[var(--color-neutral)]'
                 )}

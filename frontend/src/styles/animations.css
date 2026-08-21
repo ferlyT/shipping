@@ -16,8 +16,8 @@
   100% { background-position: 200% 0; }
 }
 
-.animate-fadeIn     { animation: fadeIn 300ms var(--transition-normal) both; }
-.animate-slideInRight { animation: slideInRight 250ms ease both; }
+.animate-fadeIn     { animation: fadeIn 400ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+.animate-slideInRight { animation: slideInRight 300ms cubic-bezier(0.16, 1, 0.3, 1) both; }
 .skeleton {
   background: linear-gradient(90deg, var(--color-border) 25%, var(--color-neutral) 50%, var(--color-border) 75%);
   background-size: 200% 100%;

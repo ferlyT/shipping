@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { rolesService } from './roles.service'
 import { authMiddleware, isAdmin } from '../../middleware/auth'
+import { successResponse, errorResponse } from '../../utils/response'
 
 const rolesRoutes = new Hono()
 
@@ -17,53 +18,53 @@ function isValidRoleName(role: string) {
 
 rolesRoutes.get('/', async (c) => {
   const data = await rolesService.getAllRoles()
-  return c.json({ data })
+  return successResponse(c, data)
 })
 
 rolesRoutes.get('/:role', async (c) => {
   const role = c.req.param('role')
   if (!isValidRoleName(role)) {
-    return c.json({ message: 'Invalid role name' }, 400)
+    return errorResponse(c, 'Invalid role name', 400)
   }
   const data = await rolesService.getRolePermissions(role)
-  return c.json({ data })
+  return successResponse(c, data)
 })
 
 rolesRoutes.put('/:role', async (c) => {
   const role = c.req.param('role')
   if (!isValidRoleName(role)) {
-    return c.json({ message: 'Invalid role name' }, 400)
+    return errorResponse(c, 'Invalid role name', 400)
   }
 
   const body = await c.req.json().catch(() => null) // Expects: { permissions: { path: string, canView: boolean }[] }
   if (!body || !Array.isArray(body.permissions)) {
-    return c.json({ message: 'Body must include a "permissions" array' }, 400)
+    return errorResponse(c, 'Body must include a "permissions" array', 400)
   }
 
   const invalidEntry = body.permissions.find(
     (p: any) => typeof p?.path !== 'string' || typeof p?.canView !== 'boolean'
   )
   if (invalidEntry) {
-    return c.json({ message: 'Each permission must have { path: string, canView: boolean }' }, 400)
+    return errorResponse(c, 'Each permission must have { path: string, canView: boolean }', 400)
   }
 
   const data = await rolesService.updateRolePermissions(role, body.permissions)
-  return c.json({ message: 'Permissions updated successfully', data })
+  return successResponse(c, data)
 })
 
 rolesRoutes.post('/:role', async (c) => {
   // Add a new custom role, duplicating viewer access initially
   const role = c.req.param('role')
   if (!isValidRoleName(role)) {
-    return c.json({ message: 'Invalid role name' }, 400)
+    return errorResponse(c, 'Invalid role name', 400)
   }
 
   try {
     const data = await rolesService.createRole(role)
-    return c.json({ message: 'Role created successfully', data })
+    return successResponse(c, data)
   } catch (err: any) {
     if (err?.message === 'Role already exists') {
-      return c.json({ message: err.message }, 409)
+      return errorResponse(c, err.message, 409)
     }
     throw err
   }

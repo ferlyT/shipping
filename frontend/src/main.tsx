@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './styles/globals.css'
 import './styles/animations.css'
-import { AppRouter } from './routes/AppRouter'
+import { AppRouter } from './app/router'
 
 const queryClient = new QueryClient({
   defaultOptions: {

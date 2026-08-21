@@ -6,7 +6,7 @@ import { successResponse, errorResponse } from '../../utils/response'
 const deliveryOrdersRoutes = new Hono()
 
 // Semua route DO memerlukan auth dan permission
-deliveryOrdersRoutes.use('/*', authMiddleware, requirePermission('/shipping/delivery-orders'))
+deliveryOrdersRoutes.use('/*', authMiddleware, requirePermission('/mshipping/delivery-orders'))
 
 deliveryOrdersRoutes.get('/', async (c) => {
   const query = c.req.query()

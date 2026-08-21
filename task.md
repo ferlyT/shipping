@@ -1,0 +1,23 @@
+# Refactor Price List to Feature-Based Architecture
+
+- `[x]` 1. Create Feature Structure
+  - `[x]` Create directories: `src/features/price-list/{components,hooks,types,pages}`
+- `[x]` 2. Extract Types
+  - `[x]` Move `TrendPoint`, `FilterOptions`, etc. to `types/index.ts`
+- `[x]` 3. Extract Hooks
+  - `[x]` Create `usePriceListTrend` (or similar) in `hooks/usePriceListTrend.ts`
+  - `[x]` Create other necessary hooks
+- `[x]` 4. Extract UI Components
+  - `[x]` Extract `DashboardFilters.tsx`
+  - `[x]` Extract `PriceTrendChart.tsx`
+- `[x]` 5. Refactor Pages
+  - `[x]` `Dashboard.tsx` (was `PriceListDashboardPage.tsx`)
+  - `[x]` `Detail.tsx` (was `PriceListDetailPage.tsx`)
+  - `[x]` `History.tsx` (was `PriceListHistoryPage.tsx`)
+  - `[x]` `Upload.tsx` (was `PriceListUploadPage.tsx`)
+- `[x]` 6. Public API & Routing
+  - `[x]` Create `src/features/price-list/index.ts`
+  - `[x]` Update `src/App.tsx` or router
+  - `[x]` Delete `src/pages/PriceList`
+- `[x]` 7. Verification
+  - `[ ]` Run TypeScript checks

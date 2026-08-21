@@ -57,22 +57,22 @@ export const rolesService = {
     }
 
     // Copy viewer paths as default
-    // Catatan: '/shipping/shipments' (Dashboard) dan '/shipping/shipments/list' (Daftar Resi)
+    // Catatan: '/mshipping/shipments' (Dashboard) dan '/mshipping/shipments/list' (Daftar Resi)
     // sekarang dua permission terpisah (granular), lihat backfill-shipment-list-permission.ts
     // untuk migrasi role yang sudah ada sebelum perubahan ini.
     const viewerPaths = [
-      '/shipping/dashboard',
-      '/shipping/customers',
-      '/shipping/shipments',
-      '/shipping/shipments/list',
-      '/shipping/shipment-batches',
-      '/shipping/delivery-orders',
-      '/shipping/billing',
+      '/mshipping/dashboard',
+      '/mshipping/customers',
+      '/mshipping/shipments',
+      '/mshipping/shipments/list',
+      '/mshipping/shipment-batches',
+      '/mshipping/delivery-orders',
+      '/mshipping/billing',
     ]
 
     await prisma.$transaction(async (tx) => {
       for (const path of viewerPaths) {
-        const isDefault = path === '/shipping/dashboard'
+        const isDefault = path === '/mshipping/dashboard'
         await tx.$executeRaw`
           INSERT INTO [dbo].[tbRolePermissions] (role, path, canView, isDefault)
           VALUES (${role}, ${path}, 1, ${isDefault ? 1 : 0})

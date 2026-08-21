@@ -30,7 +30,7 @@ authRoutes.post('/register', zValidator('json', registerSchema), async (c) => {
   try {
     const input = c.req.valid('json')
     const result = await registerUser(input)
-    return successResponse(c, result, 201)
+    return successResponse(c, result, undefined, 201)
   } catch (err) {
     return errorResponse(c, (err as Error).message, 400)
   }

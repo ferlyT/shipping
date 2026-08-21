@@ -38,7 +38,7 @@ export function ConfirmModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fadeIn">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm animate-fadeIn">
       <div className="w-full max-w-md bg-white rounded-[var(--radius-lg)] shadow-2xl overflow-hidden animate-slideUp">
         <div className="flex items-start justify-between p-5 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-3 text-red-600">

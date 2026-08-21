@@ -1,0 +1,8 @@
+export { default as AccountPage } from './pages/AccountPage'
+export * from './pages'
+export * from './types/profile.types'
+export * from './services/profile.service'
+export * from './hooks/useProfile'
+export * from './components/AvatarUpload'
+export * from './components/ProfileInfoForm'
+export * from './components/ChangePasswordForm'

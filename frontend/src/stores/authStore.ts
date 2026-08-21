@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-interface User {
+export interface User {
   id: string
   username: string
   fullName: string
   role: string
+  avatarUrl?: string | null
   permissions?: string[]
   defaultRoute?: string | null
 }
@@ -15,6 +16,7 @@ interface AuthState {
   token: string | null
   isAuthenticated: boolean
   login: (token: string, user: User) => void
+  updateUser: (partial: Partial<User>) => void
   logout: () => void
 }
 
@@ -29,6 +31,11 @@ export const useAuthStore = create<AuthState>()(
       login: (token, user) => {
         localStorage.setItem('token', token) // Untuk axios interceptor
         set({ token, user, isAuthenticated: true })
+      },
+      updateUser: (partial) => {
+        set((state) => ({
+          user: state.user ? { ...state.user, ...partial } : null
+        }))
       },
       logout: () => {
         localStorage.removeItem('token')
