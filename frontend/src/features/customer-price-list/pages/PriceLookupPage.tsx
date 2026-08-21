@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from '@/hooks/useTranslation'
 import {
@@ -10,6 +11,7 @@ import {
   ExternalLink,
   SlidersHorizontal,
   RotateCcw,
+  Loader2,
 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
@@ -18,10 +20,14 @@ import { ROUTES } from '@/lib/constants'
 import { ModeSegmentedControl } from '../components/ModeSegmentedControl'
 import { BranchPillToggle } from '../components/BranchPillToggle'
 import { CategoryMultiCombobox } from '../components/CategoryMultiCombobox'
+import { MarkingManagerModal } from '@/features/price-list/components/MarkingManagerModal'
 import { useCustomerPriceLookup } from '../hooks/useCustomerPriceLookup'
+import type { CustomerPriceListItem } from '../types'
 
 export function PriceLookupPage() {
   const { t } = useTranslation()
+  const [selectedItemForMarkings, setSelectedItemForMarkings] = useState<CustomerPriceListItem | null>(null)
+
   const {
     isLoadingCustomers,
     globalBranches,
@@ -49,11 +55,12 @@ export function PriceLookupPage() {
     setTableSearch,
     availableCategories,
     filteredCustomers,
-    handleSelectCustomer,
     isFiltered,
+    filteredItems,
+    handleSelectCustomer,
     handleResetAll,
     handleLookup,
-    filteredItems,
+    handleSaveCustomerItemMarkings,
   } = useCustomerPriceLookup()
 
   return (
@@ -107,7 +114,7 @@ export function PriceLookupPage() {
           >
             {loading ? (
               <span className="flex items-center gap-1.5 text-xs">
-                <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 Mencari...
               </span>
             ) : (
@@ -307,36 +314,77 @@ export function PriceLookupPage() {
                         <th className="px-4 py-2.5">Mode</th>
                         <th className="px-4 py-2.5">Branch</th>
                         <th className="px-4 py-2.5">Kategori</th>
+                        <th className="px-4 py-2.5">Agen / Marking</th>
                         <th className="px-4 py-2.5">Estimasi Transit</th>
                         <th className="px-4 py-2.5 text-right">Harga Tarif</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[var(--color-border)]">
-                      {filteredItems.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-4 py-2">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[0.68rem] font-semibold uppercase ${
-                                item.mode.toUpperCase().includes('SEA')
-                                  ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                                  : 'bg-cyan-50 text-cyan-700 border border-cyan-200'
-                              }`}
-                            >
-                              {item.mode.toUpperCase().includes('SEA') ? <Anchor size={11} /> : <Plane size={11} />}
-                              {item.mode}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 font-semibold text-slate-800 font-mono">{item.branch}</td>
-                          <td className="px-4 py-2 text-slate-700">{item.category}</td>
-                          <td className="px-4 py-2 text-slate-500">{item.transitTime || '—'}</td>
-                          <td className="px-4 py-2 text-right font-semibold font-mono text-emerald-700">
-                            {formatCurrency(item.price)}
-                          </td>
-                        </tr>
-                      ))}
+                      {filteredItems.map((item) => {
+                        const markingCount = item.markings?.length || 0
+                        return (
+                          <tr key={item.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-4 py-2">
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[0.68rem] font-semibold uppercase ${
+                                  item.mode.toUpperCase().includes('SEA')
+                                    ? 'bg-blue-50 text-blue-700 border border-blue-200'
+                                    : 'bg-cyan-50 text-cyan-700 border border-cyan-200'
+                                }`}
+                              >
+                                {item.mode.toUpperCase().includes('SEA') ? <Anchor size={11} /> : <Plane size={11} />}
+                                {item.mode}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2 font-semibold text-slate-800 font-mono">{item.branch}</td>
+                            <td className="px-4 py-2 text-slate-700">{item.category}</td>
+                            <td className="px-4 py-2">
+                              <div className="flex items-center justify-between gap-1.5 max-w-[180px]">
+                                {markingCount === 0 ? (
+                                  <span className="text-[11px] font-medium text-slate-400 italic">
+                                    Semua Agen
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {item.markings!.slice(0, 2).map((m) => (
+                                      <span
+                                        key={m.markingCode}
+                                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200"
+                                        title={m.agentName ? `${m.markingCode} (${m.agentName})` : m.markingCode}
+                                      >
+                                        {m.markingCode}
+                                      </span>
+                                    ))}
+                                    {markingCount > 2 && (
+                                      <span
+                                        className="px-1 py-0.5 rounded text-[10px] font-bold bg-amber-100/80 text-amber-800"
+                                        title={item.markings!.map((m) => m.markingCode).join(', ')}
+                                      >
+                                        +{markingCount - 2}
+                                      </span>
+                                    )}
+                                  </div>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedItemForMarkings(item)}
+                                  className="px-1.5 py-0.5 text-[10px] font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition-colors cursor-pointer shrink-0 ml-auto"
+                                  title="Kelola Agen"
+                                >
+                                  {markingCount > 0 ? 'Edit' : '+ Agen'}
+                                </button>
+                              </div>
+                            </td>
+                            <td className="px-4 py-2 text-slate-500">{item.transitTime || '—'}</td>
+                            <td className="px-4 py-2 text-right font-semibold font-mono text-emerald-700">
+                              {formatCurrency(item.price)}
+                            </td>
+                          </tr>
+                        )
+                      })}
                       {filteredItems.length === 0 && (
                         <tr>
-                          <td colSpan={5} className="px-4 py-8 text-center text-slate-500 text-xs">
+                          <td colSpan={6} className="px-4 py-8 text-center text-slate-500 text-xs">
                             Tidak ada tarif yang sesuai dengan filter yang dipilih.
                           </td>
                         </tr>
@@ -348,6 +396,24 @@ export function PriceLookupPage() {
             </div>
           )}
         </div>
+      )}
+
+      {/* Marking Manager Modal */}
+      {selectedItemForMarkings && (
+        <MarkingManagerModal
+          isOpen={Boolean(selectedItemForMarkings)}
+          onClose={() => setSelectedItemForMarkings(null)}
+          itemId={selectedItemForMarkings.id}
+          itemDescription={{
+            mode: selectedItemForMarkings.mode,
+            branch: selectedItemForMarkings.branch,
+            category: selectedItemForMarkings.category,
+            price: selectedItemForMarkings.price,
+            custName: `${custCode} — ${custName}`,
+          }}
+          initialMarkings={selectedItemForMarkings.markings || []}
+          onSave={(markings) => handleSaveCustomerItemMarkings(selectedItemForMarkings.id, markings)}
+        />
       )}
     </div>
   )

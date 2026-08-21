@@ -5,7 +5,7 @@ import { billingApi } from '../services/billing.service'
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslation } from '@/hooks/useTranslation'
-import { formatDate, formatDecimal, formatCurrency } from '@/lib/utils'
+import { formatDate, formatDecimal, formatCurrency, formatNumber } from '@/lib/utils'
 import { PriceListDetailModal } from './PriceListDetailModal'
 import { CustMarkingDetailModal } from './CustMarkingDetailModal'
 
@@ -49,6 +49,8 @@ interface M3CheckResponse {
   fdListCode: string
   fdListType?: number | null
   defaultFdTypeComodity?: number | null
+  markingComodityType?: number | null
+  markingComodities?: { fdTypeComodity: number | null; fdComodity: string | null; fdComodityName?: string | null }[]
   fdTglAgent?: string | null
   expectedMode?: string | null
   expectedBranch?: string | null
@@ -70,11 +72,24 @@ interface M3CheckResponse {
   } | null
   isCodOrUrgent: boolean
   recommendedM3: number
-  m3PackingList: { raw: any[]; values: number[] }
-  m3Gudang: { raw: any[]; values: number[] }
-  m3CustPerMarking: { raw: any[]; values: number[] }
-  m3Komplain: { raw: any[]; values: number[] }
-  m3ListBatch?: { raw: any[]; values: number[] }
+  m3PackingList: { raw: any[]; values: number[]; qty?: number | null }
+  m3Gudang: { raw: any[]; values: number[]; qty?: number | null }
+  m3CustPerMarking: { raw: any[]; values: number[]; totalEntryList?: number | null }
+  m3PLPerMarking?: { raw: any[]; values: number[]; totalEntryList?: number | null }
+  m3Komplain: { raw: any[]; values: number[]; qty?: number | null }
+  m3KomplainPerMarking: { raw: any[]; values: number[]; totalEntryKomplain?: number | null }
+  m3ListBatch?: { raw: any[]; values: number[]; qty?: number | null }
+  fdQtyList?: number | null
+  fdTotalQtyPL?: number | null
+  fdTotalQtyGudang?: number | null
+  fdTotalQtyKomplain?: number | null
+  totalEntryKomplain?: number | null
+  totalEntryList?: number | null
+  isPartialKomplain?: boolean
+  m3KomplainPlusGudang?: number | null
+  countKomplainLC?: number
+  countGudangLC?: number
+  fdSatuan?: string | null
   profileHarga?: {
     fdListCode: string
     fdCustCode: string
@@ -105,8 +120,8 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
     staleTime: 60000,
   })
 
-  // Bill-level Commodity Category (default from entryList join)
-  const defaultTypeId = billFdTypeComodity ?? res?.defaultFdTypeComodity ?? null
+  // Bill-level Commodity Category (default from entryList join or marking)
+  const defaultTypeId = billFdTypeComodity ?? res?.defaultFdTypeComodity ?? res?.markingComodityType ?? null
   const defaultMatchType = res?.comodityTypes?.find(
     (c) => c.fdTypeComodity === defaultTypeId && (res?.fdListType ? c.fdListType === res.fdListType : true)
   )
@@ -138,18 +153,67 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
   const plValues = res.m3PackingList?.values || []
   const gudangValues = res.m3Gudang?.values || []
   const komplainValues = res.m3Komplain?.values || []
+  const komplainPerMarkingValues = res.m3KomplainPerMarking?.values || []
   const custMarkingValues = res.m3CustPerMarking?.values || []
+  const plPerMarkingValues = res.m3PLPerMarking?.values || []
   const listBatchValues = res.m3ListBatch?.values || []
+
+  // Extract Qty and fdSatuan from backend response
+  const parseQty = (val: any): number | null => {
+    if (val === null || val === undefined || val === '') return null
+    const n = typeof val === 'number' ? val : parseInt(String(val), 10)
+    return isNaN(n) ? null : n
+  }
+
+  const rawUnified = res.m3PackingList?.raw?.[0] || res.m3ListBatch?.raw?.[0] || {}
+  const qtyList = res.fdQtyList ?? res.m3ListBatch?.qty ?? parseQty(rawUnified.fdQtyList ?? rawUnified.qtyList)
+  const qtyPL = res.fdTotalQtyPL ?? res.m3PackingList?.qty ?? parseQty(rawUnified.fdTotalQtyPL ?? rawUnified.fdTtoalQtyPL ?? rawUnified.fdQtyPL)
+  const qtyGudang = res.fdTotalQtyGudang ?? res.m3Gudang?.qty ?? parseQty(rawUnified.fdTotalQtyGudang ?? rawUnified.fdQtyGudang)
+  const qtyKomplain = res.fdTotalQtyKomplain ?? res.m3Komplain?.qty ?? parseQty(rawUnified.fdTotalQtyKomplain ?? rawUnified.fdQtyKomplain)
+  const totalEntryKomplain = res.totalEntryKomplain ?? res.m3KomplainPerMarking?.totalEntryKomplain ?? parseQty(rawUnified.TotalEntryKomplain ?? rawUnified.totalEntryKomplain ?? rawUnified.fdTotalEntryKomplain)
+  const totalEntryList = res.totalEntryList ?? res.m3CustPerMarking?.totalEntryList ?? parseQty(rawUnified.TotalEntryList ?? rawUnified.totalEntryList ?? rawUnified.fdTotalEntryList)
+  const fdSatuan = (res.fdSatuan || rawUnified.fdSatuan || rawUnified.Satuan || '').trim()
+
+  // Qty Consistency Validation:
+  // Semua Qty (EntryList, PL, Gudang) harus sama.
+  // Apabila Komplain null atau 0 maka normal (diabaikan).
+  // Apabila Komplain > 0 maka ikut dibandingkan.
+  const activeQtys: { key: string; label: string; val: number }[] = []
+  if (qtyList !== null) activeQtys.push({ key: 'ListBatch', label: t('billing.validation.listBatch') || 'EntryList', val: qtyList })
+  if (qtyPL !== null) activeQtys.push({ key: 'PL', label: t('billing.validation.pl') || 'Packing List', val: qtyPL })
+  if (qtyGudang !== null) activeQtys.push({ key: 'Gudang', label: t('billing.validation.gudang') || 'Gudang', val: qtyGudang })
+  if (qtyKomplain !== null && qtyKomplain > 0) {
+    activeQtys.push({ key: 'Komplain', label: t('billing.validation.komplain') || 'Komplain', val: qtyKomplain })
+  }
+
+  const distinctQtyVals = Array.from(new Set(activeQtys.map((q) => q.val)))
+  const hasQtyMismatch = activeQtys.length > 1 && distinctQtyVals.length > 1
+  const isQtyListDiff = hasQtyMismatch && qtyList !== null && activeQtys.some((q) => q.key !== 'ListBatch' && q.val !== qtyList)
+  const isQtyPLDiff = hasQtyMismatch && qtyPL !== null && activeQtys.some((q) => q.key !== 'PL' && q.val !== qtyPL)
+  const isQtyGudangDiff = hasQtyMismatch && qtyGudang !== null && activeQtys.some((q) => q.key !== 'Gudang' && q.val !== qtyGudang)
+  const isQtyKomplainDiff = hasQtyMismatch && qtyKomplain !== null && qtyKomplain > 0 && activeQtys.some((q) => q.key !== 'Komplain' && q.val !== qtyKomplain)
 
   // Helper untuk aturan M3 minimal 0.1 m³
   const normM3 = (v: number) => (v > 0 && v < 0.1 ? 0.1 : v)
 
-  // Check 1: Primary match against PL, Gudang, Komplain, dan List Batch
+  // Check 1: Primary match against PL, Gudang, Komplain, List Batch, dan Komplain Parsial + Gudang
   const primaryCandidates: { sourceKey: string; sourceName: string; val: number; rawVal: number }[] = [
     ...plValues.map((v) => ({ sourceKey: 'PL', sourceName: t('billing.validation.pl'), val: normM3(v), rawVal: v })),
     ...gudangValues.map((v) => ({ sourceKey: 'Gudang', sourceName: t('billing.validation.gudang'), val: normM3(v), rawVal: v })),
     ...komplainValues.map((v) => ({ sourceKey: 'Komplain', sourceName: t('billing.validation.komplain'), val: normM3(v), rawVal: v })),
+    ...plPerMarkingValues.map((v) => ({ sourceKey: 'PLPerMarking', sourceName: `${t('billing.validation.pl')} (${t('billing.validation.perMarkingGroup') || 'Per Marking'})`, val: normM3(v), rawVal: v })),
+    ...komplainPerMarkingValues.map((v) => ({ sourceKey: 'KomplainPerMarking', sourceName: t('billing.validation.komplainPerMarking') || 'M3 Komplain per Marking', val: normM3(v), rawVal: v })),
     ...listBatchValues.map((v) => ({ sourceKey: 'ListBatch', sourceName: t('billing.validation.listBatch') || 'M3 List Batch', val: normM3(v), rawVal: v })),
+    ...(res.m3KomplainPlusGudang !== null && res.m3KomplainPlusGudang !== undefined && res.m3KomplainPlusGudang > 0
+      ? [
+          {
+            sourceKey: 'KomplainHybrid',
+            sourceName: `Komplain Parsial + Gudang (${res.countKomplainLC ?? totalEntryKomplain ?? 0} LC Komplain + ${res.countGudangLC ?? ((totalEntryList || 0) - (totalEntryKomplain || 0))} LC Gudang)`,
+            val: normM3(res.m3KomplainPlusGudang),
+            rawVal: res.m3KomplainPlusGudang,
+          },
+        ]
+      : []),
   ]
 
   const primaryMatch = primaryCandidates.find((c) => Math.abs(c.val - billedM3) < 0.001)
@@ -238,7 +302,7 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
       {/* Main Comparison Body */}
       <div className="p-4 sm:p-5 space-y-4">
         {/* Metric Cards Grid */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5 sm:gap-3">
           {/* M3 Tagihan */}
           <div className="rounded-[var(--radius-lg)] border-2 border-[var(--color-primary)] bg-[var(--color-neutral)] p-2.5 sm:p-3">
             <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
@@ -249,62 +313,165 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
             </p>
           </div>
 
-          {/* M3 Packing List */}
-          <div
-            className={`rounded-[var(--radius-lg)] border p-2.5 sm:p-3 transition-colors ${primaryMatch?.sourceKey === 'PL'
-              ? 'border-green-500 bg-green-50/50'
-              : 'border-[var(--color-border)] bg-[var(--color-surface)]'
-              }`}
-          >
-            <p className="text-[10px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-              {t('billing.validation.pl')}
-            </p>
-            <p className="mt-1 text-sm sm:text-base font-semibold text-[var(--color-primary)] tabular-nums">
-              {plValues.length > 0 ? `${formatDecimal(plValues[0], 4)} m³` : '—'}
-            </p>
-          </div>
-
-          {/* M3 Gudang */}
-          <div
-            className={`rounded-[var(--radius-lg)] border p-2.5 sm:p-3 transition-colors ${primaryMatch?.sourceKey === 'Gudang'
-              ? 'border-green-500 bg-green-50/50'
-              : 'border-[var(--color-border)] bg-[var(--color-surface)]'
-              }`}
-          >
-            <p className="text-[10px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-              {t('billing.validation.gudang')}
-            </p>
-            <p className="mt-1 text-sm sm:text-base font-semibold text-[var(--color-primary)] tabular-nums">
-              {gudangValues.length > 0 ? `${formatDecimal(gudangValues[0], 4)} m³` : '—'}
-            </p>
-          </div>
-
-          {/* M3 Komplain */}
-          <div
-            className={`rounded-[var(--radius-lg)] border p-2.5 sm:p-3 transition-colors ${primaryMatch?.sourceKey === 'Komplain'
-              ? 'border-green-500 bg-green-50/50'
-              : 'border-[var(--color-border)] bg-[var(--color-surface)]'
-              }`}
-          >
-            <p className="text-[10px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-              {t('billing.validation.komplain')}
-            </p>
-            <p className="mt-1 text-sm sm:text-base font-semibold text-[var(--color-primary)] tabular-nums">
-              {komplainValues.length > 0 ? `${formatDecimal(komplainValues[0], 4)} m³` : '—'}
-            </p>
-          </div>
-
-          {/* M3 Customer per Marking */}
-          <div
-            className={`rounded-[var(--radius-lg)] border p-2.5 sm:p-3 transition-colors ${matchStatus === 'MATCH_MARKING'
-              ? 'border-blue-500 bg-blue-50/50'
-              : 'border-[var(--color-border)] bg-[var(--color-surface)]'
-              }`}
-          >
-            <div className="flex items-center justify-between gap-1">
-              <p className="text-[10px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                {t('billing.validation.custPerMarking')}
+          {/* Group: Per ListCode */}
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-4 lg:col-span-4">
+            <div className="flex items-center justify-between gap-1 mb-2">
+              <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
+                {t('billing.validation.referenceGroup') || 'Per ListCode'}
               </p>
+              {hasQtyMismatch ? (
+                <Badge variant="warning" className="text-[10px] px-2 py-0.5 font-semibold flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                  <span>{t('billing.validation.qtyMismatch') || 'Selisih Qty'}</span>
+                </Badge>
+              ) : activeQtys.length > 0 ? (
+                <Badge variant="success" className="text-[10px] px-2 py-0.5 font-semibold flex items-center gap-1">
+                  <Check className="w-3 h-3 text-emerald-600 shrink-0 stroke-[2.5]" />
+                  <span>{t('billing.validation.qtyMatch') || 'Qty Sama'}</span>
+                </Badge>
+              ) : null}
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {/* EntryList */}
+              <div
+                className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'ListBatch'
+                  ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                  : isQtyListDiff
+                    ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
+                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                  }`}
+              >
+                <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                  {t('billing.validation.listBatch')}
+                </p>
+                <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                  {listBatchValues.length > 0 ? `${formatDecimal(listBatchValues[0], 4)} m³` : '—'}
+                </p>
+                <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                  <span className="flex items-center gap-1">
+                    <span>Qty</span>
+                    {isQtyListDiff && (
+                      <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                        {t('billing.validation.qtyDiff') || 'Beda'}
+                      </Badge>
+                    )}
+                  </span>
+                  <span className={`font-semibold ${isQtyListDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
+                    {qtyList !== null ? `${formatNumber(qtyList)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
+                  </span>
+                </p>
+              </div>
+
+              {/* Packing List */}
+              <div
+                className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'PL' || primaryMatch?.sourceKey === 'PackingList'
+                  ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                  : isQtyPLDiff
+                    ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
+                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                  }`}
+              >
+                <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                  {t('billing.validation.pl')}
+                </p>
+                <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                  {plValues.length > 0 ? `${formatDecimal(plValues[0], 4)} m³` : '—'}
+                </p>
+                <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                  <span className="flex items-center gap-1">
+                    <span>Qty</span>
+                    {isQtyPLDiff && (
+                      <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                        {t('billing.validation.qtyDiff') || 'Beda'}
+                      </Badge>
+                    )}
+                  </span>
+                  <span className={`font-semibold ${isQtyPLDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
+                    {qtyPL !== null ? `${formatNumber(qtyPL)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
+                  </span>
+                </p>
+              </div>
+
+              {/* Gudang */}
+              <div
+                className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'Gudang'
+                  ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                  : isQtyGudangDiff
+                    ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
+                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                  }`}
+              >
+                <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                  {t('billing.validation.gudang')}
+                </p>
+                <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                  {gudangValues.length > 0 ? `${formatDecimal(gudangValues[0], 4)} m³` : '—'}
+                </p>
+                <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                  <span className="flex items-center gap-1">
+                    <span>Qty</span>
+                    {isQtyGudangDiff && (
+                      <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                        {t('billing.validation.qtyDiff') || 'Beda'}
+                      </Badge>
+                    )}
+                  </span>
+                  <span className={`font-semibold ${isQtyGudangDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
+                    {qtyGudang !== null ? `${formatNumber(qtyGudang)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
+                  </span>
+                </p>
+              </div>
+
+              {/* Komplain */}
+              <div
+                className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'Komplain'
+                  ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                  : isQtyKomplainDiff
+                    ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
+                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                  }`}
+              >
+                <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                  {t('billing.validation.komplain')}
+                </p>
+                <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                  {komplainValues.length > 0 ? `${formatDecimal(komplainValues[0], 4)} m³` : '—'}
+                </p>
+                <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                  <span className="flex items-center gap-1">
+                    <span>Qty</span>
+                    {qtyKomplain === null || qtyKomplain === 0 ? (
+                      <span className="text-[8px] text-[var(--color-secondary)] font-normal">
+                        ({t('billing.validation.normal') || 'Normal'})
+                      </span>
+                    ) : isQtyKomplainDiff ? (
+                      <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                        {t('billing.validation.qtyDiff') || 'Beda'}
+                      </Badge>
+                    ) : null}
+                  </span>
+                  <span className={`font-semibold ${isQtyKomplainDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
+                    {qtyKomplain !== null && qtyKomplain > 0 ? `${formatNumber(qtyKomplain)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Group: Per Marking */}
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-2 lg:col-span-2">
+            <div className="flex items-center justify-between gap-1 mb-2">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
+                  {t('billing.validation.perMarkingGroup') || 'Per Marking'}
+                </p>
+                {res.isPartialKomplain && (
+                  <Badge variant="warning" className="text-[8px] px-1.5 py-0 font-bold">
+                    Komplain Parsial ({totalEntryKomplain}/{totalEntryList} LC)
+                  </Badge>
+                )}
+              </div>
               {res.customer?.fdCustCode && (
                 <button
                   type="button"
@@ -316,43 +483,98 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                 </button>
               )}
             </div>
-            <p className="mt-1 text-sm sm:text-base font-semibold text-[var(--color-primary)] tabular-nums">
-              {custMarkingValues.length > 0 ? `${formatDecimal(custMarkingValues[0], 4)} m³` : '—'}
-            </p>
-            {res.customer?.fdCustCode && (
-              <button
-                type="button"
-                onClick={() => setIsCustMarkingModalOpen(true)}
-                className="mt-1 text-[10px] font-medium text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
-              >
-                <span>{t('billing.validation.viewDetail')}</span>
-                <ExternalLink className="w-2.5 h-2.5" />
-              </button>
-            )}
-          </div>
 
-          {/* M3 Entry List / Batch */}
-          <div
-            className={`rounded-[var(--radius-lg)] border p-2.5 sm:p-3 transition-colors ${primaryMatch?.sourceKey === 'ListBatch'
-              ? 'border-green-500 bg-green-50/50'
-              : 'border-[var(--color-border)] bg-[var(--color-surface)]'
-              }`}
-          >
-            <p className="text-[10px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-              {t('billing.validation.listBatch')}
-            </p>
-            <p className="mt-1 text-sm sm:text-base font-semibold text-[var(--color-primary)] tabular-nums">
-              {listBatchValues.length > 0 ? `${formatDecimal(listBatchValues[0], 4)} m³` : '—'}
-            </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {/* M3 PL per Marking -> Packing List */}
+                <div
+                  className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'PLPerMarking'
+                    ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                    }`}
+                >
+                  <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                    {t('billing.validation.pl')}
+                  </p>
+                  <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                    {plPerMarkingValues.length > 0 ? `${formatDecimal(plPerMarkingValues[0], 4)} m³` : '—'}
+                  </p>
+                  <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                    <span className="text-[9px] truncate mr-1">Total ListCode</span>
+                    <span className="font-semibold text-[var(--color-primary)]">
+                      {totalEntryList !== null ? `${formatNumber(totalEntryList)}` : '—'}
+                    </span>
+                  </p>
+                </div>
+
+                {/* M3 Customer per Marking -> Gudang */}
+                <div
+                  className={`rounded-md border p-2 transition-colors ${matchStatus === 'MATCH_MARKING'
+                    ? 'border-sky-500 dark:border-sky-400 bg-transparent ring-1 ring-sky-500/30'
+                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                    }`}
+                >
+                  <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                    {t('billing.validation.gudang')}
+                  </p>
+                  <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                    {custMarkingValues.length > 0 ? `${formatDecimal(custMarkingValues[0], 4)} m³` : '—'}
+                  </p>
+                  <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                    <span className="text-[9px] truncate mr-1">Total ListCode</span>
+                    <span className="font-semibold text-[var(--color-primary)]">
+                      {totalEntryList !== null ? `${formatNumber(totalEntryList)}` : '—'}
+                    </span>
+                  </p>
+                </div>
+
+                {/* M3 Komplain per Marking -> Komplain */}
+                <div
+                  className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'KomplainPerMarking'
+                    ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                    }`}
+                >
+                  <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                    {t('billing.validation.komplain')}
+                  </p>
+                  <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                    {komplainPerMarkingValues.length > 0 ? `${formatDecimal(komplainPerMarkingValues[0], 4)} m³` : '—'}
+                  </p>
+                  <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                    <span className="text-[9px] truncate mr-1">Total ListCode</span>
+                    <span className="font-semibold text-[var(--color-primary)]">
+                      {totalEntryKomplain !== null ? `${formatNumber(totalEntryKomplain)}` : '—'}
+                    </span>
+                  </p>
+                </div>
+              </div>
+
+              {/* Hybrid Validation Bar if Partial Komplain */}
+              {res.isPartialKomplain && res.m3KomplainPlusGudang !== null && res.m3KomplainPlusGudang !== undefined && res.m3KomplainPlusGudang > 0 && (
+                <div
+                  className={`mt-2 p-1.5 rounded-md border text-[10px] font-mono flex items-center justify-between transition-colors ${
+                    primaryMatch?.sourceKey === 'KomplainHybrid'
+                      ? 'border-emerald-500 dark:border-emerald-400 bg-emerald-50/80 dark:bg-transparent text-emerald-950 dark:text-emerald-200'
+                      : 'border-sky-300 dark:border-sky-700 bg-sky-50/50 dark:bg-transparent text-sky-950 dark:text-sky-200'
+                  }`}
+                >
+                  <span className="font-sans font-semibold text-[9px] flex items-center gap-1">
+                    <span>Validasi Komplain + Gudang:</span>
+                  </span>
+                  <span className="font-bold tabular-nums">
+                    {formatDecimal(res.m3KomplainPlusGudang, 4)} m³
+                  </span>
+                </div>
+              )}
           </div>
         </div>
 
         {/* Status Explanation Message */}
         <div className="space-y-2">
           {matchStatus === 'MATCH_PRIMARY' && (
-            <div className="flex items-start gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-[var(--radius-md)] p-2.5">
-              <Check className="w-4 h-4 text-green-600 shrink-0 mt-0.5 stroke-[2.5]" />
-              <span>
+            <div className="flex items-start gap-2 text-xs text-[var(--color-success)] bg-emerald-50/80 dark:bg-transparent border border-[var(--color-success)] rounded-[var(--radius-md)] p-2.5">
+              <Check className="w-4 h-4 text-[var(--color-success)] shrink-0 mt-0.5 stroke-[2.5]" />
+              <span className="font-medium">
                 {isMinChargeApplied
                   ? `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) SESUAI aturan M3 Minimal 0,1 m³ (Data ${matchedSourceName}: ${formatDecimal(matchedRawVal, 4)} m³)`
                   : `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) COCOK dengan data ${matchedSourceName}`}
@@ -361,9 +583,9 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
           )}
 
           {matchStatus === 'MATCH_MARKING' && (
-            <div className="flex items-start gap-2 text-xs text-blue-700 bg-blue-50 border border-blue-200 rounded-[var(--radius-md)] p-2.5">
-              <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-              <span>
+            <div className="flex items-start gap-2 text-xs text-[var(--color-tertiary)] bg-sky-50/80 dark:bg-transparent border border-[var(--color-tertiary)] rounded-[var(--radius-md)] p-2.5">
+              <Info className="w-4 h-4 text-[var(--color-tertiary)] shrink-0 mt-0.5" />
+              <span className="font-medium">
                 {isMinChargeApplied
                   ? `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) SESUAI aturan M3 Minimal 0,1 m³ (Data M3 per Marking: ${formatDecimal(matchedRawVal, 4)} m³)`
                   : `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) COCOK dengan M3 per Marking`}
@@ -372,9 +594,9 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
           )}
 
           {matchStatus === 'NO_MATCH' && (
-            <div className="flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-[var(--radius-md)] p-2.5">
-              <X className="w-4 h-4 text-red-600 shrink-0 mt-0.5 stroke-[2.5]" />
-              <span>
+            <div className="flex items-start gap-2 text-xs text-[var(--color-danger)] bg-rose-50/80 dark:bg-transparent border border-[var(--color-danger)] rounded-[var(--radius-md)] p-2.5">
+              <X className="w-4 h-4 text-[var(--color-danger)] shrink-0 mt-0.5 stroke-[2.5]" />
+              <span className="font-medium">
                 {t('billing.validation.noMatch').replace('{billed}', formatDecimal(billedM3, 4))}
               </span>
             </div>
@@ -382,11 +604,26 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
 
           {/* COD / URGENT Alert */}
           {isCodUrgentShortfall && (
-            <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-300 rounded-[var(--radius-md)] p-2.5">
-              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-              <span>
+            <div className="flex items-start gap-2 text-xs text-[var(--color-warning)] bg-amber-50/80 dark:bg-transparent border border-[var(--color-warning)] rounded-[var(--radius-md)] p-2.5">
+              <AlertTriangle className="w-4 h-4 text-[var(--color-warning)] shrink-0 mt-0.5" />
+              <span className="font-medium">
                 {t('billing.validation.codUrgentWarning').replace('{recommended}', formatDecimal(recommendedM3, 4))}
               </span>
+            </div>
+          )}
+
+          {/* Qty Mismatch Alert */}
+          {hasQtyMismatch && (
+            <div className="flex items-start gap-2 text-xs text-[var(--color-warning)] bg-amber-50/80 dark:bg-transparent border border-[var(--color-warning)] rounded-[var(--radius-md)] p-2.5">
+              <AlertTriangle className="w-4 h-4 text-[var(--color-warning)] shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">{t('billing.validation.qtyMismatch')}: </span>
+                <span>
+                  Terdapat perbedaan jumlah Qty antara{' '}
+                  {activeQtys.map((q) => `${q.label} (${formatNumber(q.val)})`).join(', ')}
+                  {fdSatuan ? ` ${fdSatuan}` : ''}.
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -402,10 +639,10 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
 
             <div className="flex items-center gap-3">
               {res.priceValidation.effectiveDate && (
-                <div className="flex items-center gap-1 text-[11px] font-medium text-slate-600">
-                  <Tag className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                <div className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-secondary)]">
+                  <Tag className="w-3.5 h-3.5 text-blue-500 shrink-0" />
                   <span>{t('billing.validation.effectivePriceDate')}:</span>
-                  <span className="font-semibold text-blue-700">{formatDate(res.priceValidation.effectiveDate)}</span>
+                  <span className="font-semibold text-blue-500">{formatDate(res.priceValidation.effectiveDate)}</span>
                 </div>
               )}
 
@@ -413,7 +650,7 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
+                  className="inline-flex items-center gap-1 text-xs font-bold text-blue-500 hover:text-blue-400 hover:underline transition-colors cursor-pointer"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
                   <span>{t('billing.validation.viewPriceList')}</span>
@@ -430,7 +667,7 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                 <Tag className="w-3.5 h-3.5 text-purple-600 shrink-0" />
                 <span>{t('billing.validation.custPriceProfile')}</span>
               </div>
-              <Badge variant="default" className="text-[10px] font-mono bg-purple-50 text-purple-800 border-purple-200 dark:bg-purple-950/60 dark:text-purple-300 dark:border-purple-800">
+              <Badge variant="default" className="text-[10px] font-mono">
                 {t('billing.validation.billTypeLabel')}: {
                   res.profileHarga.typeTagihan === 1
                     ? '1 (m3 + Kg)'
@@ -447,64 +684,64 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
 
             <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
               {/* Kelompok Tarif Utama */}
-              <div className="md:col-span-3 bg-purple-50/40 dark:bg-purple-950/20 border border-purple-200/80 dark:border-purple-900/40 rounded-lg p-2.5 space-y-2">
-                <p className="text-[10px] uppercase font-sans text-purple-700 dark:text-purple-300 font-bold tracking-wider">
+              <div className="md:col-span-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-2.5 space-y-2">
+                <p className="text-[10px] uppercase font-sans text-[var(--color-secondary)] font-bold tracking-wider">
                   {t('billing.validation.mainTariff')}
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-                  <div className="bg-[var(--color-surface)] border border-purple-200/60 dark:border-purple-900/40 rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-purple-700 dark:text-purple-300 font-bold">{t('billing.validation.m3Price')}</p>
-                    <p className="font-bold text-purple-900 dark:text-purple-200 mt-0.5 text-xs sm:text-sm">
+                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.m3Price')}</p>
+                    <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
                       {res.profileHarga.harga > 0 ? formatCurrency(res.profileHarga.harga) : '—'}
                     </p>
                   </div>
 
-                  <div className="bg-[var(--color-surface)] border border-purple-200/60 dark:border-purple-900/40 rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-purple-700 dark:text-purple-300 font-bold">{t('billing.validation.kgPrice')}</p>
-                    <p className="font-bold text-purple-900 dark:text-purple-200 mt-0.5 text-xs sm:text-sm">
+                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.kgPrice')}</p>
+                    <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
                       {res.profileHarga.kg > 0 ? `${formatDecimal(res.profileHarga.kg, 0)} kg` : '—'}
                     </p>
                   </div>
 
-                  <div className="bg-[var(--color-surface)] border border-purple-200/60 dark:border-purple-900/40 rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-purple-700 dark:text-purple-300 font-bold">{t('billing.validation.ratio')}</p>
-                    <p className="font-bold text-purple-900 dark:text-purple-200 mt-0.5 text-xs sm:text-sm">
+                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.ratio')}</p>
+                    <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
                       {res.profileHarga.rasio > 0 ? formatDecimal(res.profileHarga.rasio, 2) : '—'}
                     </p>
                   </div>
 
-                  <div className="bg-[var(--color-surface)] border border-purple-200/60 dark:border-purple-900/40 rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-purple-700 dark:text-purple-300 font-bold">
+                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">
                       {res.fdListType === 1 ? t('billing.validation.minChargeKg') : t('billing.validation.minChargeM3')}
                     </p>
                     <div className="mt-0.5">
                       {res.fdListType === 1 ? (
                         (res.profileHarga.minChargeKg ?? 0) > 0 ? (
-                          <p className="font-bold text-purple-900 dark:text-purple-200 text-xs sm:text-sm">
+                          <p className="font-bold text-[var(--color-primary)] text-xs sm:text-sm">
                             {`${formatDecimal(res.profileHarga.minChargeKg, 2)} kg`}
                           </p>
                         ) : (
                           <div className="flex items-center gap-1 flex-wrap">
-                            <span className="font-bold text-purple-900 dark:text-purple-200 text-xs sm:text-sm">
+                            <span className="font-bold text-[var(--color-primary)] text-xs sm:text-sm">
                               3.00 kg
                             </span>
-                            <span className="text-[9px] font-semibold text-amber-700 bg-amber-100 dark:bg-amber-950 dark:text-amber-300 px-1 py-0.5 rounded border border-amber-200 dark:border-amber-800">
-                              ({t('billing.validation.noDataYet')})
-                            </span>
+                            <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                              {t('billing.validation.noDataYet')}
+                            </Badge>
                           </div>
                         )
                       ) : (res.profileHarga.minChargeM3 ?? 0) > 0 ? (
-                        <p className="font-bold text-purple-900 dark:text-purple-200 text-xs sm:text-sm">
+                        <p className="font-bold text-[var(--color-primary)] text-xs sm:text-sm">
                           {`${formatDecimal(res.profileHarga.minChargeM3, 4)} m³`}
                         </p>
                       ) : (
                         <div className="flex items-center gap-1 flex-wrap">
-                          <span className="font-bold text-purple-900 dark:text-purple-200 text-xs sm:text-sm">
+                          <span className="font-bold text-[var(--color-primary)] text-xs sm:text-sm">
                             0.1000 m³
                           </span>
-                          <span className="text-[9px] font-semibold text-amber-700 bg-amber-100 dark:bg-amber-950 dark:text-amber-300 px-1 py-0.5 rounded border border-amber-200 dark:border-amber-800">
-                            ({t('billing.validation.noDataYet')})
-                          </span>
+                          <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                            {t('billing.validation.noDataYet')}
+                          </Badge>
                         </div>
                       )}
                     </div>
@@ -513,21 +750,21 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
               </div>
 
               {/* Kelompok Tax Return */}
-              <div className="md:col-span-2 bg-blue-50/40 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/40 rounded-lg p-2.5 space-y-2">
-                <p className="text-[10px] uppercase font-sans text-blue-700 dark:text-blue-300 font-bold tracking-wider">
+              <div className="md:col-span-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-2.5 space-y-2">
+                <p className="text-[10px] uppercase font-sans text-[var(--color-secondary)] font-bold tracking-wider">
                   {t('billing.validation.taxReturnTitle')}
                 </p>
                 <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div className="bg-[var(--color-surface)] border border-blue-200/60 dark:border-blue-900/40 rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-blue-700 dark:text-blue-300 font-bold">{t('billing.validation.taxReturnTariff')}</p>
-                    <p className="font-bold text-blue-900 dark:text-blue-200 mt-0.5 text-xs sm:text-sm">
+                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.taxReturnTariff')}</p>
+                    <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
                       {res.profileHarga.taxReturnPrice > 0 ? formatCurrency(res.profileHarga.taxReturnPrice) : '—'}
                     </p>
                   </div>
 
-                  <div className="bg-[var(--color-surface)] border border-blue-200/60 dark:border-blue-900/40 rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-blue-700 dark:text-blue-300 font-bold">{t('billing.validation.taxReturnMinCharge')}</p>
-                    <p className="font-bold text-blue-900 dark:text-blue-200 mt-0.5 text-xs sm:text-sm">
+                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.taxReturnMinCharge')}</p>
+                    <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
                       {res.profileHarga.taxReturnMinCharge > 0 ? `${formatDecimal(res.profileHarga.taxReturnMinCharge, 4)} m³` : '—'}
                     </p>
                   </div>
@@ -546,9 +783,9 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                   <Tag className="w-3.5 h-3.5 text-[var(--color-tertiary)]" />
                   {t('billing.validation.itemPriceCheck')}
                 </p>
-                <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200 border border-blue-200 dark:border-blue-800">
+                <Badge variant="info" className="text-[10px] font-bold px-2 py-0.5">
                   {defaultComodityName}
-                </span>
+                </Badge>
               </div>
               <span className="text-[10px] font-sans text-[var(--color-secondary)]">
                 {t('billing.validation.itemCountLabel', { count: invoiceDetails.length })}
@@ -560,6 +797,7 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                 <thead className="bg-[var(--color-neutral)] text-[10px] uppercase font-bold text-[var(--color-secondary)] border-b border-[var(--color-border)]">
                   <tr>
                     <th className="px-2.5 py-2">{t('billing.detail.colDescription')}</th>
+                    <th className="px-2.5 py-2">{t('billing.validation.commodityTypeCol') || 'TIPE KOMODITI'}</th>
                     <th className="px-2.5 py-2 text-right">{t('billing.validation.invoicePriceCol')}</th>
                     <th className="px-2.5 py-2 text-right">{t('billing.validation.priceProfileCol')}</th>
                     <th className="px-2.5 py-2 text-right">{t('billing.validation.priceListCol')}</th>
@@ -569,25 +807,114 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                 <tbody className="divide-y divide-[var(--color-border)] bg-[var(--color-surface)]">
                   {invoiceDetails.map((item, idx) => {
                     const listType = res.fdListType ?? null
-                    const typeId = item.fdTypeComodity ?? defaultTypeId ?? null
+                    let typeId = item.fdTypeComodity ?? defaultTypeId ?? res.markingComodityType ?? null
+                    let directComodityName = ''
+                    
+                    // Logic pencocokan komoditas cerdas:
+                    // 1. Ambil teks di belakang tanda '-' jika ada (atau setelah PARCELS)
+                    // 2. Pecahkan token berdasarkan tanda koma ','
+                    // 3. Cocokkan irisan token dengan fdComodity dari master marking (get_qr_tbm3_perMarking_plus_rasio)
+                    // 4. Pilih candidate dengan skor kecocokan tertinggi dan prioritaskan tier lebih tinggi (LARTAS - S) jika campuran
+                    const itemNameUpper = (item.fdItemName || '').toUpperCase()
+                    if (res.markingComodities && res.markingComodities.length > 0) {
+                      const textAfterDash = itemNameUpper.includes('-')
+                        ? itemNameUpper.split('-').slice(1).join('-').trim()
+                        : itemNameUpper.replace(/^PARCELS\s+/i, '').trim()
+
+                      const itemTokens = textAfterDash.split(',').map((t) => t.trim()).filter(Boolean)
+
+                      const scoredCandidates = res.markingComodities
+                        .filter((m) => !!m.fdComodity)
+                        .map((m) => {
+                          const mComUpper = m.fdComodity!.toUpperCase().trim()
+                          const mTokens = mComUpper.split(',').map((t) => t.trim()).filter(Boolean)
+
+                          let matchCount = 0
+                          for (const it of itemTokens) {
+                            for (const mt of mTokens) {
+                              if (it === mt) {
+                                matchCount += 3 // Exact token match
+                              } else if (it.includes(mt) || mt.includes(it)) {
+                                matchCount += 1 // Partial token match
+                              }
+                            }
+                          }
+
+                          const isFullExact = textAfterDash === mComUpper
+                          const isSubstring = textAfterDash.includes(mComUpper) || mComUpper.includes(textAfterDash)
+                          if (isSubstring) matchCount += 2
+
+                          const catNameUpper = (m.fdComodityName || '').toUpperCase()
+                          const isSuperLartas =
+                            catNameUpper.includes('LARTAS - S') ||
+                            catNameUpper.includes('LARTAS-S') ||
+                            catNameUpper.includes('LARTAS S')
+
+                          return {
+                            candidate: m,
+                            mComUpper,
+                            matchCount,
+                            isFullExact,
+                            isSuperLartas,
+                            length: mComUpper.length,
+                          }
+                        })
+                        .filter((sc) => sc.matchCount > 0)
+                        .sort((a, b) => {
+                          // 1. Full exact match pertama
+                          if (a.isFullExact !== b.isFullExact) return a.isFullExact ? -1 : 1
+                          // 2. Skor kecocokan token tertinggi
+                          if (a.matchCount !== b.matchCount) return b.matchCount - a.matchCount
+                          // 3. Prioritaskan tier LARTAS - S jika gabungan
+                          if (a.isSuperLartas !== b.isSuperLartas) return a.isSuperLartas ? -1 : 1
+                          // 4. String kecocokan lebih panjang
+                          return b.length - a.length
+                        })
+
+                      const matched = scoredCandidates.length > 0 ? scoredCandidates[0].candidate : null
+
+                      if (matched) {
+                        if (matched.fdTypeComodity) {
+                          typeId = matched.fdTypeComodity
+                        }
+                        if (matched.fdComodityName) {
+                          directComodityName = matched.fdComodityName
+                        } else if (matched.fdComodity) {
+                          directComodityName = matched.fdComodity
+                        }
+                      }
+                    }
+
                     const isTaxReturnItem = (item.fdItemName || '').toUpperCase().includes('TAX RETURN') || (item.fdItemName || '').toUpperCase().includes('TAXRETURN')
 
                     // Find commodity name from tbTypeComodity (item specific or fallback to bill default)
-                    const matchType = res.comodityTypes?.find(
-                      (c) => c.fdTypeComodity === typeId && (listType ? c.fdListType === listType : true)
-                    )
-                    const comodityName = matchType ? matchType.fdComodityName : item.fdComodity || defaultComodityName
+                    let comodityName = ''
+                    if (typeId) {
+                      const matchType = res.comodityTypes?.find(
+                        (c) => c.fdTypeComodity === typeId && (listType ? c.fdListType === listType : true)
+                      )
+                      if (matchType) {
+                        comodityName = matchType.fdComodityName
+                      }
+                    }
+                    if (!comodityName) {
+                      comodityName = directComodityName || item.fdComodity || defaultComodityName
+                    }
 
                     // Match with price list category (skipped for Tax Return)
                     let priceItem: PriceItem | null = null
+                    let minTargetPrice = 0
+                    let maxTargetPrice = 0
                     if (!isTaxReturnItem && res.priceValidation?.items && comodityName !== '—') {
                       const modeFilter = res.expectedMode || (listType === 1 ? 'BY AIR' : listType === 2 ? 'BY SEA' : null)
                       const branchFilter = res.expectedBranch || null
+                      const expectedSheetType = res.customer?.fdBroker === 1 ? 'MKT' : 'CS'
 
-                      // Filter candidate items matching mode & branch
+                      // Filter candidate items matching mode, branch, and sheetType
                       const candidateItems = res.priceValidation.items.filter((p) => {
                         if (modeFilter && p.mode && p.mode.toUpperCase() !== modeFilter.toUpperCase()) return false
                         if (branchFilter && p.branch && p.branch.toUpperCase() !== branchFilter.toUpperCase()) return false
+                        if (p.sheetType && p.sheetType.toUpperCase() !== expectedSheetType) return false
                         return true
                       })
 
@@ -623,7 +950,15 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                           } else if (normName.includes('ALKES') || normName.includes('MAKANAN') || normName.includes('FOOD') || normName.includes('LS')) {
                             priceItem = itemsToSearch.find((p) => p.category.toLowerCase().includes('alkes') || p.category.toLowerCase().includes('makanan') || p.category.toLowerCase().includes('ls')) || null
                           } else if (normName.includes('LARTAS S') || normName.includes('LARTAS SUPER') || normName.includes('LARTAS SPECIAL') || normName.includes('KOSMETIK')) {
-                            priceItem = itemsToSearch.find((p) => p.category.toLowerCase().includes('kosmetik') || p.category.toLowerCase().includes('obat') || p.category.toUpperCase().includes('LARTAS S') || p.category.toUpperCase().includes('LARTAS-S')) || null
+                            const matchedItems = itemsToSearch.filter((p) => {
+                              const cat = p.category.toLowerCase()
+                              return cat.includes('kosmetik') || cat.includes('obat') || cat.includes('alkes') || cat.includes('makanan') || cat.includes('ls') || p.category.toUpperCase().includes('LARTAS S') || p.category.toUpperCase().includes('LARTAS-S')
+                            })
+                            if (matchedItems.length > 0) {
+                              priceItem = matchedItems[0]
+                              minTargetPrice = Math.min(...matchedItems.map((p) => p.price))
+                              maxTargetPrice = Math.max(...matchedItems.map((p) => p.price))
+                            }
                           } else if (normName.includes('SEMI GARMENT')) {
                             priceItem = itemsToSearch.find((p) => p.category.toLowerCase().includes('semi garment')) || null
                           } else if (normName.includes('GARMENT')) {
@@ -644,6 +979,11 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                       }
                     }
 
+                      if (priceItem && minTargetPrice === 0 && maxTargetPrice === 0) {
+                        minTargetPrice = priceItem.price
+                        maxTargetPrice = priceItem.price
+                      }
+
                     let profilePrice = 0
                     if (isTaxReturnItem) {
                       profilePrice = res.profileHarga?.taxReturnPrice || 0
@@ -653,11 +993,21 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
 
                     const isMatched = isTaxReturnItem
                       ? (profilePrice > 0 && Math.abs(item.fdItemPrice - profilePrice) < 0.01)
-                      : (priceItem ? Math.abs(item.fdItemPrice - priceItem.price) < 0.01 : false)
+                      : (priceItem ? (item.fdItemPrice >= minTargetPrice - 0.01 && item.fdItemPrice <= maxTargetPrice + 0.01) : false)
 
-                    const targetPrice = isTaxReturnItem ? profilePrice : (priceItem ? priceItem.price : 0)
                     const hasTargetPrice = isTaxReturnItem ? profilePrice > 0 : priceItem !== null
                     const targetColName = isTaxReturnItem || !priceItem ? t('billing.validation.priceProfileCol') : t('billing.validation.priceListCol')
+
+                    let priceListDisplay = '—'
+                    if (isTaxReturnItem) {
+                      priceListDisplay = res.profileHarga?.taxReturnPrice && res.profileHarga.taxReturnPrice > 0 ? formatCurrency(res.profileHarga.taxReturnPrice) : '—'
+                    } else if (priceItem) {
+                      if (minTargetPrice !== maxTargetPrice) {
+                        priceListDisplay = `${formatCurrency(minTargetPrice)} - ${formatCurrency(maxTargetPrice)}`
+                      } else {
+                        priceListDisplay = formatCurrency(priceItem.price)
+                      }
+                    }
 
                     return (
                       <tr key={item.fdID || idx} className="hover:bg-[var(--color-neutral)]/40 transition-colors">
@@ -669,6 +1019,9 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                             </span>
                           )}
                         </td>
+                        <td className="px-2.5 py-2 font-semibold text-[var(--color-tertiary)] whitespace-nowrap">
+                          {comodityName}
+                        </td>
                         <td className="px-2.5 py-2 text-right font-mono font-semibold text-[var(--color-primary)]">
                           {formatCurrency(item.fdItemPrice)}
                         </td>
@@ -676,9 +1029,7 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                           {profilePrice > 0 ? formatCurrency(profilePrice) : '—'}
                         </td>
                         <td className="px-2.5 py-2 text-right font-mono font-semibold text-blue-700 dark:text-blue-300">
-                          {isTaxReturnItem
-                            ? (res.profileHarga?.taxReturnPrice && res.profileHarga.taxReturnPrice > 0 ? formatCurrency(res.profileHarga.taxReturnPrice) : '—')
-                            : (priceItem ? formatCurrency(priceItem.price) : '—')}
+                          {priceListDisplay}
                         </td>
                         <td className="px-2.5 py-2 text-center">
                           {isMatched ? (
@@ -686,14 +1037,14 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                               <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.5]" />
                               <span>{t('billing.validation.matchBadge')}</span>
                             </Badge>
-                          ) : hasTargetPrice && targetPrice > 0 ? (
-                            item.fdItemPrice > targetPrice ? (
-                              <Badge variant="danger" className="inline-flex items-center gap-1 font-semibold text-[10px] bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/60 dark:text-rose-300 dark:border-rose-800" title={`Harga invoice (${formatCurrency(item.fdItemPrice)}) beda dengan ${targetColName} (${formatCurrency(targetPrice)})`}>
+                          ) : hasTargetPrice && (isTaxReturnItem ? profilePrice > 0 : priceItem !== null) ? (
+                            item.fdItemPrice > (isTaxReturnItem ? profilePrice : maxTargetPrice) ? (
+                              <Badge variant="danger" className="inline-flex items-center gap-1 font-semibold text-[10px]" title={`Harga invoice (${formatCurrency(item.fdItemPrice)}) lebih tinggi dari ${targetColName} (${priceListDisplay})`}>
                                 <TrendingUp className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
                                 <span>{targetColName}</span>
                               </Badge>
-                            ) : item.fdItemPrice < targetPrice ? (
-                              <Badge variant="warning" className="inline-flex items-center gap-1 font-semibold text-[10px] bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800" title={`Harga invoice (${formatCurrency(item.fdItemPrice)}) beda dengan ${targetColName} (${formatCurrency(targetPrice)})`}>
+                            ) : item.fdItemPrice < (isTaxReturnItem ? profilePrice : minTargetPrice) ? (
+                              <Badge variant="warning" className="inline-flex items-center gap-1 font-semibold text-[10px]" title={`Harga invoice (${formatCurrency(item.fdItemPrice)}) lebih rendah dari ${targetColName} (${priceListDisplay})`}>
                                 <TrendingDown className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
                                 <span>{targetColName}</span>
                               </Badge>

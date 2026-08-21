@@ -153,7 +153,7 @@ export function CariManifestModal({ isOpen, onClose, onSelect }: CariManifestMod
           <button
             disabled={!inputCode.trim()}
             onClick={() => handleSelect(inputCode.trim().toUpperCase())}
-            className="px-3.5 py-2 sm:px-4 sm:py-2 bg-[var(--color-primary)] hover:opacity-90 text-white text-xs sm:text-sm font-bold rounded-[var(--radius-md)] transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-3.5 py-2 sm:px-4 sm:py-2 bg-[var(--color-primary)] hover:opacity-90 text-[var(--color-on-primary)] text-xs sm:text-sm font-bold rounded-[var(--radius-md)] transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Cari
           </button>

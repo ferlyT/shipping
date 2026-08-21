@@ -11,6 +11,9 @@ import {
   lookupPriceList,
   searchEntryList,
   lookupPriceByEntry,
+  getItemMarkings,
+  setItemMarkings,
+  deleteItemMarking,
 } from './price-list.service'
 
 const priceListRoutes = new Hono()
@@ -70,9 +73,9 @@ priceListRoutes.get('/trend', async (c) => {
   return successResponse(c, trend)
 })
 
-// GET /api/price-list/lookup?date=YYYY-MM-DD&sheetType=CS&mode=BY SEA&branch=SG&category=General Goods
+// GET /api/price-list/lookup?date=YYYY-MM-DD&sheetType=CS&mode=BY SEA&branch=SG&category=General Goods&markingCode=GZC
 priceListRoutes.get('/lookup', async (c) => {
-  const { date, sheetType, mode, branch, category } = c.req.query()
+  const { date, sheetType, mode, branch, category, markingCode } = c.req.query()
   const targetDate = date ? new Date(date) : new Date()
 
   const result = await lookupPriceList(targetDate, {
@@ -80,9 +83,39 @@ priceListRoutes.get('/lookup', async (c) => {
     mode: mode || undefined,
     branch: branch || undefined,
     category: category || undefined,
+    markingCode: markingCode || undefined,
   })
 
   return successResponse(c, result)
+})
+
+// GET /api/price-list/items/:id/markings
+priceListRoutes.get('/items/:id/markings', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
+  const markings = await getItemMarkings(id)
+  return successResponse(c, markings)
+})
+
+// PUT /api/price-list/items/:id/markings (body: { markings: [{ markingCode: string, agentName?: string }] })
+priceListRoutes.put('/items/:id/markings', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
+  const body = await c.req.json<{ markings: { markingCode: string; agentName?: string }[] }>()
+  if (!Array.isArray(body?.markings)) {
+    return errorResponse(c, 'Field markings harus berupa array', 400)
+  }
+  const result = await setItemMarkings(id, body.markings)
+  return successResponse(c, result)
+})
+
+// DELETE /api/price-list/items/:id/markings/:markingCode
+priceListRoutes.delete('/items/:id/markings/:markingCode', async (c) => {
+  const id = Number(c.req.param('id'))
+  const markingCode = c.req.param('markingCode')
+  if (isNaN(id) || !markingCode) return errorResponse(c, 'Parameter tidak valid', 400)
+  await deleteItemMarking(id, markingCode)
+  return successResponse(c, { message: 'Marking berhasil dihapus' })
 })
 
 // GET /api/price-list/entry-search?q=XXX&limit=20

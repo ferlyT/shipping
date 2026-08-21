@@ -200,6 +200,20 @@ export function useCustomerPriceLookup() {
     })
   }, [result, modeFilter, branchFilter, categoriesFilter, tableSearch])
 
+  const handleSaveCustomerItemMarkings = async (
+    itemId: number,
+    markings: { markingCode: string; agentName?: string }[]
+  ) => {
+    await customerPriceListApi.setItemMarkings(itemId, markings)
+    if (custCode) {
+      const res = await customerPriceListApi.lookup({
+        custCode,
+        date: targetDate,
+      })
+      setResult(res.data.data)
+    }
+  }
+
   return {
     customerList,
     isLoadingCustomers,
@@ -235,5 +249,6 @@ export function useCustomerPriceLookup() {
     handleResetAll,
     handleLookup,
     filteredItems,
+    handleSaveCustomerItemMarkings,
   }
 }

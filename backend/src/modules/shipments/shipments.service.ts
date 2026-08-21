@@ -53,8 +53,14 @@ const EMPTY_MARKING: MarkingDates = {
 function resolveShipmentStatus(
   marking: MarkingDates | null | undefined,
   delivery: DeliveryInfo | null | undefined,
-  billing: BillingInfo | null | undefined
+  billing: BillingInfo | null | undefined,
+  fdCancel?: number | null
 ): ShipmentStatus {
+  // fdCancel = 1 override semua status menjadi Canceled
+  if (Number(fdCancel) === 1) {
+    return { ...(marking || EMPTY_MARKING), statusLabel: 'Canceled', statusStep: -1 }
+  }
+
   if (!marking) {
     return { ...EMPTY_MARKING, statusLabel: 'Belum Ada Data Marking', statusStep: 0 }
   }
@@ -182,70 +188,189 @@ async function getBillingStatusMap(listCodes: string[]) {
 import { Prisma } from '@prisma/client'
 
 // ---------------------------------------------------------------------------
+// Multi-variable SQL condition builder
+// ---------------------------------------------------------------------------
+
+function buildSingleStatusCondition(status: number): Prisma.Sql {
+  if (status === 0) {
+    return Prisma.sql`(fdMarkingCode IS NULL OR fdMarkingCode = '' OR fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdLoadDate IS NULL AND fdETD IS NULL AND fdETA IS NULL AND fdExitDate IS NULL))`
+  } else if (status === 1) {
+    return Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdLoadDate IS NOT NULL AND fdETD IS NULL AND fdETA IS NULL AND fdExitDate IS NULL)`
+  } else if (status === 2) {
+    return Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdETD IS NOT NULL AND fdETA IS NULL AND fdExitDate IS NULL)`
+  } else if (status === 3) {
+    return Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdETA IS NOT NULL AND fdExitDate IS NULL)`
+  } else if (status === 4) {
+    return Prisma.sql`(fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL) AND fdListCode NOT IN (SELECT fdListCode FROM tbDelivery))`
+  } else if (status === 5) {
+    return Prisma.sql`(fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL) AND fdListCode IN (SELECT fdListCode FROM tbDelivery GROUP BY fdListCode HAVING MAX(ISNULL(fdSent, 0)) = 0))`
+  } else if (status === 6) {
+    return Prisma.sql`(fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL) AND fdListCode IN (SELECT fdListCode FROM tbDelivery WHERE fdSent = 1) AND fdListCode NOT IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1))`
+  } else if (status === 7) {
+    return Prisma.sql`(fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL) AND fdListCode IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1 AND fdInvNo NOT IN (SELECT fdInvNo FROM tbBillingTotal WHERE ISNULL(fdBayar, 0) > 0)))`
+  } else if (status === 8) {
+    return Prisma.sql`(fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL) AND fdListCode IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1 AND fdInvNo IN (SELECT fdInvNo FROM tbBillingTotal WHERE ISNULL(fdBayar, 0) > 0 AND ISNULL(fdBayar, 0) < ISNULL(fdJumlah, 0))))`
+  } else if (status === 9) {
+    return Prisma.sql`(fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL) AND fdListCode IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1 AND fdInvNo IN (SELECT fdInvNo FROM tbBillingTotal) AND fdInvNo NOT IN (SELECT fdInvNo FROM tbBillingTotal WHERE ISNULL(fdBayar, 0) < ISNULL(fdJumlah, 0))))`
+  }
+  return Prisma.sql`1=1`
+}
+
+function buildSingleWordCondition(word: string, field: string): Prisma.Sql {
+  const searchLike = `%${word}%`
+
+  if (field === 'customer') {
+    return Prisma.sql`fdCustName LIKE ${searchLike}`
+  } else if (field === 'resi') {
+    return Prisma.sql`fdTerima LIKE ${searchLike}`
+  } else if (field === 'marking') {
+    return Prisma.sql`(
+      fdMarkingCode LIKE ${searchLike} OR 
+      fdMarkingNo LIKE ${searchLike} OR 
+      (ISNULL(fdMarkingCode, '') + ' ' + ISNULL(fdMarkingNo, '')) LIKE ${searchLike}
+    )`
+  } else if (field === 'tracking') {
+    return Prisma.sql`fdLocalTrackingNo LIKE ${searchLike}`
+  } else if (field === 'listCode') {
+    return Prisma.sql`fdListCode LIKE ${searchLike}`
+  } else if (field === 'customer_marking') {
+    return Prisma.sql`(
+      fdCustName LIKE ${searchLike} OR 
+      fdMarkingCode LIKE ${searchLike} OR 
+      fdMarkingNo LIKE ${searchLike} OR 
+      (ISNULL(fdMarkingCode, '') + ' ' + ISNULL(fdMarkingNo, '')) LIKE ${searchLike}
+    )`
+  } else {
+    return Prisma.sql`(
+      fdCustName LIKE ${searchLike} OR 
+      fdMarkingCode LIKE ${searchLike} OR 
+      fdMarkingNo LIKE ${searchLike} OR 
+      (ISNULL(fdMarkingCode, '') + ' ' + ISNULL(fdMarkingNo, '')) LIKE ${searchLike} OR 
+      fdListCode LIKE ${searchLike} OR 
+      fdTerima LIKE ${searchLike} OR 
+      fdLocalTrackingNo LIKE ${searchLike} OR 
+      fdComodity LIKE ${searchLike}
+    )`
+  }
+}
+
+function buildTermCondition(term: string, field: string): Prisma.Sql {
+  const words = term.split(/\s+/).map((w) => w.trim()).filter(Boolean)
+
+  if (words.length <= 1) {
+    return buildSingleWordCondition(term, field)
+  }
+
+  // Multi-word (e.g. "bintang buana gzd36"): setiap kata harus cocok pada salah satu field (AND antar kata)
+  const wordConditions = words.map((w) => buildSingleWordCondition(w, field))
+  return Prisma.sql`(${Prisma.join(wordConditions, ' AND ')})`
+}
+
+function buildShipmentConditions(query: Record<string, string | undefined>): Prisma.Sql[] {
+  const conditions: Prisma.Sql[] = []
+
+  // 1. Multi-token Search (Support delimiter koma, titik-koma, newline, tab + multi-word AND)
+  const search = query.search?.trim()
+  const searchField = query.searchField?.trim() || 'ALL'
+
+  if (search) {
+    const terms = search
+      .split(/[,\n;\r\t]+/)
+      .map((s) => s.trim())
+      .filter(Boolean)
+
+    if (terms.length > 0) {
+      const termConditions = terms.map((t) => buildTermCondition(t, searchField))
+      conditions.push(Prisma.sql`(${Prisma.join(termConditions, ' OR ')})`)
+    }
+  }
+
+  // 2. Explicit Customer filter
+  const customer = query.customer?.trim()
+  if (customer && customer !== 'ALL') {
+    conditions.push(Prisma.sql`fdCustName LIKE ${'%' + customer + '%'}`)
+  }
+
+  // 3. Explicit Marking filter
+  const marking = query.marking?.trim()
+  if (marking && marking !== 'ALL') {
+    const cleanMarking = marking.replace(/[-\s]/g, '')
+    conditions.push(Prisma.sql`(
+      fdMarkingCode LIKE ${'%' + marking + '%'} OR 
+      fdMarkingNo LIKE ${'%' + marking + '%'} OR 
+      (ISNULL(fdMarkingCode, '') + ' ' + ISNULL(fdMarkingNo, '')) LIKE ${'%' + marking + '%'} OR 
+      REPLACE(REPLACE(ISNULL(fdMarkingCode, '') + ISNULL(fdMarkingNo, ''), ' ', ''), '-', '') LIKE ${'%' + cleanMarking + '%'}
+    )`)
+  }
+
+  // 2. Multi-variable List Type (e.g. "1", "2", "1,2")
+  const listType = query.listType?.trim()
+  if (listType && listType !== 'ALL') {
+    const types = listType
+      .split(',')
+      .map((t) => parseInt(t.trim(), 10))
+      .filter((n) => !isNaN(n))
+
+    if (types.length === 1) {
+      conditions.push(Prisma.sql`fdListType = ${types[0]}`)
+    } else if (types.length > 1) {
+      conditions.push(Prisma.sql`fdListType IN (${Prisma.join(types)})`)
+    }
+  }
+
+  // 3. Multi-variable Branch (e.g. "Cabang Jakarta,Cabang Surabaya")
+  const branch = query.branch?.trim()
+  if (branch && branch !== 'ALL') {
+    const branches = branch
+      .split(',')
+      .map((b) => b.trim())
+      .filter((b) => b && b !== 'ALL')
+
+    if (branches.length === 1) {
+      conditions.push(Prisma.sql`fdBranchCode = ${branches[0]}`)
+    } else if (branches.length > 1) {
+      conditions.push(Prisma.sql`fdBranchCode IN (${Prisma.join(branches)})`)
+    }
+  }
+
+  // 4. Multi-variable Status (e.g. "0,1,2", "-1,6")
+  const statusParam = query.status?.toString().trim()
+  if (statusParam && statusParam !== 'ALL') {
+    const rawStatuses = statusParam
+      .split(',')
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !isNaN(n))
+
+    if (rawStatuses.length > 0) {
+      const hasCancel = rawStatuses.includes(-1)
+      const normalStatuses = rawStatuses.filter((s) => s !== -1)
+
+      if (hasCancel && normalStatuses.length > 0) {
+        const normalSqlList = normalStatuses.map(buildSingleStatusCondition)
+        conditions.push(
+          Prisma.sql`(ISNULL(fdCancel, 0) = 1 OR (ISNULL(fdCancel, 0) = 0 AND (${Prisma.join(normalSqlList, ' OR ')})))`
+        )
+      } else if (hasCancel) {
+        conditions.push(Prisma.sql`ISNULL(fdCancel, 0) = 1`)
+      } else if (normalStatuses.length > 0) {
+        const normalSqlList = normalStatuses.map(buildSingleStatusCondition)
+        conditions.push(
+          Prisma.sql`(ISNULL(fdCancel, 0) = 0 AND (${Prisma.join(normalSqlList, ' OR ')}))`
+        )
+      }
+    }
+  }
+
+  return conditions
+}
+
+// ---------------------------------------------------------------------------
 
 export async function getShipments(query: Record<string, string | undefined>) {
   const { page, limit } = parsePagination(query)
   const { skip, take, meta } = buildPagination({ page, limit })
 
-  const search = query.search?.trim()
-  const listType = query.listType
-  const branch = query.branch?.trim()
-  const statusParam = query.status
-
-  const conditions: Prisma.Sql[] = []
-
-  if (search) {
-    const searchStarts = `${search}%`
-    const searchLike = `%${search}%`
-    conditions.push(Prisma.sql`(
-      fdListCode LIKE ${searchStarts} OR 
-      fdMarkingCode LIKE ${searchStarts} OR 
-      fdTerima LIKE ${searchStarts} OR 
-      fdLocalTrackingNo LIKE ${searchStarts} OR 
-      fdCustName LIKE ${searchLike}
-    )`)
-  }
-
-  if (listType !== undefined && listType !== '' && listType !== 'ALL') {
-    conditions.push(Prisma.sql`fdListType = ${parseInt(listType, 10)}`)
-  }
-
-  if (branch && branch !== 'ALL') {
-    conditions.push(Prisma.sql`fdBranchCode = ${branch}`)
-  }
-
-  if (statusParam && statusParam !== 'ALL') {
-    const status = parseInt(statusParam, 10)
-    
-    if (status === 0) {
-      conditions.push(Prisma.sql`(fdMarkingCode IS NULL OR fdMarkingCode = '' OR fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdLoadDate IS NULL AND fdETD IS NULL AND fdETA IS NULL AND fdExitDate IS NULL))`)
-    } else if (status === 1) {
-      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdLoadDate IS NOT NULL AND fdETD IS NULL AND fdETA IS NULL AND fdExitDate IS NULL)`)
-    } else if (status === 2) {
-      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdETD IS NOT NULL AND fdETA IS NULL AND fdExitDate IS NULL)`)
-    } else if (status === 3) {
-      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdETA IS NOT NULL AND fdExitDate IS NULL)`)
-    } else if (status === 4) {
-      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL)`)
-      conditions.push(Prisma.sql`fdListCode NOT IN (SELECT fdListCode FROM tbDelivery)`)
-    } else if (status === 5) {
-      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL)`)
-      conditions.push(Prisma.sql`fdListCode IN (SELECT fdListCode FROM tbDelivery GROUP BY fdListCode HAVING MAX(ISNULL(fdSent, 0)) = 0)`)
-    } else if (status === 6) {
-      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL)`)
-      conditions.push(Prisma.sql`fdListCode IN (SELECT fdListCode FROM tbDelivery WHERE fdSent = 1)`)
-      conditions.push(Prisma.sql`fdListCode NOT IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1)`)
-    } else if (status === 7) {
-      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL)`)
-      conditions.push(Prisma.sql`fdListCode IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1 AND fdInvNo NOT IN (SELECT fdInvNo FROM tbBillingTotal WHERE ISNULL(fdBayar, 0) > 0))`)
-    } else if (status === 8) {
-      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL)`)
-      conditions.push(Prisma.sql`fdListCode IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1 AND fdInvNo IN (SELECT fdInvNo FROM tbBillingTotal WHERE ISNULL(fdBayar, 0) > 0 AND ISNULL(fdBayar, 0) < ISNULL(fdJumlah, 0)))`)
-    } else if (status === 9) {
-      conditions.push(Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdExitDate IS NOT NULL)`)
-      conditions.push(Prisma.sql`fdListCode IN (SELECT fdListCode FROM tbBilling WHERE fdGive = 1 AND fdInvNo IN (SELECT fdInvNo FROM tbBillingTotal) AND fdInvNo NOT IN (SELECT fdInvNo FROM tbBillingTotal WHERE ISNULL(fdBayar, 0) < ISNULL(fdJumlah, 0)))`)
-    }
-  }
+  const conditions = buildShipmentConditions(query)
 
   const whereClause = conditions.length > 0 
     ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}` 
@@ -281,7 +406,8 @@ export async function getShipments(query: Record<string, string | undefined>) {
     shipmentStatus: resolveShipmentStatus(
       row.fdMarkingCode ? markingMap.get(row.fdMarkingCode.trim()) : null,
       row.fdListCode ? deliveryMap.get(row.fdListCode.trim()) : null,
-      row.fdListCode ? billingMap.get(row.fdListCode.trim()) : null
+      row.fdListCode ? billingMap.get(row.fdListCode.trim()) : null,
+      row.fdCancel
     ),
   }))
 
@@ -340,7 +466,7 @@ export async function getShipmentById(id: string) {
 
   return {
     ...shipment,
-    shipmentStatus: resolveShipmentStatus(marking, delivery, billing),
+    shipmentStatus: resolveShipmentStatus(marking, delivery, billing, shipment.fdCancel),
   }
 }
 
@@ -353,41 +479,31 @@ export async function getShipmentDimensions(id: string) {
 }
 
 export async function getShipmentsKPIs(query: Record<string, string | undefined>) {
-  const search = query.search?.trim()
-  const listType = query.listType
-  const where: any = search
-    ? {
-      OR: [
-        { fdListCode: { startsWith: search } },
-        { fdCustName: { contains: search } },
-        { fdMarkingCode: { startsWith: search } },
-        { fdTerima: { startsWith: search } },
-        { fdLocalTrackingNo: { startsWith: search } },
-      ],
-    }
-    : {}
+  const conditions = buildShipmentConditions(query)
+  const whereClause = conditions.length > 0 
+    ? Prisma.sql`WHERE ${Prisma.join(conditions, ' AND ')}` 
+    : Prisma.empty
 
-  if (listType !== undefined && listType !== '' && listType !== 'ALL') {
-    where.fdListType = parseInt(listType, 10)
-  }
-
-  const [totalResi, aggregateData] = await Promise.all([
-    prisma.vwShipment.count({ where }),
-    prisma.vwShipment.aggregate({
-      where,
-      _sum: {
-        fdJmlPack: true,
-        fdJmlBerat: true,
-        fdM3: true,
-      },
-    }),
+  const [countRes, aggregateRes] = await Promise.all([
+    prisma.$queryRaw<any[]>`
+      SELECT COUNT(*) as count FROM vwShipment 
+      ${whereClause}
+    `,
+    prisma.$queryRaw<any[]>`
+      SELECT 
+        SUM(CAST(ISNULL(fdJmlPack, 0) AS BIGINT)) as totalPackages,
+        SUM(CAST(ISNULL(fdJmlBerat, 0) AS FLOAT)) as totalBerat,
+        SUM(CAST(ISNULL(fdM3, 0) AS FLOAT)) as totalVolume
+      FROM vwShipment 
+      ${whereClause}
+    `,
   ])
 
   return {
-    totalResi,
-    totalPackages: aggregateData._sum.fdJmlPack || 0,
-    totalBerat: aggregateData._sum.fdJmlBerat || 0,
-    totalVolume: aggregateData._sum.fdM3 || 0,
+    totalResi: Number(countRes[0]?.count || 0),
+    totalPackages: Number(aggregateRes[0]?.totalPackages || 0),
+    totalBerat: Number(aggregateRes[0]?.totalBerat || 0),
+    totalVolume: Number(aggregateRes[0]?.totalVolume || 0),
   }
 }
 
@@ -400,4 +516,29 @@ export async function getShipmentBranches() {
     .map(b => b.fdBranchCode?.trim() || 'Unassigned')
     .filter((value, index, self) => self.indexOf(value) === index)
     .sort()
+}
+
+// ---------------------------------------------------------------------------
+// Dimension detail tables
+// ---------------------------------------------------------------------------
+
+export async function getDimensionsGudang(id: string) {
+  return prisma.tbEntryListDetail.findMany({
+    where: { fdListCode: id },
+    orderBy: { fdListDCode: 'asc' },
+  })
+}
+
+export async function getDimensionsPackingList(id: string) {
+  return prisma.tbEntryListDetailPackingList.findMany({
+    where: { fdListCode: id },
+    orderBy: { fdListDCode: 'asc' },
+  })
+}
+
+export async function getDimensionsKomplain(id: string) {
+  return prisma.tbEntryListDetailKomplain.findMany({
+    where: { fdListCode: id },
+    orderBy: { fdListDCode: 'asc' },
+  })
 }

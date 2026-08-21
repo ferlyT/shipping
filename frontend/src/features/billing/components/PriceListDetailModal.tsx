@@ -164,7 +164,7 @@ export function PriceListDetailModal({
                 {t('billing.validation.modalTitle')}
               </h3>
               {(expectedMode || expectedBranch) && (
-                <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-blue-100 text-blue-800 border border-blue-200 flex items-center gap-1">
+                <span className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-transparent text-blue-500 border border-blue-500/40 flex items-center gap-1">
                   <Filter className="w-3 h-3" />
                   <span>
                     Relevan: {expectedMode === 'BY AIR' ? 'Udara (BY AIR)' : expectedMode === 'BY SEA' ? 'Laut (BY SEA)' : expectedMode || '—'}
@@ -176,7 +176,7 @@ export function PriceListDetailModal({
             <p className="text-xs text-[var(--color-secondary)]">
               {t('billing.validation.modalSubtitle').replace('{date}', tglAgent ? formatDate(tglAgent) : '—')}
               {effectiveDate && (
-                <span className="ml-2 inline-flex items-center gap-1 font-semibold text-blue-600">
+                <span className="ml-2 inline-flex items-center gap-1 font-semibold text-blue-500">
                   <Tag className="w-3.5 h-3.5" />
                   {t('billing.validation.effectivePriceDate')}: {formatDate(effectiveDate)}
                 </span>
@@ -185,7 +185,7 @@ export function PriceListDetailModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-md text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-border)] transition-colors"
+            className="p-1.5 rounded-md text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -212,7 +212,7 @@ export function PriceListDetailModal({
               onClick={() => setFilterOnlyRelevant((prev) => !prev)}
               className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 border ${
                 filterOnlyRelevant
-                  ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                  ? 'bg-transparent border-blue-500 text-blue-500 shadow-xs'
                   : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)]'
               }`}
             >
@@ -230,10 +230,10 @@ export function PriceListDetailModal({
                 <button
                   type="button"
                   onClick={() => setSelectedSheetType('ALL')}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all border ${
                     selectedSheetType === 'ALL'
-                      ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                      : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                      ? 'bg-transparent border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs'
+                      : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                   }`}
                 >
                   {t('billing.validation.allTypes')}
@@ -245,14 +245,14 @@ export function PriceListDetailModal({
                       key={st}
                       type="button"
                       onClick={() => setSelectedSheetType(st)}
-                      className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all ${
+                      className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all border ${
                         isActive
                           ? st === 'CS'
-                            ? 'bg-blue-600 text-white shadow-xs'
+                            ? 'bg-transparent border-blue-500 text-blue-500 shadow-xs'
                             : st === 'MKT'
-                            ? 'bg-amber-600 text-white shadow-xs'
-                            : 'bg-[var(--color-primary)] text-white shadow-xs'
-                          : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                            ? 'bg-transparent border-amber-500 text-amber-500 shadow-xs'
+                            : 'bg-transparent border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs'
+                          : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                       }`}
                     >
                       {st}
@@ -269,10 +269,10 @@ export function PriceListDetailModal({
                     setSelectedMode('ALL')
                     setFilterOnlyRelevant(true)
                   }}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all border ${
                     selectedMode === 'ALL'
-                      ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                      : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                      ? 'bg-transparent border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs'
+                      : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                   }`}
                 >
                   {t('billing.validation.allModes')}
@@ -283,10 +283,10 @@ export function PriceListDetailModal({
                     setSelectedMode('BY AIR')
                     setFilterOnlyRelevant(true)
                   }}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all flex items-center gap-1 ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all flex items-center gap-1 border ${
                     selectedMode === 'BY AIR'
-                      ? 'bg-amber-600 text-white shadow-xs'
-                      : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                      ? 'bg-transparent border-amber-500 text-amber-500 shadow-xs'
+                      : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                   }`}
                 >
                   <Plane className="w-3 h-3" />
@@ -298,10 +298,10 @@ export function PriceListDetailModal({
                     setSelectedMode('BY SEA')
                     setFilterOnlyRelevant(true)
                   }}
-                  className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all flex items-center gap-1 ${
+                  className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all flex items-center gap-1 border ${
                     selectedMode === 'BY SEA'
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                      ? 'bg-transparent border-blue-500 text-blue-500 shadow-xs'
+                      : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                   }`}
                 >
                   <Ship className="w-3 h-3" />
@@ -320,10 +320,10 @@ export function PriceListDetailModal({
                     setSelectedBranch('ALL')
                     setFilterOnlyRelevant(true)
                   }}
-                  className={`px-2 py-0.5 text-[11px] font-bold rounded-full transition-all whitespace-nowrap ${
+                  className={`px-2.5 py-0.5 text-[11px] font-bold rounded-full transition-all whitespace-nowrap border ${
                     selectedBranch === 'ALL'
-                      ? 'bg-[var(--color-primary)] text-white'
-                      : 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] hover:bg-[var(--color-surface)]'
+                      ? 'bg-transparent border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs'
+                      : 'bg-transparent text-[var(--color-secondary)] border border-[var(--color-border)] hover:text-[var(--color-primary)]'
                   }`}
                 >
                   Semua
@@ -338,10 +338,10 @@ export function PriceListDetailModal({
                         setSelectedBranch(br)
                         setFilterOnlyRelevant(true)
                       }}
-                      className={`px-2 py-0.5 text-[11px] font-bold rounded-full transition-all whitespace-nowrap ${
+                      className={`px-2.5 py-0.5 text-[11px] font-bold rounded-full transition-all whitespace-nowrap border ${
                         isActive
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] hover:bg-[var(--color-surface)]'
+                          ? 'bg-transparent border-blue-500 text-blue-500 shadow-xs'
+                          : 'bg-transparent text-[var(--color-secondary)] border border-[var(--color-border)] hover:text-[var(--color-primary)]'
                       }`}
                     >
                       {br}
@@ -363,15 +363,15 @@ export function PriceListDetailModal({
               return (
                 <div key={group.key} className="space-y-2.5">
                   {/* Group Header */}
-                  <div className="flex items-center justify-between pb-2 border-b-2 border-[var(--color-border)]">
+                  <div className="flex items-center justify-between pb-2 border-b border-[var(--color-border)]">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider ${
+                        className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border ${
                           isCsGroup
-                            ? 'bg-blue-100 text-blue-800 border border-blue-200'
+                            ? 'bg-transparent text-blue-500 border-blue-500/40'
                             : isMktGroup
-                            ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                            : 'bg-gray-100 text-gray-700 border border-gray-200'
+                            ? 'bg-transparent text-amber-500 border-amber-500/40'
+                            : 'bg-transparent text-[var(--color-secondary)] border-[var(--color-border)]'
                         }`}
                       >
                         {group.key}
@@ -418,15 +418,15 @@ export function PriceListDetailModal({
                               key={item.id}
                               className={`transition-colors ${
                                 isRelevantRow
-                                  ? 'bg-blue-50/40 hover:bg-blue-50/70 font-semibold'
-                                  : 'hover:bg-[var(--color-neutral)]'
+                                  ? 'bg-blue-500/10 hover:bg-blue-500/15 font-semibold'
+                                  : 'hover:bg-[var(--color-neutral)]/50'
                               }`}
                             >
                               <td className="px-3.5 py-2.5 font-bold text-[var(--color-primary)]">{item.sheetType}</td>
                               <td className="px-3.5 py-2.5 font-medium text-[var(--color-secondary)]">{item.mode}</td>
                               <td className="px-3.5 py-2.5 font-semibold text-[var(--color-primary)]">
-                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-gray-100 border border-gray-200">
-                                  {item.branch}
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-transparent border border-[var(--color-border)] text-[var(--color-primary)]">
+                                  {item.branch || '—'}
                                 </span>
                               </td>
                               <td className="px-3.5 py-2.5 font-semibold text-[var(--color-primary)]">{item.category}</td>

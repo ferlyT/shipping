@@ -22,6 +22,7 @@ import {
   Lightbulb,
   ArrowUpRight,
   ArrowDownRight,
+  Loader2,
 } from "lucide-react";
 import type { TrendSeries } from "../types";
 import { formatCurrency } from "@/lib/utils";
@@ -192,7 +193,7 @@ export function PriceTrendChart({
               Tren Harga
               {isRefetching && (
                 <span className="inline-flex items-center gap-1.5 text-[0.7rem] font-medium text-[var(--color-primary)] transition-opacity duration-200">
-                  <span className="w-3 h-3 border-2 border-[var(--color-primary)]/30 border-t-[var(--color-primary)] rounded-full animate-spin shrink-0" />
+                  <Loader2 className="w-3 h-3 text-[var(--color-primary)] animate-spin shrink-0" />
                   Memperbarui…
                 </span>
               )}
@@ -227,12 +228,12 @@ export function PriceTrendChart({
       </div>
 
       {biggestMover && !loading && (
-        <div className="px-4 sm:px-6 py-3 bg-amber-50 border-b border-[var(--color-border)] flex items-start sm:items-center gap-2.5">
-          <Lightbulb size={15} className="text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+        <div className="px-4 sm:px-6 py-3 bg-transparent border-b border-[var(--color-border)] flex items-start sm:items-center gap-2.5">
+          <Lightbulb size={15} className="text-amber-500 shrink-0 mt-0.5 sm:mt-0" />
           <p className="text-[0.82rem] text-[var(--color-primary)]">
             <span className="font-semibold">{biggestMover.label}</span> mengalami perubahan harga
             terbesar:{" "}
-            <span className={`font-semibold ${biggestMover.delta > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+            <span className={`font-semibold ${biggestMover.delta > 0 ? "text-rose-500" : "text-emerald-500"}`}>
               {biggestMover.delta > 0 ? "naik" : "turun"} {formatRupiah(Math.abs(biggestMover.delta))}
               {" "}({Math.abs(biggestMover.pct).toFixed(1)}%)
             </span>{" "}

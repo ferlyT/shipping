@@ -49,6 +49,23 @@ export const customerPriceListApi = {
   getUploadDiff: (id: number) =>
     apiClient.get<{ data: CustomerPriceListDiff }>(`/customer-price-list/uploads/${id}/diff`),
 
+  // GET /api/customer-price-list/items/:id/markings
+  getItemMarkings: (itemId: number) =>
+    apiClient.get<{ data: { id: number; itemId: number; markingCode: string; agentName: string | null }[] }>(
+      `/customer-price-list/items/${itemId}/markings`
+    ),
+
+  // PUT /api/customer-price-list/items/:id/markings
+  setItemMarkings: (itemId: number, markings: { markingCode: string; agentName?: string }[]) =>
+    apiClient.put<{ data: { id: number; itemId: number; markingCode: string; agentName: string | null }[] }>(
+      `/customer-price-list/items/${itemId}/markings`,
+      { markings }
+    ),
+
+  // DELETE /api/customer-price-list/items/:id/markings/:markingCode
+  deleteItemMarking: (itemId: number, markingCode: string) =>
+    apiClient.delete(`/customer-price-list/items/${itemId}/markings/${markingCode}`),
+
   // POST /api/customer-price-list/:custCode/upload
   upload: (custCode: string, formData: FormData) =>
     apiClient.post<{ data: CustomerPriceListUploadResult }>(

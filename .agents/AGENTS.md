@@ -95,6 +95,50 @@ breadcrumbs={[
 - ❌ Warna HEX hardcoded di CSS → ✅ Gunakan CSS variable bawaan (contoh: `var(--color-primary)`)
 - ❌ Duplikasi komponen/fungsi/interface di file page berbeda → ✅ Pisahkan ke folder `features/<domain>/components/` atau `features/<domain>/types/`
 - ❌ Buat inline spinner JSX (div + border + animate-spin) di page → ✅ Gunakan `<LoadingSpinner>` dari `src/components/ui/LoadingSpinner.tsx`
+- ❌ Tombol aktif solid putih (`bg-white` / `bg-[var(--color-primary)] text-[var(--color-on-primary)]`) di darkmode → ✅ Gunakan `bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)]`
+- ❌ Background solid terang pada badge/chip (`bg-gray-100`, `bg-blue-100`, `bg-amber-100`) → ✅ Gunakan `bg-transparent border border-... text-...`
+- ❌ Highlight tabel solid terang (`bg-blue-50`, `bg-neutral-100`) di darkmode → ✅ Gunakan `bg-blue-500/10` dan `hover:bg-[var(--color-neutral)]/40`
+
+---
+
+## 🎨 Standar CSS & Desain Sistem Tema (Terutama Midnight Dark Mode)
+
+Sistem styling mshipping mendukung multi-tema dinamis melalui atribut `[data-theme]` di elemen root (`heritage`, `ocean`, `emerald`, `amber`, `midnight`). Agen **WAJIB** mematuhi aturan berikut:
+
+### 1. Token Variabel Resmi Per Tema
+| Token CSS | Heritage (Light) | Ocean (Light) | Emerald (Light) | Amber (Light) | Midnight (Dark) |
+|---|---|---|---|---|---|
+| `--color-neutral` | `#F7F5F2` | `#F1F5F9` | `#F0FDF4` | `#FDFBF7` | `#080C14` (Deep Canvas) |
+| `--color-surface` | `#FFFFFF` | `#FFFFFF` | `#FFFFFF` | `#FFFFFF` | `#0F172A` (Card / Panel) |
+| `--color-primary` | `#1A1C1E` | `#0F172A` | `#132E22` | `#291E14` | `#F1F5F9` (Text Utama) |
+| `--color-secondary` | `#6C7278` | `#64748B` | `#536B60` | `#786857` | `#94A3B8` (Text Redup) |
+| `--color-tertiary` | `#B8422E` | `#2563EB` | `#16A34A` | `#D97706` | `#38BDF8` (Aksen Brand) |
+| `--color-border` | `#E8E6E3` | `#E2E8F0` | `#DCFCE7` | `#EFE7DE` | `#1E293B` (Border Lembut) |
+| `--color-border-strong` | `#C8C4C0` | `#CBD5E1` | `#BBF7D0` | `#D8C7B8` | `#334155` (Border Tegas) |
+
+### 2. Aturan Mutlak Desain Mode Gelap (Midnight Dark)
+- **Outline Border & Transparent Background (Clean Aesthetics)**:
+  Kartu KPI metrik, chip filter, status badge, pill toggle, dan baris accordion WAJIB menggunakan `bg-transparent` dengan border tipis semantik (`border-[var(--color-border)]`, `border-[var(--color-tertiary)]`, `border-amber-500/40`, dll).
+- **DILARANG Tombol Solid Putih Terang**:
+  Di mode gelap, tombol aktif, tab aktif, atau pill filter DILARANG menggunakan background solid putih (`bg-white` atau `bg-[var(--color-primary)]`) karena menyilaukan. Gunakan:
+  ```tsx
+  active
+    ? "bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs"
+    : "border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
+  ```
+- **DILARANG Background Badge Solid Terang**:
+  DILARANG keras menggunakan `bg-gray-100`, `bg-slate-100`, `bg-blue-100`, `bg-amber-100` pada badge/chip di mode gelap karena menjadi kotak putih/abu-abu menyala.
+  - Gunakan badge standar:
+    ```tsx
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-transparent border border-amber-500/40 text-amber-500">
+      Pending
+    </span>
+    ```
+- **Hierarki Kontainer Tanpa Redundansi**:
+  - Halaman root: biarkan mewarisi `bg-[var(--color-neutral)]` dari layout utama.
+  - Card/Panel: gunakan `bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl`.
+  - Item baris/Accordion: gunakan `bg-transparent hover:bg-[var(--color-neutral)]/30 border-b border-[var(--color-border)]`.
+  - DILARANG menumpuk `bg-[var(--color-neutral)]` di dalam `bg-[var(--color-surface)]` di dalam `bg-[var(--color-neutral)]` yang membuat warna belang/terang.
 
 ---
 

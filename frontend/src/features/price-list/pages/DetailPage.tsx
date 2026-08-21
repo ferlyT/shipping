@@ -310,25 +310,25 @@ function StatCard({
   onClick?: () => void
 }) {
   const colorMap: Record<string, string> = {
-    rose: 'bg-rose-500/5 border-rose-500/20 hover:bg-rose-500/10',
-    emerald: 'bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10',
-    secondary: 'bg-[var(--color-neutral)] border-[var(--color-border)] hover:bg-[var(--color-neutral)]/80',
-    tertiary: 'bg-indigo-500/5 border-indigo-500/20 hover:bg-indigo-500/10',
+    rose: 'bg-transparent border-rose-500/40 text-rose-500 hover:border-rose-500',
+    emerald: 'bg-transparent border-emerald-500/40 text-emerald-500 hover:border-emerald-500',
+    secondary: 'bg-transparent border-[var(--color-border)] text-[var(--color-primary)] hover:border-[var(--color-secondary)]',
+    tertiary: 'bg-transparent border-indigo-500/40 text-indigo-500 hover:border-indigo-500',
   }
   const activeClassMap: Record<string, string> = {
-    rose: 'ring-2 ring-rose-500 bg-rose-500/10',
-    emerald: 'ring-2 ring-emerald-500 bg-emerald-500/10',
-    secondary: 'ring-2 ring-[var(--color-primary)]/50 bg-[var(--color-neutral)]',
-    tertiary: 'ring-2 ring-indigo-500 bg-indigo-500/10',
+    rose: 'ring-2 ring-rose-500/50 border-rose-500',
+    emerald: 'ring-2 ring-emerald-500/50 border-emerald-500',
+    secondary: 'ring-2 ring-[var(--color-primary)]/40 border-[var(--color-primary)]',
+    tertiary: 'ring-2 ring-indigo-500/50 border-indigo-500',
   }
   return (
     <div
-      className={`card p-4 border rounded-xl flex items-center gap-3 cursor-pointer transition-all duration-200 ${
+      className={`p-4 border rounded-xl flex items-center gap-3 cursor-pointer transition-all duration-200 ${
         colorMap[color] ?? ''
       } ${isActive ? activeClassMap[color] : ''}`}
       onClick={onClick}
     >
-      <div className="p-2 rounded-lg bg-[var(--color-surface)] shadow-xs">{icon}</div>
+      <div className="p-2 rounded-lg bg-transparent border border-[var(--color-border)]">{icon}</div>
       <div>
         <div className="text-[1.5rem] font-bold font-mono text-[var(--color-primary)] leading-none">{value}</div>
         <div className="text-[0.72rem] uppercase tracking-wider text-[var(--color-secondary)] font-semibold mt-0.5">{label}</div>

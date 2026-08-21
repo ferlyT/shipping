@@ -27,4 +27,7 @@ logs/
 *.ntvsca
 *.njsproj
 *.sln
-*.sw?
+# Uploads
+backend/public/uploads/*
+!backend/public/uploads/.gitkeep
+!backend/public/uploads/**/.gitkeep

@@ -249,33 +249,33 @@ function StatCard({
   isActive?: boolean
   onClick?: () => void
 }) {
-  const bgColors = {
-    emerald: 'hover:bg-emerald-50/50',
-    rose: 'hover:bg-rose-50/50',
-    secondary: 'hover:bg-[var(--color-neutral)]',
-    tertiary: 'hover:bg-indigo-50/50',
+  const borderColors = {
+    emerald: 'border-emerald-500/40 text-emerald-500 hover:border-emerald-500',
+    rose: 'border-rose-500/40 text-rose-500 hover:border-rose-500',
+    secondary: 'border-[var(--color-border)] text-[var(--color-primary)] hover:border-[var(--color-secondary)]',
+    tertiary: 'border-indigo-500/40 text-indigo-500 hover:border-indigo-500',
   }
   
   const activeBorders = {
-    emerald: 'ring-2 ring-emerald-500 border-transparent',
-    rose: 'ring-2 ring-rose-500 border-transparent',
-    secondary: 'ring-2 ring-[var(--color-secondary)] border-transparent',
-    tertiary: 'ring-2 ring-indigo-500 border-transparent',
+    emerald: 'ring-2 ring-emerald-500/50 border-emerald-500',
+    rose: 'ring-2 ring-rose-500/50 border-rose-500',
+    secondary: 'ring-2 ring-[var(--color-primary)]/40 border-[var(--color-primary)]',
+    tertiary: 'ring-2 ring-indigo-500/50 border-indigo-500',
   }
 
   return (
     <div
       onClick={onClick}
       className={`
-        bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 sm:p-5 
+        bg-transparent border rounded-xl p-4 sm:p-5 
         shadow-xs transition-all duration-200 cursor-pointer flex flex-col gap-3
-        ${bgColors[color]}
-        ${isActive ? activeBorders[color] : 'hover:border-[var(--color-secondary)]/30'}
+        ${borderColors[color]}
+        ${isActive ? activeBorders[color] : ''}
       `}
     >
       <div className="flex items-center justify-between">
         <span className="text-[0.8rem] font-semibold text-[var(--color-secondary)] tracking-wide">{label}</span>
-        <div className={`p-1.5 rounded-lg bg-[var(--color-neutral)]`}>{icon}</div>
+        <div className="p-1.5 rounded-lg bg-transparent border border-[var(--color-border)]">{icon}</div>
       </div>
       <div className="text-[1.5rem] leading-none font-bold text-[var(--color-primary)] font-mono">
         {value.toLocaleString('id-ID')}

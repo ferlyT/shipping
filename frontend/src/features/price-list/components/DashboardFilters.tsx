@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type KeyboardEvent } from "react";
-import { Search, ChevronDown, SlidersHorizontal, RotateCcw, Anchor, Plane, Info } from "lucide-react";
+import { Search, ChevronDown, SlidersHorizontal, RotateCcw, Anchor, Plane, Info, Loader2 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { FilterOptions } from "../types";
 
@@ -280,8 +280,8 @@ export function SegmentedControl({
               type="button"
               onClick={() => onChange(o)}
               aria-pressed={active}
-              className={`flex items-center gap-1.5 px-3 h-9 rounded-full text-sm font-medium whitespace-nowrap transition-colors border ${active
-                ? "bg-[var(--color-tertiary)] text-white shadow-xs"
+              className={`flex items-center gap-1.5 px-3 h-9 rounded-full text-sm font-semibold whitespace-nowrap transition-colors border ${active
+                ? "bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs"
                 : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--color-primary)]"
                 }`}
             >
@@ -410,7 +410,7 @@ export function CategoryCombobox({
             {loading ? "Memuat kategori..." : displayValue || searchPlaceholder}
           </span>
           {loading ? (
-            <span className="w-3.5 h-3.5 border-2 border-[var(--color-secondary)]/30 border-t-[var(--color-tertiary)] rounded-full animate-spin shrink-0" />
+            <Loader2 className="w-3.5 h-3.5 text-[var(--color-tertiary)] animate-spin shrink-0" />
           ) : (
             <ChevronDown
               size={14}
@@ -590,7 +590,7 @@ export function CategoryMultiCombobox({
             {loading ? "Memuat kategori..." : displayValue}
           </span>
           {loading ? (
-            <span className="w-3.5 h-3.5 border-2 border-[var(--color-secondary)]/30 border-t-[var(--color-tertiary)] rounded-full animate-spin shrink-0" />
+            <Loader2 className="w-3.5 h-3.5 text-[var(--color-tertiary)] animate-spin shrink-0" />
           ) : (
             <ChevronDown
               size={14}
@@ -782,13 +782,13 @@ export function PillToggle({
               onClick={() => onChange(p.v)}
               aria-pressed={active}
               className={`flex items-center justify-center gap-1.5 px-4 min-h-[40px] rounded-md text-sm font-medium whitespace-nowrap transition-colors ${active
-                ? "bg-[var(--color-primary)] border border-[var(--color-primary)] text-white shadow-xs"
+                ? "bg-[var(--color-primary)] border border-[var(--color-primary)] text-[var(--color-on-primary)] shadow-xs"
                 : "border border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
                 } ${p.v === "" && allowClear && !active ? "italic" : ""}`}
             >
               {active && (
                 <svg viewBox="0 0 12 12" className="w-3 h-3 shrink-0" fill="none">
-                  <path d="M2 6.2 4.8 9 10 3" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                  <path d="M2 6.2 4.8 9 10 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>
               )}
               {p.label}
@@ -858,7 +858,7 @@ export function PillSingleToggle({
               onClick={() => onChange(active ? "" : o)}
               aria-pressed={active}
               className={`px-3.5 min-w-[2.6rem] h-9 rounded-full text-xs font-semibold whitespace-nowrap transition-all border flex items-center justify-center ${active
-                ? "bg-[var(--color-tertiary)] border-[var(--color-tertiary)] text-white shadow-xs"
+                ? "bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs"
                 : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--color-primary)]"
                 }`}
             >

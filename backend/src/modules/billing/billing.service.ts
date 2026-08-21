@@ -521,7 +521,7 @@ export async function getBillingTargetDetails(query: Record<string, string | und
 
   const fetchItemsForType = async (mode: 'udara' | 'laut') => {
     const spNum = mode === 'laut' ? 2 : 1
-    const rawRows = await prisma.$queryRaw<any[]>`exec get_data_billing_gsheet ${spNum}`
+    const rawRows = await prisma.$queryRaw<any[]>`exec get_data_billing_and_data_m3 ${spNum}`
     const filtered = rawRows.filter(isTarget)
 
     let picMap = new Map<string, string>()
@@ -583,6 +583,26 @@ export async function getBillingTargetDetails(query: Record<string, string | und
         harga: Number(r.harga || 0),
         updateBy: r.UpdateBy?.trim() || '',
         updateDate: r.UpdateDate ? new Date(r.UpdateDate).toISOString() : null,
+        // Kolom baru dari get_data_billing_and_data_m3
+        m3Komplain: Number(r.fdM3Komplain ?? 0),
+        vfcKomplain: Number(r.fdVFCKomplain ?? 0),
+        totalQtyKomplain: Number(r.fdTotalQtyKomplain ?? 0),
+        totalQtyGudang: Number(r.fdTotalQtyGudang ?? 0),
+        jmlBeratKomplain: Number(r.fdJmlBeratKomplain ?? 0),
+        // Validasi hanya untuk mode laut
+        validasiMismatch: mode === 'laut' ? (() => {
+          const m3K    = Number(r.fdM3Komplain ?? 0)
+          const jml    = Number(r.Jml_pack ?? 0)
+          const qtyG   = Number(r.fdTotalQtyGudang ?? 0)
+          const qtyK   = Number(r.fdTotalQtyKomplain ?? 0)
+          const beratK = Number(r.fdJmlBeratKomplain ?? 0)
+          const berat  = Number(r.Berat ?? 0)
+          if (m3K > 0) {
+            return !(qtyK === jml && qtyK === qtyG && beratK === berat)
+          } else {
+            return !(qtyG === jml)
+          }
+        })() : false,
       }
     })
   }
@@ -991,6 +1011,7 @@ export async function getBillingM3Check(listCode: string) {
       SELECT TOP 1
         el.fdListType,
         el.fdTypeComodity,
+        el.fdSatuan,
         m.fdBranchCode,
         cb.fdBranchName
       FROM tbEntryList el WITH (NOLOCK)
@@ -1028,7 +1049,7 @@ export async function getBillingM3Check(listCode: string) {
   else if (resolvedBranchCode?.trim()) expectedBranch = resolvedBranchCode.trim().toUpperCase()
 
   // Execute M3 check & Profile Harga queries in parallel
-  const [unifiedM3Rows, m3CustRows, profileHargaRows] = await Promise.all([
+  const [unifiedM3Rows, m3CustRows, profileHargaRows, markingComodityRows] = await Promise.all([
     // 1. Unified M3 SP: exec get_m3_listcode
     safeRunRaw(() => prisma.$queryRaw<any[]>`EXEC get_m3_listcode ${resolvedListCode}`, 'get_m3_listcode'),
     // 2. M3 Customer per Marking: exec get_m3_customer_permarking @fdCustCode, @fdMarkingCode
@@ -1041,6 +1062,11 @@ export async function getBillingM3Check(listCode: string) {
       if (!resolvedListCode) return []
       return prisma.$queryRaw<any[]>`EXEC dbo.get_profile_harga_dari_listcode @fdListCode = ${resolvedListCode}`
     }, 'get_profile_harga_dari_listcode'),
+    // 4. Marking Commodity Type from qr_tbm3_perMarking_rev1
+    safeRunRaw(async () => {
+      if (!resolvedCustCode || !resolvedMarkingCode) return []
+      return prisma.$queryRaw<any[]>`EXEC dbo.get_qr_tbm3_perMarking_plus_rasio @fdCustCode = ${resolvedCustCode}, @fdMarkingCode = ${resolvedMarkingCode}`
+    }, 'get_qr_tbm3_perMarking_plus_rasio'),
   ])
 
   const profileHargaRow = Array.isArray(profileHargaRows) && profileHargaRows.length > 0 ? profileHargaRows[0] : null
@@ -1060,6 +1086,22 @@ export async function getBillingM3Check(listCode: string) {
     : null
 
   const unifiedRow = Array.isArray(unifiedM3Rows) && unifiedM3Rows.length > 0 ? unifiedM3Rows[0] : null
+  const markingComodityRow = Array.isArray(markingComodityRows) && markingComodityRows.length > 0 ? markingComodityRows[0] : null
+  const rawFirstType = markingComodityRow?.fdTypeComodity ?? markingComodityRow?.TypeComodity ?? markingComodityRow?.fdTipe ?? markingComodityRow?.Tipe
+  const markingComodityType: number | null = rawFirstType !== undefined && rawFirstType !== null && !isNaN(Number(rawFirstType)) ? Number(rawFirstType) : null
+
+  const markingComodities = Array.isArray(markingComodityRows)
+    ? markingComodityRows.map((r) => {
+        const rawType = r.fdTypeComodity ?? r.TypeComodity ?? r.fdTipe ?? r.Tipe
+        const rawComodity = r.fdComodity ?? r.Comodity ?? r.fdCommodity ?? r.Commodity ?? r.fdDescr ?? r.Descr
+        const rawComodityName = r.fdComodityName ?? r.ComodityName ?? r.Tipe ?? r.fdTipe
+        return {
+          fdTypeComodity: rawType !== null && rawType !== undefined && !isNaN(Number(rawType)) ? Number(rawType) : null,
+          fdComodity: rawComodity ? String(rawComodity).trim() : null,
+          fdComodityName: rawComodityName ? String(rawComodityName).trim() : null,
+        }
+      })
+    : []
 
   const parseM3Val = (val: any): number | null => {
     if (val === null || val === undefined) return null
@@ -1067,34 +1109,91 @@ export async function getBillingM3Check(listCode: string) {
     return isNaN(num) ? null : parseFloat(num.toFixed(4))
   }
 
+  const parseQtyVal = (val: any): number | null => {
+    if (val === null || val === undefined || val === '') return null
+    const num = typeof val === 'number' ? val : parseInt(String(val), 10)
+    return isNaN(num) ? null : num
+  }
+
   const m3PL = parseM3Val(unifiedRow?.fdM3PL)
   const m3Gudang = parseM3Val(unifiedRow?.fdM3Gudang)
+  // Parse dari get_m3_listcode (Unified SP)
   const m3Komplain = parseM3Val(unifiedRow?.fdM3Komplain)
   const m3List = parseM3Val(unifiedRow?.fdM3List)
+  const m3KomplainPerMarking = parseM3Val(unifiedRow?.M3KomplainPerMarking)
+  const m3CustPerMarking = parseM3Val(unifiedRow?.M3GudangPerMarking)
+  let m3PLPerMarking = parseM3Val(
+    unifiedRow?.fdM3PLPerMarking ??
+    unifiedRow?.M3PLPerMarking ??
+    unifiedRow?.fdM3PL_PerMarking ??
+    unifiedRow?.M3PL_PerMarking
+  )
+
+  const qtyList = parseQtyVal(unifiedRow?.fdQtyList ?? unifiedRow?.qtyList)
+  const qtyPL = parseQtyVal(unifiedRow?.fdTotalQtyPL ?? unifiedRow?.fdTtoalQtyPL ?? unifiedRow?.fdQtyPL ?? unifiedRow?.totalQtyPL)
+  const qtyGudang = parseQtyVal(unifiedRow?.fdTotalQtyGudang ?? unifiedRow?.fdQtyGudang ?? unifiedRow?.totalQtyGudang)
+  const qtyKomplain = parseQtyVal(unifiedRow?.fdTotalQtyKomplain ?? unifiedRow?.fdQtyKomplain ?? unifiedRow?.totalQtyKomplain)
+  const totalEntryKomplain = parseQtyVal(unifiedRow?.TotalEntryKomplain ?? unifiedRow?.totalEntryKomplain ?? unifiedRow?.fdTotalEntryKomplain)
+  const totalEntryList = parseQtyVal(unifiedRow?.TotalEntryList ?? unifiedRow?.totalEntryList ?? unifiedRow?.fdTotalEntryList)
+  const fdSatuan = (unifiedRow?.fdSatuan || unifiedRow?.Satuan || markingBranch?.fdSatuan || '') ? String(unifiedRow?.fdSatuan || unifiedRow?.Satuan || markingBranch?.fdSatuan || '').trim() : null
+
+  // Kalkulasi M3 Hybrid (Komplain Parsial + Gudang Non-Komplain)
+  let m3KomplainPlusGudang: number | null = null
+  let countKomplainLC = 0
+  let countGudangLC = 0
+
+  const detailRows = Array.isArray(markingComodityRows) && markingComodityRows.length > 0
+    ? markingComodityRows
+    : Array.isArray(m3CustRows) && m3CustRows.length > 0
+      ? m3CustRows
+      : []
+
+  if (detailRows.length > 0) {
+    let sumHybrid = 0
+    let sumPL = 0
+    let hasValidPL = false
+    for (const r of detailRows) {
+      const m3K = parseM3Val(r.fdM3Komplain ?? r.fdm3Komplain ?? r['M3 K'] ?? r['M3_K'])
+      const m3G = parseM3Val(r.fdM3 ?? r['M3'] ?? r.m3_gdg)
+      const plV = parseM3Val(r.fdM3PackingList ?? r.fdM3PL ?? r['M3 PL'] ?? r['M3_PL'] ?? r.m3_pl ?? r.fdm3PL)
+
+      if (m3K !== null && m3K > 0) {
+        sumHybrid += m3K
+        countKomplainLC++
+      } else if (m3G !== null && m3G > 0) {
+        sumHybrid += m3G
+        countGudangLC++
+      }
+
+      if (plV !== null && plV > 0) {
+        sumPL += plV
+        hasValidPL = true
+      }
+    }
+    m3KomplainPlusGudang = parseFloat(sumHybrid.toFixed(4))
+    if (m3PLPerMarking === null && hasValidPL) {
+      m3PLPerMarking = parseFloat(sumPL.toFixed(4))
+    }
+  }
+
+  // Fallback: jika m3PLPerMarking masih null setelah semua sumber (unified SP + perMarking SP),
+  // gunakan m3PL dari get_m3_listcode sebagai nilai representatif PL untuk marking ini
+  if (m3PLPerMarking === null && m3PL !== null) {
+    m3PLPerMarking = m3PL
+  }
+
+  const isPartialKomplain =
+    Boolean(totalEntryKomplain !== null &&
+    totalEntryList !== null &&
+    totalEntryKomplain > 0 &&
+    totalEntryKomplain < totalEntryList)
 
   const plValues = m3PL !== null ? [m3PL] : []
   const gudangValues = m3Gudang !== null ? [m3Gudang] : []
   const komplainValues = m3Komplain !== null ? [m3Komplain] : []
-
-  // Extract M3 per marking
-  const extractM3Values = (rows: any[]): number[] => {
-    if (!Array.isArray(rows)) return []
-    return rows
-      .map((r) => {
-        const val =
-          r.fdM3PerMarking ??
-          r.fdM3PLPerMarking ??
-          r.fdM3 ??
-          r.M3 ??
-          r.m3 ??
-          r.fdm3 ??
-          Object.entries(r).find(([k, v]) => k.toLowerCase().includes('m3') && typeof v === 'number')?.[1]
-        return parseM3Val(val)
-      })
-      .filter((v): v is number => v !== null)
-  }
-
-  const custValues = extractM3Values(m3CustRows)
+  const komplainPerMarkingValues = m3KomplainPerMarking !== null ? [m3KomplainPerMarking] : []
+  const custValues = m3CustPerMarking !== null ? [m3CustPerMarking] : []
+  const plPerMarkingValues = m3PLPerMarking !== null ? [m3PLPerMarking] : []
 
   const normM3 = (v: number) => (v > 0 && v < 0.1 ? 0.1 : v)
   const normPlValues = plValues.map(normM3)
@@ -1103,8 +1202,12 @@ export async function getBillingM3Check(listCode: string) {
   const normKomplainValues = komplainValues.map(normM3)
   const normM3List = m3List !== null && m3List > 0 ? normM3(m3List) : null
 
+  const normKomplainPerMarkingValues = komplainPerMarkingValues.map(normM3)
+  const normPlPerMarkingValues = plPerMarkingValues.map(normM3)
+  const normHybridValues = m3KomplainPlusGudang !== null && m3KomplainPlusGudang > 0 ? [normM3(m3KomplainPlusGudang)] : []
+
   const hasPlValue = m3PL !== null && m3PL > 0
-  const allM3Values = [...normPlValues, ...normGudangValues, ...normCustValues, ...normKomplainValues]
+  const allM3Values = [...normPlValues, ...normGudangValues, ...normCustValues, ...normKomplainValues, ...normKomplainPerMarkingValues, ...normPlPerMarkingValues, ...normHybridValues]
   if (!hasPlValue && normM3List !== null && normM3List > 0) {
     allM3Values.push(normM3List)
   }
@@ -1186,6 +1289,8 @@ export async function getBillingM3Check(listCode: string) {
     fdListCode: resolvedListCode,
     fdListType: resolvedListType,
     defaultFdTypeComodity: markingBranch?.fdTypeComodity !== null && markingBranch?.fdTypeComodity !== undefined ? Number(markingBranch.fdTypeComodity) : null,
+    markingComodityType,
+    markingComodities,
     fdTglAgent: agentDate ? agentDate.toISOString() : null,
     expectedMode,
     expectedBranch,
@@ -1210,23 +1315,49 @@ export async function getBillingM3Check(listCode: string) {
     m3PackingList: {
       raw: unifiedM3Rows,
       values: plValues,
+      qty: qtyPL,
     },
     m3Gudang: {
       raw: unifiedM3Rows,
       values: gudangValues,
+      qty: qtyGudang,
     },
     m3CustPerMarking: {
       raw: m3CustRows,
       values: custValues,
+      totalEntryList,
+    },
+    m3PLPerMarking: {
+      raw: unifiedM3Rows,
+      values: plPerMarkingValues,
+      totalEntryList,
     },
     m3Komplain: {
       raw: unifiedM3Rows,
       values: komplainValues,
+      qty: qtyKomplain,
+    },
+    m3KomplainPerMarking: {
+      raw: unifiedM3Rows,
+      values: komplainPerMarkingValues,
+      totalEntryKomplain,
     },
     m3ListBatch: {
       raw: unifiedM3Rows,
       values: m3List !== null ? [m3List] : [],
+      qty: qtyList,
     },
+    fdQtyList: qtyList,
+    fdTotalQtyPL: qtyPL,
+    fdTotalQtyGudang: qtyGudang,
+    fdTotalQtyKomplain: qtyKomplain,
+    totalEntryKomplain,
+    totalEntryList,
+    isPartialKomplain,
+    m3KomplainPlusGudang,
+    countKomplainLC,
+    countGudangLC,
+    fdSatuan,
     profileHarga,
     comodityTypes: await safeRunRaw(async () => {
       const rows = await prisma.$queryRaw<any[]>`

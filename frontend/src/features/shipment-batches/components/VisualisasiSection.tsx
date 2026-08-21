@@ -38,11 +38,11 @@ export function VisualisasiSection({
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs font-semibold">
-            <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 px-2 py-1 rounded-full border border-sky-200/60 font-semibold">
+            <span className="inline-flex items-center gap-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 px-2 py-1 rounded-full border border-sky-500/20 font-semibold">
               <Plane className="w-3.5 h-3.5 text-sky-500 shrink-0" />
               <span>{exitHistoryMonthAir}</span>
             </span>
-            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full border border-emerald-200/60 font-semibold">
+            <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-full border border-emerald-500/20 font-semibold">
               <Ship className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
               <span>{exitHistoryMonthSea}</span>
             </span>
@@ -66,11 +66,11 @@ export function VisualisasiSection({
             </p>
           </div>
           <div className="flex items-center gap-2 text-xs font-semibold">
-            <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 px-2 py-1 rounded-full border border-sky-200/60 font-semibold">
+            <span className="inline-flex items-center gap-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 px-2 py-1 rounded-full border border-sky-500/20 font-semibold">
               <Plane className="w-3.5 h-3.5 text-sky-500 shrink-0" />
               <span>{kpis?.activeBatchesAir || 0}</span>
             </span>
-            <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-1 rounded-full border border-emerald-200/60 font-semibold">
+            <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-full border border-emerald-500/20 font-semibold">
               <Ship className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
               <span>{kpis?.activeBatchesSea || 0}</span>
             </span>

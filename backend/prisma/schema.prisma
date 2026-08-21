@@ -15,6 +15,7 @@ model TbUsers {
   passwordHash String    @db.NVarChar(255)
   fullName     String    @db.NVarChar(200)
   role         String    @default("viewer") @db.NVarChar(50)
+  avatarUrl    String?   @db.NVarChar(MAX)
   isActive     Boolean   @default(true)
   isDeleted    Boolean   @default(false)
   lastLoginAt  DateTime? @db.DateTime2
@@ -346,6 +347,9 @@ model TbEntryList {
   // Relations
   deliveries     TbDelivery[]
   customer       TbCustomers? @relation(fields: [fdCustCode], references: [fdCustCode])
+  details        TbEntryListDetail[]
+  packingLists   TbEntryListDetailPackingList[]
+  komplains      TbEntryListDetailKomplain[]
 
   @@map("tbEntryList")
 }
@@ -369,17 +373,30 @@ model TbPriceListUpload {
 }
 
 model TbPriceListItem {
-  id            Int               @id @default(autoincrement())
+  id            Int                       @id @default(autoincrement())
   uploadId      Int
-  sheetType     String            @db.NVarChar(20)    // CS | MKT
-  mode          String            @db.NVarChar(50)    // BY SEA | BY AIR
-  branch        String            @db.NVarChar(50)    // destinasi / tujuan
-  transitTime   String?           @db.NVarChar(50)
-  category      String            @db.NVarChar(200)   // kategori barang
-  price         Decimal           @db.Decimal(18, 2)
-  upload        TbPriceListUpload @relation(fields: [uploadId], references: [id])
+  sheetType     String                    @db.NVarChar(20)    // CS | MKT
+  mode          String                    @db.NVarChar(50)    // BY SEA | BY AIR
+  branch        String                    @db.NVarChar(50)    // destinasi / tujuan
+  transitTime   String?                   @db.NVarChar(50)
+  category      String                    @db.NVarChar(200)   // kategori barang
+  price         Decimal                   @db.Decimal(18, 2)
+  upload        TbPriceListUpload         @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  markings      TbPriceListItemMarking[]
 
   @@map("tbPriceListItem")
+}
+
+model TbPriceListItemMarking {
+  id            Int              @id @default(autoincrement())
+  itemId        Int
+  markingCode   String           @db.NVarChar(50)
+  agentName     String?          @db.NVarChar(100)
+  item          TbPriceListItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, markingCode])
+  @@index([markingCode])
+  @@map("tbPriceListItemMarking")
 }
 
 // ─── CUSTOMER PRICE LIST MODULE ────────────────────────────────────
@@ -402,16 +419,106 @@ model TbCustomerPriceListUpload {
 }
 
 model TbCustomerPriceListItem {
-  id            Int                          @id @default(autoincrement())
+  id            Int                               @id @default(autoincrement())
   uploadId      Int
-  fdCustCode    String                       @db.Char(7)
-  sheetType     String                       @db.NVarChar(20)
-  mode          String                       @db.NVarChar(50)
-  branch        String                       @db.NVarChar(50)
-  transitTime   String?                      @db.NVarChar(50)
-  category      String                       @db.NVarChar(200)
-  price         Decimal                      @db.Decimal(18, 2)
-  upload        TbCustomerPriceListUpload    @relation(fields: [uploadId], references: [id])
+  fdCustCode    String                            @db.Char(7)
+  sheetType     String                            @db.NVarChar(20)
+  mode          String                            @db.NVarChar(50)
+  branch        String                            @db.NVarChar(50)
+  transitTime   String?                           @db.NVarChar(50)
+  category      String                            @db.NVarChar(200)
+  price         Decimal                           @db.Decimal(18, 2)
+  upload        TbCustomerPriceListUpload         @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  markings      TbCustomerPriceListItemMarking[]
 
   @@map("tbCustomerPriceListItem")
+}
+
+model TbCustomerPriceListItemMarking {
+  id            Int                      @id @default(autoincrement())
+  itemId        Int
+  markingCode   String                   @db.NVarChar(50)
+  agentName     String?                  @db.NVarChar(100)
+  item          TbCustomerPriceListItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, markingCode])
+  @@index([markingCode])
+  @@map("tbCustomerPriceListItemMarking")
+}
+
+model TbTypeComodity {
+  fdID           Int     @id @default(autoincrement())
+  fdTypeComodity Int?
+  fdComodityName String? @db.VarChar(50)
+  fdListType     Int?
+
+  @@map("tbTypeComodity")
+}
+
+// ─── ENTRY LIST DETAIL TABLES ─────────────────────────────────────
+
+/// Detail ukuran Gudang — dimensi fisik barang yang diterima di gudang
+model TbEntryListDetail {
+  fdListCode  String   @db.Char(7)
+  fdListDCode String   @db.Char(7)
+  fdDescr     String?  @db.VarChar(50)
+  fdPjg       Decimal? @db.Decimal(10, 2)  // Panjang (cm)
+  fdLbr       Decimal? @db.Decimal(10, 2)  // Lebar (cm)
+  fdTng       Decimal? @db.Decimal(10, 2)  // Tinggi (cm)
+  fdQty       Decimal? @db.Decimal(10, 0)  // Jumlah koli
+  fdSJCreated Int?
+  fdCetak     Int?
+  fdLoad      DateTime? @db.SmallDateTime
+
+  // Relations
+  entryList   TbEntryList @relation(fields: [fdListCode], references: [fdListCode], onDelete: Cascade)
+
+  @@id([fdListCode, fdListDCode])
+  @@map("tbEntryListDetail")
+}
+
+/// Detail ukuran Packing List — dimensi berdasarkan dokumen packing list
+model TbEntryListDetailPackingList {
+  fdListCode     String    @db.Char(7)
+  fdListDCode    String    @db.Char(7)
+  fdMarkingCode  String?   @db.VarChar(240)
+  fdDescr        String?   @db.VarChar(50)
+  fdPjg          Decimal?  @db.Decimal(10, 2) // Panjang (cm)
+  fdLbr          Decimal?  @db.Decimal(10, 2) // Lebar (cm)
+  fdTng          Decimal?  @db.Decimal(10, 2) // Tinggi (cm)
+  fdQty          Decimal?  @db.Decimal(10, 0) // Jumlah koli
+  fdMarkingAndNo String?   @db.VarChar(240)
+  fdComodity     String?   @db.VarChar(240)
+  fdSJCreated    Int?
+  fdCetak        Int?
+  fdCreatedBy    String?   @db.VarChar(50)
+  fdCreatedDate  DateTime? @db.SmallDateTime
+  fdUpdatedBy    String?   @db.VarChar(50)
+  fdUpdatedDate  DateTime? @db.SmallDateTime
+
+  // Relations
+  entryList      TbEntryList @relation(fields: [fdListCode], references: [fdListCode], onDelete: Cascade)
+
+  @@id([fdListCode, fdListDCode])
+  @@map("tbEntryListDetail_PackingList")
+}
+
+/// Detail ukuran Komplain — dimensi barang yang dikomplainkan
+model TbEntryListDetailKomplain {
+  fdListCode  String    @db.Char(7)
+  fdListDCode String    @db.Char(7)
+  fdDescr     String?   @db.VarChar(50)
+  fdPjg       Decimal?  @db.Decimal(10, 2) // Panjang (cm)
+  fdLbr       Decimal?  @db.Decimal(10, 2) // Lebar (cm)
+  fdTng       Decimal?  @db.Decimal(10, 2) // Tinggi (cm)
+  fdQty       Decimal?  @db.Decimal(10, 0) // Jumlah koli
+  fdSJCreated Int?
+  fdCetak     Int?
+  fdLoad      DateTime? @db.SmallDateTime
+
+  // Relations
+  entryList   TbEntryList @relation(fields: [fdListCode], references: [fdListCode], onDelete: Cascade)
+
+  @@id([fdListCode, fdListDCode])
+  @@map("tbEntryListDetail_Komplain")
 }

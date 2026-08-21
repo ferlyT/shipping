@@ -43,6 +43,9 @@ export const ROUTES = {
   // Master Data
   CUSTOMERS: '/mshipping/master/customers',
 
+  // User & Profile
+  PROFILE: '/mshipping/profile',
+
   // Administration
   USERS: '/mshipping/admin/users',
   ROLES: '/mshipping/admin/roles',

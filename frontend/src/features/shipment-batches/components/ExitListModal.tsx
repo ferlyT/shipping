@@ -81,7 +81,7 @@ export function ExitListModal({ isOpen, onClose, data, title, description, iconC
         </div>
 
         {/* List */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/50">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-[var(--color-neutral)]">
           {filteredData.length === 0 ? (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-[var(--color-neutral)] rounded-full flex items-center justify-center mx-auto mb-4">
@@ -92,9 +92,9 @@ export function ExitListModal({ isOpen, onClose, data, title, description, iconC
           ) : (
             <div className="flex flex-col gap-6">
               {[
-                { title: 'Air (Udara)', type: 1, icon: Plane, color: 'text-sky-500', bg: 'bg-sky-50' },
-                { title: 'Sea (Laut)', type: 2, icon: Ship, color: 'text-blue-600', bg: 'bg-blue-50' },
-                { title: 'Lainnya', type: null, icon: Package, color: 'text-slate-500', bg: 'bg-slate-50' }
+                { title: 'Air (Udara)', type: 1, icon: Plane, color: 'text-sky-500', bg: 'bg-sky-500/10' },
+                { title: 'Sea (Laut)', type: 2, icon: Ship, color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                { title: 'Lainnya', type: null, icon: Package, color: 'text-[var(--color-secondary)]', bg: 'bg-[var(--color-neutral)]' }
               ].map((group) => {
                 const groupData = filteredData.filter(item => 
                   group.type === null ? (item.fdListType !== 1 && item.fdListType !== 2) : item.fdListType === group.type
@@ -115,7 +115,7 @@ export function ExitListModal({ isOpen, onClose, data, title, description, iconC
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {groupData.map((item, idx) => (
-                        <div key={idx} className="bg-white border border-[var(--color-border)] rounded-lg p-3 shadow-sm hover:shadow transition-shadow flex items-start gap-3">
+                        <div key={idx} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3 shadow-sm hover:shadow transition-shadow flex items-start gap-3">
                           <div className={`p-2 rounded-md ${group.bg}`}>
                             <GroupIcon className={`w-4 h-4 ${group.color}`} />
                           </div>

@@ -8,7 +8,7 @@ import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-
+import { Table, type Column } from '@/components/ui/Table'
 import { Badge } from '@/components/ui/Badge'
 import { formatDate } from '@/lib/utils'
 
@@ -29,17 +29,94 @@ export function ListPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  const columns: Column<CustomerPriceListUploadRow>[] = [
+    {
+      key: 'fdCustCode',
+      header: t('customerPriceList.customerCode'),
+      render: (row: CustomerPriceListUploadRow) => (
+        <span className="font-semibold text-[var(--color-primary)] font-[var(--font-body)]">
+          {row.fdCustCode}
+        </span>
+      ),
+    },
+    {
+      key: 'custName',
+      header: t('customerPriceList.customerName'),
+      render: (row: CustomerPriceListUploadRow) => (
+        <span className="text-[var(--color-primary)] font-medium">
+          {row.custName || '-'}
+        </span>
+      ),
+    },
+    {
+      key: 'effectiveDate',
+      header: 'Effective Date',
+      render: (row: CustomerPriceListUploadRow) => (
+        <span className="text-[var(--color-secondary)]">
+          {formatDate(row.effectiveDate)}
+        </span>
+      ),
+    },
+    {
+      key: 'itemCount',
+      header: t('customerPriceList.totalItems'),
+      render: (row: CustomerPriceListUploadRow) => (
+        <span className="text-[var(--color-primary)] tabular-nums">
+          {row.itemCount}
+        </span>
+      ),
+    },
+    {
+      key: 'uploadedAt',
+      header: 'Upload Date',
+      render: (row: CustomerPriceListUploadRow) => (
+        <span className="text-[var(--color-secondary)]">
+          {formatDate(row.uploadedAt)}
+        </span>
+      ),
+    },
+    {
+      key: 'status',
+      header: t('common.status'),
+      render: (row: CustomerPriceListUploadRow) => (
+        <Badge
+          variant={
+            row.status === 'PARSED' ? 'success' : row.status === 'PARTIAL' ? 'warning' : 'danger'
+          }
+        >
+          {row.status}
+        </Badge>
+      ),
+    },
+    {
+      key: 'actions',
+      header: t('common.actions'),
+      className: 'text-right',
+      render: (row: CustomerPriceListUploadRow) => (
+        <div className="flex justify-end">
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={ROUTES.CUSTOMER_PRICE_LIST_DETAIL(row.fdCustCode)}>
+              <Eye className="w-4 h-4 mr-1.5" />
+              {t('common.detail')}
+            </Link>
+          </Button>
+        </div>
+      ),
+    },
+  ]
+
   if (loading) return <LoadingSpinner message={t('common.loading')} />
-  if (error) return <div className="p-4 text-rose-500">{error}</div>
+  if (error) return <div className="p-4 text-[var(--color-danger)]">{error}</div>
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-in fade-in duration-500 pb-24">
+    <div className="p-4 sm:p-6 lg:p-8 space-y-6 animate-fadeIn pb-24 bg-[var(--color-surface)] font-[var(--font-body)]">
       <PageHeader
         title={t('customerPriceList.title')}
         subtitle={t('customerPriceList.subtitle')}
         breadcrumbs={[
           { label: t('module.finance'), path: ROUTES.BILLING },
           { label: t('nav.customerPriceList') },
+          { label: t('nav.list') },
         ]}
         actions={
           <Button asChild>
@@ -51,57 +128,13 @@ export function ListPage() {
         }
       />
 
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[800px] text-sm text-left">
-            <thead className="bg-slate-50 text-slate-500 font-medium">
-              <tr>
-                <th className="px-6 py-4">{t('customerPriceList.customerCode')}</th>
-                <th className="px-6 py-4">{t('customerPriceList.customerName')}</th>
-                <th className="px-6 py-4">Effective Date</th>
-                <th className="px-6 py-4">{t('customerPriceList.totalItems')}</th>
-                <th className="px-6 py-4">Upload Date</th>
-                <th className="px-6 py-4">{t('common.status')}</th>
-                <th className="px-6 py-4 text-right">{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map((row) => (
-                <tr key={row.fdCustCode} className="hover:bg-slate-50/50 transition-colors">
-                  <td className="px-6 py-4 font-medium text-slate-900">{row.fdCustCode}</td>
-                  <td className="px-6 py-4 text-slate-600">{row.custName}</td>
-                  <td className="px-6 py-4 text-slate-600">{formatDate(row.effectiveDate)}</td>
-                  <td className="px-6 py-4 text-slate-600">{row.itemCount}</td>
-                  <td className="px-6 py-4 text-slate-600">{formatDate(row.uploadedAt)}</td>
-                  <td className="px-6 py-4">
-                    <Badge
-                      variant={
-                        row.status === 'PARSED' ? 'success' : row.status === 'PARTIAL' ? 'warning' : 'danger'
-                      }
-                    >
-                      {row.status}
-                    </Badge>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <Button variant="ghost" size="sm" className="text-blue-600 hover:text-blue-700 hover:bg-blue-50" asChild>
-                      <Link to={ROUTES.CUSTOMER_PRICE_LIST_DETAIL(row.fdCustCode)}>
-                        <Eye className="w-4 h-4 mr-2" />
-                        {t('common.detail')}
-                      </Link>
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
-                    {t('common.noData')}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+      <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-xs overflow-hidden">
+        <Table<CustomerPriceListUploadRow>
+          columns={columns}
+          data={rows}
+          keyExtractor={(row) => row.fdCustCode}
+          emptyMessage={t('common.noData')}
+        />
       </div>
     </div>
   )

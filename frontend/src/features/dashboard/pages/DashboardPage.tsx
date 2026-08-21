@@ -225,7 +225,7 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-sm text-[var(--color-primary)] font-mono">{doItem.fdSJNo}</span>
                         {(markingCode || markingNo) && (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 uppercase">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 uppercase">
                             {markingCode} {markingNo ? `#${markingNo}` : ''}
                           </span>
                         )}

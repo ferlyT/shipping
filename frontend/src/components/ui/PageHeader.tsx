@@ -31,7 +31,7 @@ export function PageHeader({
         </div>
         {subtitle && <p className="text-sm text-[var(--color-secondary)] mt-1">{subtitle}</p>}
       </div>
-      {actions && <div className="flex items-center gap-2.5 shrink-0">{actions}</div>}
+      {actions && <div className="flex items-center gap-2 sm:gap-2.5 shrink-0 flex-wrap">{actions}</div>}
     </div>
   )
 }

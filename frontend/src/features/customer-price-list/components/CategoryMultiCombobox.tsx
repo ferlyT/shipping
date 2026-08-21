@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, type KeyboardEvent } from 'react'
-import { Search, ChevronDown, Info } from 'lucide-react'
+import { Search, ChevronDown, Info, Loader2 } from 'lucide-react'
 
 interface CategoryMultiComboboxProps {
   label?: string
@@ -119,7 +119,7 @@ export function CategoryMultiCombobox({
             {loading ? 'Memuat kategori...' : displayValue}
           </span>
           {loading ? (
-            <span className="w-3.5 h-3.5 border-2 border-[var(--color-secondary)]/30 border-t-[var(--color-tertiary)] rounded-full animate-spin shrink-0" />
+            <Loader2 className="w-3.5 h-3.5 text-[var(--color-tertiary)] animate-spin shrink-0" />
           ) : (
             <ChevronDown
               size={14}

@@ -17,7 +17,7 @@ export function StatusKirimBadge({ status }: { status: string }) {
 
   return (
     <div className="whitespace-nowrap text-[11px]">
-      <div className="font-semibold text-amber-800">{main}</div>
+      <div className="font-semibold text-amber-600 dark:text-amber-400">{main}</div>
       {sub ? <div className="text-[10px] text-[var(--color-secondary)] font-normal">{sub}</div> : null}
     </div>
   )

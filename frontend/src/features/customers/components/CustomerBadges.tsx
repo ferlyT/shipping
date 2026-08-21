@@ -2,20 +2,12 @@ import { Building2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export const statusConfig = {
-  0: { label: 'NO STATUS', badgeVariant: 'default' as const, accentClass: 'border-l-gray-200', dotClass: 'bg-gray-300' },
-  1: { label: 'OK', badgeVariant: 'default' as const, accentClass: 'border-l-slate-400', dotClass: 'bg-slate-600' },
-  2: { label: 'COD', badgeVariant: 'success' as const, accentClass: 'border-l-green-500', dotClass: 'bg-green-500' },
+  0: { label: 'NO STATUS', badgeVariant: 'default' as const, accentClass: 'border-l-[var(--color-border)]', dotClass: 'bg-[var(--color-secondary)]' },
+  1: { label: 'OK', badgeVariant: 'default' as const, accentClass: 'border-l-[var(--color-secondary)]', dotClass: 'bg-[var(--color-primary)]' },
+  2: { label: 'COD', badgeVariant: 'success' as const, accentClass: 'border-l-emerald-500', dotClass: 'bg-emerald-500' },
   3: { label: 'WARNING', badgeVariant: 'warning' as const, accentClass: 'border-l-amber-500', dotClass: 'bg-amber-500' },
-  4: { label: 'BLOCKED', badgeVariant: 'danger' as const, accentClass: 'border-l-red-500', dotClass: 'bg-red-500' },
-  5: { label: 'URGENT', badgeVariant: 'info' as const, accentClass: 'border-l-cyan-500', dotClass: 'bg-cyan-500' },
-}
-
-export const badgeColorClasses: Record<string, string> = {
-  danger: 'bg-red-100 text-red-700 border border-red-200',
-  warning: 'bg-amber-100 text-amber-700 border border-amber-200',
-  success: 'bg-green-100 text-green-700 border border-green-200',
-  info: 'bg-cyan-100 text-cyan-700 border border-cyan-200',
-  default: 'bg-gray-100 text-gray-600 border border-gray-200',
+  4: { label: 'BLOCKED', badgeVariant: 'danger' as const, accentClass: 'border-l-rose-500', dotClass: 'bg-rose-500' },
+  5: { label: 'URGENT', badgeVariant: 'info' as const, accentClass: 'border-l-sky-500', dotClass: 'bg-sky-500' },
 }
 
 export function BrokerBadge({ size = 'sm' }: { size?: 'xs' | 'sm' | 'md' }) {
@@ -28,8 +20,8 @@ export function BrokerBadge({ size = 'sm' }: { size?: 'xs' | 'sm' | 'md' }) {
   return (
     <span
       className={cn(
-        'shrink-0 inline-flex items-center rounded-full font-bold tracking-wider text-white',
-        'bg-gradient-to-r from-indigo-500 to-blue-500 shadow-xs shadow-indigo-500/20',
+        'shrink-0 inline-flex items-center rounded-full font-bold tracking-wider',
+        'border border-indigo-500/50 bg-indigo-500/15 text-indigo-700 dark:text-indigo-300',
         sizing
       )}
       title="Registered broker"
@@ -48,7 +40,7 @@ export function DiscontinuedBadge({ size = 'sm' }: { size?: 'xs' | 'sm' | 'md' }
   }[size]
 
   return (
-    <span className={cn('shrink-0 bg-gray-100 text-gray-500 rounded-full font-bold tracking-wider border border-gray-200', sizing)}>
+    <span className={cn('shrink-0 bg-[var(--color-neutral)] text-[var(--color-secondary)] rounded-full font-bold tracking-wider border border-[var(--color-border)]', sizing)}>
       DISCONTINUED
     </span>
   )

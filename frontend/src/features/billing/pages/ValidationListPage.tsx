@@ -10,6 +10,7 @@ import { SearchBar } from '@/components/ui/SearchBar'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { formatWithCurrency } from '@/components/ui/CurrencyValue'
+import { AgingBadge } from '../components/AgingBadge'
 import { BillingStatusTag } from '../components/BillingStatusTag'
 import { formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
@@ -53,25 +54,6 @@ function getAgingDays(invDateStr?: string | null): number {
   const diffTime = today.getTime() - invDate.getTime()
   const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
   return diffDays > 0 ? diffDays : 0
-}
-
-function renderAgingBadge(days: number) {
-  let badgeClass = 'bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700 font-medium'
-  if (days > 60) {
-    badgeClass = 'bg-red-100 text-red-800 border-red-300 dark:bg-red-950 dark:text-red-300 dark:border-red-800 font-bold'
-  } else if (days > 30) {
-    badgeClass = 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800 font-semibold'
-  } else if (days > 14) {
-    badgeClass = 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800 font-medium'
-  } else {
-    badgeClass = 'bg-emerald-100 text-emerald-800 border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800'
-  }
-
-  return (
-    <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] border whitespace-nowrap ${badgeClass}`}>
-      {days} hr
-    </span>
-  )
 }
 
 export function ValidationListPage() {
@@ -184,13 +166,13 @@ export function ValidationListPage() {
     },
     {
       key: 'aging',
-      header: 'Aging',
+      header: t('billing.aging'),
       className: 'w-[9%]',
       render: (row: Billing) => {
         const days = getAgingDays(row.fdInvDate)
         return (
           <div className="py-0.5">
-            {renderAgingBadge(days)}
+            <AgingBadge hari={days} />
           </div>
         )
       },
@@ -248,7 +230,7 @@ export function ValidationListPage() {
     },
     {
       key: 'status',
-      header: 'Status Invoice',
+      header: t('billing.invoiceStatus'),
       className: 'w-[12%]',
       render: (row: Billing) => (
         <BillingStatusTag row={row} />
@@ -317,7 +299,7 @@ export function ValidationListPage() {
           </div>
 
           {/* Mode Tipe Filter (Udara / Laut) */}
-          <div className="flex items-center gap-1.5 bg-[var(--color-surface)] p-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] shadow-sm">
+          <div className="flex items-center gap-1.5 bg-[var(--color-surface)] p-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] shadow-xs">
             {LIST_TYPE_FILTERS.map((tf) => {
               const Icon = tf.icon
               const isActive = listTypeFilter === tf.value
@@ -327,13 +309,13 @@ export function ValidationListPage() {
                   onClick={() => {
                     setListTypeFilter(tf.value)
                   }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-semibold font-[var(--font-label)] transition-all ${
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-semibold font-[var(--font-label)] transition-all border cursor-pointer ${
                     isActive
-                      ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                      : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
+                      ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                      : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
                   }`}
                 >
-                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-white' : tf.accent}`} />
+                  <Icon className={`w-3.5 h-3.5 ${isActive ? 'text-[var(--color-tertiary)]' : tf.accent}`} />
                   <span>{tf.label}</span>
                 </button>
               )
@@ -352,10 +334,10 @@ export function ValidationListPage() {
               onClick={() => {
                 setAuthorFilter('all')
               }}
-              className={`px-3 py-1 rounded-full text-xs font-semibold font-[var(--font-label)] transition-all whitespace-nowrap ${
+              className={`px-3 py-1 rounded-full text-xs font-semibold font-[var(--font-label)] transition-all whitespace-nowrap border cursor-pointer ${
                 authorFilter === 'all'
-                  ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                  : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
+                  ? 'bg-transparent border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs'
+                  : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
               }`}
             >
               Semua ({activeDraftBillings.length})
@@ -369,14 +351,14 @@ export function ValidationListPage() {
                   onClick={() => {
                     setAuthorFilter(author)
                   }}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold font-[var(--font-label)] transition-all whitespace-nowrap flex items-center gap-1 ${
+                  className={`px-3 py-1 rounded-full text-xs font-semibold font-[var(--font-label)] transition-all whitespace-nowrap flex items-center gap-1 border cursor-pointer ${
                     isActive
-                      ? 'bg-[var(--color-primary)] text-white shadow-xs'
-                      : 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
+                      ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                      : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
                   }`}
                 >
                   <span>{author}</span>
-                  <span className={`text-[10px] ${isActive ? 'text-white/80' : 'text-[var(--color-secondary)]'}`}>
+                  <span className={`text-[10px] ${isActive ? 'text-[var(--color-tertiary)]' : 'text-[var(--color-secondary)]'}`}>
                     ({count})
                   </span>
                 </button>
@@ -444,7 +426,7 @@ export function ValidationListPage() {
                     }}
                     className={`py-2 px-3 rounded-[var(--radius-md)] text-xs font-semibold border ${
                       listTypeFilter === tf.value
-                        ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                        ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] border-[var(--color-primary)]'
                         : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)]'
                     }`}
                   >
@@ -489,7 +471,7 @@ export function ValidationListPage() {
                     </span>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-[11px] text-[var(--color-secondary)]">{formatDate(b.fdInvDate)}</span>
-                      {renderAgingBadge(getAgingDays(b.fdInvDate))}
+                      <AgingBadge hari={getAgingDays(b.fdInvDate)} />
                     </div>
                   </div>
                   <BillingStatusTag row={b} />

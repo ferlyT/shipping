@@ -1,7 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { shipmentsApi } from '../services/shipments.service'
 
-
 export function useShipmentDetail(listCode: string | undefined) {
   return useQuery({
     queryKey: ['shipmentDetail', listCode],

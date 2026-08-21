@@ -100,14 +100,14 @@ export function GroupSection({
           <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--color-secondary)]">
             {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </span>
-          <span className="font-[var(--font-label)] text-[11px] sm:text-[11.5px] md:text-xs tracking-[0.08em] uppercase text-[var(--color-primary)] font-semibold truncate">
+          <span className="font-[var(--font-label)] text-xs tracking-[0.08em] uppercase text-[var(--color-primary)] font-semibold truncate">
             {displayTitle}
           </span>
-          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-[10.5px] sm:text-[11px] font-bold text-[var(--color-secondary)] shrink-0">
+          <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] text-[10px] sm:text-[11px] font-bold text-[var(--color-secondary)] shrink-0">
             {displayCount}
           </span>
         </span>
-        <span className="flex items-center gap-1.5 text-[11.5px] sm:text-xs md:text-[12.5px] font-semibold text-[var(--color-secondary)] shrink-0 tabular-nums">
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-secondary)] shrink-0 tabular-nums">
           <span className="whitespace-nowrap">{groupMeta.totalPkgs.toLocaleString('en-US')} pkgs</span>
           <span className="text-[var(--color-border)]">·</span>
           <span className="whitespace-nowrap">{groupMeta.totalWeight.toLocaleString('en-US', { maximumFractionDigits: 0 })} kg</span>
@@ -126,7 +126,7 @@ export function GroupSection({
               <div className={cn('overflow-x-auto', viewMode === 'shortlist' ? 'hidden' : 'hidden sm:block')}>
                 <table className="w-full min-w-[1000px] border-collapse bg-[var(--color-surface)]">
                   <thead>
-                    <tr className="text-left font-[var(--font-label)] text-[11px] sm:text-[11.5px] md:text-xs tracking-[0.08em] uppercase text-[var(--color-secondary)] border-b border-[var(--color-border)] bg-[var(--color-neutral)]/50">
+                    <tr className="text-left font-[var(--font-label)] text-xs tracking-[0.08em] uppercase text-[var(--color-secondary)] border-b border-[var(--color-border)] bg-[var(--color-neutral)]/50">
                       <th className="py-3.5 pl-4 pr-3">Kode Marking</th>
                       <th className="py-3.5 px-3">Consignee</th>
                       <th className="py-3.5 px-3">Dokumen</th>
@@ -138,7 +138,7 @@ export function GroupSection({
                   <tbody>
                     {rows.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-6 text-center text-sm sm:text-[14.5px] md:text-[15px] text-[var(--color-secondary)] font-medium">
+                        <td colSpan={6} className="py-6 text-center text-sm text-[var(--color-secondary)] font-medium">
                           Tidak ada data yang ditemukan.
                         </td>
                       </tr>
@@ -154,7 +154,7 @@ export function GroupSection({
               {/* Mobile List */}
               <div className={cn('flex flex-col divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]', viewMode === 'shortlist' ? 'block' : 'sm:hidden')}>
                 {rows.length === 0 ? (
-                  <div className="py-8 text-center text-sm sm:text-[14.5px] md:text-[15px] text-[var(--color-secondary)] font-medium bg-[var(--color-surface)]">
+                  <div className="py-8 text-center text-sm text-[var(--color-secondary)] font-medium bg-[var(--color-surface)]">
                     Tidak ada data yang ditemukan.
                   </div>
                 ) : (
@@ -168,12 +168,12 @@ export function GroupSection({
               {withPagination && totalPages > 0 ? (
                 <div className="border-t border-[var(--color-border)] px-3 sm:px-6 py-3 sm:py-4 flex flex-col md:flex-row justify-between items-center gap-3 sm:gap-4 bg-[var(--color-surface)]">
                   <Pagination page={page} limit={limit} total={total} totalPages={totalPages} onPageChange={goToPage} />
-                  <div className="flex items-center gap-1.5 text-[12.5px] sm:text-[13px] md:text-[13.5px] text-[var(--color-secondary)] shrink-0">
+                  <div className="flex items-center gap-1.5 text-xs sm:text-sm text-[var(--color-secondary)] shrink-0">
                     <span>Baris:</span>
                     <select
                       value={limit}
                       onChange={(e) => { setLimit(Number(e.target.value)); goToPage(1) }}
-                      className="text-[12.5px] sm:text-[13px] md:text-[13.5px] text-[var(--color-primary)] border border-[var(--color-border)] rounded-[var(--radius-sm)] px-2 py-1 outline-none bg-[var(--color-surface)] cursor-pointer font-[var(--font-body)]"
+                      className="text-xs sm:text-sm text-[var(--color-primary)] border border-[var(--color-border)] rounded-[var(--radius-sm)] px-2 py-1 outline-none bg-[var(--color-surface)] cursor-pointer font-[var(--font-body)]"
                     >
                       <option value={10}>10</option>
                       <option value={25}>25</option>
@@ -183,7 +183,7 @@ export function GroupSection({
                 </div>
               ) : !withPagination && total > RECENT_LIMIT ? (
                 <div className="border-t border-[var(--color-border)] px-3 sm:px-6 py-2.5 sm:py-3 text-center bg-[var(--color-surface)]">
-                  <span className="text-[11.5px] sm:text-xs md:text-[12.5px] font-medium text-[var(--color-secondary)]">
+                  <span className="text-xs font-medium text-[var(--color-secondary)]">
                     Menampilkan {rows.length} dari {total} batch terbaru
                   </span>
                 </div>
@@ -268,12 +268,12 @@ export function StatusBlock({
           </span>
           <span className="min-w-0">
             <span className="flex flex-wrap items-center gap-2">
-              <span className={`text-sm sm:text-[14.5px] md:text-[15px] font-bold leading-tight ${meta.accent}`}>{meta.label}</span>
-              <span className={`inline-flex items-baseline gap-1 w-fit rounded-full px-2.5 py-0.5 text-[11px] sm:text-[11.5px] md:text-xs font-bold ${meta.badgeBg} ${meta.badgeText} whitespace-nowrap`}>
+              <span className={`text-sm sm:text-base font-bold leading-tight ${meta.accent}`}>{meta.label}</span>
+              <span className={`inline-flex items-baseline gap-1 w-fit rounded-full px-2.5 py-0.5 text-xs font-bold ${meta.badgeBg} ${meta.badgeText} whitespace-nowrap`}>
                 <span className="font-[var(--font-display)] tabular-nums">{totalCount}</span> batch
               </span>
             </span>
-            <span className="mt-1 block text-xs sm:text-[13px] md:text-[14px] font-medium text-[var(--color-secondary)] truncate">{meta.hint}</span>
+            <span className="mt-1 block text-xs sm:text-sm font-medium text-[var(--color-secondary)] truncate">{meta.hint}</span>
           </span>
         </span>
         <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${meta.badgeBg} ${meta.accent}`}>
@@ -286,10 +286,10 @@ export function StatusBlock({
           {isLoading ? (
             <div className="flex flex-col justify-center items-center p-8 bg-[var(--color-surface)] gap-4">
               <span className="w-10 h-10 border-4 border-[var(--color-tertiary)] border-t-transparent rounded-full animate-spin" />
-              <p className="text-[var(--color-secondary)] text-sm sm:text-[14.5px] md:text-[15px] animate-pulse">Memuat data batch...</p>
+              <p className="text-[var(--color-secondary)] text-sm animate-pulse">Memuat data batch...</p>
             </div>
           ) : groups.length === 0 ? (
-            <p className="px-5 py-6 text-sm sm:text-[14.5px] md:text-[15px] text-[var(--color-secondary)] font-medium text-center bg-[var(--color-surface)]">
+            <p className="px-5 py-6 text-sm text-[var(--color-secondary)] font-medium text-center bg-[var(--color-surface)]">
               Tidak ada batch pada status ini.
             </p>
           ) : (

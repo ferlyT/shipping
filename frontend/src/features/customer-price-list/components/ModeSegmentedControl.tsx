@@ -21,7 +21,7 @@ export function ModeSegmentedControl({
           aria-pressed={value === 'BY SEA'}
           className={`flex items-center gap-1.5 px-3.5 h-9 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border cursor-pointer ${
             value === 'BY SEA'
-              ? 'bg-[var(--color-tertiary)] text-white shadow-xs border-transparent'
+              ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
               : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--color-primary)]'
           }`}
         >
@@ -34,7 +34,7 @@ export function ModeSegmentedControl({
           aria-pressed={value === 'BY AIR'}
           className={`flex items-center gap-1.5 px-3.5 h-9 rounded-full text-xs font-semibold whitespace-nowrap transition-colors border cursor-pointer ${
             value === 'BY AIR'
-              ? 'bg-[var(--color-tertiary)] text-white shadow-xs border-transparent'
+              ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
               : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--color-primary)]'
           }`}
         >

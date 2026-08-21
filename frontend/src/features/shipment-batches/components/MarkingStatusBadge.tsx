@@ -12,14 +12,14 @@ export const MARKING_STATUS_META: Record<number | string, {
   text: string
   dot: string
 }> = {
-  1: { label: 'PROCESS',   bg: 'bg-[#FFF4E6]', text: 'text-[#E8590C]', dot: 'bg-[#E8590C]' },
-  2: { label: 'COMPLETED', bg: 'bg-[#EBFBEE]', text: 'text-[#2B8A3E]', dot: 'bg-[#2B8A3E]' },
-  3: { label: 'CANCELLED', bg: 'bg-[#FFF0F0]', text: 'text-[#C92A2A]', dot: 'bg-[#C92A2A]' },
-  4: { label: 'RE-EXPORT', bg: 'bg-[#EDF2FF]', text: 'text-[#3B5BDB]', dot: 'bg-[#3B5BDB]' },
-  LOADED: { label: 'LOADED', bg: 'bg-sky-50', text: 'text-sky-700 border border-sky-200/60', dot: 'bg-sky-500' },
-  DELIVERED: { label: 'DELIVERED', bg: 'bg-blue-50', text: 'text-blue-700 border border-blue-200/60', dot: 'bg-blue-500' },
-  CUSTOM: { label: 'CUSTOM', bg: 'bg-purple-50', text: 'text-purple-700 border border-purple-200/60', dot: 'bg-purple-500' },
-  CANCELLED: { label: 'CANCELLED', bg: 'bg-[#FFF0F0]', text: 'text-[#C92A2A] border border-red-200/60', dot: 'bg-[#C92A2A]' },
+  1: { label: 'PROCESS',   bg: 'bg-amber-500/10', text: 'text-amber-600 dark:text-amber-400', dot: 'bg-amber-500' },
+  2: { label: 'COMPLETED', bg: 'bg-emerald-500/10', text: 'text-emerald-600 dark:text-emerald-400', dot: 'bg-emerald-500' },
+  3: { label: 'CANCELLED', bg: 'bg-rose-500/10', text: 'text-rose-600 dark:text-rose-400', dot: 'bg-rose-500' },
+  4: { label: 'RE-EXPORT', bg: 'bg-blue-500/10', text: 'text-blue-600 dark:text-blue-400', dot: 'bg-blue-500' },
+  LOADED: { label: 'LOADED', bg: 'bg-sky-500/10', text: 'text-sky-600 dark:text-sky-400 border border-sky-500/20', dot: 'bg-sky-500' },
+  DELIVERED: { label: 'DELIVERED', bg: 'bg-indigo-500/10', text: 'text-indigo-600 dark:text-indigo-400 border border-indigo-500/20', dot: 'bg-indigo-500' },
+  CUSTOM: { label: 'CUSTOM', bg: 'bg-purple-500/10', text: 'text-purple-600 dark:text-purple-400 border border-purple-500/20', dot: 'bg-purple-500' },
+  CANCELLED: { label: 'CANCELLED', bg: 'bg-rose-500/10', text: 'text-rose-600 dark:text-rose-400 border border-rose-500/20', dot: 'bg-rose-500' },
 }
 
 // Metadata status open/closed untuk header StatusBlock

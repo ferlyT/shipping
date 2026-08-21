@@ -1,18 +1,14 @@
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { shipmentsApi } from '../services/shipments.service'
 import { useTranslation } from '@/hooks/useTranslation'
 import { Package, Weight, Box, Receipt, ListChecks, Layers, ArrowRight } from 'lucide-react'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { useShipmentKpis } from '../hooks/useShipmentKpis'
 
 export default function ShipmentsDashboardPage() {
   const { t } = useTranslation()
-  const { data: kpiData, isLoading: isLoadingKpi } = useQuery({
-    queryKey: ['shipmentsKpi', 'ALL'],
-    queryFn: () => shipmentsApi.getKpis({}),
-  })
+  const { data: kpiData, isLoading: isLoadingKpi } = useShipmentKpis({})
 
   const kpis = kpiData
 
@@ -39,7 +35,7 @@ export default function ShipmentsDashboardPage() {
           </div>
           <div className="flex items-center gap-2 text-[var(--color-secondary)]">
             <Receipt className="w-4 h-4 text-blue-500" />
-            <span className="text-xs font-bold uppercase tracking-wider">Total Resi</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{t('shipments.totalResi')}</span>
           </div>
           <div className="mt-3">
             {isLoadingKpi ? (
@@ -59,7 +55,7 @@ export default function ShipmentsDashboardPage() {
           </div>
           <div className="flex items-center gap-2 text-[var(--color-secondary)]">
             <Package className="w-4 h-4 text-emerald-500" />
-            <span className="text-xs font-bold uppercase tracking-wider">Total Packages</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{t('shipments.totalPackages')}</span>
           </div>
           <div className="mt-3">
             {isLoadingKpi ? (
@@ -79,7 +75,7 @@ export default function ShipmentsDashboardPage() {
           </div>
           <div className="flex items-center gap-2 text-[var(--color-secondary)]">
             <Weight className="w-4 h-4 text-purple-500" />
-            <span className="text-xs font-bold uppercase tracking-wider">Total Berat</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{t('shipments.totalWeight')}</span>
           </div>
           <div className="mt-3 flex items-baseline gap-1">
             {isLoadingKpi ? (
@@ -99,7 +95,7 @@ export default function ShipmentsDashboardPage() {
           </div>
           <div className="flex items-center gap-2 text-[var(--color-secondary)]">
             <Box className="w-4 h-4 text-rose-500" />
-            <span className="text-xs font-bold uppercase tracking-wider">Total Volume</span>
+            <span className="text-xs font-bold uppercase tracking-wider">{t('shipments.totalVolume')}</span>
           </div>
           <div className="mt-3 flex items-baseline gap-1">
             {isLoadingKpi ? (
@@ -123,15 +119,15 @@ export default function ShipmentsDashboardPage() {
           className="group flex items-center justify-between gap-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 shadow-sm hover:shadow-md hover:border-[var(--color-primary)] transition-all"
         >
           <div className="flex items-center gap-4">
-            <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-blue-50 text-blue-600 group-hover:bg-[var(--color-primary)] group-hover:text-white transition-colors">
+            <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 group-hover:bg-[var(--color-primary)] group-hover:text-[var(--color-on-primary)] transition-colors">
               <ListChecks className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-[var(--color-primary)] font-[var(--font-display)]">
-                Daftar Resi
+                {t('shipments.listTitle')}
               </h3>
               <p className="text-xs text-[var(--color-secondary)] mt-0.5">
-                Lihat, cari, dan kelola seluruh resi pengiriman.
+                {t('shipments.listSubtitle')}
               </p>
             </div>
           </div>
@@ -143,15 +139,15 @@ export default function ShipmentsDashboardPage() {
           className="group flex items-center justify-between gap-4 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 shadow-sm hover:shadow-md hover:border-[var(--color-primary)] transition-all"
         >
           <div className="flex items-center gap-4">
-            <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-50 text-indigo-600 group-hover:bg-[var(--color-primary)] group-hover:text-white transition-colors">
+            <div className="flex items-center justify-center w-12 h-12 rounded-lg bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 group-hover:bg-[var(--color-primary)] group-hover:text-[var(--color-on-primary)] transition-colors">
               <Layers className="w-6 h-6" />
             </div>
             <div>
               <h3 className="text-sm font-semibold text-[var(--color-primary)] font-[var(--font-display)]">
-                Batch Marking
+                {t('nav.batchMarking')}
               </h3>
               <p className="text-xs text-[var(--color-secondary)] mt-0.5">
-                Kelola pengelompokan resi berdasarkan marking.
+                {t('batchMarking.subtitle')}
               </p>
             </div>
           </div>

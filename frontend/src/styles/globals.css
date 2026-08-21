@@ -7,7 +7,8 @@
    ATURAN: Gunakan variabel ini, JANGAN hardcode hex
    ═══════════════════════════════════════════════════ */
 
-:root {
+:root,
+[data-theme="heritage"] {
   /* Colors */
   --color-primary:     #1A1C1E;
   --color-secondary:   #6C7278;
@@ -15,6 +16,7 @@
   --color-neutral:     #F7F5F2;
   --color-surface:     #FFFFFF;
   --color-on-primary:  #FFFFFF;
+  --color-sidebar-bg:  #1A1C1E;
   
   /* Borders */
   --color-border:      #E8E6E3;
@@ -23,8 +25,123 @@
   /* Semantic */
   --color-success:     #2D6A4F;
   --color-warning:     #B7860B;
-  --color-danger:      #B8422E; /* sama dengan tertiary */
+  --color-danger:      #B8422E;
   --color-muted:       #9EA4AA;
+}
+
+[data-theme="ocean"] {
+  --color-primary:     #0F172A;
+  --color-secondary:   #64748B;
+  --color-tertiary:    #2563EB;
+  --color-neutral:     #F1F5F9;
+  --color-surface:     #FFFFFF;
+  --color-on-primary:  #FFFFFF;
+  --color-sidebar-bg:  #0F172A;
+  --color-border:      #E2E8F0;
+  --color-border-strong: #CBD5E1;
+  --color-success:     #059669;
+  --color-warning:     #D97706;
+  --color-danger:      #E11D48;
+  --color-muted:       #94A3B8;
+}
+
+[data-theme="emerald"] {
+  --color-primary:     #132E22;
+  --color-secondary:   #536B60;
+  --color-tertiary:    #16A34A;
+  --color-neutral:     #F0FDF4;
+  --color-surface:     #FFFFFF;
+  --color-on-primary:  #FFFFFF;
+  --color-sidebar-bg:  #0D2118;
+  --color-border:      #DCFCE7;
+  --color-border-strong: #BBF7D0;
+  --color-success:     #15803D;
+  --color-warning:     #CA8A04;
+  --color-danger:      #DC2626;
+  --color-muted:       #86EFAC;
+}
+
+[data-theme="amber"] {
+  --color-primary:     #291E14;
+  --color-secondary:   #786857;
+  --color-tertiary:    #D97706;
+  --color-neutral:     #FDFBF7;
+  --color-surface:     #FFFFFF;
+  --color-on-primary:  #FFFFFF;
+  --color-sidebar-bg:  #221810;
+  --color-border:      #EFE7DE;
+  --color-border-strong: #D8C7B8;
+  --color-success:     #15803D;
+  --color-warning:     #D97706;
+  --color-danger:      #DC2626;
+  --color-muted:       #A89F91;
+}
+
+[data-theme="midnight"] {
+  --color-primary:     #F1F5F9;
+  --color-secondary:   #94A3B8;
+  --color-tertiary:    #38BDF8;
+  --color-neutral:     #080C14;
+  --color-surface:     #0F172A;
+  --color-on-primary:  #0F172A;
+  --color-sidebar-bg:  #080C14;
+  --color-border:      #1E293B;
+  --color-border-strong: #334155;
+  --color-success:     #34D399;
+  --color-warning:     #FBBF24;
+  --color-danger:      #FB7185;
+  --color-muted:       #64748B;
+}
+
+/* ═══════════════════════════════════════════════════
+   MIDNIGHT THEME — BADGES & TAGS
+   Background follows theme background (transparent),
+   Border matches font color
+   ═══════════════════════════════════════════════════ */
+[data-theme="midnight"] .app-badge,
+[data-theme="midnight"] [data-component="badge"],
+[data-theme="midnight"] .badge,
+[data-theme="midnight"] .badge-tag {
+  background-color: transparent !important;
+  border-color: currentColor !important;
+}
+
+[data-theme="midnight"] .app-badge[data-variant="default"],
+[data-theme="midnight"] [data-component="badge"][data-variant="default"] {
+  color: var(--color-secondary) !important;
+  border-color: var(--color-border-strong) !important;
+  background-color: transparent !important;
+}
+
+[data-theme="midnight"] .app-badge[data-variant="success"],
+[data-theme="midnight"] [data-component="badge"][data-variant="success"] {
+  color: var(--color-success) !important;
+  border-color: var(--color-success) !important;
+  background-color: transparent !important;
+}
+
+[data-theme="midnight"] .app-badge[data-variant="warning"],
+[data-theme="midnight"] [data-component="badge"][data-variant="warning"] {
+  color: var(--color-warning) !important;
+  border-color: var(--color-warning) !important;
+  background-color: transparent !important;
+}
+
+[data-theme="midnight"] .app-badge[data-variant="danger"],
+[data-theme="midnight"] [data-component="badge"][data-variant="danger"] {
+  color: var(--color-danger) !important;
+  border-color: var(--color-danger) !important;
+  background-color: transparent !important;
+}
+
+[data-theme="midnight"] .app-badge[data-variant="info"],
+[data-theme="midnight"] [data-component="badge"][data-variant="info"] {
+  color: var(--color-tertiary) !important;
+  border-color: var(--color-tertiary) !important;
+  background-color: transparent !important;
+}
+
+:root {
 
   /* Typography */
   --font-display:  'Fraunces', Georgia, serif;

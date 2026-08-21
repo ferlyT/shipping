@@ -52,7 +52,25 @@ export const priceListApi = {
     mode?: string
     branch?: string
     category?: string
+    markingCode?: string
   }) => apiClient.get<PriceListLookupResult>('/price-list/lookup', { params }),
+
+  // GET /api/price-list/items/:id/markings
+  getItemMarkings: (itemId: number) =>
+    apiClient.get<{ data: { id: number; itemId: number; markingCode: string; agentName: string | null }[] }>(
+      `/price-list/items/${itemId}/markings`
+    ),
+
+  // PUT /api/price-list/items/:id/markings
+  setItemMarkings: (itemId: number, markings: { markingCode: string; agentName?: string }[]) =>
+    apiClient.put<{ data: { id: number; itemId: number; markingCode: string; agentName: string | null }[] }>(
+      `/price-list/items/${itemId}/markings`,
+      { markings }
+    ),
+
+  // DELETE /api/price-list/items/:id/markings/:markingCode
+  deleteItemMarking: (itemId: number, markingCode: string) =>
+    apiClient.delete(`/price-list/items/${itemId}/markings/${markingCode}`),
 
   // GET /api/price-list/entry-search
   searchEntries: (q: string, limit = 20) =>

@@ -82,11 +82,6 @@ export function truncate(str: string, maxLength: number): string {
   return str.length > maxLength ? str.slice(0, maxLength) + '…' : str
 }
 
-// Get initials dari nama
-export function getInitials(name: string): string {
-  return name.split(' ').slice(0, 2).map(n => n[0]).join('').toUpperCase()
-}
-
 // Format tanggal singkat ke "12 Jan 2024" (en-GB) — dipakai di komponen marking
 // Terpisah dari formatDate() agar mendukung fitur dual bahasa
 export function formatDateShort(value: string | Date | null | undefined): string {
@@ -104,3 +99,70 @@ export function formatYearMonthKey(key: string): string {
   const d = new Date(Number(year), Number(month) - 1, 1)
   return d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
 }
+
+/**
+ * Hitung Overweight berdasarkan berat (kg), volume (m³), dan rasio dengan pembulatan ke atas (round up)
+ * Formula: Math.ceil(berat - (m3 * rasio))
+ * @returns nilai overweight bulat (kg) jika > 0, atau 0 jika tidak ada overweight
+ */
+export function calculateOverweight(
+  berat: number | null | undefined,
+  m3: number | null | undefined,
+  rasio: number | null | undefined
+): number {
+  const b = Number(berat || 0)
+  const vol = Number(m3 || 0)
+  const r = Number(rasio || 0)
+
+  if (b <= 0 || vol <= 0 || r <= 0) return 0
+  const ow = b - (vol * r)
+  if (ow <= 0) return 0
+  return Math.ceil(ow)
+}
+
+/**
+ * Hitung selisih real berat vs kuota rasio dengan pembulatan ke atas (round up): Math.ceil(berat - (m3 * rasio))
+ * @returns angka real selisih bulat (bisa negatif atau positif) atau null jika data tidak lengkap
+ */
+export function calculateOverweightRaw(
+  berat: number | null | undefined,
+  m3: number | null | undefined,
+  rasio: number | null | undefined
+): number | null {
+  const b = Number(berat || 0)
+  const vol = Number(m3 || 0)
+  const r = Number(rasio || 0)
+
+  if (r <= 0 || (b === 0 && vol === 0)) return null
+  const diff = b - (vol * r)
+  const res = Math.ceil(diff)
+  return res === 0 ? 0 : res
+}
+
+// Inisial nama untuk avatar fallback
+export function getInitials(name?: string | null): string {
+  if (!name?.trim()) return 'US'
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase()
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
+}
+
+// Helper untuk resolve URL media / avatar yang diunggah ke backend
+export function resolveMediaUrl(url?: string | null): string | undefined {
+  if (!url) return undefined
+  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) {
+    return url
+  }
+  const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+  try {
+    if (apiBase.startsWith('http')) {
+      const urlObj = new URL(apiBase)
+      const origin = urlObj.origin
+      const cleanPath = url.startsWith('/') ? url : `/${url}`
+      return `${origin}${cleanPath}`
+    }
+  } catch {}
+  return url
+}
+
+

@@ -275,11 +275,11 @@ export function UploadPage() {
           </dl>
 
           {result.warnings.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-              <p className="text-xs font-semibold text-amber-700 mb-1.5">Peringatan Parser ({result.warnings.length})</p>
+            <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+              <p className="text-xs font-semibold text-amber-600 dark:text-amber-400 mb-1.5">Peringatan Parser ({result.warnings.length})</p>
               <ul className="space-y-1">
                 {result.warnings.map((w, i) => (
-                  <li key={i} className="text-xs text-amber-700 flex gap-1.5">
+                  <li key={i} className="text-xs text-amber-600 dark:text-amber-400 flex gap-1.5">
                     <span className="shrink-0">⚠</span>
                     {w}
                   </li>

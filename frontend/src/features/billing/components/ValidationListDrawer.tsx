@@ -141,7 +141,7 @@ export function ValidationListDrawer({
         {/* Header */}
         <div className="px-4 py-3.5 sm:px-5 sm:py-4 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-lg bg-[var(--color-primary)] text-white shadow-xs">
+            <div className="p-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-xs">
               <FileText className="w-5 h-5" />
             </div>
             <div>
@@ -190,7 +190,7 @@ export function ValidationListDrawer({
               onClick={() => setModeFilter('all')}
               className={`px-3 py-1 rounded-full border text-[11px] font-medium transition-all flex items-center gap-1 cursor-pointer ${
                 modeFilter === 'all'
-                  ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-2xs'
+                  ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] border-[var(--color-primary)] shadow-2xs'
                   : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)]'
               }`}
             >
@@ -235,7 +235,7 @@ export function ValidationListDrawer({
                   onClick={() => setAuthorFilter('all')}
                   className={`px-2.5 py-0.5 rounded-md border text-[10px] font-semibold whitespace-nowrap transition-all cursor-pointer ${
                     authorFilter === 'all'
-                      ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)]'
+                      ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] border-[var(--color-primary)]'
                       : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)]'
                   }`}
                 >

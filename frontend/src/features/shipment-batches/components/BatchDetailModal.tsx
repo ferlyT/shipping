@@ -36,28 +36,28 @@ export function BatchDetailModal({
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 z-40 bg-slate-900/30 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-6 pointer-events-none">
         <div
-          className="w-full sm:max-w-2xl bg-white shadow-2xl rounded-t-[28px] sm:rounded-2xl flex flex-col overflow-hidden pointer-events-auto h-[94vh] sm:h-auto sm:max-h-[90vh]"
+          className="w-full sm:max-w-2xl bg-[var(--color-surface)] shadow-2xl rounded-t-[28px] sm:rounded-2xl flex flex-col overflow-hidden pointer-events-auto h-[94vh] sm:h-auto sm:max-h-[90vh] border border-[var(--color-border)]"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header Panel */}
-          <div className="flex-shrink-0 px-5 sm:px-8 pt-5 sm:pt-6 pb-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10">
+          <div className="flex-shrink-0 px-5 sm:px-8 pt-5 sm:pt-6 pb-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-surface)] sticky top-0 z-10">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary)]/5 text-[var(--color-primary)] border border-slate-100">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary)]/5 text-[var(--color-primary)] border border-[var(--color-border)]">
                 <Box className="h-5 w-5" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg sm:text-[1.15rem] md:text-[1.2rem] font-bold font-[var(--font-display)] text-[var(--color-primary)] leading-none">{selectedRow.fdMarkingCode}</h2>
-                  <span className="rounded-full bg-[#F7F5F2] border border-slate-100 px-2 py-0.5 text-[11px] sm:text-[11.5px] md:text-xs font-[var(--font-label)] font-medium text-[var(--color-secondary)]">
+                  <h2 className="text-lg sm:text-xl font-bold font-[var(--font-display)] text-[var(--color-primary)] leading-none">{selectedRow.fdMarkingCode}</h2>
+                  <span className="rounded-full bg-[var(--color-neutral)] border border-[var(--color-border)] px-2 py-0.5 text-xs font-[var(--font-label)] font-medium text-[var(--color-secondary)]">
                     {listTypeFilter === '1' ? 'AIR' : 'SEA'}
                   </span>
                 </div>
-                <p className="text-xs sm:text-[13px] md:text-[14px] text-[var(--color-secondary)] mt-1 font-[var(--font-body)]">{listTypeFilter === '1' ? 'Air freight batch' : 'Sea freight batch'}</p>
+                <p className="text-xs sm:text-sm text-[var(--color-secondary)] mt-1 font-[var(--font-body)]">{listTypeFilter === '1' ? 'Air freight batch' : 'Sea freight batch'}</p>
               </div>
             </div>
             <button
@@ -65,21 +65,21 @@ export function BatchDetailModal({
                 onClose()
                 setModalTab('detail')
               }}
-              className="p-2 hover:bg-[#F7F5F2] rounded-full transition-colors text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
+              className="p-2 hover:bg-[var(--color-neutral)] rounded-full transition-colors text-[var(--color-secondary)] hover:text-[var(--color-primary)] cursor-pointer"
             >
               <X size={20} />
             </button>
           </div>
           
-          <div className="flex px-5 sm:px-8 border-b border-slate-100 bg-white sticky top-[79px] z-10 text-sm sm:text-[14.5px] md:text-[15px] shrink-0">
+          <div className="flex px-5 sm:px-8 border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-[79px] z-10 text-sm shrink-0">
             <button 
-              className={cn("px-4 py-3 font-semibold border-b-2 transition-colors", modalTab === 'detail' ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]")}
+              className={cn("px-4 py-3 font-semibold border-b-2 transition-colors cursor-pointer", modalTab === 'detail' ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]")}
               onClick={() => setModalTab('detail')}
             >
               Info Detail
             </button>
             <button 
-              className={cn("px-4 py-3 font-semibold border-b-2 transition-colors", modalTab === 'timeline' ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]")}
+              className={cn("px-4 py-3 font-semibold border-b-2 transition-colors cursor-pointer", modalTab === 'timeline' ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]")}
               onClick={() => setModalTab('timeline')}
             >
               Timeline & Performance
@@ -87,7 +87,7 @@ export function BatchDetailModal({
           </div>
 
           {/* Content Panel */}
-          <div className="flex-1 overflow-y-auto bg-slate-50/50">
+          <div className="flex-1 overflow-y-auto bg-[var(--color-neutral)]">
             {isLoadingDetail ? (
               <div className="p-8 flex justify-center">
                 <div className="animate-spin w-8 h-8 border-4 border-[var(--color-primary)] border-t-transparent rounded-full" />
@@ -99,41 +99,41 @@ export function BatchDetailModal({
                     {/* Info Grid */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                        <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Consignee</p>
-                        <p className="mt-1 text-sm sm:text-[14.5px] md:text-[15px] font-semibold text-[var(--color-primary)]">{selectedMarking.fdConsignee || '-'}</p>
+                        <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Consignee</p>
+                        <p className="mt-1 text-sm font-semibold text-[var(--color-primary)]">{selectedMarking.fdConsignee || '-'}</p>
                       </div>
                       <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                        <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Region</p>
-                        <p className={cn("mt-1 text-sm sm:text-[14.5px] md:text-[15px] font-semibold", selectedMarking.fdWilayah ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
+                        <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Region</p>
+                        <p className={cn("mt-1 text-sm font-semibold", selectedMarking.fdWilayah ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
                           {selectedMarking.fdWilayah || 'Not recorded'}
                         </p>
                       </div>
                       <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                        <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">{listTypeFilter === '1' ? 'AWB No.' : 'BL No.'}</p>
-                        <p className={cn("mt-1 text-sm sm:text-[14.5px] md:text-[15px] font-semibold break-all", (listTypeFilter === '1' ? selectedMarking.fdAWB : selectedMarking.fdBLNo) ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
+                        <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">{listTypeFilter === '1' ? 'AWB No.' : 'BL No.'}</p>
+                        <p className={cn("mt-1 text-sm font-semibold break-all", (listTypeFilter === '1' ? selectedMarking.fdAWB : selectedMarking.fdBLNo) ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
                           {listTypeFilter === '1' ? (selectedMarking.fdAWB || 'Not recorded') : (selectedMarking.fdBLNo || 'Not recorded')}
                         </p>
                       </div>
                       {listTypeFilter === '2' && (
                         <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                          <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Container</p>
-                          <p className={cn("mt-1 text-sm sm:text-[14.5px] md:text-[15px] font-semibold", selectedMarking.fdContNo ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
+                          <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Container</p>
+                          <p className={cn("mt-1 text-sm font-semibold", selectedMarking.fdContNo ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
                             {selectedMarking.fdContNo ? `${selectedMarking.fdContNo} ${selectedMarking.fdContSize ? `(${selectedMarking.fdContSize})` : ''}` : '—'}
                           </p>
                         </div>
                       )}
                       {selectedMarking.fdGudang && selectedMarking.fdGudang.trim() !== '' && (
                         <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                          <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Gudang</p>
-                          <p className="mt-1 text-sm sm:text-[14.5px] md:text-[15px] font-semibold text-[var(--color-primary)]">
+                          <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Gudang</p>
+                          <p className="mt-1 text-sm font-semibold text-[var(--color-primary)]">
                             {selectedMarking.fdGudang}
                           </p>
                         </div>
                       )}
                       {selectedMarking.fdKet && selectedMarking.fdKet.trim() !== '' && (
                         <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                          <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Keterangan</p>
-                          <p className="mt-1 text-sm sm:text-[14.5px] md:text-[15px] font-semibold text-[var(--color-primary)]">
+                          <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Keterangan</p>
+                          <p className="mt-1 text-sm font-semibold text-[var(--color-primary)]">
                             {selectedMarking.fdKet}
                           </p>
                         </div>
@@ -267,11 +267,11 @@ export function BatchDetailModal({
                                       <Icon className={cn("h-4 w-4", s.text)} />
                                     </div>
                                     <div className="ml-4 sm:ml-0 mt-0 sm:mt-3 flex flex-col sm:items-center">
-                                      <p className="text-[10px] sm:text-[11px] md:text-xs uppercase font-[var(--font-label)] text-[var(--color-secondary)] font-medium">{stage.label}</p>
-                                      <p className="text-[11px] sm:text-[11.5px] md:text-xs font-semibold text-[var(--color-primary)] mt-0.5 min-h-[16px]">
+                                      <p className="text-xs uppercase font-[var(--font-label)] text-[var(--color-secondary)] font-medium">{stage.label}</p>
+                                      <p className="text-xs font-semibold text-[var(--color-primary)] mt-0.5 min-h-[16px]">
                                         {!stage.date ? "—" : (stage.key === "etd_eta" ? stage.date : formatDate(stage.date))}
                                       </p>
-                                      <span className={cn("mt-1 sm:mt-1.5 rounded-full px-2 py-0.5 text-[9px] sm:text-[9.5px] md:text-[10px] uppercase font-bold tracking-wider w-fit", s.badgeBg, s.badgeText)}>
+                                      <span className={cn("mt-1 sm:mt-1.5 rounded-full px-2 py-0.5 text-[10px] uppercase font-bold tracking-wider w-fit", s.badgeBg, s.badgeText)}>
                                         {s.label}
                                       </span>
                                     </div>
@@ -315,47 +315,47 @@ export function BatchDetailModal({
 
                       return (
                         <div>
-                          <h3 className="mb-4 text-xs sm:text-[13px] md:text-[14px] font-bold font-[var(--font-label)] uppercase tracking-widest text-[var(--color-secondary)] flex items-center gap-2">
+                          <h3 className="mb-4 text-xs sm:text-sm font-bold font-[var(--font-label)] uppercase tracking-widest text-[var(--color-secondary)] flex items-center gap-2">
                             <Clock size={14} />
                             Performance
                           </h3>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                             {/* KpiCard 1 */}
                             <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                              <p className="text-[10px] sm:text-[11px] md:text-xs font-bold uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Lead time loading</p>
+                              <p className="text-xs font-bold uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Lead time loading</p>
                               <div className="mt-2 flex items-baseline gap-1">
-                                <span className="text-2xl sm:text-[1.6rem] md:text-[1.7rem] font-bold font-[var(--font-display)] text-[var(--color-primary)]">
+                                <span className="text-2xl font-bold font-[var(--font-display)] text-[var(--color-primary)]">
                                   {leadTimeLoading === null ? "—" : leadTimeLoading}
                                 </span>
-                                {leadTimeLoading !== null && <span className="text-[10px] sm:text-[11px] md:text-xs uppercase font-bold text-[var(--color-secondary)]">days</span>}
+                                {leadTimeLoading !== null && <span className="text-xs uppercase font-bold text-[var(--color-secondary)]">days</span>}
                               </div>
-                              <p className="mt-1 text-[10px] sm:text-[11px] md:text-xs font-medium text-[var(--color-secondary)]">Load date → ETD</p>
+                              <p className="mt-1 text-xs font-medium text-[var(--color-secondary)]">Load date → ETD</p>
                             </div>
 
                             {/* KpiCard 2 */}
                             <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                              <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Transit time</p>
+                              <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Transit time</p>
                               <div className="mt-2 flex items-baseline gap-1">
-                                <span className="text-2xl sm:text-[1.6rem] md:text-[1.7rem] font-bold font-[var(--font-display)] text-[var(--color-primary)]">
+                                <span className="text-2xl font-bold font-[var(--font-display)] text-[var(--color-primary)]">
                                   {transitTime === null ? "—" : transitTime}
                                 </span>
-                                {transitTime !== null && <span className="text-[10px] sm:text-[11px] md:text-xs uppercase font-bold text-[var(--color-secondary)]">days</span>}
+                                {transitTime !== null && <span className="text-xs uppercase font-bold text-[var(--color-secondary)]">days</span>}
                               </div>
-                              <p className="mt-1 text-[10px] sm:text-[11px] md:text-xs font-medium text-[var(--color-secondary)]">ETD → ETA</p>
+                              <p className="mt-1 text-xs font-medium text-[var(--color-secondary)]">ETD → ETA</p>
                             </div>
 
                             {/* KpiCard 3 */}
                             <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                              <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Warehouse delay</p>
+                              <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Warehouse delay</p>
                               <div className="mt-2 flex items-baseline gap-1">
-                                <span className="text-2xl sm:text-[1.6rem] md:text-[1.7rem] font-bold font-[var(--font-display)] text-[var(--color-primary)]">
+                                <span className="text-2xl font-bold font-[var(--font-display)] text-[var(--color-primary)]">
                                   {warehouseDelay === null ? "—" : warehouseDelay}
                                 </span>
-                                {warehouseDelay !== null && <span className="text-[10px] sm:text-[11px] md:text-xs uppercase font-bold text-[var(--color-secondary)]">days</span>}
+                                {warehouseDelay !== null && <span className="text-xs uppercase font-bold text-[var(--color-secondary)]">days</span>}
                               </div>
-                              <p className="mt-1 text-[10px] sm:text-[11px] md:text-xs font-medium text-[var(--color-secondary)]">ETA → {exitDate ? 'Exit date' : 'Today (ongoing)'}</p>
+                              <p className="mt-1 text-xs font-medium text-[var(--color-secondary)]">ETA → {exitDate ? 'Exit date' : 'Today (ongoing)'}</p>
                               {warehouseDelay !== null && (
-                                <p className={cn("mt-2 text-[11px] sm:text-[11.5px] md:text-xs font-bold", isDelayed ? "text-[var(--color-warning)]" : "text-[var(--color-success)]")}>
+                                <p className={cn("mt-2 text-xs font-bold", isDelayed ? "text-[var(--color-warning)]" : "text-[var(--color-success)]")}>
                                   {isDelayed ? `${warehouseDelay}d over ETA` : (exitDate ? "Within ETA" : "On track (ongoing)")}
                                 </p>
                               )}
@@ -363,9 +363,9 @@ export function BatchDetailModal({
 
                             {/* KpiCard 4 */}
                             <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                              <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Total shipment cycle</p>
+                              <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Total shipment cycle</p>
                               <div className="mt-2 flex items-baseline gap-1">
-                                <span className={cn("text-2xl sm:text-[1.6rem] md:text-[1.7rem] font-bold font-[var(--font-display)]", isCycleDelayed ? "text-[var(--color-danger)]" : "text-[var(--color-primary)]")}>
+                                <span className={cn("text-2xl font-bold font-[var(--font-display)]", isCycleDelayed ? "text-[var(--color-danger)]" : "text-[var(--color-primary)]")}>
                                   {totalCycle === null ? "—" : totalCycle}
                                 </span>
                                 {totalCycle !== null && <span className="text-[10px] sm:text-[11px] md:text-xs uppercase font-bold text-[var(--color-secondary)]">days</span>}

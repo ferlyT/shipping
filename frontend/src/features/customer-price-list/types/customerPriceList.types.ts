@@ -1,4 +1,8 @@
-// Types untuk Customer Price List feature
+export interface CustomerItemMarking {
+  id?: number
+  markingCode: string
+  agentName?: string | null
+}
 
 export interface CustomerPriceListItem {
   id: number
@@ -7,6 +11,7 @@ export interface CustomerPriceListItem {
   transitTime: string | null
   category: string
   price: number
+  markings?: CustomerItemMarking[]
 }
 
 export interface ActiveCustomerPriceList {

@@ -9,6 +9,9 @@ import {
   getCustomerUploadDiff,
   getCustomerPriceListFilters,
   lookupCustomerPriceList,
+  getCustomerItemMarkings,
+  setCustomerItemMarkings,
+  deleteCustomerItemMarking,
 } from './customer-price-list.service'
 
 const customerPriceListRoutes = new Hono()
@@ -33,7 +36,7 @@ customerPriceListRoutes.get('/', async (c) => {
   return successResponse(c, rows)
 })
 
-// GET /api/customer-price-list/lookup?custCode=...&date=YYYY-MM-DD
+// GET /api/customer-price-list/lookup?custCode=...&date=YYYY-MM-DD&markingCode=...
 // Cari harga khusus customer pada tanggal tertentu
 customerPriceListRoutes.get('/lookup', async (c) => {
   const custCode = c.req.query('custCode')?.trim()
@@ -41,6 +44,7 @@ customerPriceListRoutes.get('/lookup', async (c) => {
   const mode = c.req.query('mode')?.trim()
   const branch = c.req.query('branch')?.trim()
   const category = c.req.query('category')?.trim()
+  const markingCode = c.req.query('markingCode')?.trim()
 
   if (!custCode) {
     return errorResponse(c, 'Kode customer wajib diisi', 400)
@@ -51,8 +55,37 @@ customerPriceListRoutes.get('/lookup', async (c) => {
     return errorResponse(c, 'Format tanggal tidak valid', 400)
   }
 
-  const result = await lookupCustomerPriceList(custCode, targetDate, { mode, branch, category })
+  const result = await lookupCustomerPriceList(custCode, targetDate, { mode, branch, category, markingCode })
   return successResponse(c, result)
+})
+
+// GET /api/customer-price-list/items/:id/markings
+customerPriceListRoutes.get('/items/:id/markings', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
+  const markings = await getCustomerItemMarkings(id)
+  return successResponse(c, markings)
+})
+
+// PUT /api/customer-price-list/items/:id/markings
+customerPriceListRoutes.put('/items/:id/markings', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
+  const body = await c.req.json<{ markings: { markingCode: string; agentName?: string }[] }>()
+  if (!Array.isArray(body?.markings)) {
+    return errorResponse(c, 'Field markings harus berupa array', 400)
+  }
+  const result = await setCustomerItemMarkings(id, body.markings)
+  return successResponse(c, result)
+})
+
+// DELETE /api/customer-price-list/items/:id/markings/:markingCode
+customerPriceListRoutes.delete('/items/:id/markings/:markingCode', async (c) => {
+  const id = Number(c.req.param('id'))
+  const markingCode = c.req.param('markingCode')
+  if (isNaN(id) || !markingCode) return errorResponse(c, 'Parameter tidak valid', 400)
+  await deleteCustomerItemMarking(id, markingCode)
+  return successResponse(c, { message: 'Marking berhasil dihapus' })
 })
 
 

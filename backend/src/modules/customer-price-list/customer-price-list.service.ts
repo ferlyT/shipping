@@ -139,6 +139,7 @@ export async function getActiveCustomerPriceList(fdCustCode: string) {
 
   const items = await prisma.tbCustomerPriceListItem.findMany({
     where: { uploadId: latestUpload.id },
+    include: { markings: true },
     orderBy: [{ mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
   })
 
@@ -156,6 +157,11 @@ export async function getActiveCustomerPriceList(fdCustCode: string) {
       transitTime: it.transitTime,
       category: it.category,
       price: Number(it.price),
+      markings: it.markings?.map((m) => ({
+        id: m.id,
+        markingCode: m.markingCode,
+        agentName: m.agentName,
+      })) || [],
     })),
   }
 }
@@ -166,7 +172,7 @@ export async function getActiveCustomerPriceList(fdCustCode: string) {
 export async function getCustomerUploadDiff(id: number) {
   const current = await prisma.tbCustomerPriceListUpload.findUnique({
     where: { id },
-    include: { items: true },
+    include: { items: { include: { markings: true } } },
   })
   if (!current) return null
 
@@ -177,7 +183,7 @@ export async function getCustomerUploadDiff(id: number) {
       status: { not: 'FAILED' },
     },
     orderBy: { effectiveDate: 'desc' },
-    include: { items: true },
+    include: { items: { include: { markings: true } } },
   })
 
   const key = (it: { mode: string; branch: string; category: string }) =>
@@ -197,6 +203,11 @@ export async function getCustomerUploadDiff(id: number) {
       previousPrice: prevPrice ?? null,
       delta: prevPrice !== undefined ? currPrice - prevPrice : null,
       deltaPct: prevPrice ? ((currPrice - prevPrice) / prevPrice) * 100 : null,
+      markings: it.markings?.map((m) => ({
+        id: m.id,
+        markingCode: m.markingCode,
+        agentName: m.agentName,
+      })) || [],
     }
   })
 
@@ -253,12 +264,12 @@ export async function getCustomerPriceListFilters(fdCustCode?: string) {
 }
 
 /**
- * Cari harga khusus customer pada tanggal tertentu.
+ * Cari harga khusus customer pada tanggal tertentu dengan dukungan filter markingCode agen (Level 1 & Level 2).
  */
 export async function lookupCustomerPriceList(
   fdCustCode: string,
   targetDate: Date,
-  filters?: { mode?: string; branch?: string; category?: string }
+  filters?: { mode?: string; branch?: string; category?: string; markingCode?: string }
 ) {
   const upload = await prisma.tbCustomerPriceListUpload.findFirst({
     where: {
@@ -280,16 +291,62 @@ export async function lookupCustomerPriceList(
       targetDate,
       uploadInfo: null,
       items: [],
+      isMarkingOverride: false,
     }
   }
 
-  const items = await prisma.tbCustomerPriceListItem.findMany({
-    where: { uploadId: upload.id },
-    orderBy: [{ mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
-  })
+  const baseWhere: Prisma.TbCustomerPriceListItemWhereInput = {
+    uploadId: upload.id,
+  }
+
+  if (filters?.mode) baseWhere.mode = filters.mode;
+  if (filters?.branch) baseWhere.branch = filters.branch;
+  if (filters?.category) {
+    const catStr = filters.category;
+    const categories = catStr.split(',').map((s) => s.trim()).filter(Boolean);
+    if (categories.length === 1) {
+      baseWhere.category = categories[0];
+    } else if (categories.length > 1) {
+      baseWhere.category = { in: categories } as any;
+    }
+  }
+
+  let items: any[] = []
+  let isMarkingOverride = false
+
+  // 1. Coba cari dengan markingCode (Level 1)
+  if (filters?.markingCode?.trim()) {
+    const cleanMarking = filters.markingCode.trim()
+    const markingItems = await prisma.tbCustomerPriceListItem.findMany({
+      where: {
+        ...baseWhere,
+        markings: {
+          some: {
+            markingCode: { equals: cleanMarking },
+          },
+        },
+      },
+      include: { markings: true },
+      orderBy: [{ mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
+    })
+
+    if (markingItems.length > 0) {
+      items = markingItems
+      isMarkingOverride = true
+    }
+  }
+
+  // 2. Fallback ke item customer standar (Level 2) jika tidak ada item khusus markingCode
+  if (items.length === 0) {
+    items = await prisma.tbCustomerPriceListItem.findMany({
+      where: baseWhere,
+      include: { markings: true },
+      orderBy: [{ mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
+    })
+  }
 
   return {
-    found: true,
+    found: items.length > 0,
     fdCustCode,
     targetDate,
     uploadInfo: {
@@ -299,6 +356,7 @@ export async function lookupCustomerPriceList(
       priceDate: upload.priceDate,
       uploadedAt: upload.uploadedAt,
     },
+    isMarkingOverride,
     items: items.map((it) => ({
       id: it.id,
       mode: it.mode,
@@ -306,7 +364,64 @@ export async function lookupCustomerPriceList(
       transitTime: it.transitTime,
       category: it.category,
       price: Number(it.price),
+      markings: it.markings?.map((m: any) => ({
+        id: m.id,
+        markingCode: m.markingCode,
+        agentName: m.agentName,
+      })) || [],
     })),
   }
+}
+
+export async function getCustomerItemMarkings(itemId: number) {
+  return prisma.tbCustomerPriceListItemMarking.findMany({
+    where: { itemId },
+    orderBy: { markingCode: 'asc' },
+  })
+}
+
+export async function setCustomerItemMarkings(
+  itemId: number,
+  markings: { markingCode: string; agentName?: string }[],
+) {
+  return prisma.$transaction(async (tx) => {
+    await tx.tbCustomerPriceListItemMarking.deleteMany({
+      where: { itemId },
+    })
+
+    if (markings.length > 0) {
+      const validMarkings = markings
+        .map((m) => ({
+          itemId,
+          markingCode: m.markingCode.trim(),
+          agentName: m.agentName?.trim() || null,
+        }))
+        .filter((m) => m.markingCode.length > 0)
+
+      const uniqueMap = new Map<string, typeof validMarkings[0]>()
+      validMarkings.forEach((m) => uniqueMap.set(m.markingCode.toUpperCase(), m))
+      const uniqueList = Array.from(uniqueMap.values())
+
+      if (uniqueList.length > 0) {
+        await tx.tbCustomerPriceListItemMarking.createMany({
+          data: uniqueList,
+        })
+      }
+    }
+
+    return tx.tbCustomerPriceListItemMarking.findMany({
+      where: { itemId },
+      orderBy: { markingCode: 'asc' },
+    })
+  })
+}
+
+export async function deleteCustomerItemMarking(itemId: number, markingCode: string) {
+  return prisma.tbCustomerPriceListItemMarking.deleteMany({
+    where: {
+      itemId,
+      markingCode: markingCode.trim(),
+    },
+  })
 }
 

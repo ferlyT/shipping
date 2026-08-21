@@ -6,10 +6,10 @@ import type { ExitHistoryDay } from '../services/marking.service'
 
 const renderLegend = () => (
   <div className="flex items-center justify-center gap-4 pt-2 text-xs font-semibold">
-    <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 px-2 py-0.5 rounded-md border border-sky-200/60">
+    <span className="inline-flex items-center gap-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 px-2 py-0.5 rounded-md border border-sky-500/20">
       <Plane className="w-3.5 h-3.5 text-sky-500 shrink-0" />
     </span>
-    <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md border border-emerald-200/60">
+    <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-md border border-emerald-500/20">
       <Ship className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
     </span>
   </div>
@@ -81,6 +81,8 @@ export function ExitBarChart({
           <Tooltip
             cursor={{ fill: 'var(--color-neutral)', opacity: 0.6 }}
             contentStyle={{
+              background: 'var(--color-surface)',
+              color: 'var(--color-text)',
               borderRadius: '10px',
               border: '1px solid var(--color-border)',
               boxShadow: '0 8px 24px -8px rgba(0,0,0,0.15)',

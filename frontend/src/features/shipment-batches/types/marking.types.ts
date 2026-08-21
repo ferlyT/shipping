@@ -70,27 +70,27 @@ export function getCommodityIcon(name: string | null | undefined): {
   tooltip: string
 } {
   if (!name || typeof name !== 'string' || name.toUpperCase() === 'NOT SET') {
-    return { Icon: PackageX, color: 'text-slate-400', bg: 'bg-slate-100/80', tooltip: 'Not set' }
+    return { Icon: PackageX, color: 'text-[var(--color-secondary)]', bg: 'bg-[var(--color-neutral)]', tooltip: 'Not set' }
   }
   const upperName = name.toUpperCase()
-  if (upperName.includes('BOOK')) return { Icon: Book, color: 'text-blue-600', bg: 'bg-blue-50', tooltip: name }
+  if (upperName.includes('BOOK')) return { Icon: Book, color: 'text-blue-500', bg: 'bg-blue-500/10', tooltip: name }
   if (upperName.includes('CLOTH') || upperName.includes('GARMENT') || upperName.includes('FABRIC') || upperName.includes('SHIRT')) {
-    return { Icon: Shirt, color: 'text-pink-600', bg: 'bg-pink-50', tooltip: name }
+    return { Icon: Shirt, color: 'text-pink-500', bg: 'bg-pink-500/10', tooltip: name }
   }
   if (upperName.includes('TRANSFORMER') || upperName.includes('MACHINE') || upperName.includes('ENGINE') || upperName.includes('TURBOCHARGER') || upperName.includes('SPAREPART') || upperName.includes('LAUNCHER')) {
-    return { Icon: Settings, color: 'text-orange-600', bg: 'bg-orange-50', tooltip: name }
+    return { Icon: Settings, color: 'text-orange-500', bg: 'bg-orange-500/10', tooltip: name }
   }
   if (upperName.includes('ELECTRONIC') || upperName.includes('CIRCUIT') || upperName.includes('KEYBOARD') || upperName.includes('COMPUTER') || upperName.includes('LCD') || upperName.includes('SIM CARD')) {
-    return { Icon: Cpu, color: 'text-purple-600', bg: 'bg-purple-50', tooltip: name }
+    return { Icon: Cpu, color: 'text-purple-500', bg: 'bg-purple-500/10', tooltip: name }
   }
   if (upperName.includes('FOOD') || upperName.includes('DRINK') || upperName.includes('COFFEE')) {
-    return { Icon: Coffee, color: 'text-amber-600', bg: 'bg-amber-50', tooltip: name }
+    return { Icon: Coffee, color: 'text-amber-500', bg: 'bg-amber-500/10', tooltip: name }
   }
   if (upperName.includes('MEDICAL') || upperName.includes('PILL') || upperName.includes('DRUG') || upperName.includes('PHARMACY')) {
-    return { Icon: PillIcon, color: 'text-emerald-600', bg: 'bg-emerald-50', tooltip: name }
+    return { Icon: PillIcon, color: 'text-emerald-500', bg: 'bg-emerald-500/10', tooltip: name }
   }
   if (upperName.includes('VEHICLE') || upperName.includes('CAR') || upperName.includes('AUTO') || upperName.includes('MOTOR')) {
-    return { Icon: Car, color: 'text-cyan-600', bg: 'bg-cyan-50', tooltip: name }
+    return { Icon: Car, color: 'text-cyan-500', bg: 'bg-cyan-500/10', tooltip: name }
   }
-  return { Icon: Package, color: 'text-slate-700', bg: 'bg-slate-100', tooltip: name }
+  return { Icon: Package, color: 'text-[var(--color-primary)]', bg: 'bg-[var(--color-neutral)]', tooltip: name }
 }

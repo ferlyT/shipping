@@ -98,6 +98,7 @@ const CustomerPriceListDiffPage = lazy(() => import('@/features/customer-price-l
 const CustomerPriceListLookupPage = lazy(() => import('@/features/customer-price-list').then(m => ({ default: m.PriceLookupPage })))
 const UserManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.UserManagementPage })))
 const RoleManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.RoleManagementPage })))
+const AccountPage        = lazy(() => import('@/features/profile').then(m => ({ default: m.AccountPage })))
 
 export function AppRouter() {
   return (
@@ -109,6 +110,7 @@ export function AppRouter() {
           <Route element={<ProtectedRoute />}>
             <Route element={<AppLayout />}>
               <Route path="/mshipping" element={<DefaultRouteRedirect />} />
+              <Route path={ROUTES.PROFILE} element={<AccountPage />} />
               <Route element={<PermissionGuard />}>
                 <Route path={ROUTES.DASHBOARD}         element={<DashboardPage />} />
                 <Route path={ROUTES.CUSTOMERS}         element={<CustomersPage />} />

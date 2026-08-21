@@ -48,7 +48,7 @@ function PriceChangeCard({
   variant: 'naik' | 'turun'
 }) {
   const isNaik = variant === 'naik'
-  const chipBg = isNaik ? 'bg-rose-500/10 text-rose-600' : 'bg-emerald-500/10 text-emerald-600'
+  const chipBg = isNaik ? 'bg-transparent border border-rose-500/40 text-rose-500' : 'bg-transparent border border-emerald-500/40 text-emerald-500'
   const TrendIcon = isNaik ? TrendingUp : TrendingDown
   const sign = isNaik ? '+' : ''
 
@@ -295,29 +295,29 @@ export function DashboardPage() {
               </p>
 
               <div className="grid grid-cols-4 gap-2 mt-4 pt-4 border-t border-[var(--color-border)] text-center">
-                <div className="p-2 rounded-lg bg-rose-500/10 text-rose-600">
+                <div className="p-2 rounded-xl bg-transparent border border-rose-500/40 text-rose-500">
                   <p className="text-lg font-bold tabular-nums">{naik.length}</p>
-                  <p className="text-[0.68rem] font-medium uppercase tracking-wider">Naik</p>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">Naik</p>
                 </div>
-                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-600">
+                <div className="p-2 rounded-xl bg-transparent border border-emerald-500/40 text-emerald-500">
                   <p className="text-lg font-bold tabular-nums">{turun.length}</p>
-                  <p className="text-[0.68rem] font-medium uppercase tracking-wider">Turun</p>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">Turun</p>
                 </div>
-                <div className="p-2 rounded-lg bg-[var(--color-neutral)] text-[var(--color-secondary)]">
+                <div className="p-2 rounded-xl bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)]">
                   <p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{tetapCount}</p>
-                  <p className="text-[0.68rem] font-medium uppercase tracking-wider">Tetap</p>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">Tetap</p>
                 </div>
-                <div className="p-2 rounded-lg bg-blue-500/10 text-blue-600">
+                <div className="p-2 rounded-xl bg-transparent border border-blue-500/40 text-blue-500">
                   <p className="text-lg font-bold tabular-nums">{baruCount}</p>
-                  <p className="text-[0.68rem] font-medium uppercase tracking-wider">Baru</p>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">Baru</p>
                 </div>
               </div>
             </div>
 
             <PriceChangeCard
               title="Kenaikan Tarif Tertinggi"
-              icon={<TrendingUp size={16} className="text-rose-600" />}
-              iconBg="bg-rose-500/10"
+              icon={<TrendingUp size={16} className="text-rose-500" />}
+              iconBg="bg-transparent border border-rose-500/30"
               emptyText="Tidak ada kenaikan tarif."
               items={naik}
               variant="naik"
@@ -325,8 +325,8 @@ export function DashboardPage() {
 
             <PriceChangeCard
               title="Penurunan Tarif Terbesar"
-              icon={<TrendingDown size={16} className="text-emerald-600" />}
-              iconBg="bg-emerald-500/10"
+              icon={<TrendingDown size={16} className="text-emerald-500" />}
+              iconBg="bg-transparent border border-emerald-500/30"
               emptyText="Tidak ada penurunan tarif."
               items={turun}
               variant="turun"

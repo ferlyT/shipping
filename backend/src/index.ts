@@ -20,47 +20,88 @@ import { priceListRoutes } from './modules/price-list/price-list.routes'
 import { customerPriceListRoutes } from './modules/customer-price-list/customer-price-list.routes'
 
 
-const app = new Hono().basePath(ENV.APP_BASE_PATH)
+import path from 'path'
+import { profileRoutes } from './modules/profile/profile.routes'
+
+const rootApp = new Hono()
 
 // Global middleware
-app.use('*', cors({
+rootApp.use('*', cors({
   origin: ENV.IS_PRODUCTION ? 'http://36.93.22.142' : '*',
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
 }))
-app.use('*', honoLogger())
-app.use('/api/*', rateLimiter({
+rootApp.use('*', honoLogger())
+
+// Static file serving handler for uploads
+const serveUploadHandler = async (c: any) => {
+  const urlPath = c.req.path
+  const match = urlPath.match(/\/uploads\/(.+)$/)
+  if (!match) return c.text('Not found', 404)
+  const relativePath = match[1]
+  const fullPath = path.join(process.cwd(), 'public', 'uploads', relativePath)
+  const file = Bun.file(fullPath)
+  if (await file.exists()) {
+    return new Response(file)
+  }
+  return c.text('Not found', 404)
+}
+
+// Support uploads at root, APP_BASE_PATH, /mshipping, and /api/uploads
+rootApp.get('/uploads/*', serveUploadHandler)
+rootApp.get(`${ENV.APP_BASE_PATH}/uploads/*`, serveUploadHandler)
+rootApp.get('/mshipping/uploads/*', serveUploadHandler)
+rootApp.get('/api/uploads/*', serveUploadHandler)
+rootApp.get('/mshipping/api/uploads/*', serveUploadHandler)
+
+// API rate limiter
+rootApp.use('/api/*', rateLimiter({
   windowMs: 15 * 60 * 1000, // 15 menit
   limit: ENV.IS_PRODUCTION ? 1000 : 10000,
   keyGenerator: (c) => c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'local-dev',
 }))
+rootApp.use(`${ENV.APP_BASE_PATH}/api/*`, rateLimiter({
+  windowMs: 15 * 60 * 1000,
+  limit: ENV.IS_PRODUCTION ? 1000 : 10000,
+  keyGenerator: (c) => c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'local-dev',
+}))
+
+const apiApp = new Hono()
 
 // Mount routes
-app.route('/api/auth', authRoutes)
-app.route('/api/users', usersRoutes)
-app.route('/api/roles', rolesRoutes)
-app.route('/api/customers', customersRoutes)
-app.route('/api/marking', markingRoutes)
-app.route('/api/billing', billingRoutes)
-app.route('/api/delivery-orders', deliveryOrdersRoutes)
-app.route('/api/shipments', shipmentsRoutes)
-app.route('/api/dashboard', dashboardRoutes)
-app.route('/api/price-list', priceListRoutes)
-app.route('/api/customer-price-list', customerPriceListRoutes)
-
+apiApp.route('/auth', authRoutes)
+apiApp.route('/profile', profileRoutes)
+apiApp.route('/users', usersRoutes)
+apiApp.route('/roles', rolesRoutes)
+apiApp.route('/customers', customersRoutes)
+apiApp.route('/marking', markingRoutes)
+apiApp.route('/billing', billingRoutes)
+apiApp.route('/delivery-orders', deliveryOrdersRoutes)
+apiApp.route('/shipments', shipmentsRoutes)
+apiApp.route('/dashboard', dashboardRoutes)
+apiApp.route('/price-list', priceListRoutes)
+apiApp.route('/customer-price-list', customerPriceListRoutes)
 
 // Health check
-app.get('/api/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
+apiApp.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
+
+// Mount apiApp at both /api, ${ENV.APP_BASE_PATH}/api, and /mshipping/api
+rootApp.route('/api', apiApp)
+if (ENV.APP_BASE_PATH && ENV.APP_BASE_PATH !== '/') {
+  rootApp.route(`${ENV.APP_BASE_PATH}/api`, apiApp)
+}
+rootApp.route('/mshipping/api', apiApp)
 
 // Error handler
-app.onError(createErrorHandler())
+rootApp.onError(createErrorHandler())
 
 logger.info(`Server berjalan di port ${ENV.PORT}`)
 
 const server = Bun.serve({
   port: ENV.PORT,
   hostname: "0.0.0.0",
-  fetch: app.fetch,
+  fetch: rootApp.fetch,
+  idleTimeout: 120, // 120 detik timeout untuk mencegah premature socket drop
 })
 
 logger.info(`Server berjalan di port ${server.port}`)

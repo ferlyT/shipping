@@ -20,7 +20,7 @@ export function BatchRow({ row, onView, onViewManifest }: BatchRowProps) {
   return (
     <tr className="bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] transition-colors duration-200 border-b border-[var(--color-border)] last:border-0">
       <td className="py-4 pl-4 pr-3">
-        <p className="text-sm sm:text-[14.5px] md:text-[15px] font-semibold text-[var(--color-primary)]">
+        <p className="text-sm font-semibold text-[var(--color-primary)]">
           {row.fdMarkingCode}
         </p>
         <span className="mt-1.5 inline-block">
@@ -35,41 +35,41 @@ export function BatchRow({ row, onView, onViewManifest }: BatchRowProps) {
         </span>
       </td>
       <td className="py-4 px-3">
-        <p className="text-sm sm:text-[14.5px] md:text-[15px] text-[var(--color-primary)] font-medium">
+        <p className="text-sm text-[var(--color-primary)] font-medium">
           {row.fdConsignee || '-'}
         </p>
-        <p className="mt-1 flex items-center gap-1 text-[11px] sm:text-[11.5px] md:text-xs text-[var(--color-secondary)]">
+        <p className="mt-1 flex items-center gap-1 text-xs text-[var(--color-secondary)]">
           <MapPin className="h-3 w-3 shrink-0" />
           <span className="truncate max-w-[150px]">{row.fdWilayah || 'Tidak diketahui'}</span>
         </p>
       </td>
-      <td className="py-4 px-3 text-sm sm:text-[14.5px] md:text-[15px] text-[var(--color-secondary)]">
+      <td className="py-4 px-3 text-sm text-[var(--color-secondary)]">
         {row.fdListType === 1 ? (
           <span className="font-medium text-[var(--color-primary)]">AWB: {row.fdAWB || '—'}</span>
         ) : (
           <span className="font-medium text-[var(--color-primary)]">BL: {row.fdBLNo || '—'}</span>
         )}
         {row.fdListType !== 1 && (row.fdListType === 2 || (row.fdContNo && row.fdContNo.trim() !== '')) && (
-          <p className="text-[11px] sm:text-[11.5px] md:text-xs mt-1">
+          <p className="text-xs mt-1">
             Cont: {row.fdContNo || '—'}
             {row.fdContSize && row.fdContSize.trim() !== '' ? ` (${row.fdContSize.trim()})` : ''}
           </p>
         )}
         {row.fdKet && row.fdKet.trim() !== '' && (
-          <p className="text-[11px] sm:text-[11.5px] md:text-xs mt-1 text-[var(--color-tertiary)] truncate max-w-[150px]" title={row.fdKet}>
+          <p className="text-xs mt-1 text-[var(--color-tertiary)] truncate max-w-[150px]" title={row.fdKet}>
             Ket: {row.fdKet}
           </p>
         )}
       </td>
       <td className="py-4 px-3">
-        <p className="text-sm sm:text-[14.5px] md:text-[15px] text-[var(--color-primary)] font-medium">
+        <p className="text-sm text-[var(--color-primary)] font-medium">
           {row.fdJmlPack != null ? Number(row.fdJmlPack).toLocaleString('en-US') : 0} PKGS
         </p>
-        <p className="mt-0.5 text-xs sm:text-[13px] md:text-[14px] text-[var(--color-secondary)]">
+        <p className="mt-0.5 text-xs text-[var(--color-secondary)]">
           {row.fdJmlBerat != null ? Number(row.fdJmlBerat).toLocaleString('en-US') : 0} KG
         </p>
       </td>
-      <td className="py-4 px-3 text-sm sm:text-[14.5px] md:text-[15px] text-[var(--color-secondary)] whitespace-nowrap">
+      <td className="py-4 px-3 text-sm text-[var(--color-secondary)] whitespace-nowrap">
         <div className="flex items-start gap-2">
           <Calendar className="h-4 w-4 mt-0.5 text-[var(--color-secondary)]/70 shrink-0" />
           <div className="flex flex-col space-y-1.5">
@@ -84,7 +84,7 @@ export function BatchRow({ row, onView, onViewManifest }: BatchRowProps) {
                   {label}
                 </span>
                 <span className={cn(
-                  'text-[11px] sm:text-[11.5px] md:text-xs font-medium',
+                  'text-xs font-medium',
                   label === 'EXIT' && !value && 'text-[var(--color-muted)]'
                 )}>
                   {formatDateShort(value)}
@@ -98,7 +98,7 @@ export function BatchRow({ row, onView, onViewManifest }: BatchRowProps) {
         <div className="flex items-center justify-end gap-1.5">
           <button
             onClick={() => onViewManifest(row)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs sm:text-[13px] md:text-[14px] font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-neutral)] bg-[var(--color-surface)]"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] transition-colors hover:bg-[var(--color-neutral)] bg-[var(--color-surface)] cursor-pointer"
           >
             <ClipboardList className="h-3.5 w-3.5" />
             Manifest
@@ -131,11 +131,11 @@ export function BatchListRow({ row, onView }: BatchListRowProps) {
     <button
       type="button"
       onClick={() => onView(row)}
-      className="flex w-full flex-col gap-3 p-3.5 sm:p-4 text-left hover:bg-slate-50 active:bg-slate-100 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]/40"
+      className="flex w-full flex-col gap-3 p-3.5 sm:p-4 text-left hover:bg-[var(--color-neutral)] active:opacity-80 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]/40"
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/5 text-[var(--color-primary)] border border-slate-100">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/5 text-[var(--color-primary)] border border-[var(--color-border)]">
             {isAir ? <Plane className="h-3.5 w-3.5" /> : <Ship className="h-3.5 w-3.5" />}
           </div>
           <div>
@@ -158,11 +158,11 @@ export function BatchListRow({ row, onView }: BatchListRowProps) {
               etaDate={row.fdETA}
               sysDate={row.fdSysDate}
             />
-            <div className="text-[9px] sm:text-[9.5px] md:text-[10px] font-medium text-[var(--color-secondary)]">
+            <div className="text-[10px] font-medium text-[var(--color-secondary)]">
               {row.fdJmlPack || 0} PKGS
             </div>
           </div>
-          <ChevronRight className="w-4 h-4 text-slate-300 shrink-0" />
+          <ChevronRight className="w-4 h-4 text-[var(--color-secondary)] shrink-0" />
         </div>
       </div>
     </button>

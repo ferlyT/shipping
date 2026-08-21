@@ -2,6 +2,7 @@ import { prisma } from '../../config/database'
 import { Prisma } from '@prisma/client'
 import { parsePriceListWorkbook } from './price-list.parser'
 import { logger } from '../../config/logger'
+import { lookupCustomerPriceList } from '../customer-price-list/customer-price-list.service'
 
 async function safeRunRaw<T = any>(queryFn: () => Promise<T>, description: string): Promise<T> {
   try {
@@ -227,7 +228,7 @@ export async function getFilterOptions(params: {
 
 export async function lookupPriceList(
   targetDate: Date,
-  filters?: { sheetType?: string; mode?: string; branch?: string; category?: string },
+  filters?: { sheetType?: string; mode?: string; branch?: string; category?: string; markingCode?: string },
 ) {
   const upload = await prisma.tbPriceListUpload.findFirst({
     where: {
@@ -244,22 +245,64 @@ export async function lookupPriceList(
       targetDate,
       uploadInfo: null,
       items: [],
+      appliedLevel: 'NONE',
     }
   }
 
-  const whereItem: Prisma.TbPriceListItemWhereInput = {
+  const baseWhereItem: Prisma.TbPriceListItemWhereInput = {
     uploadId: upload.id,
   }
 
-  if (filters?.sheetType) whereItem.sheetType = filters.sheetType
-  if (filters?.mode) whereItem.mode = filters.mode
-  if (filters?.branch) whereItem.branch = filters.branch
-  if (filters?.category) whereItem.category = filters.category
+  if (filters?.sheetType) baseWhereItem.sheetType = filters.sheetType;
+  if (filters?.mode) baseWhereItem.mode = filters.mode;
+  if (filters?.branch) baseWhereItem.branch = filters.branch;
+  if (filters?.category) {
+    const catStr = filters.category;
+    const categories = catStr.split(',').map((s) => s.trim()).filter(Boolean);
+    if (categories.length === 1) {
+      baseWhereItem.category = categories[0];
+    } else if (categories.length > 1) {
+      baseWhereItem.category = { in: categories } as any;
+    }
+  }
 
-  const items = await prisma.tbPriceListItem.findMany({
-    where: whereItem,
-    orderBy: [{ sheetType: 'asc' }, { mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
-  })
+  let items: any[] = []
+  let isMarkingOverride = false
+
+  // 1. Jika ada filter markingCode, coba cari yang markingCode-nya cocok (Level 3)
+  if (filters?.markingCode?.trim()) {
+    const cleanMarking = filters.markingCode.trim()
+    const markingItems = await prisma.tbPriceListItem.findMany({
+      where: {
+        ...baseWhereItem,
+        markings: {
+          some: {
+            markingCode: { equals: cleanMarking },
+          },
+        },
+      },
+      include: {
+        markings: true,
+      },
+      orderBy: [{ sheetType: 'asc' }, { mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
+    })
+
+    if (markingItems.length > 0) {
+      items = markingItems
+      isMarkingOverride = true
+    }
+  }
+
+  // 2. Jika tidak ada markingCode atau tidak ada item yang match dengan markingCode, ambil item standar (Level 4)
+  if (items.length === 0) {
+    items = await prisma.tbPriceListItem.findMany({
+      where: baseWhereItem,
+      include: {
+        markings: true,
+      },
+      orderBy: [{ sheetType: 'asc' }, { mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
+    })
+  }
 
   return {
     found: true,
@@ -271,6 +314,7 @@ export async function lookupPriceList(
       priceDate: upload.priceDate,
       uploadedAt: upload.uploadedAt,
     },
+    isMarkingOverride,
     items: items.map((it) => ({
       id: it.id,
       sheetType: it.sheetType,
@@ -279,8 +323,67 @@ export async function lookupPriceList(
       transitTime: it.transitTime,
       category: it.category,
       price: Number(it.price),
+      markings: it.markings?.map((m: any) => ({
+        id: m.id,
+        markingCode: m.markingCode,
+        agentName: m.agentName,
+      })) || [],
     })),
   }
+}
+
+export async function getItemMarkings(itemId: number) {
+  return prisma.tbPriceListItemMarking.findMany({
+    where: { itemId },
+    orderBy: { markingCode: 'asc' },
+  })
+}
+
+export async function setItemMarkings(
+  itemId: number,
+  markings: { markingCode: string; agentName?: string }[],
+) {
+  // Replace all markings for this item in a transaction
+  return prisma.$transaction(async (tx) => {
+    await tx.tbPriceListItemMarking.deleteMany({
+      where: { itemId },
+    })
+
+    if (markings.length > 0) {
+      const validMarkings = markings
+        .map((m) => ({
+          itemId,
+          markingCode: m.markingCode.trim(),
+          agentName: m.agentName?.trim() || null,
+        }))
+        .filter((m) => m.markingCode.length > 0)
+
+      // Deduplicate by markingCode
+      const uniqueMap = new Map<string, typeof validMarkings[0]>()
+      validMarkings.forEach((m) => uniqueMap.set(m.markingCode.toUpperCase(), m))
+      const uniqueList = Array.from(uniqueMap.values())
+
+      if (uniqueList.length > 0) {
+        await tx.tbPriceListItemMarking.createMany({
+          data: uniqueList,
+        })
+      }
+    }
+
+    return tx.tbPriceListItemMarking.findMany({
+      where: { itemId },
+      orderBy: { markingCode: 'asc' },
+    })
+  })
+}
+
+export async function deleteItemMarking(itemId: number, markingCode: string) {
+  return prisma.tbPriceListItemMarking.deleteMany({
+    where: {
+      itemId,
+      markingCode: markingCode.trim(),
+    },
+  })
 }
 
 export async function searchEntryList(q: string, limit = 20) {
@@ -529,12 +632,63 @@ export async function lookupPriceByEntry(listCode: string) {
       }))
     : []
 
-  // 3. Fetch effective price list items for agentDate (or current date if missing)
+  // 3. Fetch effective price list items using 4-tier Priority Hierarchy:
+  // Level 1: Customer Price List + Matching Agent Marking Code
+  // Level 2: Customer Price List Standard (No Marking)
+  // Level 3: General Price List + Matching Agent Marking Code
+  // Level 4: General Price List Standard (No Marking)
   const targetDate = agentDate || new Date()
-  const priceLookup = await lookupPriceList(targetDate, {
-    mode: expectedMode || undefined,
-    branch: expectedBranch || undefined,
-  })
+  const markingCode = entry.fdMarkingCode ? String(entry.fdMarkingCode).trim() : undefined
+  const custCode = entry.fdCustCode ? String(entry.fdCustCode).trim() : undefined
+
+  let priceValidation: any = null
+  let appliedRule: 'CUSTOMER_MARKING' | 'CUSTOMER_DEFAULT' | 'GENERAL_MARKING' | 'GENERAL_DEFAULT' | 'NONE' = 'NONE'
+
+  // Step A: Coba cari di Customer Price List terlebih dahulu (Level 1 & 2)
+  if (custCode) {
+    const custLookup = await lookupCustomerPriceList(custCode, targetDate, {
+      mode: expectedMode || undefined,
+      branch: expectedBranch || undefined,
+      markingCode,
+    })
+
+    if (custLookup.found && custLookup.items.length > 0) {
+      appliedRule = custLookup.isMarkingOverride ? 'CUSTOMER_MARKING' : 'CUSTOMER_DEFAULT'
+      priceValidation = {
+        source: 'CUSTOMER',
+        uploadInfo: custLookup.uploadInfo,
+        effectiveDate: custLookup.uploadInfo?.effectiveDate
+          ? new Date(custLookup.uploadInfo.effectiveDate).toISOString()
+          : null,
+        isMarkingOverride: custLookup.isMarkingOverride,
+        appliedRule,
+        items: custLookup.items,
+      }
+    }
+  }
+
+  // Step B: Jika tidak ditemukan di Customer Price List, fallback ke General Price List (Level 3 & 4)
+  if (!priceValidation) {
+    const generalLookup = await lookupPriceList(targetDate, {
+      mode: expectedMode || undefined,
+      branch: expectedBranch || undefined,
+      markingCode,
+    })
+
+    if (generalLookup.found && generalLookup.items.length > 0) {
+      appliedRule = generalLookup.isMarkingOverride ? 'GENERAL_MARKING' : 'GENERAL_DEFAULT'
+      priceValidation = {
+        source: 'GENERAL',
+        uploadInfo: generalLookup.uploadInfo,
+        effectiveDate: generalLookup.uploadInfo?.effectiveDate
+          ? new Date(generalLookup.uploadInfo.effectiveDate).toISOString()
+          : null,
+        isMarkingOverride: generalLookup.isMarkingOverride,
+        appliedRule,
+        items: generalLookup.items,
+      }
+    }
+  }
 
   return {
     found: true,
@@ -553,13 +707,10 @@ export async function lookupPriceByEntry(listCode: string) {
         }
       : null,
     comodityTypes,
-    priceValidation: {
-      effectiveDate: priceLookup.uploadInfo?.effectiveDate
-        ? new Date(priceLookup.uploadInfo.effectiveDate).toISOString()
-        : null,
-      items: priceLookup.items,
-    },
+    appliedRule,
+    priceValidation,
   }
 }
+
 
 

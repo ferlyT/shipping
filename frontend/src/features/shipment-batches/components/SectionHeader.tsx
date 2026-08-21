@@ -23,7 +23,7 @@ export function SectionHeader({
   const content = (
     <>
       <Icon className={cn("h-3.5 w-3.5 shrink-0", colorClass)} />
-      <span className={cn("font-[var(--font-label)] text-[11px] sm:text-[11.5px] tracking-[0.08em] uppercase font-semibold", colorClass)}>
+      <span className={cn("font-[var(--font-label)] text-xs tracking-[0.08em] uppercase font-semibold", colorClass)}>
         {label}
       </span>
       {badgeText && (

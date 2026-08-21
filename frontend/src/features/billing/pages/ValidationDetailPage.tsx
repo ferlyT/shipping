@@ -210,11 +210,10 @@ export function ValidationDetailPage() {
         }
       />
 
-      <div className="bg-[var(--color-surface)] rounded-[var(--radius-lg)] sm:rounded-[var(--radius-xl)] shadow-sm flex flex-col border border-[var(--color-border)]">
-        <div className="p-3 sm:p-6 bg-[var(--color-neutral)] space-y-4 sm:space-y-6">
-          {/* Info Grid */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
-            <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4 shadow-sm">
+      <div className="space-y-4 sm:space-y-6">
+        {/* Info Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
+          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4 shadow-xs">
               <p className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">{t('billing.detail.customer')}</p>
               <div className="mt-1 sm:mt-1.5 flex items-center gap-1.5 flex-wrap">
                 <span className="text-sm font-semibold text-[var(--color-primary)]">{data.customer?.fdCustName || data.fdCustCode || '—'}</span>
@@ -227,7 +226,7 @@ export function ValidationDetailPage() {
                   </Badge>
                 )}
                 {data.customer?.fdBroker === 1 && (
-                  <Badge variant="warning" className="text-[10px] px-1.5 py-0 font-bold bg-amber-500/15 text-amber-700 border-amber-500/30">
+                  <Badge variant="warning" className="text-[10px] px-1.5 py-0 font-bold">
                     BROKER
                   </Badge>
                 )}
@@ -298,7 +297,18 @@ export function ValidationDetailPage() {
                   {details.length > 0 ? (
                     details.map((row) => (
                       <tr key={row.fdID} className="border-b border-[var(--color-border)] last:border-b-0">
-                        <td className="px-4 py-3 sm:px-5 sm:py-3.5 text-[var(--color-primary)] font-medium leading-snug break-words">{row.fdItemName}</td>
+                        <td className="px-4 py-3 sm:px-5 sm:py-3.5 leading-snug break-words">
+                          <div className="font-medium text-[var(--color-primary)]">
+                            {row.fdItemName}
+                          </div>
+                          {row.fdComodity && (
+                            <div className="mt-1.5">
+                              <Badge variant="default" className="text-[10px] px-1.5 py-0 font-medium">
+                                {row.fdComodity}
+                              </Badge>
+                            </div>
+                          )}
+                        </td>
                         <td className="px-4 py-3 sm:px-5 sm:py-3.5 text-right text-[var(--color-primary)] tabular-nums">
                           {(Number(row.fdQty || 0) !== 0 || row.fdListCode) && (
                             <span>
@@ -333,10 +343,17 @@ export function ValidationDetailPage() {
                   {details.map((row) => (
                     <li key={row.fdID} className="px-4 py-3">
                       <div className="flex items-start justify-between gap-3">
-                        <p className="min-w-0 text-sm font-semibold text-[var(--color-primary)] leading-snug break-words">
-                          {row.fdItemName}
-                        </p>
-                        <p className="shrink-0 min-w-[9rem] text-sm font-bold text-[var(--color-tertiary)]">
+                        <div className="min-w-0 flex flex-col items-start gap-1">
+                          <p className="text-sm font-semibold text-[var(--color-primary)] leading-snug break-words">
+                            {row.fdItemName}
+                          </p>
+                          {row.fdComodity && (
+                            <Badge variant="default" className="text-[10px] px-1.5 py-0 font-medium">
+                              {row.fdComodity}
+                            </Badge>
+                          )}
+                        </div>
+                        <p className="shrink-0 min-w-[9rem] text-right text-sm font-bold text-[var(--color-tertiary)]">
                           <CurrencyValue value={row.fdTotal} currency={row.fdCurr} />
                         </p>
                       </div>
@@ -396,16 +413,15 @@ export function ValidationDetailPage() {
             </div>
           </div>
         </div>
-      </div>
 
       {/* Floating Action Button (hanya icon, sticky di tengah kanan layar) */}
       {createPortal(
         <button
           onClick={() => setIsListDrawerOpen(true)}
-          className="fixed right-4 top-1/2 -translate-y-1/2 z-50 p-3.5 rounded-full bg-[var(--color-primary)] text-white shadow-2xl hover:opacity-90 hover:scale-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center border-2 border-white dark:border-slate-800"
+          className="fixed right-4 top-1/2 -translate-y-1/2 z-50 p-3.5 rounded-full bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xl hover:opacity-90 hover:scale-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center border-2 border-[var(--color-surface)]"
           title={`${t('billing.validation.selectInvoiceTitle')} (Ctrl + F)`}
         >
-          <ListFilter className="w-5 h-5 text-white transition-transform" />
+          <ListFilter className="w-5 h-5 text-[var(--color-on-primary)] transition-transform" />
         </button>,
         document.body
       )}

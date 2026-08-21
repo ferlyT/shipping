@@ -1,20 +1,21 @@
 import { useState, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Plane, Ship, Download, Users, Layers, Clock, X, FileSpreadsheet, AlertTriangle } from 'lucide-react'
+import { Search, Plane, Ship, Download, Users, Layers, Clock, X, FileSpreadsheet, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { billingApi } from '../services/billing.service'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslation } from '@/hooks/useTranslation'
-import { formatDateTime, formatCurrency, formatDecimal } from '@/lib/utils'
+import { formatDateTime, formatCurrency, formatDecimal, cn } from '@/lib/utils'
 import { AgingBadge } from '../components/AgingBadge'
 import { StatusBadge } from '../components/StatusBadge'
 import { StatusKirimBadge } from '../components/StatusKirimBadge'
 
 const PIC_BADGES: Record<string, { label: string; bg: string; text: string }> = {
-  thara: { label: 'Thara', bg: '#1A1C1E', text: '#fff' },
+  thara: { label: 'Thara', bg: 'var(--color-primary)', text: 'var(--color-on-primary)' },
   yati:  { label: 'Yati',  bg: '#B8422E', text: '#fff' },
   kiki:  { label: 'Kiki',  bg: '#D97706', text: '#fff' },
   ferly: { label: 'Ferly', bg: '#1F6E5C', text: '#fff' },
@@ -49,6 +50,7 @@ export default function TargetPage() {
   const [activePic,   setActivePic]   = useState<string>(initialPic)
   const [activeGroup, setActiveGroup] = useState<GroupKey>('all')
   const [searchQuery, setSearchQuery] = useState('')
+  const [mismatchItem, setMismatchItem] = useState<any | null>(null)
 
   const picOptions = useMemo(() => PIC_OPTIONS_BY_TYPE[activeType] || [], [activeType])
 
@@ -99,70 +101,189 @@ export default function TargetPage() {
     return counts
   }, [rawList])
 
+  // Filtered by group
+  const groupedList = useMemo(() => {
+    if (activeGroup === 'all') return rawList
+    return rawList.filter((item) => {
+      const typeStr     = String(item.type     || '').toUpperCase().trim()
+      const comodityStr = String(item.comodity || '').toUpperCase().trim()
+      const st          = String(item.status   || '').toUpperCase().trim()
+      const hari        = Number(item.hari     || 0)
+      if (activeGroup === 'fcl')    return typeStr.includes('FCL') || comodityStr.includes('FCL')
+      if (activeGroup === 'cod')    return st.includes('COD')
+      if (activeGroup === 'urgent') return st.includes('URGENT')
+      if (activeGroup === 'aging')  return hari > 7
+      return true
+    })
+  }, [rawList, activeGroup])
+
+  // Filtered by search query (client-side)
   const filteredList = useMemo(() => {
-    let list = rawList
-
-    if (activeGroup !== 'all') {
-      list = list.filter((item: any) => {
-        const typeStr     = String(item.type     || '').toUpperCase().trim()
-        const comodityStr = String(item.comodity || '').toUpperCase().trim()
-        const st          = String(item.status   || '').toUpperCase().trim()
-        const hari        = Number(item.hari     || 0)
-        if (activeGroup === 'fcl')    return typeStr.includes('FCL') || comodityStr.includes('FCL')
-        if (activeGroup === 'cod')    return st.includes('COD')
-        if (activeGroup === 'urgent') return st.includes('URGENT')
-        if (activeGroup === 'aging')  return hari > 7
-        return true
-      })
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase()
-      list = list.filter((item: any) =>
-        item.customer?.toLowerCase().includes(q)    ||
-        item.markingCode?.toLowerCase().includes(q) ||
-        item.markingNo?.toLowerCase().includes(q)   ||
-        item.status?.toLowerCase().includes(q)      ||
-        item.comodity?.toLowerCase().includes(q)    ||
-        item.branch?.toLowerCase().includes(q)      ||
-        item.sales?.toLowerCase().includes(q)
+    if (!searchQuery.trim()) return groupedList
+    const q = searchQuery.toLowerCase().trim()
+    return groupedList.filter((item) => {
+      return (
+        String(item.customer    || '').toLowerCase().includes(q) ||
+        String(item.markingCode || '').toLowerCase().includes(q) ||
+        String(item.markingNo   || '').toLowerCase().includes(q) ||
+        String(item.listNo      || '').toLowerCase().includes(q) ||
+        String(item.branch      || '').toLowerCase().includes(q) ||
+        String(item.comodity    || '').toLowerCase().includes(q) ||
+        String(item.type        || '').toLowerCase().includes(q) ||
+        String(item.pic         || '').toLowerCase().includes(q)
       )
-    }
+    })
+  }, [groupedList, searchQuery])
 
-    return list
-  }, [rawList, searchQuery, activeGroup])
-
+  // Export to Excel
   const handleExportExcel = () => {
     if (!filteredList.length) return
-    const exportData = filteredList.map((item: any) => ({
-      'Aging (Hari)':   item.hari ?? 0,
-      'PIC':            item.pic || '',
-      'Customer':       item.customer || '',
-      'Status Item':    item.status || '',
-      'Cabang':         item.branch || '',
-      'Sales':          item.sales || '',
-      'Marking Code':   item.markingCode || '',
-      'Marking No':     item.markingNo || '',
-      'Komoditi':       item.comodity || '',
-      'Type':           item.type || '',
-      'Tax Return':     Number(item.taxReturn) === 1 ? 'Ya' : 'Tidak',
-      'Jumlah Pack':    item.jmlPack ?? 0,
-      'Satuan':         item.satuan || '',
-      'M3 Gudang':      item.m3Gudang ?? 0,
-      'M3 List':        item.m3List ?? 0,
-      'Berat (kg)':     item.berat ?? 0,
-      'Status Kirim':   item.statusKirim || '',
-      'Harga':          item.harga ?? 0,
-      'Diubah Oleh':    item.updateBy || '',
-      'Tanggal Update': item.updateDate ? formatDateTime(item.updateDate) : '',
+    const exportData = filteredList.map((item, idx) => ({
+      'No':            idx + 1,
+      'PIC':           item.pic         || '-',
+      'Tipe':          item.type        || '-',
+      'List No':       item.listNo      || '-',
+      'Marking Code':  item.markingCode || '-',
+      'Marking No':    item.markingNo   || '-',
+      'Cabang':        item.branch      || '-',
+      'Customer':      item.customer    || '-',
+      'Komoditi':      item.comodity    || '-',
+      'Qty (List)':    item.qty         ?? '-',
+      'Qty (PL)':      item.qtyPL       ?? '-',
+      'M3':            item.m3          ?? '-',
+      'M3 PL':         item.m3PL        ?? '-',
+      'M3 Real':       item.m3Real      ?? '-',
+      'Harga M3':      item.hargaM3     ?? '-',
+      'Total Biaya':   item.totalBiaya  ?? '-',
+      'Status':        item.status      || '-',
+      'Status Kirim':  item.statusKirim || '-',
+      'Hari (Aging)':  item.hari        ?? '-',
+      'Tgl Buat List': item.createdDate ? formatDateTime(item.createdDate) : '-',
     }))
-    const worksheet = XLSX.utils.json_to_sheet(exportData)
-    const keys = Object.keys(exportData[0] || {})
-    worksheet['!cols'] = keys.map((k) => ({ wch: Math.max(k.length + 4, 12) }))
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, `Target Bill ${activeType.toUpperCase()}`)
-    const dateStr  = new Date().toISOString().split('T')[0]
-    XLSX.writeFile(workbook, `Target_Bill_${activeType.toUpperCase()}_${activePic}_${dateStr}.xlsx`)
+
+    const ws = XLSX.utils.json_to_sheet(exportData)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Target Billing')
+
+    const typeLabel = activeType === 'all' ? 'Semua' : activeType === 'udara' ? 'Udara' : 'Laut'
+    const picLabel  = activePic  === 'all' ? 'Semua-PIC' : activePic.toUpperCase()
+    const fileName  = `Target-Billing-${typeLabel}-${picLabel}-${new Date().toISOString().slice(0, 10)}.xlsx`
+    XLSX.writeFile(wb, fileName)
+  }
+
+  // Modal mismatch komplain
+  const MismatchModal = () => {
+    if (!mismatchItem) return null
+    const item = mismatchItem
+    const m3K  = Number(item.m3Komplain || 0)
+    const vfcK = Number(item.vfcKomplain ?? -1)
+    const m3PL = Number(item.m3PL || 0)
+    const m3R  = Number(item.m3Real || 0)
+
+    const checks = m3K > 0
+      ? [
+          {
+            label: 'M3 Komplain vs M3 Real',
+            ok: Math.abs(m3K - m3R) < 0.0001,
+            val1: formatDecimal(m3K, 4),
+            val2: formatDecimal(m3R, 4),
+          },
+          {
+            label: 'VFC Komplain vs M3 PL',
+            ok: vfcK === 0 ? false : Math.abs(vfcK - m3PL) < 0.0001,
+            val1: vfcK >= 0 ? formatDecimal(vfcK, 4) : 'N/A',
+            val2: formatDecimal(m3PL, 4),
+          },
+        ]
+      : [
+          {
+            label: 'M3 PL vs M3 Real',
+            ok: Math.abs(m3PL - m3R) < 0.0001,
+            val1: formatDecimal(m3PL, 4),
+            val2: formatDecimal(m3R, 4),
+          },
+        ]
+
+    return createPortal(
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
+        onClick={() => setMismatchItem(null)}
+      >
+        <div
+          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-xl)] shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)] bg-[var(--color-neutral)]">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-[var(--color-danger)]" />
+              <span className="text-sm font-bold text-[var(--color-danger)]">Detail Mismatch Komplain</span>
+            </div>
+            <button
+              onClick={() => setMismatchItem(null)}
+              className="p-1 rounded-[var(--radius-md)] hover:bg-[var(--color-surface)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Info baris */}
+          <div className="px-5 py-3 bg-[var(--color-neutral)]/50 border-b border-[var(--color-border)]">
+            <div className="text-xs font-semibold text-[var(--color-primary)]">{item.customer || '-'}</div>
+            <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">
+              {item.markingCode} {item.markingNo ? `· ${item.markingNo}` : ''} · {item.branch}
+            </div>
+            <div className="flex items-center gap-3 mt-2 text-[10px] text-[var(--color-secondary)]">
+              <span>M3 Komplain: <strong className="text-[var(--color-primary)]">{m3K}</strong></span>
+              <span>VFC Komplain: <strong className="text-[var(--color-primary)]">{item.vfcKomplain ?? 0}</strong></span>
+            </div>
+          </div>
+
+          {/* Tabel validasi */}
+          <div className="px-5 py-4 space-y-2.5">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-secondary)] mb-1">
+              {m3K > 0 ? 'Validasi (M3 Komplain > 0)' : 'Validasi (M3 Komplain = 0)'}
+            </p>
+            {checks.map((c, i) => (
+              <div
+                key={i}
+                className={`flex items-center justify-between rounded-[var(--radius-lg)] px-4 py-2.5 text-xs border ${
+                  c.ok
+                    ? 'bg-emerald-500/10 border-emerald-500/30'
+                    : 'bg-rose-500/10 border-rose-500/30'
+                }`}
+              >
+                <span className={`font-medium ${c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{c.label}</span>
+                <div className="flex items-center gap-2">
+                  <span className={`font-mono text-[11px] ${c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400 font-bold'}`}>
+                    {c.val1}
+                  </span>
+                  <span className="text-[var(--color-secondary)] text-[10px]">vs</span>
+                  <span className={`font-mono text-[11px] ${c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400 font-bold'}`}>
+                    {c.val2}
+                  </span>
+                  {c.ok
+                    ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                    : <XCircle      className="w-4 h-4 text-rose-500 shrink-0" />
+                  }
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Footer */}
+          <div className="px-5 pb-4">
+            <button
+              onClick={() => setMismatchItem(null)}
+              className="w-full py-2 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--color-neutral)] hover:bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-primary)] transition-colors cursor-pointer"
+            >
+              Tutup
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    )
   }
 
   if (isLoading && !resData) return <LoadingSpinner message={t('common.loadingBilling')} />
@@ -171,9 +292,9 @@ export default function TargetPage() {
 
   return (
     <div
-      className="p-4 sm:p-6 w-full space-y-5 animate-fadeIn pb-24 min-h-screen"
-      style={{ fontFamily: '"Public Sans", sans-serif', background: 'var(--color-neutral)' }}
+      className="p-4 sm:p-6 w-full space-y-5 animate-fadeIn pb-24 min-h-screen bg-[var(--color-neutral)] font-[var(--font-body)]"
     >
+      <MismatchModal />
       <PageHeader
         title={`Target Bill ${activeType === 'all' ? 'Semua Mode' : activeType.toUpperCase()}`}
         subtitle={
@@ -189,10 +310,10 @@ export default function TargetPage() {
       />
 
       {/* ── TOOLBAR CARD ─────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl shadow-sm border border-[var(--color-border)] overflow-hidden">
+      <div className="bg-[var(--color-surface)] rounded-2xl shadow-sm border border-[var(--color-border)] overflow-hidden">
 
         {/* Row 1 — Mode + PIC */}
-        <div className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] bg-gray-50/60">
+        <div className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/50">
 
           {/* Mode toggle */}
           <div className="flex items-center gap-0.5 p-0.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)] shrink-0">
@@ -200,7 +321,7 @@ export default function TargetPage() {
               onClick={() => handleTypeChange('all')}
               className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeType === 'all'
-                  ? 'bg-[#1A1C1E] text-white shadow-sm'
+                  ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-sm'
                   : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
@@ -246,8 +367,8 @@ export default function TargetPage() {
                     isActive && badge
                       ? 'border-transparent shadow-sm'
                       : isActive
-                      ? 'bg-[#1A1C1E] text-white border-transparent shadow-sm'
-                      : 'bg-white text-[var(--color-secondary)] border-[var(--color-border)] hover:border-gray-400'
+                      ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] border-transparent shadow-sm'
+                      : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)]'
                   }`}
                   style={isActive && badge ? { background: badge.bg, color: badge.text } : {}}
                 >
@@ -277,14 +398,14 @@ export default function TargetPage() {
                     isActive
                       ? opt.color
                         ? `${opt.color} border-transparent shadow-sm`
-                        : 'bg-[#1A1C1E] text-white border-transparent shadow-sm'
-                      : 'bg-white text-[var(--color-secondary)] border-[var(--color-border)] hover:border-gray-400 hover:text-[var(--color-primary)]'
+                        : 'bg-[var(--color-primary)] text-[var(--color-on-primary)] border-transparent shadow-sm'
+                      : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)] hover:text-[var(--color-primary)]'
                   }`}
                 >
                   {opt.key === 'aging' && <Clock className="w-3 h-3" />}
                   {opt.name}
                   <span className={`ml-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${
-                    isActive ? 'bg-white/25 text-current' : 'bg-gray-100 text-gray-600'
+                    isActive ? 'bg-white/25 text-current' : 'bg-[var(--color-neutral)] text-[var(--color-secondary)]'
                   }`}>
                     {count}
                   </span>
@@ -361,7 +482,7 @@ export default function TargetPage() {
       </div>
 
       {/* ── TABLE CARD ───────────────────────────────────────── */}
-      <div className="bg-white rounded-2xl shadow-sm border border-[var(--color-border)] overflow-hidden">
+      <div className="bg-[var(--color-surface)] rounded-2xl shadow-sm border border-[var(--color-border)] overflow-hidden">
 
         {/* Table header info */}
         <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
@@ -381,8 +502,8 @@ export default function TargetPage() {
 
         {filteredList.length === 0 ? (
           <div className="h-72 flex flex-col items-center justify-center gap-3 text-center px-8">
-            <div className="w-14 h-14 rounded-2xl bg-gray-100 flex items-center justify-center">
-              <Download className="w-6 h-6 text-gray-400" />
+            <div className="w-14 h-14 rounded-2xl bg-[var(--color-neutral)] flex items-center justify-center">
+              <Download className="w-6 h-6 text-[var(--color-secondary)]" />
             </div>
             <div>
               <p className="text-sm font-semibold text-[var(--color-primary)]">Tidak ada data</p>
@@ -396,17 +517,17 @@ export default function TargetPage() {
                 className="sticky top-0 z-10 text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)]"
                 style={{ fontFamily: '"Space Grotesk", sans-serif', background: 'var(--color-neutral)' }}
               >
-                <tr>
-                  <th className="px-4 py-3 w-[72px] border-b border-[var(--color-border)]">Aging</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">PIC</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Customer & Status</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Cabang & Sales</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Marking & Kargo</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Komoditi</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
-                  <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
-                </tr>
+                  <tr>
+                    <th className="px-4 py-3 w-[72px] border-b border-[var(--color-border)]">Aging</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">PIC</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Customer & Status</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Cabang & Sales</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Marking & Kargo</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Komoditi</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
+                    <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
+                  </tr>
               </thead>
               <tbody>
                 {filteredList.map((item: any, idx: number) => {
@@ -415,8 +536,10 @@ export default function TargetPage() {
                   return (
                     <tr
                       key={idx}
-                      className="group transition-colors hover:bg-blue-50/40"
-                      style={{ background: isEven ? '#fff' : '#fafafa' }}
+                      className={cn(
+                        "group transition-colors hover:bg-[var(--color-neutral)]",
+                        isEven ? "bg-[var(--color-surface)]" : "bg-[var(--color-neutral)]/40"
+                      )}
                     >
                       {/* Aging */}
                       <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
@@ -435,7 +558,7 @@ export default function TargetPage() {
 
                       {/* Customer & Status */}
                       <td className="px-4 py-3 border-b border-[var(--color-border)] max-w-[220px]" title={item.customer}>
-                        <div className="font-semibold text-gray-900 truncate leading-tight">{item.customer || '-'}</div>
+                        <div className="font-semibold text-[var(--color-primary)] truncate leading-tight">{item.customer || '-'}</div>
                         <div className="mt-0.5">
                           <StatusBadge status={item.status} />
                         </div>
@@ -449,7 +572,19 @@ export default function TargetPage() {
 
                       {/* Marking & Kargo */}
                       <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap" title={`${item.markingCode} ${item.markingNo}`}>
-                        <div className="font-semibold text-[var(--color-primary)]">{item.markingCode || '-'}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span className="font-semibold text-[var(--color-primary)]">{item.markingCode || '-'}</span>
+                          {item.validasiMismatch && activeType !== 'udara' && (
+                            <button
+                              onClick={() => setMismatchItem(item)}
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 transition-colors cursor-pointer shrink-0"
+                              title="Klik untuk lihat detail mismatch"
+                            >
+                              <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                              Mismatch
+                            </button>
+                          )}
+                        </div>
                         <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">
                           {item.markingNo ? `${item.markingNo} · ` : ''}
                           <span className="font-bold text-[var(--color-primary)]">{item.jmlPack} {item.satuan}</span>
@@ -489,7 +624,7 @@ export default function TargetPage() {
                         </div>
                       </td>
 
-                      {/* Harga */}
+
                       <td className="px-4 py-3 border-b border-[var(--color-border)] text-right whitespace-nowrap">
                         {item.harga > 0 ? (
                           <div className="font-bold text-emerald-700">

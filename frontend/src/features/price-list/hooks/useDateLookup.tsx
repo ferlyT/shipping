@@ -25,7 +25,8 @@ export function useDateLookup(isActive: boolean) {
   const [sheetTypeFilter, setSheetTypeFilter] = useState<string>('CS')
   const [modeFilter, setModeFilter] = useState<string>('BY SEA')
   const [branchFilter, setBranchFilter] = useState<string>('GZ')
-  const [categoryFilter, setCategoryFilter] = useState<string>('')
+  // Multi-select: user boleh pilih lebih dari satu kategori barang sekaligus.
+  const [categoryFilter, setCategoryFilter] = useState<string[]>([])
   const [tableSearch, setTableSearch] = useState('')
 
   const [isLoadingDate, setIsLoadingDate] = useState(true)
@@ -55,7 +56,7 @@ export function useDateLookup(isActive: boolean) {
         if (defaultMode) setModeFilter((prev) => (prev ? prev : defaultMode))
         if (defaultSheet) setSheetTypeFilter((prev) => (prev ? prev : defaultSheet))
         if (defaultBranch) setBranchFilter((prev) => (prev ? prev : defaultBranch))
-        if (defaultCat) setCategoryFilter((prev) => (prev ? prev : defaultCat))
+        if (defaultCat) setCategoryFilter((prev) => (prev.length ? prev : [defaultCat]))
       })
       .catch(() => {
         setFilterOptions({
@@ -90,11 +91,13 @@ export function useDateLookup(isActive: boolean) {
             branches: newBranches.length > 0 ? newBranches : prev.branches,
           }))
 
-          // Adjust categoryFilter if current category is invalid for the new mode/sheetType
+          // Buang kategori yang sudah dipilih tapi tidak valid lagi untuk mode/sheetType baru.
+          // Kalau semua pilihan lama jadi tidak valid, jatuhkan ke default tunggal.
           setCategoryFilter((prev) => {
-            if (prev && newCats.includes(prev)) return prev
+            const stillValid = prev.filter((c) => newCats.includes(c))
+            if (stillValid.length > 0) return stillValid
             const preferred = newCats.find((c) => /general|good|cargo|umum/i.test(c)) ?? newCats[0] ?? ''
-            return preferred
+            return preferred ? [preferred] : []
           })
         }
       })
@@ -115,7 +118,10 @@ export function useDateLookup(isActive: boolean) {
         sheetType: sheetTypeFilter || undefined,
         mode: modeFilter || undefined,
         branch: branchFilter || undefined,
-        category: categoryFilter || undefined,
+        // NOTE: backend/priceListApi perlu mendukung beberapa kategori sekaligus.
+        // Dikirim sebagai string dipisah koma — sesuaikan di priceListApi.lookupPrice /
+        // endpoint terkait kalau formatnya beda (mis. array asli lewat query[]).
+        category: categoryFilter.length > 0 ? categoryFilter.join(',') : undefined,
       })
       .then((res) => {
         const raw = res.data as any
@@ -148,7 +154,7 @@ export function useDateLookup(isActive: boolean) {
     setModeFilter(defaultMode)
     setSheetTypeFilter(defaultSheet)
     setBranchFilter(defaultBranch)
-    setCategoryFilter(defaultCat)
+    setCategoryFilter(defaultCat ? [defaultCat] : [])
     setTableSearch('')
   }
 
@@ -161,7 +167,8 @@ export function useDateLookup(isActive: boolean) {
     (modeFilter && modeFilter.toLowerCase() !== defaultModeName.toLowerCase()) ||
       (sheetTypeFilter && sheetTypeFilter.toLowerCase() !== defaultSheetName.toLowerCase()) ||
       (branchFilter && branchFilter.toLowerCase() !== defaultBranchName.toLowerCase()) ||
-      (categoryFilter && categoryFilter !== defaultCatName) ||
+      categoryFilter.length !== (defaultCatName ? 1 : 0) ||
+      (categoryFilter.length === 1 && categoryFilter[0] !== defaultCatName) ||
       targetDate !== getTodayString() ||
       tableSearch
   )
@@ -180,6 +187,15 @@ export function useDateLookup(isActive: boolean) {
       return matchSheet || matchMode || matchBranch || matchCat || matchTransit
     })
   }, [dateResult, tableSearch])
+
+  const [selectedItemForMarkings, setSelectedItemForMarkings] = useState<PriceListLookupItem | null>(null)
+
+  const handleSaveItemMarkings = async (markings: { markingCode: string; agentName?: string }[]) => {
+    if (!selectedItemForMarkings) return
+    await priceListApi.setItemMarkings(selectedItemForMarkings.id, markings)
+    // Refresh date lookup data
+    await fetchDateLookup(false)
+  }
 
   const dateColumns = useMemo(
     () => [
@@ -233,9 +249,54 @@ export function useDateLookup(isActive: boolean) {
         ),
       },
       {
+        key: 'markings',
+        header: 'AGEN / MARKING',
+        className: 'w-[180px]',
+        render: (item: PriceListLookupItem) => {
+          const count = item.markings?.length || 0
+          return (
+            <div className="flex items-center justify-between gap-1.5">
+              {count === 0 ? (
+                <span className="text-[11px] font-medium text-slate-400 italic">
+                  Semua Agen
+                </span>
+              ) : (
+                <div className="flex items-center gap-1 flex-wrap max-w-[130px]">
+                  {item.markings!.slice(0, 2).map((m) => (
+                    <span
+                      key={m.markingCode}
+                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                      title={m.agentName ? `${m.markingCode} (${m.agentName})` : m.markingCode}
+                    >
+                      {m.markingCode}
+                    </span>
+                  ))}
+                  {count > 2 && (
+                    <span
+                      className="px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400"
+                      title={item.markings!.map((m) => m.markingCode).join(', ')}
+                    >
+                      +{count - 2}
+                    </span>
+                  )}
+                </div>
+              )}
+              <button
+                type="button"
+                onClick={() => setSelectedItemForMarkings(item)}
+                className="px-1.5 py-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-md transition-colors cursor-pointer shrink-0"
+                title="Kelola Agen"
+              >
+                {count > 0 ? 'Edit' : '+ Agen'}
+              </button>
+            </div>
+          )
+        },
+      },
+      {
         key: 'price',
         header: 'HARGA (TARIF)',
-        className: 'w-[150px] text-right',
+        className: 'w-[140px] text-right',
         render: (item: PriceListLookupItem) => (
           <span className="font-bold text-xs text-emerald-600 dark:text-emerald-400">
             {formatCurrency(item.price)}
@@ -269,5 +330,8 @@ export function useDateLookup(isActive: boolean) {
     isFiltered,
     filteredDateItems,
     dateColumns,
+    selectedItemForMarkings,
+    setSelectedItemForMarkings,
+    handleSaveItemMarkings,
   }
 }

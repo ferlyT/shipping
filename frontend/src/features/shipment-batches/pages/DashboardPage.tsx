@@ -29,7 +29,7 @@ export default function ShipmentBatchesDashboardPage() {
   }
 
   return (
-    <div className="flex flex-col gap-4 lg:gap-8 bg-[#F8FAFC] p-3 sm:p-4 lg:p-8 min-h-full">
+    <div className="flex flex-col gap-4 lg:gap-8 bg-[var(--color-neutral)] p-3 sm:p-4 lg:p-8 min-h-full">
       <PageHeader
         title={t('marking.title')}
         subtitle={t('marking.subtitle')}

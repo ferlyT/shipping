@@ -8,6 +8,47 @@ export interface ShipmentDimension {
   fdQty: number | null
 }
 
+export interface ShipmentDimensionGudang {
+  fdListCode: string
+  fdListDCode: string
+  fdDescr: string | null
+  fdPjg: number | null
+  fdLbr: number | null
+  fdTng: number | null
+  fdQty: number | null
+  fdSJCreated?: number | null
+  fdCetak?: number | null
+  fdLoad?: string | null
+}
+
+export interface ShipmentDimensionPackingList {
+  fdListCode: string
+  fdListDCode: string
+  fdMarkingCode?: string | null
+  fdMarkingAndNo?: string | null
+  fdComodity?: string | null
+  fdDescr: string | null
+  fdPjg: number | null
+  fdLbr: number | null
+  fdTng: number | null
+  fdQty: number | null
+  fdSJCreated?: number | null
+  fdCetak?: number | null
+}
+
+export interface ShipmentDimensionKomplain {
+  fdListCode: string
+  fdListDCode: string
+  fdDescr: string | null
+  fdPjg: number | null
+  fdLbr: number | null
+  fdTng: number | null
+  fdQty: number | null
+  fdSJCreated?: number | null
+  fdCetak?: number | null
+  fdLoad?: string | null
+}
+
 export interface ShipmentStatus {
   fdLoadDate: string | null
   fdETD: string | null
@@ -34,6 +75,7 @@ export interface Shipment {
   fdSatuan: string | null
   fdJmlBerat: number | null
   fdM3: number | null
+  fdCancel?: number | null
   fdLocalTrackingNo?: string | null
   shipmentStatus?: ShipmentStatus
 }

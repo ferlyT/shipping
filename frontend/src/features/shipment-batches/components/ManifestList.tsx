@@ -92,7 +92,7 @@ function AutocompleteInput({
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={handleKeyDown}
         onFocus={() => { if (suggestions.length > 0 && value.length >= 2) setOpen(true) }}
-        className="w-full pl-9 pr-8 py-[9px] bg-white border border-[#E4E1DA] rounded-[var(--radius-md)] text-xs sm:text-sm text-[var(--color-primary)] placeholder:text-[#A1A1AA] focus:outline-none focus:border-[var(--color-tertiary)] transition-colors shadow-sm"
+        className="w-full pl-9 pr-8 py-[9px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] text-xs sm:text-sm text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] focus:outline-none focus:border-[var(--color-tertiary)] transition-colors shadow-sm"
         autoComplete="off"
       />
 
@@ -116,8 +116,8 @@ function AutocompleteInput({
 
       {/* Dropdown suggestions */}
       {open && (
-        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-white border border-[#E4E1DA] rounded-[var(--radius-md)] shadow-lg overflow-hidden">
-          <ul className="max-h-52 overflow-y-auto divide-y divide-[#F0EEE8]">
+        <div className="absolute left-0 right-0 top-full mt-1.5 z-50 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-md)] shadow-lg overflow-hidden">
+          <ul className="max-h-52 overflow-y-auto divide-y divide-[var(--color-border)]">
             {suggestions.map((s, idx) => (
               <li key={idx}>
                 <button
@@ -125,8 +125,8 @@ function AutocompleteInput({
                   onMouseDown={(e) => e.preventDefault()}
                   onClick={() => { onChange(s); setOpen(false) }}
                   className={cn(
-                    'w-full text-left px-3.5 py-2.5 text-xs sm:text-sm text-[var(--color-primary)] hover:bg-[#F7F5F2] transition-colors',
-                    idx === activeIdx && 'bg-[#F7F5F2] font-semibold'
+                    'w-full text-left px-3.5 py-2.5 text-xs sm:text-sm text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors',
+                    idx === activeIdx && 'bg-[var(--color-neutral)] font-semibold'
                   )}
                 >
                   {highlight(s, value)}
@@ -204,7 +204,7 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
     return (
       <div className="py-16 flex flex-col justify-center items-center bg-[var(--color-surface)] gap-4">
         <span className="w-10 h-10 border-4 border-[var(--color-tertiary)] border-t-transparent rounded-full animate-spin" />
-        <p className="text-[var(--color-secondary)] text-sm sm:text-[14.5px] md:text-[15px] animate-pulse">
+        <p className="text-[var(--color-secondary)] text-sm animate-pulse">
           Memuat data manifest...
         </p>
       </div>
@@ -214,7 +214,7 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-[var(--color-surface)]">
       {/* Toolbar */}
-      <div className="px-4 py-2.5 sm:px-6 sm:py-3 border-b border-[#E4E1DA] bg-[var(--color-surface)] flex items-center gap-3">
+      <div className="px-4 py-2.5 sm:px-6 sm:py-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex items-center gap-3">
         <AutocompleteInput
           value={searchTerm}
           onChange={setSearchTerm}
@@ -223,7 +223,7 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
           placeholder="Cari resi, customer, barang..."
         />
 
-        <div className="flex items-center gap-1 bg-[#F7F5F2] rounded-[var(--radius-md)] p-0.5 border border-[#E4E1DA] shrink-0">
+        <div className="flex items-center gap-1 bg-[var(--color-neutral)] rounded-[var(--radius-md)] p-0.5 border border-[var(--color-border)] shrink-0">
           {([
             { mode: 'table', Icon: Rows3 },
             { mode: 'grid',  Icon: LayoutGrid },
@@ -236,7 +236,7 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
               className={cn(
                 'p-1.5 rounded-[var(--radius-sm)] transition-all',
                 viewMode === mode
-                  ? 'bg-white shadow-sm text-[var(--color-primary)]'
+                  ? 'bg-[var(--color-surface)] shadow-sm text-[var(--color-primary)]'
                   : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               )}
             >
@@ -247,21 +247,21 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
       </div>
 
       {/* Content area */}
-      <div className="flex-1 min-h-0 overflow-y-auto bg-[#F8FAFC]">
+      <div className="flex-1 min-h-0 overflow-y-auto bg-[var(--color-neutral)]">
         {filteredManifest.length === 0 ? (
-          <div className="py-16 flex justify-center text-sm sm:text-[14.5px] md:text-[15px] text-[var(--color-secondary)]">
+          <div className="py-16 flex justify-center text-sm text-[var(--color-secondary)]">
             {searchTerm ? 'Tidak ada manifest yang cocok dengan pencarian.' : 'Tidak ada manifest di batch ini.'}
           </div>
         ) : viewMode === 'shortlist' ? (
-          <div className="flex flex-col divide-y divide-[#E4E1DA] border-y border-[#E4E1DA]">
+          <div className="flex flex-col divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]">
             {filteredManifest.map((m) => {
               const info = getCommodityIcon((m as any).fdComodityName || m.fdComodity)
               const Icon = info.Icon
               return (
-                <div key={m.fdListCode} className="flex flex-col gap-2 p-3 bg-white hover:bg-slate-50 transition-colors">
+                <div key={m.fdListCode} className="flex flex-col gap-2 p-3 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-slate-100', info.bg, info.color)}>
+                      <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--color-border)]', info.bg, info.color)}>
                         <Icon className="h-4 w-4" />
                       </div>
                       <div className="flex flex-col">
@@ -274,16 +274,16 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
-                      <div className="font-semibold text-[10px] sm:text-[11px] text-[var(--color-tertiary)] bg-[#F7F5F2] px-2 py-0.5 rounded">
+                      <div className="font-semibold text-[10px] sm:text-[11px] text-[var(--color-tertiary)] bg-[var(--color-neutral)] px-2 py-0.5 rounded">
                         {m.fdJmlPack || 0} {m.fdSatuan?.trim().toUpperCase()}
                       </div>
-                      <div className="text-[9.5px] sm:text-[10.5px] text-[var(--color-secondary)]">
+                      <div className="text-[10px] text-[var(--color-secondary)]">
                         {m.fdJmlBerat || 0} kg
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 pl-[40px] text-[10.5px] sm:text-[11.5px]">
-                    <span className="text-[var(--color-primary)] font-medium bg-slate-100 px-1.5 py-0.5 rounded line-clamp-1 break-all">
+                  <div className="flex items-center gap-2 pl-[40px] text-xs">
+                    <span className="text-[var(--color-primary)] font-medium bg-[var(--color-neutral)] px-1.5 py-0.5 rounded line-clamp-1 break-all">
                       {m.fdMarkingNo || '-'}
                     </span>
                     <span className="text-[var(--color-secondary)] line-clamp-1">
@@ -296,13 +296,13 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
           </div>
         ) : viewMode === 'table' ? (
           <div className="p-4 sm:p-6 overflow-x-auto">
-            <div className="min-w-[800px] border border-[#E4E1DA] rounded-[var(--radius-lg)] overflow-hidden shadow-sm">
-              <table className="w-full border-collapse bg-white">
+            <div className="min-w-[800px] border border-[var(--color-border)] rounded-[var(--radius-lg)] overflow-hidden shadow-sm">
+              <table className="w-full border-collapse bg-[var(--color-surface)]">
                 <thead>
                   <tr>
                     {['Customer', 'Marking / Receiver', 'Commodity', 'Description', 'Summary'].map((h, i) => (
                       <th key={h} className={cn(
-                        'bg-[var(--color-neutral)] font-[var(--font-label)] text-[0.65rem] sm:text-[0.7rem] tracking-[0.08em] uppercase text-[var(--color-secondary)] py-3 px-4 border-b border-[#E4E1DA] font-medium',
+                        'bg-[var(--color-neutral)] font-[var(--font-label)] text-[0.65rem] sm:text-[0.7rem] tracking-[0.08em] uppercase text-[var(--color-secondary)] py-3 px-4 border-b border-[var(--color-border)] font-medium',
                         i === 4 ? 'text-right' : 'text-left'
                       )}>
                         {h}
@@ -315,7 +315,7 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
                     const info = getCommodityIcon((m as any).fdComodityName || m.fdComodity)
                     const Icon = info.Icon
                     return (
-                      <tr key={m.fdListCode} className="hover:bg-[#FBFAF8] border-b border-[#EFEDE7] last:border-0">
+                      <tr key={m.fdListCode} className="hover:bg-[var(--color-neutral)]/50 border-b border-[var(--color-border)] last:border-0">
                         <td className="py-3 px-4 text-[0.85rem] sm:text-[0.9rem] align-top">
                           <span className="font-semibold text-[var(--color-primary)]">{m.fdCustName || '—'}</span>
                         </td>
@@ -324,7 +324,7 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
                             {m.fdMarkingNo ? (
                               <span className="text-[13px] sm:text-[14px] font-semibold text-[var(--color-primary)] uppercase leading-tight">{m.fdMarkingNo}</span>
                             ) : (
-                              <span className="font-medium text-slate-400 leading-tight">-</span>
+                              <span className="font-medium text-[var(--color-secondary)] leading-tight">-</span>
                             )}
                             {m.fdTerima && <span className="font-semibold text-[var(--color-primary)] mt-1 leading-snug">{m.fdTerima}</span>}
                             {m.fdListCode && <span className="text-[13px] sm:text-[14px] text-[var(--color-tertiary)] font-medium leading-snug">{m.fdListCode}</span>}
@@ -338,11 +338,11 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
                             </div>
                           </div>
                         </td>
-                        <td className="py-3 px-4 text-[0.85rem] sm:text-[0.9rem] align-top">
+                        <td className="py-3 px-4 text-xs sm:text-sm align-top">
                           <span className="text-[var(--color-secondary)] whitespace-normal break-words line-clamp-3 block">{m.fdDesc || ''}</span>
                         </td>
-                        <td className="py-3 px-4 text-[0.85rem] sm:text-[0.9rem] align-top">
-                          <div className="flex flex-col gap-1 text-[12.5px] sm:text-[13px] leading-tight text-[var(--color-secondary)] whitespace-nowrap items-end mt-1">
+                        <td className="py-3 px-4 text-xs sm:text-sm align-top">
+                          <div className="flex flex-col gap-1 text-xs sm:text-sm leading-tight text-[var(--color-secondary)] whitespace-nowrap items-end mt-1">
                             <div className="flex justify-end gap-1.5"><span className="font-medium">Pkg:</span><span className="text-[var(--color-tertiary)] font-semibold">{m.fdJmlPack || 0} {m.fdSatuan?.trim().toUpperCase()}</span></div>
                             <div className="flex justify-end gap-1.5"><span className="font-medium">Wgt:</span><span className="text-[var(--color-primary)] font-semibold">{m.fdJmlBerat || 0} kg</span></div>
                             <div className="flex justify-end gap-1.5"><span className="font-medium">Vol:</span><span className="text-[var(--color-primary)] font-semibold">{m.fdM3 || 0} m³</span></div>
@@ -362,36 +362,36 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
               const info = getCommodityIcon((m as any).fdComodityName || m.fdComodity)
               const Icon = info.Icon
               return (
-                <div key={m.fdListCode} className="bg-[var(--color-surface)] border border-[#E4E1DA] rounded-[8px] overflow-hidden hover:shadow-md transition-all flex flex-col">
-                  <div className="px-5 py-4 flex items-center justify-between bg-[var(--color-neutral)] border-b border-[#E4E1DA]">
+                <div key={m.fdListCode} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[8px] overflow-hidden hover:shadow-md transition-all flex flex-col">
+                  <div className="px-5 py-4 flex items-center justify-between bg-[var(--color-neutral)] border-b border-[var(--color-border)]">
                     <div>
-                      <div className="font-[var(--font-label)] text-[0.65rem] sm:text-[0.7rem] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-[3px]">List No.</div>
-                      <div className="font-[var(--font-display)] font-semibold text-[1.1rem] sm:text-[1.15rem] tracking-[-0.01em] text-[var(--color-primary)]">{m.fdListCode}</div>
+                      <div className="font-[var(--font-label)] text-[10px] sm:text-[11px] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-[3px]">List No.</div>
+                      <div className="font-[var(--font-display)] font-semibold text-lg tracking-[-0.01em] text-[var(--color-primary)]">{m.fdListCode}</div>
                     </div>
                   </div>
                   <div className="px-5 py-4 flex flex-col gap-4">
                     <div className="flex justify-between items-start gap-4">
                       <div>
-                        <div className="font-[var(--font-label)] text-[0.65rem] sm:text-[0.7rem] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-1">Customer</div>
-                        <div className="font-semibold text-[13px] sm:text-[14px] text-[var(--color-primary)]">{m.fdCustName || '—'}</div>
+                        <div className="font-[var(--font-label)] text-[10px] sm:text-[11px] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-1">Customer</div>
+                        <div className="font-semibold text-xs sm:text-sm text-[var(--color-primary)]">{m.fdCustName || '—'}</div>
                       </div>
                       <div className="text-right">
-                        <div className="font-[var(--font-label)] text-[0.65rem] sm:text-[0.7rem] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-1">Resi</div>
-                        <div className="font-semibold text-[13px] sm:text-[14px] text-[var(--color-primary)]">{m.fdTerima || '-'}</div>
+                        <div className="font-[var(--font-label)] text-[10px] sm:text-[11px] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-1">Resi</div>
+                        <div className="font-semibold text-xs sm:text-sm text-[var(--color-primary)]">{m.fdTerima || '-'}</div>
                       </div>
                     </div>
                     <div>
-                      <div className="font-[var(--font-label)] text-[0.65rem] sm:text-[0.7rem] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-1">Commodity</div>
+                      <div className="font-[var(--font-label)] text-[10px] sm:text-[11px] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-1">Commodity</div>
                       <div className="flex flex-col gap-1.5 mb-1.5">
-                        <div className="font-semibold text-[13px] sm:text-[14px] text-[var(--color-primary)]">{m.fdComodity || '-'}</div>
+                        <div className="font-semibold text-xs sm:text-sm text-[var(--color-primary)]">{m.fdComodity || '-'}</div>
                         <div title={info.tooltip} className={cn('flex items-center w-fit p-1.5 rounded-md cursor-help transition-colors', info.bg, info.color)}>
                           <Icon size={14} />
                         </div>
                       </div>
-                      <div className="text-[12px] sm:text-[12.5px] text-[var(--color-secondary)] mt-0.5">{m.fdDesc}</div>
+                      <div className="text-xs text-[var(--color-secondary)] mt-0.5">{m.fdDesc}</div>
                     </div>
                   </div>
-                  <div className="mt-auto px-5 py-3.5 bg-[#F7F5F2] border-t border-[#E4E1DA] flex justify-between items-center text-[12.5px] sm:text-[13px]">
+                  <div className="mt-auto px-5 py-3.5 bg-[var(--color-neutral)] border-t border-[var(--color-border)] flex justify-between items-center text-xs sm:text-sm">
                     <div className="flex flex-col">
                       <span className="text-[var(--color-secondary)] font-medium">Packages</span>
                       <span className="font-semibold text-[var(--color-tertiary)]">{m.fdJmlPack || 0} {m.fdSatuan?.trim().toUpperCase()}</span>
@@ -413,7 +413,7 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
       </div>
 
       {/* Footer — stats */}
-      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center px-4 py-3 sm:px-6 bg-[var(--color-neutral)] border-t border-[#E4E1DA] text-xs sm:text-sm text-[var(--color-secondary)] gap-3 sm:gap-2">
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center px-4 py-3 sm:px-6 bg-[var(--color-neutral)] border-t border-[var(--color-border)] text-xs sm:text-sm text-[var(--color-secondary)] gap-3 sm:gap-2">
         <div className="text-center sm:text-left">
           Total Manifest: <b className="text-[var(--color-primary)]">{filteredManifest.length}</b>
         </div>

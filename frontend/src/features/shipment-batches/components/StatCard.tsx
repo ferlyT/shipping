@@ -91,13 +91,13 @@ export function StatCard({
             {(airValue !== undefined || seaValue !== undefined) && (
               <div className="flex items-center gap-2 text-[11px]">
                 {airValue !== undefined && (
-                  <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded border border-sky-200/60 font-semibold">
+                  <span className="inline-flex items-center gap-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded border border-sky-500/20 font-semibold">
                     <Plane className="w-3 h-3 text-sky-500 shrink-0" />
                     <span>{typeof airValue === 'number' ? airValue.toLocaleString() : airValue}</span>
                   </span>
                 )}
                 {seaValue !== undefined && (
-                  <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200/60 font-semibold">
+                  <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-semibold">
                     <Ship className="w-3 h-3 text-emerald-500 shrink-0" />
                     <span>{typeof seaValue === 'number' ? seaValue.toLocaleString() : seaValue}</span>
                   </span>
@@ -172,7 +172,7 @@ export function StatCardGroup({
   const headerContent = (
     <>
       <Icon className={cn("h-4 w-4 shrink-0", iconColorClass)} />
-      <span className={cn("text-[11px] sm:text-[11.5px] font-bold uppercase tracking-wider", titleColorClass)}>
+      <span className={cn("text-xs font-bold uppercase tracking-wider", titleColorClass)}>
         {title}
       </span>
     </>
@@ -239,13 +239,13 @@ export function StatCardGroup({
                   {(item.airValue !== undefined || item.seaValue !== undefined) && !item.isLoading && (
                     <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[11px]">
                       {item.airValue !== undefined && (
-                        <span className="inline-flex items-center gap-1 bg-sky-50 text-sky-700 px-1.5 py-0.5 rounded border border-sky-200/60 font-semibold">
+                        <span className="inline-flex items-center gap-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded border border-sky-500/20 font-semibold">
                           <Plane className="w-3 h-3 text-sky-500 shrink-0" />
                           <span>{typeof item.airValue === 'number' ? item.airValue.toLocaleString() : item.airValue}</span>
                         </span>
                       )}
                       {item.seaValue !== undefined && (
-                        <span className="inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded border border-emerald-200/60 font-semibold">
+                        <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-semibold">
                           <Ship className="w-3 h-3 text-emerald-500 shrink-0" />
                           <span>{typeof item.seaValue === 'number' ? item.seaValue.toLocaleString() : item.seaValue}</span>
                         </span>

@@ -25,7 +25,7 @@ export function BranchPillToggle({
               aria-pressed={active}
               className={`px-3.5 min-w-[2.6rem] h-9 rounded-full text-xs font-semibold whitespace-nowrap transition-all border flex items-center justify-center cursor-pointer ${
                 active
-                  ? 'bg-[var(--color-tertiary)] border-[var(--color-tertiary)] text-white shadow-xs'
+                  ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
                   : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:border-[var(--color-primary)]/40 hover:text-[var(--color-primary)]'
               }`}
             >

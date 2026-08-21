@@ -55,6 +55,7 @@ export async function loginUser(input: LoginInput) {
       username: user.username,
       fullName: user.fullName,
       role: user.role,
+      avatarUrl: user.avatarUrl,
       permissions,
       defaultRoute,
     },

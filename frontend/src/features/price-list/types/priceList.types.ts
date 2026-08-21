@@ -1,3 +1,9 @@
+export interface ItemMarking {
+  id?: number
+  markingCode: string
+  agentName?: string | null
+}
+
 export interface TrendPoint {
   uploadId: number
   date: string
@@ -69,11 +75,13 @@ export interface PriceListLookupItem {
   transitTime: string | null
   category: string
   price: number
+  markings?: ItemMarking[]
 }
 
 export interface PriceListLookupResult {
   found: boolean
   targetDate: string
+  isMarkingOverride?: boolean
   uploadInfo: {
     uploadId: number
     fileName: string
@@ -115,8 +123,12 @@ export interface PriceByEntryResult {
   expectedBranch: string | null
   customer: { fdCustCode: string; fdCustName: string | null } | null
   comodityTypes: ComodityType[]
+  appliedRule?: 'CUSTOMER_MARKING' | 'CUSTOMER_DEFAULT' | 'GENERAL_MARKING' | 'GENERAL_DEFAULT' | 'NONE'
   priceValidation: {
+    source?: 'CUSTOMER' | 'GENERAL'
     effectiveDate: string | null
+    isMarkingOverride?: boolean
+    appliedRule?: string
     items: PriceListLookupItem[]
   } | null
 }
