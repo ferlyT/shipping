@@ -1,13 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useTranslation } from '@/hooks/useTranslation'
-import { Upload, Eye, ArrowRight, History as HistoryIcon, AlertCircle, FileSpreadsheet, CornerDownRight, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Upload, Eye, ArrowRight, History as HistoryIcon, FileSpreadsheet, CornerDownRight, ChevronLeft, ChevronRight, Calendar, AlertCircle, Plane, Ship } from 'lucide-react'
+
 import { priceListApi } from '../services/priceList.service'
 import type { UploadRow } from '../types'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
+import { EditEffectiveDateModal } from '../components/EditEffectiveDateModal'
+import { MarkingManagerModal } from '../components/MarkingManagerModal'
 
 interface UploadGroup {
   effectiveDate: string
@@ -33,10 +36,13 @@ export function HistoryPage() {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [editingUpload, setEditingUpload] = useState<UploadRow | null>(null)
+  const [selectedUploadForMarking, setSelectedUploadForMarking] = useState<UploadRow | null>(null)
+
   const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  useEffect(() => {
+  const loadUploads = () => {
     setLoading(true)
     priceListApi
       .listUploads({ page, pageSize })
@@ -56,6 +62,10 @@ export function HistoryPage() {
         setError(err?.response?.data?.message || err?.message || 'Gagal memuat riwayat upload')
       })
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadUploads()
   }, [page])
 
   // Group by effectiveDate so superseded versions stay pinned beneath active version
@@ -207,6 +217,7 @@ export function HistoryPage() {
                 {[
                   { label: 'Berlaku Mulai', note: 'Tanggal harga berlaku' },
                   { label: 'File' },
+                  { label: 'Agen / Marking' },
                   { label: 'Diupload Oleh' },
                   { label: 'Waktu Upload' },
                   { label: 'Baris Harga' },
@@ -234,7 +245,7 @@ export function HistoryPage() {
             {loading ? (
               <tbody className="divide-y divide-[var(--color-border)]">
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <LoadingSpinner message={t('common.loading')} />
                   </td>
                 </tr>
@@ -242,7 +253,7 @@ export function HistoryPage() {
             ) : rows.length === 0 ? (
               <tbody>
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                       <div className="w-16 h-16 bg-[var(--color-neutral)] rounded-full flex items-center justify-center mb-4 border border-[var(--color-border)]">
                         <FileSpreadsheet className="w-8 h-8 text-[var(--color-secondary)]" />
@@ -268,6 +279,7 @@ export function HistoryPage() {
                 >
                   {group.items.map((row, ri) => {
                     const isHead = ri === 0
+                    const markingsCount = row.markings?.length || 0
                     return (
                       <tr
                         key={row.id}
@@ -287,6 +299,7 @@ export function HistoryPage() {
                                   month: 'short',
                                   year: 'numeric',
                                 })}
+
                               </span>
                               {group.items.length > 1 && (
                                 <span className="text-[0.65rem] font-mono font-semibold text-[var(--color-tertiary)] uppercase tracking-wide">
@@ -317,6 +330,45 @@ export function HistoryPage() {
                           </div>
                         </td>
 
+                        {/* Agen / Marking Column */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {markingsCount === 0 ? (
+                              <span className="text-xs text-[var(--color-secondary)] italic">Semua Agen</span>
+                            ) : (
+                              <div className="flex items-center gap-1 flex-wrap max-w-[150px]">
+                                {row.markings!.slice(0, 2).map((m, mi) => (
+                                  <span
+                                    key={`${m.markingCode}-${m.mode || 'ALL'}-${mi}`}
+                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                                    title={
+                                      m.agentName
+                                        ? `${m.markingCode} (${m.agentName}${m.mode ? ` · ${m.mode}` : ''})`
+                                        : `${m.markingCode}${m.mode ? ` (${m.mode})` : ''}`
+                                    }
+                                  >
+                                    {m.mode?.toUpperCase().includes('AIR') && <Plane size={9} className="text-sky-500" />}
+                                    {m.mode?.toUpperCase().includes('SEA') && <Ship size={9} className="text-blue-500" />}
+                                    <span>{m.markingCode}</span>
+                                  </span>
+                                ))}
+                                {markingsCount > 2 && (
+                                  <span className="px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                                    +{markingsCount - 2}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedUploadForMarking(row)}
+                              className="px-1.5 py-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-md transition-colors cursor-pointer shrink-0"
+                            >
+                              {markingsCount > 0 ? 'Edit' : '+ Agen'}
+                            </button>
+                          </div>
+                        </td>
+
                         <td className="px-6 py-4 whitespace-nowrap text-[0.9rem] text-[var(--color-secondary)]">
                           {row.uploadedBy ?? <span className="text-[var(--color-secondary)]/40">—</span>}
                         </td>
@@ -336,14 +388,25 @@ export function HistoryPage() {
                           <span className={STATUS_CLASS[row.status]}>{STATUS_LABEL[row.status]}</span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <Link
-                            to={ROUTES.PRICE_LIST_DETAIL(row.id)}
-                            className="p-1.5 text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] rounded-md transition-all duration-150 inline-flex items-center gap-1 text-[0.85rem]"
-                          >
-                            <Eye size={16} />
-                            <span className="hidden sm:inline">Detail</span>
-                            <ArrowRight size={14} />
-                          </Link>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingUpload(row)}
+                              className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 rounded-md transition-colors inline-flex items-center gap-1 text-[0.82rem] cursor-pointer"
+                              title="Edit Tanggal Efektif"
+                            >
+                              <Calendar size={14} />
+                              <span className="hidden sm:inline">Edit Tgl</span>
+                            </button>
+                            <Link
+                              to={ROUTES.PRICE_LIST_DETAIL(row.id)}
+                              className="p-1.5 text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] rounded-md transition-all duration-150 inline-flex items-center gap-1 text-[0.85rem]"
+                            >
+                              <Eye size={16} />
+                              <span className="hidden sm:inline">Detail</span>
+                              <ArrowRight size={14} />
+                            </Link>
+                          </div>
                         </td>
                       </tr>
                     )
@@ -353,6 +416,7 @@ export function HistoryPage() {
             )}
           </table>
         </div>
+
 
         {/* Pagination */}
         {total > 0 && (
@@ -386,6 +450,41 @@ export function HistoryPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Effective Date Modal */}
+      {editingUpload && (
+        <EditEffectiveDateModal
+          isOpen={Boolean(editingUpload)}
+          onClose={() => setEditingUpload(null)}
+          uploadId={editingUpload.id}
+          fileName={editingUpload.fileName}
+          currentEffectiveDate={editingUpload.effectiveDate}
+          onSave={async (newDate) => {
+            await priceListApi.updateEffectiveDate(editingUpload.id, newDate)
+            loadUploads()
+          }}
+        />
+      )}
+
+      {/* Marking Manager Modal */}
+      {selectedUploadForMarking && (
+        <MarkingManagerModal
+          isOpen={Boolean(selectedUploadForMarking)}
+          onClose={() => setSelectedUploadForMarking(null)}
+          uploadId={selectedUploadForMarking.id}
+          uploadDescription={{
+            fileName: selectedUploadForMarking.fileName,
+            effectiveDate: selectedUploadForMarking.effectiveDate,
+          }}
+          initialMarkings={selectedUploadForMarking.markings || []}
+          onSave={async (markings) => {
+            await priceListApi.setUploadMarkings(selectedUploadForMarking.id, markings)
+            loadUploads()
+          }}
+        />
+      )}
     </div>
   )
 }
+
+

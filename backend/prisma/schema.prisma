@@ -357,17 +357,18 @@ model TbEntryList {
 // ─── PRICE LIST MODULE ─────────────────────────────────────────────
 
 model TbPriceListUpload {
-  id            Int                 @id @default(autoincrement())
-  fileName      String              @db.NVarChar(500)
-  uploadedBy    String?             @db.NVarChar(100)
-  uploadedAt    DateTime            @default(now()) @db.DateTime2
-  priceDate     DateTime?           @db.DateTime2
-  effectiveDate DateTime            @db.DateTime2
-  status        String              @db.NVarChar(20)   // PARSED | PARTIAL | FAILED
-  warnings      String?             @db.NVarChar(Max)  // JSON string
-  rawSnapshot   String?             @db.NVarChar(Max)  // JSON string
-  isSuperseded  Boolean             @default(false)
+  id            Int                       @id @default(autoincrement())
+  fileName      String                    @db.NVarChar(500)
+  uploadedBy    String?                   @db.NVarChar(100)
+  uploadedAt    DateTime                  @default(now()) @db.DateTime2
+  priceDate     DateTime?                 @db.DateTime2
+  effectiveDate DateTime                  @db.DateTime2
+  status        String                    @db.NVarChar(20)   // PARSED | PARTIAL | FAILED
+  warnings      String?                   @db.NVarChar(Max)  // JSON string
+  rawSnapshot   String?                   @db.NVarChar(Max)  // JSON string
+  isSuperseded  Boolean                   @default(false)
   items         TbPriceListItem[]
+  markings      TbPriceListUploadMarking[]
 
   @@map("tbPriceListUpload")
 }
@@ -382,38 +383,39 @@ model TbPriceListItem {
   category      String                    @db.NVarChar(200)   // kategori barang
   price         Decimal                   @db.Decimal(18, 2)
   upload        TbPriceListUpload         @relation(fields: [uploadId], references: [id], onDelete: Cascade)
-  markings      TbPriceListItemMarking[]
 
   @@map("tbPriceListItem")
 }
 
-model TbPriceListItemMarking {
-  id            Int              @id @default(autoincrement())
-  itemId        Int
-  markingCode   String           @db.NVarChar(50)
-  agentName     String?          @db.NVarChar(100)
-  item          TbPriceListItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+model TbPriceListUploadMarking {
+  id            Int               @id @default(autoincrement())
+  uploadId      Int
+  markingCode   String            @db.NVarChar(50)
+  agentName     String?           @db.NVarChar(100)
+  mode          String?           @db.NVarChar(50)    // BY SEA | BY AIR | null (Semua)
+  upload        TbPriceListUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
 
-  @@unique([itemId, markingCode])
+  @@unique([uploadId, markingCode, mode])
   @@index([markingCode])
-  @@map("tbPriceListItemMarking")
+  @@map("tbPriceListUploadMarking")
 }
 
 // ─── CUSTOMER PRICE LIST MODULE ────────────────────────────────────
 
 model TbCustomerPriceListUpload {
-  id            Int                        @id @default(autoincrement())
-  fdCustCode    String                     @db.Char(7)
-  fileName      String                     @db.NVarChar(500)
-  uploadedBy    String?                    @db.NVarChar(100)
-  uploadedAt    DateTime                   @default(now()) @db.DateTime2
-  priceDate     DateTime?                  @db.DateTime2
-  effectiveDate DateTime                   @db.DateTime2
-  status        String                     @db.NVarChar(20)   // PARSED | PARTIAL | FAILED
-  warnings      String?                    @db.NVarChar(Max)  // JSON string
-  rawSnapshot   String?                    @db.NVarChar(Max)  // JSON string
-  isSuperseded  Boolean                    @default(false)
+  id            Int                               @id @default(autoincrement())
+  fdCustCode    String                            @db.Char(7)
+  fileName      String                            @db.NVarChar(500)
+  uploadedBy    String?                           @db.NVarChar(100)
+  uploadedAt    DateTime                          @default(now()) @db.DateTime2
+  priceDate     DateTime?                         @db.DateTime2
+  effectiveDate DateTime                          @db.DateTime2
+  status        String                            @db.NVarChar(20)   // PARSED | PARTIAL | FAILED
+  warnings      String?                           @db.NVarChar(Max)  // JSON string
+  rawSnapshot   String?                           @db.NVarChar(Max)  // JSON string
+  isSuperseded  Boolean                           @default(false)
   items         TbCustomerPriceListItem[]
+  markings      TbCustomerPriceListUploadMarking[]
 
   @@map("tbCustomerPriceListUpload")
 }
@@ -429,24 +431,26 @@ model TbCustomerPriceListItem {
   category      String                            @db.NVarChar(200)
   price         Decimal                           @db.Decimal(18, 2)
   upload        TbCustomerPriceListUpload         @relation(fields: [uploadId], references: [id], onDelete: Cascade)
-  markings      TbCustomerPriceListItemMarking[]
 
   @@map("tbCustomerPriceListItem")
 }
 
-model TbCustomerPriceListItemMarking {
-  id            Int                      @id @default(autoincrement())
-  itemId        Int
-  markingCode   String                   @db.NVarChar(50)
-  agentName     String?                  @db.NVarChar(100)
-  item          TbCustomerPriceListItem  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+model TbCustomerPriceListUploadMarking {
+  id            Int                       @id @default(autoincrement())
+  uploadId      Int
+  markingCode   String                    @db.NVarChar(50)
+  agentName     String?                   @db.NVarChar(100)
+  mode          String?                   @db.NVarChar(50)    // BY SEA | BY AIR | null (Semua)
+  upload        TbCustomerPriceListUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
 
-  @@unique([itemId, markingCode])
+  @@unique([uploadId, markingCode, mode])
   @@index([markingCode])
-  @@map("tbCustomerPriceListItemMarking")
+  @@map("tbCustomerPriceListUploadMarking")
 }
 
+
 model TbTypeComodity {
+
   fdID           Int     @id @default(autoincrement())
   fdTypeComodity Int?
   fdComodityName String? @db.VarChar(50)

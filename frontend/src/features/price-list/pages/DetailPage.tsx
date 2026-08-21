@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from '@/hooks/useTranslation'
-import { ArrowLeft, AlertCircle, TrendingUp, TrendingDown, Minus, Sparkles, Filter, Anchor, Plane } from 'lucide-react'
+import { ArrowLeft, AlertCircle, TrendingUp, TrendingDown, Anchor, Plane, Ship, Calendar, Tag } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { priceListApi } from '../services/priceList.service'
 import type { DiffResponse, DiffRow } from '../types'
@@ -9,7 +9,9 @@ import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { SegmentedControl, PillSingleToggle } from '../components/DashboardFilters'
+import { SegmentedControl } from '../components/DashboardFilters'
+import { EditEffectiveDateModal } from '../components/EditEffectiveDateModal'
+import { MarkingManagerModal } from '../components/MarkingManagerModal'
 
 export function DetailPage() {
   const { t } = useTranslation()
@@ -24,7 +26,10 @@ export function DetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  const [isEditingEffectiveDate, setIsEditingEffectiveDate] = useState(false)
+  const [isManagingMarkings, setIsManagingMarkings] = useState(false)
+
+  const loadData = () => {
     if (!uploadId) return
     setLoading(true)
     priceListApi
@@ -37,6 +42,10 @@ export function DetailPage() {
         setError(err?.response?.data?.message || err?.message || 'Gagal memuat detail upload')
       })
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadData()
   }, [uploadId])
 
   const modeOptions = useMemo(() => {
@@ -84,6 +93,8 @@ export function DetailPage() {
       }
     : null
 
+  const uploadMarkings = data?.markings || []
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 w-full min-w-0 space-y-6 sm:space-y-8 bg-[var(--color-surface)] font-[var(--font-body)] animate-fadeIn pb-24">
       {/* Page Header (3-Level ERP Breadcrumbs) */}
@@ -107,14 +118,77 @@ export function DetailPage() {
           { label: `#${uploadId}` },
         ]}
         actions={
-          <Link to={ROUTES.PRICE_LIST_HISTORY}>
-            <Button variant="secondary" size="sm">
-              <ArrowLeft className="w-4 h-4 mr-1.5" />
-              {t('nav.priceListHistory')}
-            </Button>
-          </Link>
+          <div className="flex items-center gap-2.5 flex-wrap">
+            {data && (
+              <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsManagingMarkings(true)}
+                >
+                  <Tag className="w-4 h-4 mr-1.5 text-amber-500" />
+                  Agen / Marking ({uploadMarkings.length})
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsEditingEffectiveDate(true)}
+                >
+                  <Calendar className="w-4 h-4 mr-1.5" />
+                  Edit Tgl Efektif
+                </Button>
+              </>
+            )}
+            <Link to={ROUTES.PRICE_LIST_HISTORY}>
+              <Button variant="secondary" size="sm">
+                <ArrowLeft className="w-4 h-4 mr-1.5" />
+                {t('nav.priceListHistory')}
+              </Button>
+            </Link>
+          </div>
         }
       />
+
+      {/* Info Agen / Marking Banner */}
+      {!loading && data && (
+        <div className="flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 gap-3 flex-wrap">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+              <Tag size={16} />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold text-[var(--color-primary)]">Agen & Kode Marking Terkait:</span>
+                {uploadMarkings.length === 0 ? (
+                  <span className="text-xs text-[var(--color-secondary)] italic">
+                    Berlaku umum untuk semua agen
+                  </span>
+                ) : (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {uploadMarkings.map((m) => (
+                      <span
+                        key={m.markingCode}
+                        className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                      >
+                        {m.markingCode}
+                        {m.agentName && <span className="ml-1 text-[10px] opacity-80 font-normal">({m.agentName})</span>}
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setIsManagingMarkings(true)}
+            className="text-xs shrink-0"
+          >
+            {uploadMarkings.length > 0 ? 'Edit Marking' : '+ Tambah Marking Agen'}
+          </Button>
+        </div>
+      )}
 
       {/* Error */}
       {error && (
@@ -141,13 +215,38 @@ export function DetailPage() {
               }}
             />
 
-            <PillSingleToggle
-              label="Cabang Target"
-              value={branchFilter}
-              onChange={setBranchFilter}
-              options={branchOptions}
-              clearLabel="Semua Cabang"
-            />
+            <div className="space-y-1.5">
+              <label className="text-xs font-semibold text-[var(--color-secondary)] uppercase tracking-wider">
+                Cabang Target
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setBranchFilter('')}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer border ${
+                    branchFilter === ''
+                      ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)]'
+                      : 'bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                  }`}
+                >
+                  Semua Cabang
+                </button>
+                {branchOptions.map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => setBranchFilter(b)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer border ${
+                      branchFilter === b
+                        ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)]'
+                        : 'bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                    }`}
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -172,7 +271,7 @@ export function DetailPage() {
             onClick={() => setActiveKpi((prev) => (prev === 'turun' ? 'all' : 'turun'))}
           />
           <StatCard
-            icon={<Minus size={18} className="text-[var(--color-secondary)]" />}
+            icon={<span className="font-bold text-sm text-[var(--color-secondary)]">—</span>}
             label="Tetap"
             value={stats.tetap}
             color="secondary"
@@ -180,7 +279,7 @@ export function DetailPage() {
             onClick={() => setActiveKpi((prev) => (prev === 'tetap' ? 'all' : 'tetap'))}
           />
           <StatCard
-            icon={<Sparkles size={18} className="text-indigo-500" />}
+            icon={<span className="font-bold text-sm text-indigo-500">★</span>}
             label="Baru"
             value={stats.baru}
             color="tertiary"
@@ -195,7 +294,6 @@ export function DetailPage() {
         {/* Toolbar */}
         <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2">
-            <Filter size={16} className="text-[var(--color-secondary)]" />
             <h2 className="text-[1rem] font-semibold text-[var(--color-primary)]">
               {rows.length.toLocaleString('id-ID')} baris harga
             </h2>
@@ -221,12 +319,12 @@ export function DetailPage() {
           <table className="min-w-full divide-y divide-[var(--color-border)]">
             <thead className="bg-[var(--color-neutral)]">
               <tr>
-                {['Tipe', 'Mode', 'Cabang', 'Kategori Barang', 'Harga Sebelumnya', 'Harga Sekarang', 'Perubahan'].map((h, i) => (
+                {['Tipe', 'Mode', 'Cabang', 'Kategori Barang', 'Agen / Marking', 'Harga Sebelumnya', 'Harga Sekarang', 'Perubahan'].map((h, i) => (
                   <th
                     key={h}
                     scope="col"
                     className={`px-6 py-4 text-[0.72rem] tracking-[0.06em] font-semibold text-[var(--color-secondary)] uppercase ${
-                      i >= 4 ? 'text-right' : 'text-left'
+                      i >= 5 ? 'text-right' : 'text-left'
                     }`}
                   >
                     {h}
@@ -237,13 +335,13 @@ export function DetailPage() {
             <tbody className="divide-y divide-[var(--color-border)]">
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
+                  <td colSpan={8} className="px-6 py-12 text-center">
                     <LoadingSpinner message={t('common.loading')} />
                   </td>
                 </tr>
               ) : rows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <p className="text-[var(--color-secondary)] text-sm">Tidak ada data yang ditampilkan.</p>
                   </td>
                 </tr>
@@ -260,6 +358,37 @@ export function DetailPage() {
                       <span className="font-mono text-[0.85rem] font-semibold text-[var(--color-primary)]">{r.branch}</span>
                     </td>
                     <td className="px-6 py-4 text-[0.9rem] text-[var(--color-primary)] max-w-[220px] truncate">{r.category}</td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {r.markings && r.markings.length > 0 ? (
+                        <div className="flex items-center gap-1 flex-wrap">
+                          {r.markings.map((m, mi) => (
+                            <span
+                              key={`${m.markingCode}-${m.mode || 'ALL'}-${mi}`}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25"
+                              title={
+                                m.agentName
+                                  ? `${m.markingCode} (${m.agentName}${m.mode ? ` · ${m.mode}` : ''})`
+                                  : `${m.markingCode}${m.mode ? ` (${m.mode})` : ''}`
+                              }
+                            >
+                              {m.mode?.toUpperCase().includes('AIR') && <Plane size={9} className="text-sky-500" />}
+                              {m.mode?.toUpperCase().includes('SEA') && <Ship size={9} className="text-blue-500" />}
+                              <span>{m.markingCode}</span>
+                              {m.agentName && (
+                                <span className="text-[9px] font-normal text-[var(--color-secondary)]">
+                                  · {m.agentName}
+                                </span>
+                              )}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-[11px] font-medium text-[var(--color-secondary)]/60 italic">
+                          Semua Agen
+                        </span>
+                      )}
+                    </td>
+
                     <td className="px-6 py-4 whitespace-nowrap text-right text-[0.88rem] font-mono text-[var(--color-secondary)]/70">
                       {r.previousPrice !== null ? formatCurrency(r.previousPrice) : <span className="text-[var(--color-secondary)]/30">—</span>}
                     </td>
@@ -288,11 +417,46 @@ export function DetailPage() {
               )}
             </tbody>
           </table>
+
         </div>
       </div>
+
+      {/* Edit Effective Date Modal */}
+      {data && (
+        <EditEffectiveDateModal
+          isOpen={isEditingEffectiveDate}
+          onClose={() => setIsEditingEffectiveDate(false)}
+          uploadId={uploadId}
+          currentEffectiveDate={data.currentEffectiveDate}
+          onSave={async (newDate) => {
+            await priceListApi.updateEffectiveDate(uploadId, newDate)
+            loadData()
+          }}
+        />
+      )}
+
+      {/* Marking Manager Modal */}
+      {data && (
+        <MarkingManagerModal
+          isOpen={isManagingMarkings}
+          onClose={() => setIsManagingMarkings(false)}
+          uploadId={uploadId}
+          uploadDescription={{
+            title: `Price List Upload #${uploadId}`,
+            effectiveDate: data.currentEffectiveDate,
+          }}
+          initialMarkings={uploadMarkings}
+          onSave={async (markings) => {
+            await priceListApi.setUploadMarkings(uploadId, markings)
+            loadData()
+          }}
+        />
+      )}
     </div>
   )
 }
+
+
 
 function StatCard({
   icon,

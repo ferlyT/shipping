@@ -49,22 +49,26 @@ export const customerPriceListApi = {
   getUploadDiff: (id: number) =>
     apiClient.get<{ data: CustomerPriceListDiff }>(`/customer-price-list/uploads/${id}/diff`),
 
-  // GET /api/customer-price-list/items/:id/markings
-  getItemMarkings: (itemId: number) =>
-    apiClient.get<{ data: { id: number; itemId: number; markingCode: string; agentName: string | null }[] }>(
-      `/customer-price-list/items/${itemId}/markings`
+  // PATCH /api/customer-price-list/uploads/:id/effective-date
+  updateEffectiveDate: (id: number, effectiveDate: string) =>
+    apiClient.patch<{ data: CustomerUploadHistory }>(`/customer-price-list/uploads/${id}/effective-date`, { effectiveDate }),
+
+  // GET /api/customer-price-list/uploads/:id/markings
+  getUploadMarkings: (uploadId: number) =>
+    apiClient.get<{ data: { id: number; uploadId: number; markingCode: string; agentName: string | null }[] }>(
+      `/customer-price-list/uploads/${uploadId}/markings`
     ),
 
-  // PUT /api/customer-price-list/items/:id/markings
-  setItemMarkings: (itemId: number, markings: { markingCode: string; agentName?: string }[]) =>
-    apiClient.put<{ data: { id: number; itemId: number; markingCode: string; agentName: string | null }[] }>(
-      `/customer-price-list/items/${itemId}/markings`,
+  // PUT /api/customer-price-list/uploads/:id/markings
+  setUploadMarkings: (uploadId: number, markings: { markingCode: string; agentName?: string }[]) =>
+    apiClient.put<{ data: { id: number; uploadId: number; markingCode: string; agentName: string | null }[] }>(
+      `/customer-price-list/uploads/${uploadId}/markings`,
       { markings }
     ),
 
-  // DELETE /api/customer-price-list/items/:id/markings/:markingCode
-  deleteItemMarking: (itemId: number, markingCode: string) =>
-    apiClient.delete(`/customer-price-list/items/${itemId}/markings/${markingCode}`),
+  // DELETE /api/customer-price-list/uploads/:id/markings/:markingCode
+  deleteUploadMarking: (uploadId: number, markingCode: string) =>
+    apiClient.delete(`/customer-price-list/uploads/${uploadId}/markings/${markingCode}`),
 
   // POST /api/customer-price-list/:custCode/upload
   upload: (custCode: string, formData: FormData) =>
@@ -74,4 +78,5 @@ export const customerPriceListApi = {
       { headers: { 'Content-Type': 'multipart/form-data' } },
     ),
 }
+
 

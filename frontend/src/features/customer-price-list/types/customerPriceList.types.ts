@@ -2,6 +2,7 @@ export interface CustomerItemMarking {
   id?: number
   markingCode: string
   agentName?: string | null
+  mode?: string | null
 }
 
 export interface CustomerPriceListItem {
@@ -37,6 +38,7 @@ export interface CustomerPriceListUploadRow {
   _count: { items: number }
   custName: string
   itemCount: number
+  markings?: CustomerItemMarking[]
 }
 
 export interface CustomerUploadHistory {
@@ -50,9 +52,11 @@ export interface CustomerUploadHistory {
   status: 'PARSED' | 'PARTIAL' | 'FAILED'
   isSuperseded: boolean
   _count: { items: number }
+  markings?: CustomerItemMarking[]
 }
 
 export interface CustomerPriceListDiffRow {
+  id?: number
   mode: string
   branch: string
   category: string
@@ -60,7 +64,9 @@ export interface CustomerPriceListDiffRow {
   previousPrice: number | null
   delta: number | null
   deltaPct: number | null
+  markings?: CustomerItemMarking[]
 }
+
 
 export interface CustomerPriceListDiff {
   fdCustCode: string
@@ -68,8 +74,10 @@ export interface CustomerPriceListDiff {
   currentEffectiveDate: string
   previousUploadId: number | null
   previousEffectiveDate: string | null
+  markings?: CustomerItemMarking[]
   diff: CustomerPriceListDiffRow[]
 }
+
 
 export interface CustomerPriceListFilters {
   modes: string[]

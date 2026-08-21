@@ -23,7 +23,7 @@ export function useCustomerPriceHistory() {
   const pageSize = 20
   const totalPages = Math.max(1, Math.ceil(total / pageSize))
 
-  useEffect(() => {
+  const loadHistory = () => {
     if (!custCode) return
 
     // Fetch customer info
@@ -52,6 +52,10 @@ export function useCustomerPriceHistory() {
         setError(err?.response?.data?.message || err?.message || 'Gagal memuat riwayat upload')
       })
       .finally(() => setLoading(false))
+  }
+
+  useEffect(() => {
+    loadHistory()
   }, [custCode, page])
 
   // Group by effectiveDate so superseded versions stay pinned beneath active version
@@ -87,5 +91,6 @@ export function useCustomerPriceHistory() {
     loading,
     error,
     groups,
+    reload: loadHistory,
   }
 }

@@ -21,6 +21,7 @@ import { customerPriceListRoutes } from './modules/customer-price-list/customer-
 
 
 import path from 'path'
+import fs from 'fs/promises'
 import { profileRoutes } from './modules/profile/profile.routes'
 
 const rootApp = new Hono()
@@ -33,26 +34,63 @@ rootApp.use('*', cors({
 }))
 rootApp.use('*', honoLogger())
 
-// Static file serving handler for uploads
+// Static file serving handler for uploads with dev/prod distinction
 const serveUploadHandler = async (c: any) => {
   const urlPath = c.req.path
-  const match = urlPath.match(/\/uploads\/(.+)$/)
-  if (!match) return c.text('Not found', 404)
-  const relativePath = match[1]
+  let relativePath = ''
+
+  const uploadsMatch = urlPath.match(/\/(?:mshipping\/)?(?:api\/)?uploads\/(.+)$/)
+  const avatarsMatch = urlPath.match(/\/(?:mshipping\/)?(?:api\/)?avatars\/(.+)$/)
+
+  if (uploadsMatch) {
+    relativePath = uploadsMatch[1]
+  } else if (avatarsMatch) {
+    relativePath = `avatars/${avatarsMatch[1]}`
+  } else {
+    return c.text('Not found', 404)
+  }
+
   const fullPath = path.join(process.cwd(), 'public', 'uploads', relativePath)
   const file = Bun.file(fullPath)
   if (await file.exists()) {
     return new Response(file)
   }
+
+  // Development mode: Fallback ke server production jika file belum ada di lokal
+  if (!ENV.IS_PRODUCTION) {
+    try {
+      const prodUrl = `http://36.93.22.142:3010/uploads/${relativePath}`
+      const remoteRes = await fetch(prodUrl, { signal: AbortSignal.timeout(3000) })
+      if (remoteRes.ok) {
+        const buffer = await remoteRes.arrayBuffer()
+        // Simpan ke local cache agar request berikutnya langsung tersedia
+        await fs.mkdir(path.dirname(fullPath), { recursive: true })
+        await fs.writeFile(fullPath, Buffer.from(buffer))
+        return new Response(Buffer.from(buffer), {
+          headers: {
+            'Content-Type': remoteRes.headers.get('Content-Type') || 'image/png',
+          },
+        })
+      }
+    } catch (e) {
+      // Remote fetch gagal atau timeout, fallback 404
+      logger.warn(`Gagal fetch fallback upload dari production untuk: ${relativePath}`)
+    }
+  }
+
   return c.text('Not found', 404)
 }
 
-// Support uploads at root, APP_BASE_PATH, /mshipping, and /api/uploads
+// Support uploads at root, APP_BASE_PATH, /mshipping, /avatars, and /api/uploads
 rootApp.get('/uploads/*', serveUploadHandler)
+rootApp.get('/avatars/*', serveUploadHandler)
 rootApp.get(`${ENV.APP_BASE_PATH}/uploads/*`, serveUploadHandler)
+rootApp.get(`${ENV.APP_BASE_PATH}/avatars/*`, serveUploadHandler)
 rootApp.get('/mshipping/uploads/*', serveUploadHandler)
+rootApp.get('/mshipping/avatars/*', serveUploadHandler)
 rootApp.get('/api/uploads/*', serveUploadHandler)
 rootApp.get('/mshipping/api/uploads/*', serveUploadHandler)
+
 
 // API rate limiter
 rootApp.use('/api/*', rateLimiter({

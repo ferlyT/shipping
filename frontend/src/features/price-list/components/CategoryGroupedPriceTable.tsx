@@ -5,6 +5,7 @@ import {
   ChevronsUpDown,
   Anchor,
   Plane,
+  Ship,
   Layers,
   LayoutGrid,
   List,
@@ -187,54 +188,46 @@ export function CategoryGroupedPriceTable({
           </div>
         ),
       },
-      ...(onManageMarkings
-        ? [
-            {
-              key: 'markings',
-              header: 'AGEN / MARKING',
-              className: 'w-[180px]',
-              render: (item: PriceListLookupItem) => {
-                const count = item.markings?.length || 0
-                return (
-                  <div className="flex items-center justify-between gap-1.5">
-                    {count === 0 ? (
-                      <span className="text-[11px] font-medium text-slate-400 italic">
-                        {t('priceList.lookup.allAgents')}
-                      </span>
-                    ) : (
-                      <div className="flex items-center gap-1 flex-wrap max-w-[130px]">
-                        {item.markings!.slice(0, 2).map((m) => (
-                          <span
-                            key={m.markingCode}
-                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                            title={m.agentName ? `${m.markingCode} (${m.agentName})` : m.markingCode}
-                          >
-                            {m.markingCode}
-                          </span>
-                        ))}
-                        {count > 2 && (
-                          <span
-                            className="px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                            title={item.markings!.map((m) => m.markingCode).join(', ')}
-                          >
-                            +{count - 2}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => onManageMarkings(item)}
-                      className="px-1.5 py-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-md transition-colors cursor-pointer shrink-0"
-                    >
-                      {count > 0 ? t('priceList.lookup.editAgent') : t('priceList.lookup.addAgent')}
-                    </button>
-                  </div>
-                )
-              },
-            },
-          ]
-        : []),
+      {
+        key: 'markings',
+        header: 'AGEN / MARKING',
+        className: 'w-[180px]',
+        render: (item: PriceListLookupItem) => {
+          const markings = item.markings || []
+          if (markings.length === 0) {
+            return (
+              <span className="text-[11px] font-medium text-[var(--color-secondary)]/70 italic">
+                Semua Agen
+              </span>
+            )
+          }
+          return (
+            <div className="flex items-center gap-1 flex-wrap">
+              {markings.map((m, idx) => (
+                <span
+                  key={`${m.markingCode}-${m.mode || 'ALL'}-${idx}`}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25"
+                  title={
+                    m.agentName
+                      ? `${m.markingCode} (${m.agentName}${m.mode ? ` · ${m.mode}` : ''})`
+                      : `${m.markingCode}${m.mode ? ` (${m.mode})` : ''}`
+                  }
+                >
+                  {m.mode?.toUpperCase().includes('AIR') && <Plane size={9} className="text-sky-500" />}
+                  {m.mode?.toUpperCase().includes('SEA') && <Ship size={9} className="text-blue-500" />}
+                  <span>{m.markingCode}</span>
+                  {m.agentName && (
+                    <span className="text-[9px] font-normal text-[var(--color-secondary)]">
+                      · {m.agentName}
+                    </span>
+                  )}
+                </span>
+              ))}
+            </div>
+          )
+        },
+      },
+
       {
         key: 'price',
         header: 'HARGA (TARIF)',
@@ -497,11 +490,9 @@ export function CategoryGroupedPriceTable({
                             <th className="py-2.5 px-4 text-left w-[140px]">
                               {t('priceList.lookup.estimatedTime')}
                             </th>
-                            {onManageMarkings && (
-                              <th className="py-2.5 px-4 text-left w-[180px]">
-                                {t('priceList.lookup.agentMarking')}
-                              </th>
-                            )}
+                            <th className="py-2.5 px-4 text-left w-[180px]">
+                              {t('priceList.lookup.agentMarking')}
+                            </th>
                             {hasAnyMatch && (
                               <th className="py-2.5 px-4 text-left w-[110px]">Status</th>
                             )}
@@ -549,48 +540,38 @@ export function CategoryGroupedPriceTable({
                                 {row.transitTime || '-'}
                               </td>
 
-                              {/* Agen / Marking (if editable) */}
-                              {onManageMarkings && (
-                                <td className="py-3 px-4">
-                                  <div className="flex items-center justify-between gap-1.5">
-                                    {(row.markings?.length || 0) === 0 ? (
-                                      <span className="text-[11px] font-medium text-slate-400 italic">
-                                        {t('priceList.lookup.allAgents')}
-                                      </span>
-                                    ) : (
-                                      <div className="flex items-center gap-1 flex-wrap max-w-[120px]">
-                                        {row.markings!.slice(0, 2).map((m) => (
-                                          <span
-                                            key={m.markingCode}
-                                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                                            title={
-                                              m.agentName
-                                                ? `${m.markingCode} (${m.agentName})`
-                                                : m.markingCode
-                                            }
-                                          >
-                                            {m.markingCode}
-                                          </span>
-                                        ))}
-                                        {row.markings!.length > 2 && (
-                                          <span className="px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400">
-                                            +{row.markings!.length - 2}
+                              {/* Agen / Marking */}
+                              <td className="py-3 px-4">
+                                {(row.markings?.length || 0) === 0 ? (
+                                  <span className="text-[11px] font-medium text-[var(--color-secondary)]/70 italic">
+                                    Semua Agen
+                                  </span>
+                                ) : (
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    {row.markings!.map((m, idx) => (
+                                      <span
+                                        key={`${m.markingCode}-${m.mode || 'ALL'}-${idx}`}
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25"
+                                        title={
+                                          m.agentName
+                                            ? `${m.markingCode} (${m.agentName}${m.mode ? ` · ${m.mode}` : ''})`
+                                            : `${m.markingCode}${m.mode ? ` (${m.mode})` : ''}`
+                                        }
+                                      >
+                                        {m.mode?.toUpperCase().includes('AIR') && <Plane size={9} className="text-sky-500" />}
+                                        {m.mode?.toUpperCase().includes('SEA') && <Ship size={9} className="text-blue-500" />}
+                                        <span>{m.markingCode}</span>
+                                        {m.agentName && (
+                                          <span className="text-[9px] font-normal text-[var(--color-secondary)]">
+                                            · {m.agentName}
                                           </span>
                                         )}
-                                      </div>
-                                    )}
-                                    <button
-                                      type="button"
-                                      onClick={() => onManageMarkings(row)}
-                                      className="px-1.5 py-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-md transition-colors cursor-pointer shrink-0"
-                                    >
-                                      {(row.markings?.length || 0) > 0
-                                        ? t('priceList.lookup.editAgent')
-                                        : t('priceList.lookup.addAgent')}
-                                    </button>
+                                      </span>
+                                    ))}
                                   </div>
-                                </td>
-                              )}
+                                )}
+                              </td>
+
 
                               {/* Match status */}
                               {hasAnyMatch && (

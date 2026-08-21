@@ -81,6 +81,10 @@ export async function listUploads(page = 1, pageSize = 20) {
         status: true,
         isSuperseded: true,
         _count: { select: { items: true } },
+        markings: {
+          select: { id: true, markingCode: true, agentName: true, mode: true },
+          orderBy: { markingCode: 'asc' },
+        },
       },
     }),
     prisma.tbPriceListUpload.count(),
@@ -91,7 +95,10 @@ export async function listUploads(page = 1, pageSize = 20) {
 export async function getUploadDiff(id: number) {
   const current = await prisma.tbPriceListUpload.findUnique({
     where: { id },
-    include: { items: true },
+    include: {
+      items: true,
+      markings: true,
+    },
   })
   if (!current) return null
 
@@ -115,6 +122,7 @@ export async function getUploadDiff(id: number) {
     const prevPrice = prevMap.get(key(it))
     const currPrice = Number(it.price)
     return {
+      id: it.id,
       sheetType: it.sheetType,
       mode: it.mode,
       branch: it.branch,
@@ -123,16 +131,76 @@ export async function getUploadDiff(id: number) {
       previousPrice: prevPrice ?? null,
       delta: prevPrice !== undefined ? currPrice - prevPrice : null,
       deltaPct: prevPrice ? ((currPrice - prevPrice) / prevPrice) * 100 : null,
+      markings: current.markings?.map((m) => ({
+        id: m.id,
+        markingCode: m.markingCode,
+        agentName: m.agentName,
+        mode: m.mode,
+      })) || [],
     }
   })
 
   return {
     currentUploadId: current.id,
     currentEffectiveDate: current.effectiveDate,
+
     previousUploadId: previous?.id ?? null,
     previousEffectiveDate: previous?.effectiveDate ?? null,
+    markings: current.markings?.map((m) => ({
+      id: m.id,
+      markingCode: m.markingCode,
+      agentName: m.agentName,
+      mode: m.mode,
+    })) || [],
     diff,
   }
+}
+
+
+
+export async function updateUploadEffectiveDate(id: number, newEffectiveDate: Date) {
+  const current = await prisma.tbPriceListUpload.findUnique({
+    where: { id },
+  })
+  if (!current) return null
+
+  const updated = await prisma.tbPriceListUpload.update({
+    where: { id },
+    data: { effectiveDate: newEffectiveDate },
+  })
+
+  // Recalculate superseded status for uploads with the same effectiveDate
+  const allForDate = await prisma.tbPriceListUpload.findMany({
+    where: {
+      effectiveDate: newEffectiveDate,
+      status: { not: 'FAILED' },
+    },
+    orderBy: { uploadedAt: 'desc' },
+  })
+
+  if (allForDate.length > 1) {
+    const latest = allForDate[0]
+    const older = allForDate.slice(1)
+    if (latest) {
+      await prisma.tbPriceListUpload.update({
+        where: { id: latest.id },
+        data: { isSuperseded: false },
+      })
+    }
+    for (const old of older) {
+      await prisma.tbPriceListUpload.update({
+        where: { id: old.id },
+        data: { isSuperseded: true },
+      })
+    }
+  } else if (allForDate.length === 1 && allForDate[0]) {
+    await prisma.tbPriceListUpload.update({
+      where: { id: allForDate[0].id },
+      data: { isSuperseded: false },
+    })
+  }
+
+  return updated
 }
 
 export async function getLatestUploadDiff() {
@@ -143,6 +211,7 @@ export async function getLatestUploadDiff() {
   if (!latest) return null
   return getUploadDiff(latest.id)
 }
+
 
 export async function getPriceTrend(filter: {
   sheetType?: string
@@ -226,165 +295,230 @@ export async function getFilterOptions(params: {
   }
 }
 
+export async function getDistinctBranches(): Promise<string[]> {
+  const [generalBranches, customerBranches] = await Promise.all([
+    prisma.tbPriceListItem.findMany({
+      distinct: ['branch'],
+      select: { branch: true },
+      where: { branch: { not: '' } },
+    }),
+    prisma.tbCustomerPriceListItem.findMany({
+      distinct: ['branch'],
+      select: { branch: true },
+      where: { branch: { not: '' } },
+    }),
+  ])
+
+  const set = new Set<string>()
+  generalBranches.forEach((b) => {
+    if (b.branch && b.branch.trim()) set.add(b.branch.trim())
+  })
+  customerBranches.forEach((b) => {
+    if (b.branch && b.branch.trim()) set.add(b.branch.trim())
+  })
+
+  return Array.from(set).sort()
+}
+
+export function normalizeMode(mode?: string | null): string {
+  if (!mode) return 'BY SEA'
+  const m = mode.trim().toUpperCase()
+  if (m.includes('AIR') || m.includes('UDARA')) return 'BY AIR'
+  return 'BY SEA'
+}
+
 export async function lookupPriceList(
   targetDate: Date,
   filters?: { sheetType?: string; mode?: string; branch?: string; category?: string; markingCode?: string },
 ) {
-  const upload = await prisma.tbPriceListUpload.findFirst({
-    where: {
-      effectiveDate: { lte: targetDate },
-      status: { not: 'FAILED' },
-      isSuperseded: false,
-    },
-    orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
-  })
+  try {
+    let upload: any = null
+    let isMarkingOverride = false
 
-  if (!upload) {
+    // 1. Pengecekan Level 3: Khusus Agen Marking Umum (TbPriceListUploadMarking)
+    // Jika parameter markingCode disertakan, cari upload aktif yang memiliki relasi di TbPriceListUploadMarking dengan markingCode & mode yang cocok (Laut/Udara).
+    if (filters?.markingCode?.trim()) {
+      const cleanMarking = filters.markingCode.trim()
+      const targetMode = filters?.mode ? normalizeMode(filters.mode) : undefined
+
+      const markingCondition: any = {
+        markingCode: { equals: cleanMarking },
+      }
+      if (targetMode) {
+        markingCondition.mode = targetMode
+      }
+
+      upload = await prisma.tbPriceListUpload.findFirst({
+        where: {
+          effectiveDate: { lte: targetDate },
+          status: { not: 'FAILED' },
+          isSuperseded: false,
+          markings: {
+            some: markingCondition,
+          },
+        },
+        include: { markings: true },
+        orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
+      })
+
+      if (upload) {
+        isMarkingOverride = true
+      }
+    }
+
+    // 2. Pengecekan Level 4: Tarif Standar Master Umum (TbPriceListUpload)
+    // Jika tidak ada markingCode atau tidak ada upload khusus markingCode, ambil upload umum terbaru
+    if (!upload) {
+      upload = await prisma.tbPriceListUpload.findFirst({
+        where: {
+          effectiveDate: { lte: targetDate },
+          status: { not: 'FAILED' },
+          isSuperseded: false,
+        },
+        include: { markings: true },
+        orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
+      })
+    }
+
+    if (!upload) {
+      return {
+        found: false,
+        targetDate,
+        uploadInfo: null,
+        items: [],
+        isMarkingOverride: false,
+        appliedRule: 'NONE' as const,
+      }
+    }
+
+    const baseWhereItem: Prisma.TbPriceListItemWhereInput = {
+      uploadId: upload.id,
+    }
+
+    if (filters?.sheetType) baseWhereItem.sheetType = filters.sheetType;
+    if (filters?.mode) baseWhereItem.mode = filters.mode;
+    if (filters?.branch) baseWhereItem.branch = filters.branch;
+    if (filters?.category) {
+      const catStr = filters.category;
+      const categories = catStr.split(',').map((s) => s.trim()).filter(Boolean);
+      if (categories.length === 1) {
+        baseWhereItem.category = categories[0];
+      } else if (categories.length > 1) {
+        baseWhereItem.category = { in: categories } as any;
+      }
+    }
+
+    const items = await prisma.tbPriceListItem.findMany({
+      where: baseWhereItem,
+      orderBy: [{ sheetType: 'asc' }, { mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
+    })
+
+    const appliedRule = isMarkingOverride ? 'GENERAL_MARKING' : 'GENERAL_DEFAULT'
+
+    return {
+      found: items.length > 0,
+      targetDate,
+      uploadInfo: {
+        uploadId: upload.id,
+        fileName: upload.fileName,
+        effectiveDate: upload.effectiveDate,
+        priceDate: upload.priceDate,
+        uploadedAt: upload.uploadedAt,
+        markings: upload.markings?.map((m: any) => ({
+          id: m.id,
+          markingCode: m.markingCode,
+          agentName: m.agentName,
+          mode: m.mode,
+        })) || [],
+      },
+      isMarkingOverride,
+      appliedRule,
+      items: items.map((it) => ({
+        id: it.id,
+        sheetType: it.sheetType,
+        mode: it.mode,
+        branch: it.branch,
+        transitTime: it.transitTime,
+        category: it.category,
+        price: Number(it.price),
+        markings: upload.markings?.map((m: any) => ({
+          id: m.id,
+          markingCode: m.markingCode,
+          agentName: m.agentName,
+          mode: m.mode,
+        })) || [],
+      })),
+    }
+
+  } catch (err) {
+    logger.error('Error executing lookupPriceList:', err)
     return {
       found: false,
       targetDate,
       uploadInfo: null,
       items: [],
-      appliedLevel: 'NONE',
+      isMarkingOverride: false,
+      appliedRule: 'NONE' as const,
     }
-  }
-
-  const baseWhereItem: Prisma.TbPriceListItemWhereInput = {
-    uploadId: upload.id,
-  }
-
-  if (filters?.sheetType) baseWhereItem.sheetType = filters.sheetType;
-  if (filters?.mode) baseWhereItem.mode = filters.mode;
-  if (filters?.branch) baseWhereItem.branch = filters.branch;
-  if (filters?.category) {
-    const catStr = filters.category;
-    const categories = catStr.split(',').map((s) => s.trim()).filter(Boolean);
-    if (categories.length === 1) {
-      baseWhereItem.category = categories[0];
-    } else if (categories.length > 1) {
-      baseWhereItem.category = { in: categories } as any;
-    }
-  }
-
-  let items: any[] = []
-  let isMarkingOverride = false
-
-  // 1. Jika ada filter markingCode, coba cari yang markingCode-nya cocok (Level 3)
-  if (filters?.markingCode?.trim()) {
-    const cleanMarking = filters.markingCode.trim()
-    const markingItems = await prisma.tbPriceListItem.findMany({
-      where: {
-        ...baseWhereItem,
-        markings: {
-          some: {
-            markingCode: { equals: cleanMarking },
-          },
-        },
-      },
-      include: {
-        markings: true,
-      },
-      orderBy: [{ sheetType: 'asc' }, { mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
-    })
-
-    if (markingItems.length > 0) {
-      items = markingItems
-      isMarkingOverride = true
-    }
-  }
-
-  // 2. Jika tidak ada markingCode atau tidak ada item yang match dengan markingCode, ambil item standar (Level 4)
-  if (items.length === 0) {
-    items = await prisma.tbPriceListItem.findMany({
-      where: baseWhereItem,
-      include: {
-        markings: true,
-      },
-      orderBy: [{ sheetType: 'asc' }, { mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
-    })
-  }
-
-  return {
-    found: true,
-    targetDate,
-    uploadInfo: {
-      uploadId: upload.id,
-      fileName: upload.fileName,
-      effectiveDate: upload.effectiveDate,
-      priceDate: upload.priceDate,
-      uploadedAt: upload.uploadedAt,
-    },
-    isMarkingOverride,
-    items: items.map((it) => ({
-      id: it.id,
-      sheetType: it.sheetType,
-      mode: it.mode,
-      branch: it.branch,
-      transitTime: it.transitTime,
-      category: it.category,
-      price: Number(it.price),
-      markings: it.markings?.map((m: any) => ({
-        id: m.id,
-        markingCode: m.markingCode,
-        agentName: m.agentName,
-      })) || [],
-    })),
   }
 }
 
-export async function getItemMarkings(itemId: number) {
-  return prisma.tbPriceListItemMarking.findMany({
-    where: { itemId },
+export async function getUploadMarkings(uploadId: number) {
+  return prisma.tbPriceListUploadMarking.findMany({
+    where: { uploadId },
     orderBy: { markingCode: 'asc' },
   })
 }
 
-export async function setItemMarkings(
-  itemId: number,
-  markings: { markingCode: string; agentName?: string }[],
+export async function setUploadMarkings(
+  uploadId: number,
+  markings: { markingCode: string; agentName?: string; mode?: string }[],
 ) {
-  // Replace all markings for this item in a transaction
+  // Replace all markings for this upload in a transaction
   return prisma.$transaction(async (tx) => {
-    await tx.tbPriceListItemMarking.deleteMany({
-      where: { itemId },
+    await tx.tbPriceListUploadMarking.deleteMany({
+      where: { uploadId },
     })
 
     if (markings.length > 0) {
       const validMarkings = markings
         .map((m) => ({
-          itemId,
+          uploadId,
           markingCode: m.markingCode.trim(),
           agentName: m.agentName?.trim() || null,
+          mode: normalizeMode(m.mode),
         }))
         .filter((m) => m.markingCode.length > 0)
 
-      // Deduplicate by markingCode
+      // Deduplicate by markingCode and mode
       const uniqueMap = new Map<string, typeof validMarkings[0]>()
-      validMarkings.forEach((m) => uniqueMap.set(m.markingCode.toUpperCase(), m))
+      validMarkings.forEach((m) => uniqueMap.set(`${m.markingCode.toUpperCase()}||${m.mode || 'ALL'}`, m))
       const uniqueList = Array.from(uniqueMap.values())
 
       if (uniqueList.length > 0) {
-        await tx.tbPriceListItemMarking.createMany({
+        await tx.tbPriceListUploadMarking.createMany({
           data: uniqueList,
         })
       }
     }
 
-    return tx.tbPriceListItemMarking.findMany({
-      where: { itemId },
+    return tx.tbPriceListUploadMarking.findMany({
+      where: { uploadId },
       orderBy: { markingCode: 'asc' },
     })
   })
 }
 
-export async function deleteItemMarking(itemId: number, markingCode: string) {
-  return prisma.tbPriceListItemMarking.deleteMany({
+export async function deleteUploadMarking(uploadId: number, markingCode: string) {
+  return prisma.tbPriceListUploadMarking.deleteMany({
     where: {
-      itemId,
+      uploadId,
       markingCode: markingCode.trim(),
     },
   })
 }
+
+
 
 export async function searchEntryList(q: string, limit = 20) {
   let cleanQ = q.trim()

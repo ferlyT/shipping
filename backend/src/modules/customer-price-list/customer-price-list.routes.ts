@@ -7,12 +7,14 @@ import {
   listCustomerUploads,
   getActiveCustomerPriceList,
   getCustomerUploadDiff,
+  updateCustomerUploadEffectiveDate,
   getCustomerPriceListFilters,
   lookupCustomerPriceList,
-  getCustomerItemMarkings,
-  setCustomerItemMarkings,
-  deleteCustomerItemMarking,
+  getCustomerUploadMarkings,
+  setCustomerUploadMarkings,
+  deleteCustomerUploadMarking,
 } from './customer-price-list.service'
+
 
 const customerPriceListRoutes = new Hono()
 
@@ -59,34 +61,35 @@ customerPriceListRoutes.get('/lookup', async (c) => {
   return successResponse(c, result)
 })
 
-// GET /api/customer-price-list/items/:id/markings
-customerPriceListRoutes.get('/items/:id/markings', async (c) => {
+// GET /api/customer-price-list/uploads/:id/markings
+customerPriceListRoutes.get('/uploads/:id/markings', async (c) => {
   const id = Number(c.req.param('id'))
-  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
-  const markings = await getCustomerItemMarkings(id)
+  if (isNaN(id)) return errorResponse(c, 'ID upload tidak valid', 400)
+  const markings = await getCustomerUploadMarkings(id)
   return successResponse(c, markings)
 })
 
-// PUT /api/customer-price-list/items/:id/markings
-customerPriceListRoutes.put('/items/:id/markings', async (c) => {
+// PUT /api/customer-price-list/uploads/:id/markings
+customerPriceListRoutes.put('/uploads/:id/markings', async (c) => {
   const id = Number(c.req.param('id'))
-  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
+  if (isNaN(id)) return errorResponse(c, 'ID upload tidak valid', 400)
   const body = await c.req.json<{ markings: { markingCode: string; agentName?: string }[] }>()
   if (!Array.isArray(body?.markings)) {
     return errorResponse(c, 'Field markings harus berupa array', 400)
   }
-  const result = await setCustomerItemMarkings(id, body.markings)
+  const result = await setCustomerUploadMarkings(id, body.markings)
   return successResponse(c, result)
 })
 
-// DELETE /api/customer-price-list/items/:id/markings/:markingCode
-customerPriceListRoutes.delete('/items/:id/markings/:markingCode', async (c) => {
+// DELETE /api/customer-price-list/uploads/:id/markings/:markingCode
+customerPriceListRoutes.delete('/uploads/:id/markings/:markingCode', async (c) => {
   const id = Number(c.req.param('id'))
   const markingCode = c.req.param('markingCode')
   if (isNaN(id) || !markingCode) return errorResponse(c, 'Parameter tidak valid', 400)
-  await deleteCustomerItemMarking(id, markingCode)
+  await deleteCustomerUploadMarking(id, markingCode)
   return successResponse(c, { message: 'Marking berhasil dihapus' })
 })
+
 
 
 // GET /api/customer-price-list/:custCode/active
@@ -129,6 +132,27 @@ customerPriceListRoutes.get('/uploads/:id/diff', async (c) => {
   const diff = await getCustomerUploadDiff(id)
   if (!diff) return errorResponse(c, 'Upload tidak ditemukan', 404)
   return successResponse(c, diff)
+})
+
+// PATCH /api/customer-price-list/uploads/:id/effective-date
+customerPriceListRoutes.patch('/uploads/:id/effective-date', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID tidak valid', 400)
+
+  const body = await c.req.json<{ effectiveDate: string }>()
+  if (!body?.effectiveDate) {
+    return errorResponse(c, 'Field effectiveDate wajib diisi', 400)
+  }
+
+  const effectiveDate = new Date(body.effectiveDate)
+  if (isNaN(effectiveDate.getTime())) {
+    return errorResponse(c, 'Format tanggal tidak valid', 400)
+  }
+
+  const updated = await updateCustomerUploadEffectiveDate(id, effectiveDate)
+  if (!updated) return errorResponse(c, 'Upload customer price list tidak ditemukan', 404)
+
+  return successResponse(c, updated)
 })
 
 // POST /api/customer-price-list/:custCode/upload  (multipart/form-data)

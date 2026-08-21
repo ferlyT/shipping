@@ -2,6 +2,7 @@ export interface ItemMarking {
   id?: number
   markingCode: string
   agentName?: string | null
+  mode?: string | null
 }
 
 export interface TrendPoint {
@@ -31,9 +32,11 @@ export interface UploadRow {
   status: 'PARSED' | 'PARTIAL' | 'FAILED'
   isSuperseded: boolean
   _count: { items: number }
+  markings?: ItemMarking[]
 }
 
 export interface DiffRow {
+  id?: number
   sheetType: string
   mode: string
   branch: string
@@ -42,15 +45,19 @@ export interface DiffRow {
   previousPrice: number | null
   delta: number | null
   deltaPct: number | null
+  markings?: ItemMarking[]
 }
+
 
 export interface DiffResponse {
   currentUploadId: number
   currentEffectiveDate: string
   previousUploadId: number | null
   previousEffectiveDate: string | null
+  markings?: ItemMarking[]
   diff: DiffRow[]
 }
+
 
 export interface TrendSeries {
   key: string

@@ -1,37 +1,39 @@
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { X, Plus, Tag, AlertCircle, Check, Loader2 } from 'lucide-react'
+import { X, Tag, Plus, Building2, AlertCircle, Check, Loader2, Plane, Ship, FileSpreadsheet, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
-import { formatCurrency } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
+import { priceListApi } from '../services/priceList.service'
 import type { ItemMarking } from '../types'
 
 interface MarkingManagerModalProps {
   isOpen: boolean
   onClose: () => void
-  itemId: number
-  itemDescription: {
-    sheetType?: string
-    mode: string
-    branch: string
-    category: string
-    price: number
+  uploadId: number
+  uploadDescription: {
+    title?: string
+    fileName?: string
+    effectiveDate?: string
+    custCode?: string
     custName?: string
   }
   initialMarkings?: ItemMarking[]
-  onSave: (markings: { markingCode: string; agentName?: string }[]) => Promise<void>
+  onSave: (markings: { markingCode: string; agentName?: string; mode?: string }[]) => Promise<void>
 }
 
-export function MarkingManagerModal({
+export const MarkingManagerModal: React.FC<MarkingManagerModalProps> = ({
   isOpen,
   onClose,
-  itemId: _itemId,
-  itemDescription,
+  uploadId: _uploadId,
+  uploadDescription,
   initialMarkings = [],
   onSave,
-}: MarkingManagerModalProps) {
-  const [markings, setMarkings] = useState<ItemMarking[]>([])
+}) => {
+  const [markings, setMarkings] = useState<ItemMarking[]>(initialMarkings)
   const [newCode, setNewCode] = useState('')
   const [newAgentName, setNewAgentName] = useState('')
+  const [newMode, setNewMode] = useState<'BY SEA' | 'BY AIR'>('BY SEA')
+  const [branchOptions, setBranchOptions] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedSuccess, setSavedSuccess] = useState(false)
@@ -41,8 +43,24 @@ export function MarkingManagerModal({
       setMarkings(initialMarkings)
       setNewCode('')
       setNewAgentName('')
+      setNewMode('BY SEA')
       setError(null)
       setSavedSuccess(false)
+
+      // Fetch distinct branches from price list items
+      priceListApi
+        .getBranches()
+        .then((res) => {
+          const raw = res.data as any
+          const data = raw?.data ?? raw
+          if (Array.isArray(data)) {
+            setBranchOptions(data)
+          }
+        })
+        .catch(() => {
+          // Fallback options
+          setBranchOptions(['GZ', 'YW', 'SGC', 'FOSHAN'])
+        })
     }
   }, [isOpen, initialMarkings])
 
@@ -52,8 +70,15 @@ export function MarkingManagerModal({
     const cleanCode = newCode.trim().toUpperCase()
     if (!cleanCode) return
 
-    if (markings.some((m) => m.markingCode.toUpperCase() === cleanCode)) {
-      setError(`Kode marking "${cleanCode}" sudah ada di daftar.`)
+    const modeVal = newMode
+    if (
+      markings.some(
+        (m) =>
+          m.markingCode.toUpperCase() === cleanCode &&
+          (m.mode || 'BY SEA') === modeVal
+      )
+    ) {
+      setError(`Kode marking "${cleanCode}" (${modeVal === 'BY AIR' ? 'Udara' : 'Laut'}) sudah ada di daftar.`)
       return
     }
 
@@ -62,6 +87,7 @@ export function MarkingManagerModal({
       {
         markingCode: cleanCode,
         agentName: newAgentName.trim() || null,
+        mode: modeVal,
       },
     ])
     setNewCode('')
@@ -69,8 +95,16 @@ export function MarkingManagerModal({
     setError(null)
   }
 
-  const handleRemoveMarking = (codeToRemove: string) => {
-    setMarkings((prev) => prev.filter((m) => m.markingCode.toUpperCase() !== codeToRemove.toUpperCase()))
+  const handleRemoveMarking = (codeToRemove: string, modeToRemove?: string | null) => {
+    setMarkings((prev) =>
+      prev.filter(
+        (m) =>
+          !(
+            m.markingCode.toUpperCase() === codeToRemove.toUpperCase() &&
+            (m.mode || 'BY SEA') === (modeToRemove || 'BY SEA')
+          )
+      )
+    )
     setError(null)
   }
 
@@ -78,10 +112,31 @@ export function MarkingManagerModal({
     setIsSaving(true)
     setError(null)
     try {
+      let finalMarkings = [...markings]
+      const cleanCode = newCode.trim().toUpperCase()
+      const modeVal = newMode
+
+      if (cleanCode) {
+        if (
+          !finalMarkings.some(
+            (m) =>
+              m.markingCode.toUpperCase() === cleanCode &&
+              (m.mode || 'BY SEA') === modeVal
+          )
+        ) {
+          finalMarkings.push({
+            markingCode: cleanCode,
+            agentName: newAgentName.trim() || null,
+            mode: modeVal,
+          })
+        }
+      }
+
       await onSave(
-        markings.map((m) => ({
+        finalMarkings.map((m) => ({
           markingCode: m.markingCode,
           agentName: m.agentName || undefined,
+          mode: m.mode || 'BY SEA',
         }))
       )
       setSavedSuccess(true)
@@ -94,6 +149,7 @@ export function MarkingManagerModal({
       setIsSaving(false)
     }
   }
+
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -127,33 +183,122 @@ export function MarkingManagerModal({
 
         {/* Body */}
         <div className="p-5 space-y-4 overflow-y-auto flex-1">
-          {/* Item Info Banner */}
+          {/* Upload Info Banner */}
           <div className="p-3.5 rounded-xl bg-[var(--color-neutral)]/50 border border-[var(--color-border)] space-y-1.5">
             <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-[var(--color-primary)]">
-                {itemDescription.mode} · {itemDescription.branch}
-                {itemDescription.sheetType && ` · ${itemDescription.sheetType}`}
-              </span>
-              <span className="font-bold text-emerald-600 dark:text-emerald-400">
-                {formatCurrency(itemDescription.price)}
-              </span>
+              <div className="flex items-center gap-1.5 font-semibold text-[var(--color-primary)]">
+                <FileSpreadsheet size={14} className="text-amber-500 shrink-0" />
+                <span className="truncate max-w-[240px]">{uploadDescription.fileName || uploadDescription.title || `Price List Upload #${_uploadId}`}</span>
+              </div>
+              {uploadDescription.effectiveDate && (
+                <div className="flex items-center gap-1 text-[11px] font-mono text-[var(--color-secondary)]">
+                  <Calendar size={12} />
+                  <span>{formatDate(uploadDescription.effectiveDate)}</span>
+                </div>
+              )}
             </div>
-            <p className="text-xs text-[var(--color-secondary)] font-medium truncate">{itemDescription.category}</p>
-            {itemDescription.custName && (
-              <p className="text-[11px] text-[var(--color-tertiary)] font-medium">Customer: {itemDescription.custName}</p>
+            {uploadDescription.custCode && (
+              <p className="text-[11px] text-[var(--color-tertiary)] font-medium">
+                Customer: <span className="font-semibold">{uploadDescription.custCode}</span> {uploadDescription.custName ? `— ${uploadDescription.custName}` : ''}
+              </p>
             )}
           </div>
 
-          {/* Form Input Tambah Agen */}
-          <div className="space-y-2">
-            <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
-              Tambah Kode Marking Agen
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-12 gap-2">
-              <div className="sm:col-span-5">
+
+          {/* Form Input Tambah Agen (Urutan: Mode -> Branch -> Kode Marking) */}
+          <div className="space-y-3 p-3.5 rounded-xl bg-[var(--color-neutral)] border border-[var(--color-border)]">
+            {/* 1. Mode Selector */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-secondary)] flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] inline-flex items-center justify-center text-[9px] font-bold text-[var(--color-tertiary)]">1</span>
+                Pilih Mode Pengiriman
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setNewMode('BY SEA')}
+                  className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                    newMode === 'BY SEA'
+                      ? 'bg-[var(--color-surface)] border-blue-500 text-blue-500 shadow-xs font-bold ring-1 ring-blue-500/20'
+                      : 'bg-[var(--color-surface)]/60 border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                  }`}
+                >
+                  <Ship size={14} /> Laut (BY SEA)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setNewMode('BY AIR')}
+                  className={`flex items-center justify-center gap-1.5 py-2 text-xs font-semibold rounded-lg border transition-all cursor-pointer ${
+                    newMode === 'BY AIR'
+                      ? 'bg-[var(--color-surface)] border-sky-500 text-sky-500 shadow-xs font-bold ring-1 ring-sky-500/20'
+                      : 'bg-[var(--color-surface)]/60 border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                  }`}
+                >
+                  <Plane size={14} /> Udara (BY AIR)
+                </button>
+              </div>
+            </div>
+
+            {/* 2. Branch / Nama Agen */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-secondary)] flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] inline-flex items-center justify-center text-[9px] font-bold text-[var(--color-tertiary)]">2</span>
+                Branch / Nama Agen
+              </label>
+              <input
+                type="text"
+                list="agent-branch-datalist"
+                placeholder="Pilih atau ketik Branch (mis. GZ, HK, SG)"
+                value={newAgentName}
+                onChange={(e) => setNewAgentName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault()
+                    handleAddMarking()
+                  }
+                }}
+                className="w-full h-9 px-3 text-xs rounded-lg bg-[var(--color-surface)] text-[var(--color-primary)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+              />
+              <datalist id="agent-branch-datalist">
+                {branchOptions.map((branch) => (
+                  <option key={branch} value={branch} />
+                ))}
+              </datalist>
+
+              {/* Quick Branch Suggestions */}
+              {branchOptions.length > 0 && (
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[10px] text-[var(--color-secondary)] flex items-center gap-1">
+                    <Building2 size={11} /> Shortcut:
+                  </span>
+                  {branchOptions.map((branch) => (
+                    <button
+                      key={branch}
+                      type="button"
+                      onClick={() => setNewAgentName(branch)}
+                      className={`px-2 py-0.5 text-[10px] font-semibold rounded-md border transition-colors cursor-pointer ${
+                        newAgentName === branch
+                          ? 'bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/40'
+                          : 'bg-[var(--color-surface)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] border-[var(--color-border)]'
+                      }`}
+                    >
+                      {branch}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* 3. Kode Marking */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-secondary)] flex items-center gap-1.5">
+                <span className="w-4 h-4 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] inline-flex items-center justify-center text-[9px] font-bold text-[var(--color-tertiary)]">3</span>
+                Kode Marking
+              </label>
+              <div className="flex gap-2">
                 <input
                   type="text"
-                  placeholder="Kode Marking (mis. GZC)"
+                  placeholder="Ketik Kode Marking (mis. GZC, AIRGZ)"
                   value={newCode}
                   onChange={(e) => setNewCode(e.target.value)}
                   onKeyDown={(e) => {
@@ -162,31 +307,14 @@ export function MarkingManagerModal({
                       handleAddMarking()
                     }
                   }}
-                  className="w-full h-9 px-3 text-xs font-semibold rounded-lg bg-[var(--color-surface)] text-[var(--color-primary)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 uppercase placeholder:normal-case"
+                  className="flex-1 h-9 px-3 text-xs font-semibold rounded-lg bg-[var(--color-surface)] text-[var(--color-primary)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500 uppercase placeholder:normal-case font-mono"
                 />
-              </div>
-              <div className="sm:col-span-5">
-                <input
-                  type="text"
-                  placeholder="Nama Agen (Opsional)"
-                  value={newAgentName}
-                  onChange={(e) => setNewAgentName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      handleAddMarking()
-                    }
-                  }}
-                  className="w-full h-9 px-3 text-xs rounded-lg bg-[var(--color-surface)] text-[var(--color-primary)] border border-[var(--color-border)] focus:outline-none focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
-                />
-              </div>
-              <div className="sm:col-span-2">
                 <Button
                   type="button"
                   variant="primary"
                   size="sm"
                   onClick={handleAddMarking}
-                  className="w-full h-9 text-xs"
+                  className="h-9 px-4 text-xs shrink-0"
                 >
                   <Plus size={14} className="mr-1" />
                   Tambah
@@ -210,24 +338,33 @@ export function MarkingManagerModal({
                 Agen Terhubung ({markings.length})
               </span>
               {markings.length === 0 && (
-                <span className="text-[11px] text-[var(--color-secondary)] italic">Berlaku untuk semua agen (Default)</span>
+                <span className="text-[11px] text-[var(--color-secondary)] italic">Belum ada agen khusus. Tarif berlaku standar.</span>
               )}
             </div>
 
             {markings.length > 0 ? (
               <div className="flex flex-wrap gap-2 p-3 bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-xl min-h-[70px] max-h-[160px] overflow-y-auto">
-                {markings.map((m) => (
+                {markings.map((m, idx) => (
                   <div
-                    key={m.markingCode}
+                    key={`${m.markingCode}-${m.mode || 'BY SEA'}-${idx}`}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 text-xs font-semibold shadow-2xs group"
                   >
                     <span>{m.markingCode}</span>
                     {m.agentName && (
                       <span className="text-[10px] text-[var(--color-secondary)] font-normal">({m.agentName})</span>
                     )}
+                    {m.mode === 'BY AIR' ? (
+                      <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-medium border border-sky-500/40 text-sky-500">
+                        <Plane size={9} /> Udara
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-medium border border-blue-500/40 text-blue-500">
+                        <Ship size={9} /> Laut
+                      </span>
+                    )}
                     <button
                       type="button"
-                      onClick={() => handleRemoveMarking(m.markingCode)}
+                      onClick={() => handleRemoveMarking(m.markingCode, m.mode)}
                       className="p-0.5 text-amber-500 hover:text-rose-600 rounded hover:bg-amber-500/20 transition-colors ml-0.5"
                       title="Hapus agen ini"
                     >

@@ -3,7 +3,11 @@ import { Palette, Check, Sparkles } from 'lucide-react'
 import { useThemeStore, THEMES, type ThemeId } from '@/stores/themeStore'
 import { useTranslation } from '@/hooks/useTranslation'
 
-export function ThemeToggle() {
+interface ThemeToggleProps {
+  align?: 'left' | 'right' | 'auto'
+}
+
+export function ThemeToggle({ align = 'auto' }: ThemeToggleProps) {
   const { theme, setTheme } = useThemeStore()
   const { t } = useTranslation()
   const [isOpen, setIsOpen] = useState(false)
@@ -26,6 +30,13 @@ export function ThemeToggle() {
     setIsOpen(false)
   }
 
+  const dropdownAlignmentClass =
+    align === 'right'
+      ? 'right-0'
+      : align === 'left'
+      ? 'left-0'
+      : 'left-0 sm:left-auto sm:right-0'
+
   return (
     <div className="relative" ref={dropdownRef}>
       <button
@@ -46,7 +57,7 @@ export function ThemeToggle() {
       </button>
 
       {isOpen && (
-        <div className="absolute left-0 mt-2 w-56 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl p-1.5 z-50 animate-in fade-in-0 zoom-in-95 duration-150">
+        <div className={`absolute ${dropdownAlignmentClass} mt-2 w-56 max-w-[calc(100vw-2rem)] rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl p-1.5 z-50 animate-in fade-in-0 zoom-in-95 duration-150`}>
           <div className="px-2.5 py-1.5 border-b border-[var(--color-border)] mb-1 flex items-center justify-between">
             <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-[var(--color-secondary)] flex items-center gap-1.5">
               <Sparkles className="w-3 h-3 text-[var(--color-tertiary)]" />

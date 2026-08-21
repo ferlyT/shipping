@@ -16,7 +16,6 @@ import {
   PillSingleToggle,
   CategoryMultiCombobox,
 } from './DashboardFilters'
-import { MarkingManagerModal } from './MarkingManagerModal'
 import { CategoryGroupedPriceTable } from './CategoryGroupedPriceTable'
 import type { useDateLookup } from '../hooks/useDateLookup'
 
@@ -43,11 +42,9 @@ export function DateLookupTab({
   handleResetFilters,
   isFiltered,
   filteredDateItems,
-  selectedItemForMarkings,
-  setSelectedItemForMarkings,
-  handleSaveItemMarkings,
 }: DateLookupTabProps) {
   const [filtersExpanded, setFiltersExpanded] = useState(true)
+
 
   return (
     <div className="space-y-5">
@@ -214,28 +211,10 @@ export function DateLookupTab({
           totalOriginalCount={dateResult?.items.length || 0}
           searchQuery={tableSearch}
           onSearchChange={setTableSearch}
-          onManageMarkings={setSelectedItemForMarkings}
           emptyMessage={tableSearch ? t('priceList.lookup.noMatch') : t('common.noData')}
-        />
-      )}
-
-      {/* Marking Manager Modal */}
-      {selectedItemForMarkings && (
-        <MarkingManagerModal
-          isOpen={Boolean(selectedItemForMarkings)}
-          onClose={() => setSelectedItemForMarkings(null)}
-          itemId={selectedItemForMarkings.id}
-          itemDescription={{
-            sheetType: selectedItemForMarkings.sheetType,
-            mode: selectedItemForMarkings.mode,
-            branch: selectedItemForMarkings.branch,
-            category: selectedItemForMarkings.category,
-            price: selectedItemForMarkings.price,
-          }}
-          initialMarkings={selectedItemForMarkings.markings || []}
-          onSave={handleSaveItemMarkings}
         />
       )}
     </div>
   )
 }
+

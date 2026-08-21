@@ -147,22 +147,47 @@ export function getInitials(name?: string | null): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-// Helper untuk resolve URL media / avatar yang diunggah ke backend
+// Helper untuk resolve URL media / avatar yang diunggah ke backend (mendukung dev local & production)
 export function resolveMediaUrl(url?: string | null): string | undefined {
-  if (!url) return undefined
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) {
-    return url
+  if (!url || typeof url !== 'string') return undefined
+  const trimmed = url.trim()
+  if (!trimmed) return undefined
+
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('data:')
+  ) {
+    return trimmed
   }
-  const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-  try {
-    if (apiBase.startsWith('http')) {
-      const urlObj = new URL(apiBase)
-      const origin = urlObj.origin
-      const cleanPath = url.startsWith('/') ? url : `/${url}`
-      return `${origin}${cleanPath}`
+
+  // Normalisasi path jika hanya berupa nama berkas
+  let normalizedPath = trimmed
+  if (!normalizedPath.startsWith('/')) {
+    if (normalizedPath.startsWith('uploads/')) {
+      normalizedPath = `/${normalizedPath}`
+    } else if (normalizedPath.startsWith('avatars/')) {
+      normalizedPath = `/uploads/${normalizedPath}`
+    } else {
+      normalizedPath = `/uploads/avatars/${normalizedPath}`
     }
-  } catch {}
-  return url
+  }
+
+  const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+  const isDev = import.meta.env.DEV
+
+  // Di Production: Jika VITE_API_BASE_URL mengarah ke host tertentu (misal http://36.93.22.142:3010)
+  if (!isDev && apiBase.startsWith('http')) {
+    try {
+      const urlObj = new URL(apiBase)
+      return `${urlObj.origin}${normalizedPath}`
+    } catch {}
+  }
+
+  // Di Development Local: Gunakan relative path yang di-proxy oleh dev server Vite
+  return normalizedPath
 }
+
 
 

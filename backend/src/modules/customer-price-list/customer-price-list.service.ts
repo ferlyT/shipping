@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database'
 import { Prisma } from '@prisma/client'
 import { parsePriceListWorkbook } from '../price-list/price-list.parser'
+import { logger } from '../../config/logger'
 
 /**
  * Ingest file Excel price list customer ke DB.
@@ -119,11 +120,14 @@ export async function listCustomerUploads(fdCustCode: string, page = 1, pageSize
         status: true,
         isSuperseded: true,
         _count: { select: { items: true } },
+        markings: {
+          select: { id: true, markingCode: true, agentName: true, mode: true },
+          orderBy: { markingCode: 'asc' },
+        },
       },
     }),
     prisma.tbCustomerPriceListUpload.count({ where: { fdCustCode } }),
   ])
-
   return { rows, total, page, pageSize }
 }
 
@@ -133,13 +137,13 @@ export async function listCustomerUploads(fdCustCode: string, page = 1, pageSize
 export async function getActiveCustomerPriceList(fdCustCode: string) {
   const latestUpload = await prisma.tbCustomerPriceListUpload.findFirst({
     where: { fdCustCode, isSuperseded: false, status: { not: 'FAILED' } },
-    orderBy: { effectiveDate: 'desc' },
+    include: { markings: true },
+    orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
   })
   if (!latestUpload) return null
 
   const items = await prisma.tbCustomerPriceListItem.findMany({
     where: { uploadId: latestUpload.id },
-    include: { markings: true },
     orderBy: [{ mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
   })
 
@@ -150,6 +154,12 @@ export async function getActiveCustomerPriceList(fdCustCode: string) {
     priceDate: latestUpload.priceDate,
     uploadedAt: latestUpload.uploadedAt,
     fileName: latestUpload.fileName,
+    markings: latestUpload.markings?.map((m) => ({
+      id: m.id,
+      markingCode: m.markingCode,
+      agentName: m.agentName,
+      mode: m.mode,
+    })) || [],
     items: items.map((it) => ({
       id: it.id,
       mode: it.mode,
@@ -157,10 +167,11 @@ export async function getActiveCustomerPriceList(fdCustCode: string) {
       transitTime: it.transitTime,
       category: it.category,
       price: Number(it.price),
-      markings: it.markings?.map((m) => ({
+      markings: latestUpload.markings?.map((m) => ({
         id: m.id,
         markingCode: m.markingCode,
         agentName: m.agentName,
+        mode: m.mode,
       })) || [],
     })),
   }
@@ -172,7 +183,10 @@ export async function getActiveCustomerPriceList(fdCustCode: string) {
 export async function getCustomerUploadDiff(id: number) {
   const current = await prisma.tbCustomerPriceListUpload.findUnique({
     where: { id },
-    include: { items: { include: { markings: true } } },
+    include: {
+      items: true,
+      markings: true,
+    },
   })
   if (!current) return null
 
@@ -183,7 +197,7 @@ export async function getCustomerUploadDiff(id: number) {
       status: { not: 'FAILED' },
     },
     orderBy: { effectiveDate: 'desc' },
-    include: { items: { include: { markings: true } } },
+    include: { items: true },
   })
 
   const key = (it: { mode: string; branch: string; category: string }) =>
@@ -196,6 +210,7 @@ export async function getCustomerUploadDiff(id: number) {
     const prevPrice = prevMap.get(key(it))
     const currPrice = Number(it.price)
     return {
+      id: it.id,
       mode: it.mode,
       branch: it.branch,
       category: it.category,
@@ -203,10 +218,11 @@ export async function getCustomerUploadDiff(id: number) {
       previousPrice: prevPrice ?? null,
       delta: prevPrice !== undefined ? currPrice - prevPrice : null,
       deltaPct: prevPrice ? ((currPrice - prevPrice) / prevPrice) * 100 : null,
-      markings: it.markings?.map((m) => ({
+      markings: current.markings?.map((m) => ({
         id: m.id,
         markingCode: m.markingCode,
         agentName: m.agentName,
+        mode: m.mode,
       })) || [],
     }
   })
@@ -217,11 +233,66 @@ export async function getCustomerUploadDiff(id: number) {
     currentEffectiveDate: current.effectiveDate,
     previousUploadId: previous?.id ?? null,
     previousEffectiveDate: previous?.effectiveDate ?? null,
+    markings: current.markings?.map((m) => ({
+      id: m.id,
+      markingCode: m.markingCode,
+      agentName: m.agentName,
+      mode: m.mode,
+    })) || [],
     diff,
   }
 }
 
+
+
+export async function updateCustomerUploadEffectiveDate(id: number, newEffectiveDate: Date) {
+  const current = await prisma.tbCustomerPriceListUpload.findUnique({
+    where: { id },
+  })
+  if (!current) return null
+
+  const updated = await prisma.tbCustomerPriceListUpload.update({
+    where: { id },
+    data: { effectiveDate: newEffectiveDate },
+  })
+
+  // Recalculate superseded status for uploads of this customer with the same effectiveDate
+  const allForDate = await prisma.tbCustomerPriceListUpload.findMany({
+    where: {
+      fdCustCode: current.fdCustCode,
+      effectiveDate: newEffectiveDate,
+      status: { not: 'FAILED' },
+    },
+    orderBy: { uploadedAt: 'desc' },
+  })
+
+  if (allForDate.length > 1) {
+    const latest = allForDate[0]
+    const older = allForDate.slice(1)
+    if (latest) {
+      await prisma.tbCustomerPriceListUpload.update({
+        where: { id: latest.id },
+        data: { isSuperseded: false },
+      })
+    }
+    for (const old of older) {
+      await prisma.tbCustomerPriceListUpload.update({
+        where: { id: old.id },
+        data: { isSuperseded: true },
+      })
+    }
+  } else if (allForDate.length === 1 && allForDate[0]) {
+    await prisma.tbCustomerPriceListUpload.update({
+      where: { id: allForDate[0].id },
+      data: { isSuperseded: false },
+    })
+  }
+
+  return updated
+}
+
 export async function getCustomerPriceListFilters(fdCustCode?: string) {
+
   const whereUpload: Prisma.TbCustomerPriceListUploadWhereInput = {
     isSuperseded: false,
     status: { not: 'FAILED' },
@@ -263,31 +334,26 @@ export async function getCustomerPriceListFilters(fdCustCode?: string) {
   }
 }
 
+export function normalizeMode(mode?: string | null): string {
+  if (!mode) return 'BY SEA'
+  const m = mode.trim().toUpperCase()
+  if (m.includes('AIR') || m.includes('UDARA')) return 'BY AIR'
+  return 'BY SEA'
+}
+
 /**
- * Cari harga khusus customer pada tanggal tertentu dengan dukungan filter markingCode agen (Level 1 & Level 2).
+ * Cari harga khusus customer pada tanggal tertentu dengan dukungan filter markingCode agen (Level 1 & Level 2) dan mode (Udara / Laut).
  */
 export async function lookupCustomerPriceList(
   fdCustCode: string,
   targetDate: Date,
   filters?: { mode?: string; branch?: string; category?: string; markingCode?: string }
 ) {
-  const upload = await prisma.tbCustomerPriceListUpload.findFirst({
-    where: {
-      fdCustCode,
-      effectiveDate: { lte: targetDate },
-      status: { not: 'FAILED' },
-      isSuperseded: false,
-    },
-    orderBy: [
-      { effectiveDate: 'desc' },
-      { uploadedAt: 'desc' },
-    ],
-  })
-
-  if (!upload) {
+  const cleanCustCode = fdCustCode ? fdCustCode.trim() : ''
+  if (!cleanCustCode) {
     return {
       found: false,
-      fdCustCode,
+      fdCustCode: '',
       targetDate,
       uploadInfo: null,
       items: [],
@@ -295,133 +361,194 @@ export async function lookupCustomerPriceList(
     }
   }
 
-  const baseWhere: Prisma.TbCustomerPriceListItemWhereInput = {
-    uploadId: upload.id,
-  }
+  try {
+    let upload: any = null
+    let isMarkingOverride = false
 
-  if (filters?.mode) baseWhere.mode = filters.mode;
-  if (filters?.branch) baseWhere.branch = filters.branch;
-  if (filters?.category) {
-    const catStr = filters.category;
-    const categories = catStr.split(',').map((s) => s.trim()).filter(Boolean);
-    if (categories.length === 1) {
-      baseWhere.category = categories[0];
-    } else if (categories.length > 1) {
-      baseWhere.category = { in: categories } as any;
-    }
-  }
+    // 1. Pengecekan Level 1: Khusus Agen Marking Customer (TbCustomerPriceListUploadMarking)
+    if (filters?.markingCode?.trim()) {
+      const cleanMarking = filters.markingCode.trim()
+      const targetMode = filters?.mode ? normalizeMode(filters.mode) : undefined
 
-  let items: any[] = []
-  let isMarkingOverride = false
+      const markingCondition: any = {
+        markingCode: { equals: cleanMarking },
+      }
+      if (targetMode) {
+        markingCondition.mode = targetMode
+      }
 
-  // 1. Coba cari dengan markingCode (Level 1)
-  if (filters?.markingCode?.trim()) {
-    const cleanMarking = filters.markingCode.trim()
-    const markingItems = await prisma.tbCustomerPriceListItem.findMany({
-      where: {
-        ...baseWhere,
-        markings: {
-          some: {
-            markingCode: { equals: cleanMarking },
+      upload = await prisma.tbCustomerPriceListUpload.findFirst({
+        where: {
+          fdCustCode: cleanCustCode,
+          effectiveDate: { lte: targetDate },
+          status: { not: 'FAILED' },
+          isSuperseded: false,
+          markings: {
+            some: markingCondition,
           },
         },
-      },
-      include: { markings: true },
-      orderBy: [{ mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
-    })
+        include: { markings: true },
+        orderBy: [
+          { effectiveDate: 'desc' },
+          { uploadedAt: 'desc' },
+        ],
+      })
 
-    if (markingItems.length > 0) {
-      items = markingItems
-      isMarkingOverride = true
+      if (upload) {
+        isMarkingOverride = true
+      }
     }
-  }
 
-  // 2. Fallback ke item customer standar (Level 2) jika tidak ada item khusus markingCode
-  if (items.length === 0) {
-    items = await prisma.tbCustomerPriceListItem.findMany({
+    // 2. Pengecekan Level 2: Master Customer Upload Default
+    if (!upload) {
+      upload = await prisma.tbCustomerPriceListUpload.findFirst({
+        where: {
+          fdCustCode: cleanCustCode,
+          effectiveDate: { lte: targetDate },
+          status: { not: 'FAILED' },
+          isSuperseded: false,
+        },
+        include: { markings: true },
+        orderBy: [
+          { effectiveDate: 'desc' },
+          { uploadedAt: 'desc' },
+        ],
+      })
+    }
+
+    if (!upload) {
+      return {
+        found: false,
+        fdCustCode: cleanCustCode,
+        targetDate,
+        uploadInfo: null,
+        items: [],
+        isMarkingOverride: false,
+      }
+    }
+
+    const baseWhere: Prisma.TbCustomerPriceListItemWhereInput = {
+      uploadId: upload.id,
+      fdCustCode: cleanCustCode,
+    }
+
+    if (filters?.mode) baseWhere.mode = filters.mode;
+    if (filters?.branch) baseWhere.branch = filters.branch;
+    if (filters?.category) {
+      const catStr = filters.category;
+      const categories = catStr.split(',').map((s) => s.trim()).filter(Boolean);
+      if (categories.length === 1) {
+        baseWhere.category = categories[0];
+      } else if (categories.length > 1) {
+        baseWhere.category = { in: categories } as any;
+      }
+    }
+
+    const items = await prisma.tbCustomerPriceListItem.findMany({
       where: baseWhere,
-      include: { markings: true },
       orderBy: [{ mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
     })
-  }
 
-  return {
-    found: items.length > 0,
-    fdCustCode,
-    targetDate,
-    uploadInfo: {
-      uploadId: upload.id,
-      fileName: upload.fileName,
-      effectiveDate: upload.effectiveDate,
-      priceDate: upload.priceDate,
-      uploadedAt: upload.uploadedAt,
-    },
-    isMarkingOverride,
-    items: items.map((it) => ({
-      id: it.id,
-      mode: it.mode,
-      branch: it.branch,
-      transitTime: it.transitTime,
-      category: it.category,
-      price: Number(it.price),
-      markings: it.markings?.map((m: any) => ({
-        id: m.id,
-        markingCode: m.markingCode,
-        agentName: m.agentName,
-      })) || [],
-    })),
+    return {
+      found: items.length > 0,
+      fdCustCode: cleanCustCode,
+      targetDate,
+      uploadInfo: {
+        uploadId: upload.id,
+        fileName: upload.fileName,
+        effectiveDate: upload.effectiveDate,
+        priceDate: upload.priceDate,
+        uploadedAt: upload.uploadedAt,
+        markings: upload.markings?.map((m: any) => ({
+          id: m.id,
+          markingCode: m.markingCode,
+          agentName: m.agentName,
+          mode: m.mode,
+        })) || [],
+      },
+      isMarkingOverride,
+      items: items.map((it) => ({
+        id: it.id,
+        sheetType: it.sheetType,
+        mode: it.mode,
+        branch: it.branch,
+        transitTime: it.transitTime,
+        category: it.category,
+        price: Number(it.price),
+        markings: upload.markings?.map((m: any) => ({
+          id: m.id,
+          markingCode: m.markingCode,
+          agentName: m.agentName,
+          mode: m.mode,
+        })) || [],
+      })),
+    }
+
+  } catch (err) {
+    logger.error('Error executing lookupCustomerPriceList:', err)
+    return {
+      found: false,
+      fdCustCode: cleanCustCode,
+      targetDate,
+      uploadInfo: null,
+      items: [],
+      isMarkingOverride: false,
+    }
   }
 }
 
-export async function getCustomerItemMarkings(itemId: number) {
-  return prisma.tbCustomerPriceListItemMarking.findMany({
-    where: { itemId },
+export async function getCustomerUploadMarkings(uploadId: number) {
+  return prisma.tbCustomerPriceListUploadMarking.findMany({
+    where: { uploadId },
     orderBy: { markingCode: 'asc' },
   })
 }
 
-export async function setCustomerItemMarkings(
-  itemId: number,
-  markings: { markingCode: string; agentName?: string }[],
+export async function setCustomerUploadMarkings(
+  uploadId: number,
+  markings: { markingCode: string; agentName?: string; mode?: string }[],
 ) {
   return prisma.$transaction(async (tx) => {
-    await tx.tbCustomerPriceListItemMarking.deleteMany({
-      where: { itemId },
+    await tx.tbCustomerPriceListUploadMarking.deleteMany({
+      where: { uploadId },
     })
 
     if (markings.length > 0) {
       const validMarkings = markings
         .map((m) => ({
-          itemId,
+          uploadId,
           markingCode: m.markingCode.trim(),
           agentName: m.agentName?.trim() || null,
+          mode: normalizeMode(m.mode),
         }))
         .filter((m) => m.markingCode.length > 0)
 
       const uniqueMap = new Map<string, typeof validMarkings[0]>()
-      validMarkings.forEach((m) => uniqueMap.set(m.markingCode.toUpperCase(), m))
+      validMarkings.forEach((m) => uniqueMap.set(`${m.markingCode.toUpperCase()}||${m.mode || 'ALL'}`, m))
       const uniqueList = Array.from(uniqueMap.values())
 
       if (uniqueList.length > 0) {
-        await tx.tbCustomerPriceListItemMarking.createMany({
+        await tx.tbCustomerPriceListUploadMarking.createMany({
           data: uniqueList,
         })
       }
     }
 
-    return tx.tbCustomerPriceListItemMarking.findMany({
-      where: { itemId },
+    return tx.tbCustomerPriceListUploadMarking.findMany({
+      where: { uploadId },
       orderBy: { markingCode: 'asc' },
     })
   })
 }
 
-export async function deleteCustomerItemMarking(itemId: number, markingCode: string) {
-  return prisma.tbCustomerPriceListItemMarking.deleteMany({
+
+export async function deleteCustomerUploadMarking(uploadId: number, markingCode: string) {
+  return prisma.tbCustomerPriceListUploadMarking.deleteMany({
     where: {
-      itemId,
+      uploadId,
       markingCode: markingCode.trim(),
     },
   })
 }
+
 

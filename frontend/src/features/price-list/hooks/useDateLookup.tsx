@@ -188,15 +188,6 @@ export function useDateLookup(isActive: boolean) {
     })
   }, [dateResult, tableSearch])
 
-  const [selectedItemForMarkings, setSelectedItemForMarkings] = useState<PriceListLookupItem | null>(null)
-
-  const handleSaveItemMarkings = async (markings: { markingCode: string; agentName?: string }[]) => {
-    if (!selectedItemForMarkings) return
-    await priceListApi.setItemMarkings(selectedItemForMarkings.id, markings)
-    // Refresh date lookup data
-    await fetchDateLookup(false)
-  }
-
   const dateColumns = useMemo(
     () => [
       {
@@ -249,51 +240,6 @@ export function useDateLookup(isActive: boolean) {
         ),
       },
       {
-        key: 'markings',
-        header: 'AGEN / MARKING',
-        className: 'w-[180px]',
-        render: (item: PriceListLookupItem) => {
-          const count = item.markings?.length || 0
-          return (
-            <div className="flex items-center justify-between gap-1.5">
-              {count === 0 ? (
-                <span className="text-[11px] font-medium text-slate-400 italic">
-                  Semua Agen
-                </span>
-              ) : (
-                <div className="flex items-center gap-1 flex-wrap max-w-[130px]">
-                  {item.markings!.slice(0, 2).map((m) => (
-                    <span
-                      key={m.markingCode}
-                      className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
-                      title={m.agentName ? `${m.markingCode} (${m.agentName})` : m.markingCode}
-                    >
-                      {m.markingCode}
-                    </span>
-                  ))}
-                  {count > 2 && (
-                    <span
-                      className="px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400"
-                      title={item.markings!.map((m) => m.markingCode).join(', ')}
-                    >
-                      +{count - 2}
-                    </span>
-                  )}
-                </div>
-              )}
-              <button
-                type="button"
-                onClick={() => setSelectedItemForMarkings(item)}
-                className="px-1.5 py-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-md transition-colors cursor-pointer shrink-0"
-                title="Kelola Agen"
-              >
-                {count > 0 ? 'Edit' : '+ Agen'}
-              </button>
-            </div>
-          )
-        },
-      },
-      {
         key: 'price',
         header: 'HARGA (TARIF)',
         className: 'w-[140px] text-right',
@@ -330,8 +276,6 @@ export function useDateLookup(isActive: boolean) {
     isFiltered,
     filteredDateItems,
     dateColumns,
-    selectedItemForMarkings,
-    setSelectedItemForMarkings,
-    handleSaveItemMarkings,
   }
 }
+
