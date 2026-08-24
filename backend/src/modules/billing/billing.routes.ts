@@ -1,12 +1,37 @@
 import { Hono } from 'hono'
 import { authMiddleware, requirePermission } from '../../middleware/auth'
-import { getBillings, getBillingById, getBillingKPIs, getBillingTrends, getBillingByEmployeeDaily, getSjVsBillComparison, getSjVsBillDetails, getBillingTargetDetails, getBillingM3Check, getM3CustPerMarkingDetails } from './billing.service'
+import {
+  getBillings,
+  getBillingById,
+  getBillingKPIs,
+  getBillingTrends,
+  getBillingByEmployeeDaily,
+  getSjVsBillComparison,
+  getSjVsBillDetails,
+  getBillingTargetDetails,
+  getBillingTargetPriceCheck,
+  getBillingM3Check,
+  getM3CustPerMarkingDetails,
+  getBillingPartialDetails,
+} from './billing.service'
 import { successResponse, errorResponse } from '../../utils/response'
 
 const billingRoutes = new Hono()
 
 // Semua route billing memerlukan auth dan permission
 billingRoutes.use('/*', authMiddleware, requirePermission('/mshipping/billing'))
+
+billingRoutes.get('/target-price-check', async (c) => {
+  const query = c.req.query()
+  const result = await getBillingTargetPriceCheck(query)
+  return successResponse(c, result)
+})
+
+billingRoutes.get('/partial-details', async (c) => {
+  const query = c.req.query()
+  const result = await getBillingPartialDetails(query)
+  return successResponse(c, result)
+})
 
 billingRoutes.get('/m3-check/:listCode?', async (c) => {
   const listCode = c.req.param('listCode') || c.req.query('listCode')

@@ -22,6 +22,8 @@ import { customerPriceListRoutes } from './modules/customer-price-list/customer-
 
 import path from 'path'
 import fs from 'fs/promises'
+import { swaggerUI } from '@hono/swagger-ui'
+import { openApiSpec } from './docs/swagger'
 import { profileRoutes } from './modules/profile/profile.routes'
 
 const rootApp = new Hono()
@@ -120,6 +122,10 @@ apiApp.route('/dashboard', dashboardRoutes)
 apiApp.route('/price-list', priceListRoutes)
 apiApp.route('/customer-price-list', customerPriceListRoutes)
 
+// OpenAPI JSON & Swagger UI
+apiApp.get('/openapi.json', (c) => c.json(openApiSpec))
+apiApp.get('/docs', swaggerUI({ url: 'openapi.json' }))
+
 // Health check
 apiApp.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
 
@@ -129,6 +135,16 @@ if (ENV.APP_BASE_PATH && ENV.APP_BASE_PATH !== '/') {
   rootApp.route(`${ENV.APP_BASE_PATH}/api`, apiApp)
 }
 rootApp.route('/mshipping/api', apiApp)
+
+// Root & Sub-path Swagger UI redirects / routes
+rootApp.get('/docs', swaggerUI({ url: '/api/openapi.json' }))
+rootApp.get('/swagger', (c) => c.redirect('/docs'))
+if (ENV.APP_BASE_PATH && ENV.APP_BASE_PATH !== '/') {
+  rootApp.get(`${ENV.APP_BASE_PATH}/docs`, swaggerUI({ url: `${ENV.APP_BASE_PATH}/api/openapi.json` }))
+  rootApp.get(`${ENV.APP_BASE_PATH}/swagger`, (c) => c.redirect(`${ENV.APP_BASE_PATH}/docs`))
+}
+rootApp.get('/mshipping/docs', swaggerUI({ url: '/mshipping/api/openapi.json' }))
+rootApp.get('/mshipping/swagger', (c) => c.redirect('/mshipping/docs'))
 
 // Error handler
 rootApp.onError(createErrorHandler())

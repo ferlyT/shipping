@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { CurrencyValue, formatWithCurrency } from '@/components/ui/CurrencyValue'
-import { formatDate, formatDateTime, formatDecimal } from '@/lib/utils'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import { useToastStore } from '@/stores/toastStore'
 import { Badge } from '@/components/ui/Badge'
 import { statusConfig } from '@/features/customers/components/CustomerBadges'
@@ -16,61 +16,8 @@ import { BillingValidationCard } from '../components/BillingValidationCard'
 import { ValidationListDrawer } from '../components/ValidationListDrawer'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
-
-interface BillingDetail {
-  fdInvNo: string
-  fdID: string
-  fdItemName: string
-  fdQty: number
-  fdListCode: string | null
-  fdItemPrice: number
-  fdTotal: number
-  fdCurr: string | null
-  fdTypeComodity?: number | null
-  fdComodity?: string | null
-}
-
-interface Billing {
-  fdInvNo: string
-  fdInvDate: string
-  fdCustCode: string
-  fdDescr: string
-  fdJumlah1: number
-  fdJumlah2?: number | null
-  fdCurr1: string | null
-  fdMarkingCode: string | null
-  fdMarkingNo: string | null
-  fdGiveDate: string
-  employee?: {
-    fdEmpName: string | null
-  } | null
-  customer?: {
-    fdCustName: string | null
-    fdBlocked?: number | null
-    fdContact: string | null
-    fdBillTo: string | null
-    fdBillAddr1: string | null
-    fdSalesNM?: string | null
-    fdBroker?: number | null
-  } | null
-  details?: BillingDetail[]
-  fdListCode?: string | null
-  fdTypeComodity?: number | null
-}
-
-function formatQtyDecimal(qty: number, unitStr?: string | null, itemName?: string | null): string {
-  const num = Number(qty || 0)
-  const unit = (unitStr || '').trim().toUpperCase()
-  const name = (itemName || '').trim().toUpperCase()
-
-  const isM2 = unit === 'M2' || name.includes('M2')
-  const isM3 = unit === 'M3' || name.includes('M3')
-
-  if (isM2 || isM3) {
-    return formatDecimal(num, 4)
-  }
-  return formatDecimal(num, Number.isInteger(num) ? 0 : 2)
-}
+import type { Billing } from '../types/billing.types'
+import { formatQtyDecimal } from '../utils/billing.utils'
 
 export function ValidationDetailPage() {
   const { t } = useTranslation()
@@ -132,18 +79,35 @@ export function ValidationDetailPage() {
     )
   }
 
+  const isVfcItem = (name?: string | null) => {
+    const n = (name || '').toUpperCase()
+    return (
+      n.includes('VOLUME FREIGHT') ||
+      n.includes('FREIGHT CHARGE') ||
+      n.includes('VFC')
+    )
+  }
+
   const unitTotals = details.reduce<Record<string, number>>((acc, row) => {
-    let unit = row.fdListCode?.trim()?.toUpperCase()
+    if (isAuxiliaryItem(row.fdItemName)) return acc
+
     const nameUpper = (row.fdItemName || '').toUpperCase()
+
+    // Pisahkan Volume Freight Charges menjadi total tersendiri
+    if (isVfcItem(row.fdItemName)) {
+      acc['VOLUME FREIGHT CHARGES'] = (acc['VOLUME FREIGHT CHARGES'] || 0) + Number(row.fdQty || 0)
+      return acc
+    }
+
+    let unit = row.fdListCode?.trim()?.toUpperCase()
 
     // If unit is blank, infer from (M3) or (KG) in item name
     if (!unit) {
       if (nameUpper.includes('(M3)')) unit = 'M3'
-      else if (nameUpper.includes('(KG)')) unit = 'KG'
+      else if (nameUpper.includes('(KG)') || nameUpper.includes('PARCELS TO JAKARTA (KG)') || nameUpper.includes('MINIMUM CHARGES')) unit = 'KG'
       else if (nameUpper.includes('(PCS)')) unit = 'PCS'
     }
 
-    if (isAuxiliaryItem(row.fdItemName)) return acc
     if (!unit) return acc
 
     acc[unit] = (acc[unit] || 0) + Number(row.fdQty || 0)
@@ -158,7 +122,7 @@ export function ValidationDetailPage() {
   const isUnitCode = (code?: string | null) => {
     if (!code?.trim()) return true
     const u = code.trim().toUpperCase()
-    return ['M3', 'M2', 'KG', 'PCS', 'COLY', 'CTN', 'BOX', 'PKGS'].includes(u)
+    return ['M3', 'M2', 'KG', 'PCS', 'COLY', 'CTN', 'BOX', 'PKGS', 'VOLUME FREIGHT CHARGES'].includes(u)
   }
 
   const primaryListCode =
@@ -170,6 +134,7 @@ export function ValidationDetailPage() {
 
   const rawM3FromItems = details.reduce((sum, d) => {
     if (isAuxiliaryItem(d.fdItemName)) return sum
+    if (isVfcItem(d.fdItemName)) return sum
     let unit = d.fdListCode?.trim()?.toUpperCase()
     const nameUpper = (d.fdItemName || '').toUpperCase()
     if (!unit && nameUpper.includes('(M3)')) unit = 'M3'
@@ -178,8 +143,29 @@ export function ValidationDetailPage() {
     return isM3Item ? sum + Number(d.fdQty || 0) : sum
   }, 0)
 
+  const rawKgFromItems = details.reduce((sum, d) => {
+    if (isAuxiliaryItem(d.fdItemName)) return sum
+    if (isVfcItem(d.fdItemName)) return sum
+    let unit = d.fdListCode?.trim()?.toUpperCase()
+    const nameUpper = (d.fdItemName || '').toUpperCase()
+    if (!unit && (nameUpper.includes('(KG)') || nameUpper.includes('KG') || nameUpper.includes('MINIMUM CHARGES') || nameUpper.includes('PARCELS'))) {
+      unit = 'KG'
+    }
+
+    const isKgItem = unit === 'KG' || nameUpper.includes('(KG)') || nameUpper.includes('MINIMUM CHARGES') || nameUpper.includes('PARCELS TO JAKARTA (KG)')
+    return isKgItem ? sum + Number(d.fdQty || 0) : sum
+  }, 0)
+
+  const rawVfcFromItems = details.reduce((sum, d) => {
+    if (isAuxiliaryItem(d.fdItemName)) return sum
+    if (!isVfcItem(d.fdItemName)) return sum
+    return sum + Number(d.fdQty || 0)
+  }, 0)
+
   const calcM3 = unitTotals['M3'] ?? rawM3FromItems
   const billedM3 = calcM3 > 0 && calcM3 < 0.1 ? 0.1 : calcM3
+  const billedKg = unitTotals['KG'] ?? rawKgFromItems
+  const billedVfc = unitTotals['VOLUME FREIGHT CHARGES'] ?? rawVfcFromItems
 
   return (
     <div className="p-3 sm:p-6 lg:p-8 w-full space-y-6 animate-fadeIn pb-24 font-[var(--font-body)]">
@@ -259,11 +245,13 @@ export function ValidationDetailPage() {
             </div>
           </div>
 
-          {/* Kartu Validasi Billing M3 */}
+          {/* Kartu Validasi Billing M3 / Berat */}
           {primaryListCode && (
             <BillingValidationCard
               listCode={primaryListCode}
               billedM3={billedM3}
+              billedKg={billedKg}
+              billedVfc={billedVfc}
               invoiceDetails={details}
               billFdTypeComodity={data.fdTypeComodity}
             />
@@ -384,16 +372,19 @@ export function ValidationDetailPage() {
             {/* Footer ringkasan */}
             <div className="border-t border-[var(--color-border)] bg-[var(--color-neutral)] px-4 py-4 sm:px-6 sm:py-5">
               <div className="ml-auto flex w-full flex-col gap-2.5 sm:w-[28rem]">
-                {Object.entries(unitTotals).map(([unit, qty]) => (
-                  <div key={unit} className="flex items-center justify-between gap-3">
-                    <span className="text-[11px] sm:text-xs font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">
-                      {t('billing.detail.total')} {unit}
-                    </span>
-                    <span className="text-sm sm:text-base font-semibold text-[var(--color-primary)] tabular-nums">
-                      {formatQtyDecimal(qty, unit)} {unit}
-                    </span>
-                  </div>
-                ))}
+                {Object.entries(unitTotals).map(([unit, qty]) => {
+                  const isVfc = unit === 'VOLUME FREIGHT CHARGES'
+                  return (
+                    <div key={unit} className="flex items-center justify-between gap-3">
+                      <span className="text-[11px] sm:text-xs font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">
+                        {isVfc ? 'TOTAL VOLUME FREIGHT CHARGES' : `${t('billing.detail.total')} ${unit}`}
+                      </span>
+                      <span className="text-sm sm:text-base font-semibold text-[var(--color-primary)] tabular-nums">
+                        {formatQtyDecimal(qty, isVfc ? 'KG' : unit)} {isVfc ? 'KG (VFC)' : unit}
+                      </span>
+                    </div>
+                  )
+                })}
                 <div
                   className={`flex items-baseline justify-between gap-4 ${Object.keys(unitTotals).length > 0 ? 'mt-1 pt-3 border-t border-[var(--color-border)]' : ''
                     }`}

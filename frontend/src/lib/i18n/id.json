@@ -216,6 +216,8 @@
   "billing.validation.allBranches": "Semua Destinasi",
   "billing.validation.groupCs": "Customer Service (CS)",
   "billing.validation.groupMkt": "Marketing (MKT)",
+  "billing.validation.groupCustomer": "Harga Khusus Customer",
+  "billing.validation.customerPriceActive": "Price List Khusus Customer",
   "billing.validation.allTypes": "Semua Tipe",
   "billing.validation.listBatch": "EntryList",
   "billing.validation.qtyMatch": "Qty Sama",

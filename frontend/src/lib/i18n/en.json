@@ -216,6 +216,8 @@
   "billing.validation.allBranches": "All Destinations",
   "billing.validation.groupCs": "Customer Service (CS)",
   "billing.validation.groupMkt": "Marketing (MKT)",
+  "billing.validation.groupCustomer": "Customer Special Price",
+  "billing.validation.customerPriceActive": "Customer Specific Price List",
   "billing.validation.allTypes": "All Types",
   "billing.validation.listBatch": "EntryList",
   "billing.validation.qtyMatch": "Qty Matches",

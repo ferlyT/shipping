@@ -22,7 +22,7 @@ const KPI_CARDS = [
   { id: 'amt_month', key: 'billing.monthAmount', value: 'Rp. 10.837.404.519,95', desc: '↘ 83.7% vs bulan lalu', subDesc1: 'Rp 2,26 M', subDesc2: 'Rp 8,57 M', icon: CreditCard, color: 'text-rose-500' },
 ]
 
-export default function BillingDashboardPage() {
+export default function DashboardPage() {
   const { t } = useTranslation()
   const isMobile = useIsMobile()
   const [activeTab, setActiveTab] = useState<ChartTab>('harian')

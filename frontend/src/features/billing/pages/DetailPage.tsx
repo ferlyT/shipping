@@ -7,63 +7,16 @@ import { Button } from '@/components/ui/Button'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { CurrencyValue, formatWithCurrency } from '@/components/ui/CurrencyValue'
-import { formatDate, formatDateTime, formatDecimal } from '@/lib/utils'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import { useToastStore } from '@/stores/toastStore'
 import { Badge } from '@/components/ui/Badge'
 import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
+import type { Billing } from '../types/billing.types'
+import { formatQtyDecimal } from '../utils/billing.utils'
 
-interface BillingDetail {
-  fdInvNo: string
-  fdID: string
-  fdItemName: string
-  fdQty: number
-  fdListCode: string | null
-  fdItemPrice: number
-  fdTotal: number
-  fdCurr: string | null
-}
-
-interface Billing {
-  fdInvNo: string
-  fdInvDate: string
-  fdCustCode: string
-  fdDescr: string
-  fdJumlah1: number
-  fdJumlah2?: number | null
-  fdCurr1: string | null
-  fdMarkingCode: string | null
-  fdMarkingNo: string | null
-  fdGiveDate: string
-  employee?: {
-    fdEmpName: string | null
-  } | null
-  customer?: {
-    fdCustName: string | null
-    fdBlocked?: number | null
-    fdContact: string | null
-    fdBillTo: string | null
-    fdBillAddr1: string | null
-  } | null
-  details?: BillingDetail[]
-}
-
-function formatQtyDecimal(qty: number, unitStr?: string | null, itemName?: string | null): string {
-  const num = Number(qty || 0)
-  const unit = (unitStr || '').trim().toUpperCase()
-  const name = (itemName || '').trim().toUpperCase()
-
-  const isM2 = unit === 'M2' || name.includes('M2')
-  const isM3 = unit === 'M3' || name.includes('M3')
-
-  if (isM2 || isM3) {
-    return formatDecimal(num, 4)
-  }
-  return formatDecimal(num, Number.isInteger(num) ? 0 : 2)
-}
-
-export default function BillingDetailPage() {
+export default function DetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -99,11 +52,28 @@ export default function BillingDetailPage() {
 
   const details = [...(data.details || [])].sort((a, b) => a.fdID.localeCompare(b.fdID))
 
+  const isVfcItem = (name?: string | null) => {
+    const n = (name || '').toUpperCase()
+    return (
+      n.includes('VOLUME FREIGHT') ||
+      n.includes('FREIGHT CHARGE') ||
+      n.includes('VFC')
+    )
+  }
+
   const unitTotals = details.reduce<Record<string, number>>((acc, row) => {
+    const nameUpper = (row.fdItemName || '').toUpperCase()
+
+    // Pisahkan Volume Freight Charges menjadi total tersendiri
+    if (isVfcItem(row.fdItemName)) {
+      acc['VOLUME FREIGHT CHARGES'] = (acc['VOLUME FREIGHT CHARGES'] || 0) + Number(row.fdQty || 0)
+      return acc
+    }
+
     const unit = row.fdListCode?.trim()
     if (!unit) return acc
     // Aturan khusus M3: hanya item PARCELS yang dihitung ke total M3
-    if (unit.toUpperCase() === 'M3' && row.fdItemName?.substring(0, 7).toUpperCase() !== 'PARCELS') return acc
+    if (unit.toUpperCase() === 'M3' && !nameUpper.includes('PARCEL')) return acc
     acc[unit] = (acc[unit] || 0) + Number(row.fdQty || 0)
     return acc
   }, {})
@@ -258,16 +228,19 @@ export default function BillingDetailPage() {
             {/* Footer ringkasan */}
             <div className="border-t border-[var(--color-border)] bg-[var(--color-neutral)] px-4 py-4 sm:px-6 sm:py-5">
               <div className="ml-auto flex w-full flex-col gap-2.5 sm:w-[28rem]">
-                {Object.entries(unitTotals).map(([unit, qty]) => (
-                  <div key={unit} className="flex items-center justify-between gap-3">
-                    <span className="text-[11px] sm:text-xs font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">
-                      {t('billing.detail.total')} {unit}
-                    </span>
-                    <span className="text-sm sm:text-base font-semibold text-[var(--color-primary)] tabular-nums">
-                      {formatQtyDecimal(qty, unit)} {unit}
-                    </span>
-                  </div>
-                ))}
+                {Object.entries(unitTotals).map(([unit, qty]) => {
+                  const isVfc = unit === 'VOLUME FREIGHT CHARGES'
+                  return (
+                    <div key={unit} className="flex items-center justify-between gap-3">
+                      <span className="text-[11px] sm:text-xs font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">
+                        {isVfc ? 'TOTAL VOLUME FREIGHT CHARGES' : `${t('billing.detail.total')} ${unit}`}
+                      </span>
+                      <span className="text-sm sm:text-base font-semibold text-[var(--color-primary)] tabular-nums">
+                        {formatQtyDecimal(qty, isVfc ? 'KG' : unit)} {isVfc ? 'KG (VFC)' : unit}
+                      </span>
+                    </div>
+                  )
+                })}
                 <div
                   className={`flex items-baseline justify-between gap-4 ${Object.keys(unitTotals).length > 0 ? 'mt-1 pt-3 border-t border-[var(--color-border)]' : ''
                     }`}

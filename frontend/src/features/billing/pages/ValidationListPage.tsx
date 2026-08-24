@@ -18,43 +18,14 @@ import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { useToastStore } from '@/stores/toastStore'
-
-interface Billing {
-  fdInvNo: string
-  fdInvDate: string
-  fdListType: number | null
-  fdCustCode: string | null
-  fdMarkingCode: string | null
-  fdMarkingNo: string | null
-  fdDescr: string
-  fdJumlah1: number | null
-  fdJumlah2?: number | null
-  fdCurr1: string | null
-  fdTypeBilling: number | null
-  fdGive: number | null
-  fdGive2: number | null
-  fdCekDate: string | null
-  customer?: { fdCustName: string | null; fdBlocked?: number | null } | null
-  employee?: { fdEmpName: string | null } | null
-}
+import type { Billing } from '../types/billing.types'
+import { getAgingDays } from '../utils/billing.utils'
 
 const LIST_TYPE_FILTERS: { value: 'all' | 1 | 2; label: string; icon: typeof LayoutGrid; accent: string }[] = [
   { value: 'all', label: 'Semua', icon: LayoutGrid, accent: '' },
   { value: 1, label: 'Udara', icon: Plane, accent: 'text-amber-600' },
   { value: 2, label: 'Laut', icon: Ship, accent: 'text-blue-600' },
 ]
-
-function getAgingDays(invDateStr?: string | null): number {
-  if (!invDateStr) return 0
-  const invDate = new Date(invDateStr)
-  if (isNaN(invDate.getTime())) return 0
-  const today = new Date()
-  invDate.setHours(0, 0, 0, 0)
-  today.setHours(0, 0, 0, 0)
-  const diffTime = today.getTime() - invDate.getTime()
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-  return diffDays > 0 ? diffDays : 0
-}
 
 export function ValidationListPage() {
   const { t } = useTranslation()

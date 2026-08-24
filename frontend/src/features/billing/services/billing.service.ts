@@ -30,5 +30,18 @@ export const billingApi = {
 
   m3CustMarkingDetails: (custCode: string, markingCode: string) =>
     apiClient.get('/billing/m3-cust-marking-details', { params: { custCode, markingCode } }),
+
+  partialDetails: (params: { markingCode: string; customer?: string; custCode?: string }) =>
+    apiClient.get('/billing/partial-details', { params }),
+
+  targetPriceCheck: (params: {
+    markingCode: string
+    markingNo?: string
+    customer?: string
+    branch?: string
+    type?: string
+    mode?: string
+    harga?: number
+  }) => apiClient.get('/billing/target-price-check', { params }),
 }
 

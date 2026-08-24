@@ -20,31 +20,14 @@ import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { useToastStore } from '@/stores/toastStore'
-
-interface Billing {
-  fdInvNo: string
-  fdInvDate: string
-  fdListType: number | null
-  fdCustCode: string | null
-  fdMarkingCode: string | null
-  fdMarkingNo: string | null
-  fdDescr: string
-  fdJumlah1: number | null
-  fdCurr1: string | null
-  fdTypeBilling: number | null
-  fdGive: number | null
-  fdGive2: number | null
-  fdCekDate: string | null
-  customer?: { fdCustName: string | null; fdBlocked?: number | null } | null
-  employee?: { fdEmpName: string | null } | null
-}
+import type { Billing } from '../types/billing.types'
 
 const LIST_TYPE_CONFIG: Record<number, { label: string; icon: typeof Plane; accent: string }> = {
   1: { label: 'UDARA', icon: Plane, accent: 'text-sky-600' },
   2: { label: 'LAUT', icon: Ship, accent: 'text-blue-700' },
 }
 
-export default function BillingPage() {
+export default function ListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addToast } = useToastStore()

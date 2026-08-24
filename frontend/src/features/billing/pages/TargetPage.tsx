@@ -1,8 +1,7 @@
 import { useState, useMemo } from 'react'
-import { createPortal } from 'react-dom'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Plane, Ship, Download, Users, Layers, Clock, X, FileSpreadsheet, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
+import { Search, Plane, Ship, Download, Users, Layers, Clock, X, FileSpreadsheet, AlertTriangle, CheckCircle2, Tag, Info } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { billingApi } from '../services/billing.service'
 import { ROUTES } from '@/lib/constants'
@@ -13,6 +12,10 @@ import { formatDateTime, formatCurrency, formatDecimal, cn } from '@/lib/utils'
 import { AgingBadge } from '../components/AgingBadge'
 import { StatusBadge } from '../components/StatusBadge'
 import { StatusKirimBadge } from '../components/StatusKirimBadge'
+import { MismatchModal } from '../components/MismatchModal'
+import { PartialDetailModal } from '../components/PartialDetailModal'
+import { TargetPriceCheckModal } from '../components/TargetPriceCheckModal'
+import type { TargetBillingItem, GroupKey } from '../types/billing.types'
 
 const PIC_BADGES: Record<string, { label: string; bg: string; text: string }> = {
   thara: { label: 'Thara', bg: 'var(--color-primary)', text: 'var(--color-on-primary)' },
@@ -28,15 +31,14 @@ const PIC_OPTIONS_BY_TYPE = {
   laut:  [{ key: 'all', name: 'Semua PIC' }, { key: 'thara', name: 'Thara' }, { key: 'ferly', name: 'Ferly' }, { key: 'rico', name: 'Rico' }],
 }
 
-const GROUP_OPTIONS = [
-  { key: 'all',    name: 'Semua',        color: '' },
-  { key: 'fcl',    name: 'FCL',          color: 'bg-violet-600 text-white' },
-  { key: 'cod',    name: 'COD',          color: 'bg-rose-600 text-white' },
-  { key: 'urgent', name: 'URGENT',       color: 'bg-orange-500 text-white' },
-  { key: 'aging',  name: 'Aging > 7 Hari', color: 'bg-amber-600 text-white' },
+const GROUP_OPTIONS: { key: GroupKey; name: string; borderAccent?: string; activeClass?: string }[] = [
+  { key: 'all',     name: 'Semua' },
+  { key: 'partial', name: 'PARSIAL',        borderAccent: 'border-purple-500/40 text-purple-600 dark:text-purple-400', activeClass: 'border-purple-500 text-purple-600 dark:text-purple-400 bg-purple-500/10' },
+  { key: 'fcl',     name: 'FCL',            borderAccent: 'border-indigo-500/40 text-indigo-600 dark:text-indigo-400', activeClass: 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' },
+  { key: 'cod',     name: 'COD',            borderAccent: 'border-rose-500/40 text-rose-600 dark:text-rose-400',     activeClass: 'border-rose-500 text-rose-600 dark:text-rose-400 bg-rose-500/10' },
+  { key: 'urgent',  name: 'URGENT',         borderAccent: 'border-orange-500/40 text-orange-600 dark:text-orange-400', activeClass: 'border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-500/10' },
+  { key: 'aging',   name: 'Aging > 7 Hari', borderAccent: 'border-amber-500/40 text-amber-600 dark:text-amber-400',   activeClass: 'border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/10' },
 ]
-
-type GroupKey = 'all' | 'fcl' | 'cod' | 'urgent' | 'aging'
 
 export default function TargetPage() {
   const { t } = useTranslation()
@@ -46,11 +48,13 @@ export default function TargetPage() {
   const initialType = (typeParam === 'laut' ? 'laut' : typeParam === 'udara' ? 'udara' : 'all') as 'all' | 'udara' | 'laut'
   const initialPic  = searchParams.get('pic') || 'all'
 
-  const [activeType,  setActiveType]  = useState<'all' | 'udara' | 'laut'>(initialType)
-  const [activePic,   setActivePic]   = useState<string>(initialPic)
-  const [activeGroup, setActiveGroup] = useState<GroupKey>('all')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [mismatchItem, setMismatchItem] = useState<any | null>(null)
+  const [activeType,       setActiveType]       = useState<'all' | 'udara' | 'laut'>(initialType)
+  const [activePic,        setActivePic]        = useState<string>(initialPic)
+  const [activeGroup,      setActiveGroup]      = useState<GroupKey>('all')
+  const [searchQuery,      setSearchQuery]      = useState('')
+  const [mismatchItem,     setMismatchItem]     = useState<TargetBillingItem | null>(null)
+  const [partialModalItem, setPartialModalItem] = useState<TargetBillingItem | null>(null)
+  const [priceCheckItem,   setPriceCheckItem]   = useState<TargetBillingItem | null>(null)
 
   const picOptions = useMemo(() => PIC_OPTIONS_BY_TYPE[activeType] || [], [activeType])
 
@@ -78,21 +82,22 @@ export default function TargetPage() {
     queryKey: ['targetBillDetails', activeType, activePic],
     queryFn: async () => {
       const res = await billingApi.targetDetails({ type: activeType, pic: activePic })
-      return res.data as { data: any[] }
+      return res.data as { data: TargetBillingItem[] }
     },
     staleTime: 30_000,
   })
 
-  const rawList = resData?.data || []
+  const rawList: TargetBillingItem[] = resData?.data || []
 
   // Summary counts per group (always from rawList)
   const groupCounts = useMemo(() => {
-    const counts: Record<GroupKey, number> = { all: rawList.length, fcl: 0, cod: 0, urgent: 0, aging: 0 }
+    const counts: Record<GroupKey, number> = { all: rawList.length, partial: 0, fcl: 0, cod: 0, urgent: 0, aging: 0 }
     for (const item of rawList) {
       const typeStr     = String(item.type     || '').toUpperCase().trim()
       const comodityStr = String(item.comodity || '').toUpperCase().trim()
       const st          = String(item.status   || '').toUpperCase().trim()
       const hari        = Number(item.hari     || 0)
+      if (item.isPartial)        counts.partial++
       if (typeStr.includes('FCL') || comodityStr.includes('FCL')) counts.fcl++
       if (st.includes('COD'))    counts.cod++
       if (st.includes('URGENT')) counts.urgent++
@@ -109,6 +114,7 @@ export default function TargetPage() {
       const comodityStr = String(item.comodity || '').toUpperCase().trim()
       const st          = String(item.status   || '').toUpperCase().trim()
       const hari        = Number(item.hari     || 0)
+      if (activeGroup === 'partial') return !!item.isPartial
       if (activeGroup === 'fcl')    return typeStr.includes('FCL') || comodityStr.includes('FCL')
       if (activeGroup === 'cod')    return st.includes('COD')
       if (activeGroup === 'urgent') return st.includes('URGENT')
@@ -130,7 +136,8 @@ export default function TargetPage() {
         String(item.branch      || '').toLowerCase().includes(q) ||
         String(item.comodity    || '').toLowerCase().includes(q) ||
         String(item.type        || '').toLowerCase().includes(q) ||
-        String(item.pic         || '').toLowerCase().includes(q)
+        String(item.pic         || '').toLowerCase().includes(q) ||
+        (item.isPartial && (q === 'parsial' || q === 'partial'))
       )
     })
   }, [groupedList, searchQuery])
@@ -139,26 +146,28 @@ export default function TargetPage() {
   const handleExportExcel = () => {
     if (!filteredList.length) return
     const exportData = filteredList.map((item, idx) => ({
-      'No':            idx + 1,
-      'PIC':           item.pic         || '-',
-      'Tipe':          item.type        || '-',
-      'List No':       item.listNo      || '-',
-      'Marking Code':  item.markingCode || '-',
-      'Marking No':    item.markingNo   || '-',
-      'Cabang':        item.branch      || '-',
-      'Customer':      item.customer    || '-',
-      'Komoditi':      item.comodity    || '-',
-      'Qty (List)':    item.qty         ?? '-',
-      'Qty (PL)':      item.qtyPL       ?? '-',
-      'M3':            item.m3          ?? '-',
-      'M3 PL':         item.m3PL        ?? '-',
-      'M3 Real':       item.m3Real      ?? '-',
-      'Harga M3':      item.hargaM3     ?? '-',
-      'Total Biaya':   item.totalBiaya  ?? '-',
-      'Status':        item.status      || '-',
-      'Status Kirim':  item.statusKirim || '-',
-      'Hari (Aging)':  item.hari        ?? '-',
-      'Tgl Buat List': item.createdDate ? formatDateTime(item.createdDate) : '-',
+      'No':                 idx + 1,
+      'PIC':                item.pic         || '-',
+      'Tipe':               item.type        || '-',
+      'List No':            item.listNo      || '-',
+      'Marking Code':       item.markingCode || '-',
+      'Marking No':         item.markingNo   || '-',
+      'Parsial':            item.isPartial   ? `Parsial (${item.countTerima || 1} terima)` : 'Normal',
+      'Tgl Input':          item.fdLoad      ? formatDateTime(item.fdLoad) : '-',
+      'Cabang':             item.branch      || '-',
+      'Customer':           item.customer    || '-',
+      'Komoditi':           item.comodity    || '-',
+      'Qty (List)':         item.qty         ?? '-',
+      'Qty (PL)':           item.qtyPL       ?? '-',
+      'M3':                 item.m3          ?? '-',
+      'M3 PL':              item.m3PL        ?? '-',
+      'M3 Real':            item.m3Real      ?? '-',
+      'Harga M3':           item.hargaM3     ?? '-',
+      'Total Biaya':        item.totalBiaya  ?? '-',
+      'Status':             item.status      || '-',
+      'Status Kirim':       item.statusKirim || '-',
+      'Hari (Aging)':       item.hari        ?? '-',
+      'Tgl Buat List':      item.createdDate ? formatDateTime(item.createdDate) : '-',
     }))
 
     const ws = XLSX.utils.json_to_sheet(exportData)
@@ -171,130 +180,16 @@ export default function TargetPage() {
     XLSX.writeFile(wb, fileName)
   }
 
-  // Modal mismatch komplain
-  const MismatchModal = () => {
-    if (!mismatchItem) return null
-    const item = mismatchItem
-    const m3K  = Number(item.m3Komplain || 0)
-    const vfcK = Number(item.vfcKomplain ?? -1)
-    const m3PL = Number(item.m3PL || 0)
-    const m3R  = Number(item.m3Real || 0)
-
-    const checks = m3K > 0
-      ? [
-          {
-            label: 'M3 Komplain vs M3 Real',
-            ok: Math.abs(m3K - m3R) < 0.0001,
-            val1: formatDecimal(m3K, 4),
-            val2: formatDecimal(m3R, 4),
-          },
-          {
-            label: 'VFC Komplain vs M3 PL',
-            ok: vfcK === 0 ? false : Math.abs(vfcK - m3PL) < 0.0001,
-            val1: vfcK >= 0 ? formatDecimal(vfcK, 4) : 'N/A',
-            val2: formatDecimal(m3PL, 4),
-          },
-        ]
-      : [
-          {
-            label: 'M3 PL vs M3 Real',
-            ok: Math.abs(m3PL - m3R) < 0.0001,
-            val1: formatDecimal(m3PL, 4),
-            val2: formatDecimal(m3R, 4),
-          },
-        ]
-
-    return createPortal(
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-fadeIn"
-        onClick={() => setMismatchItem(null)}
-      >
-        <div
-          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-xl)] shadow-2xl w-full max-w-md overflow-hidden animate-fadeIn"
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* Header */}
-          <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)] bg-[var(--color-neutral)]">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-[var(--color-danger)]" />
-              <span className="text-sm font-bold text-[var(--color-danger)]">Detail Mismatch Komplain</span>
-            </div>
-            <button
-              onClick={() => setMismatchItem(null)}
-              className="p-1 rounded-[var(--radius-md)] hover:bg-[var(--color-surface)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Info baris */}
-          <div className="px-5 py-3 bg-[var(--color-neutral)]/50 border-b border-[var(--color-border)]">
-            <div className="text-xs font-semibold text-[var(--color-primary)]">{item.customer || '-'}</div>
-            <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">
-              {item.markingCode} {item.markingNo ? `· ${item.markingNo}` : ''} · {item.branch}
-            </div>
-            <div className="flex items-center gap-3 mt-2 text-[10px] text-[var(--color-secondary)]">
-              <span>M3 Komplain: <strong className="text-[var(--color-primary)]">{m3K}</strong></span>
-              <span>VFC Komplain: <strong className="text-[var(--color-primary)]">{item.vfcKomplain ?? 0}</strong></span>
-            </div>
-          </div>
-
-          {/* Tabel validasi */}
-          <div className="px-5 py-4 space-y-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-secondary)] mb-1">
-              {m3K > 0 ? 'Validasi (M3 Komplain > 0)' : 'Validasi (M3 Komplain = 0)'}
-            </p>
-            {checks.map((c, i) => (
-              <div
-                key={i}
-                className={`flex items-center justify-between rounded-[var(--radius-lg)] px-4 py-2.5 text-xs border ${
-                  c.ok
-                    ? 'bg-emerald-500/10 border-emerald-500/30'
-                    : 'bg-rose-500/10 border-rose-500/30'
-                }`}
-              >
-                <span className={`font-medium ${c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>{c.label}</span>
-                <div className="flex items-center gap-2">
-                  <span className={`font-mono text-[11px] ${c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400 font-bold'}`}>
-                    {c.val1}
-                  </span>
-                  <span className="text-[var(--color-secondary)] text-[10px]">vs</span>
-                  <span className={`font-mono text-[11px] ${c.ok ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400 font-bold'}`}>
-                    {c.val2}
-                  </span>
-                  {c.ok
-                    ? <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                    : <XCircle      className="w-4 h-4 text-rose-500 shrink-0" />
-                  }
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Footer */}
-          <div className="px-5 pb-4">
-            <button
-              onClick={() => setMismatchItem(null)}
-              className="w-full py-2 text-xs font-semibold rounded-[var(--radius-md)] bg-[var(--color-neutral)] hover:bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-primary)] transition-colors cursor-pointer"
-            >
-              Tutup
-            </button>
-          </div>
-        </div>
-      </div>,
-      document.body
-    )
-  }
-
   if (isLoading && !resData) return <LoadingSpinner message={t('common.loadingBilling')} />
 
   const activeGroupOpt = GROUP_OPTIONS.find((g) => g.key === activeGroup)
 
   return (
-    <div
-      className="p-4 sm:p-6 w-full space-y-5 animate-fadeIn pb-24 min-h-screen bg-[var(--color-neutral)] font-[var(--font-body)]"
-    >
-      <MismatchModal />
+    <div className="p-4 sm:p-6 w-full space-y-5 animate-fadeIn pb-24 min-h-screen bg-[var(--color-neutral)] font-[var(--font-body)]">
+      <MismatchModal item={mismatchItem} onClose={() => setMismatchItem(null)} />
+      <PartialDetailModal item={partialModalItem} onClose={() => setPartialModalItem(null)} />
+      <TargetPriceCheckModal item={priceCheckItem} activeMode={activeType} onClose={() => setPriceCheckItem(null)} />
+      
       <PageHeader
         title={`Target Bill ${activeType === 'all' ? 'Semua Mode' : activeType.toUpperCase()}`}
         subtitle={
@@ -310,7 +205,7 @@ export default function TargetPage() {
       />
 
       {/* ── TOOLBAR CARD ─────────────────────────────────────── */}
-      <div className="bg-[var(--color-surface)] rounded-2xl shadow-sm border border-[var(--color-border)] overflow-hidden">
+      <div className="bg-[var(--color-surface)] rounded-2xl shadow-xs border border-[var(--color-border)] overflow-hidden">
 
         {/* Row 1 — Mode + PIC */}
         <div className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/50">
@@ -321,8 +216,8 @@ export default function TargetPage() {
               onClick={() => handleTypeChange('all')}
               className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeType === 'all'
-                  ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-sm'
-                  : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                  ? 'bg-transparent border border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                  : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
               Semua
@@ -331,8 +226,8 @@ export default function TargetPage() {
               onClick={() => handleTypeChange('udara')}
               className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeType === 'udara'
-                  ? 'bg-amber-500 text-white shadow-sm'
-                  : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                  ? 'bg-amber-500/15 border border-amber-500 text-amber-600 dark:text-amber-400 shadow-xs'
+                  : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
               <Plane className="w-3.5 h-3.5" /> Udara
@@ -341,8 +236,8 @@ export default function TargetPage() {
               onClick={() => handleTypeChange('laut')}
               className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
                 activeType === 'laut'
-                  ? 'bg-emerald-600 text-white shadow-sm'
-                  : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                  ? 'bg-emerald-500/15 border border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                  : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
               <Ship className="w-3.5 h-3.5" /> Laut
@@ -365,9 +260,9 @@ export default function TargetPage() {
                   onClick={() => handlePicChange(opt.key)}
                   className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-all cursor-pointer border ${
                     isActive && badge
-                      ? 'border-transparent shadow-sm'
+                      ? 'border-transparent shadow-xs'
                       : isActive
-                      ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] border-transparent shadow-sm'
+                      ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
                       : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)]'
                   }`}
                   style={isActive && badge ? { background: badge.bg, color: badge.text } : {}}
@@ -382,30 +277,30 @@ export default function TargetPage() {
         {/* Row 2 — Group filter cards + Search + Export */}
         <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
 
-          {/* Group filter — card style with count badges */}
+          {/* Group filter */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wide">
               <Layers className="w-3 h-3" /> Kategori
             </span>
             {GROUP_OPTIONS.map((opt) => {
               const isActive = activeGroup === opt.key
-              const count    = groupCounts[opt.key as GroupKey]
+              const count    = groupCounts[opt.key]
               return (
                 <button
                   key={opt.key}
-                  onClick={() => setActiveGroup(opt.key as GroupKey)}
+                  onClick={() => setActiveGroup(opt.key)}
                   className={`relative flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
                     isActive
-                      ? opt.color
-                        ? `${opt.color} border-transparent shadow-sm`
-                        : 'bg-[var(--color-primary)] text-[var(--color-on-primary)] border-transparent shadow-sm'
+                      ? opt.activeClass || 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
                       : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)] hover:text-[var(--color-primary)]'
                   }`}
                 >
                   {opt.key === 'aging' && <Clock className="w-3 h-3" />}
                   {opt.name}
-                  <span className={`ml-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center ${
-                    isActive ? 'bg-white/25 text-current' : 'bg-[var(--color-neutral)] text-[var(--color-secondary)]'
+                  <span className={`ml-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center border ${
+                    isActive
+                      ? 'border-current bg-current/10 text-current'
+                      : 'border-[var(--color-border)] bg-[var(--color-neutral)] text-[var(--color-secondary)]'
                   }`}>
                     {count}
                   </span>
@@ -417,18 +312,18 @@ export default function TargetPage() {
           {/* Search + Export */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <div className="relative flex-1 sm:w-60">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-secondary)]" />
               <input
                 type="text"
                 placeholder="Cari customer, marking, komoditi..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-8 pr-8 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] transition-all"
+                className="w-full pl-8 pr-8 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-tertiary)]/20 focus:border-[var(--color-tertiary)] text-[var(--color-primary)] transition-all"
               />
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-primary)] cursor-pointer"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -437,7 +332,7 @@ export default function TargetPage() {
             <button
               onClick={handleExportExcel}
               disabled={filteredList.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors shadow-sm shrink-0 cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors shadow-xs shrink-0 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Export Excel</span>
@@ -448,32 +343,32 @@ export default function TargetPage() {
 
         {/* Active filters summary bar */}
         {(activeType !== 'all' || activePic !== 'all' || activeGroup !== 'all' || searchQuery) && (
-          <div className="px-4 py-2 border-t border-[var(--color-border)] bg-blue-50/50 flex items-center gap-2 flex-wrap">
-            <span className="text-[10px] font-semibold text-blue-600 uppercase tracking-wide">Filter aktif:</span>
+          <div className="px-4 py-2 border-t border-[var(--color-border)] bg-[var(--color-neutral)]/40 flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-semibold text-[var(--color-tertiary)] uppercase tracking-wide">Filter aktif:</span>
             {activeType !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-semibold rounded-full">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 text-[10px] font-semibold rounded-full">
                 {activeType === 'udara' ? <Plane className="w-2.5 h-2.5" /> : <Ship className="w-2.5 h-2.5" />}
                 {activeType}
               </span>
             )}
             {activePic !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-slate-100 text-slate-700 text-[10px] font-semibold rounded-full capitalize">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)] text-[10px] font-semibold rounded-full capitalize">
                 PIC: {activePic}
               </span>
             )}
             {activeGroup !== 'all' && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-violet-100 text-violet-700 text-[10px] font-semibold rounded-full">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-transparent border border-purple-500/40 text-purple-600 dark:text-purple-400 text-[10px] font-semibold rounded-full">
                 {activeGroupOpt?.name}
               </span>
             )}
             {searchQuery && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600 text-[10px] font-semibold rounded-full">
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-transparent border border-[var(--color-border)] text-[var(--color-primary)] text-[10px] font-semibold rounded-full">
                 &ldquo;{searchQuery}&rdquo;
               </span>
             )}
             <button
               onClick={() => { setActiveType('all'); setActivePic('all'); setActiveGroup('all'); setSearchQuery(''); setSearchParams({}) }}
-              className="ml-auto text-[10px] font-semibold text-blue-600 hover:text-blue-800 flex items-center gap-0.5 cursor-pointer"
+              className="ml-auto text-[10px] font-semibold text-[var(--color-tertiary)] hover:underline flex items-center gap-0.5 cursor-pointer"
             >
               <X className="w-2.5 h-2.5" /> Reset semua
             </button>
@@ -482,12 +377,12 @@ export default function TargetPage() {
       </div>
 
       {/* ── TABLE CARD ───────────────────────────────────────── */}
-      <div className="bg-[var(--color-surface)] rounded-2xl shadow-sm border border-[var(--color-border)] overflow-hidden">
+      <div className="bg-[var(--color-surface)] rounded-2xl shadow-xs border border-[var(--color-border)] overflow-hidden">
 
         {/* Table header info */}
         <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
           <div>
-            <span className="text-xs font-semibold text-[var(--color-primary)]" style={{ fontFamily: '"Space Grotesk", sans-serif' }}>
+            <span className="text-xs font-semibold text-[var(--color-primary)] font-[var(--font-display)]">
               {filteredList.length} item
             </span>
             <span className="text-xs text-[var(--color-secondary)] ml-1.5">
@@ -514,31 +409,30 @@ export default function TargetPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1200px] text-left text-xs">
               <thead
-                className="sticky top-0 z-10 text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)]"
-                style={{ fontFamily: '"Space Grotesk", sans-serif', background: 'var(--color-neutral)' }}
+                className="sticky top-0 z-10 text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)] bg-[var(--color-neutral)] font-[var(--font-display)]"
               >
-                  <tr>
-                    <th className="px-4 py-3 w-[72px] border-b border-[var(--color-border)]">Aging</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">PIC</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Customer & Status</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Cabang & Sales</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Marking & Kargo</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Komoditi</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
-                    <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
-                  </tr>
+                <tr>
+                  <th className="px-4 py-3 w-[72px] border-b border-[var(--color-border)]">Aging</th>
+                  <th className="px-4 py-3 border-b border-[var(--color-border)]">PIC</th>
+                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Customer & Status</th>
+                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Cabang & Sales</th>
+                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Marking & Kargo</th>
+                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Komoditi</th>
+                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
+                  <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
+                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
+                </tr>
               </thead>
               <tbody>
-                {filteredList.map((item: any, idx: number) => {
+                {filteredList.map((item, idx) => {
                   const badge = PIC_BADGES[item.pic] || { label: item.pic, bg: '#4B5563', text: '#fff' }
                   const isEven = idx % 2 === 0
                   return (
                     <tr
                       key={idx}
                       className={cn(
-                        "group transition-colors hover:bg-[var(--color-neutral)]",
-                        isEven ? "bg-[var(--color-surface)]" : "bg-[var(--color-neutral)]/40"
+                        "group transition-colors hover:bg-[var(--color-neutral)]/40",
+                        isEven ? "bg-[var(--color-surface)]" : "bg-[var(--color-neutral)]/20"
                       )}
                     >
                       {/* Aging */}
@@ -572,12 +466,26 @@ export default function TargetPage() {
 
                       {/* Marking & Kargo */}
                       <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap" title={`${item.markingCode} ${item.markingNo}`}>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="font-semibold text-[var(--color-primary)]">{item.markingCode || '-'}</span>
+                          {item.isPartial && (
+                            <button
+                              type="button"
+                              onClick={() => setPartialModalItem(item)}
+                              className="inline-flex items-center cursor-pointer group/parsial"
+                              title={`Klik untuk melihat ${item.countTerima || 1} data pengiriman parsial terkait di tbEntryList`}
+                            >
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-transparent border border-purple-500/50 text-purple-600 dark:text-purple-400 group-hover/parsial:bg-purple-500/10 group-hover/parsial:border-purple-500 transition-colors shadow-2xs shrink-0"
+                              >
+                                PARSIAL
+                              </span>
+                            </button>
+                          )}
                           {item.validasiMismatch && activeType !== 'udara' && (
                             <button
                               onClick={() => setMismatchItem(item)}
-                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-full bg-red-100 text-red-700 border border-red-300 hover:bg-red-200 transition-colors cursor-pointer shrink-0"
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-transparent border border-rose-500/50 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
                               title="Klik untuk lihat detail mismatch"
                             >
                               <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
@@ -607,11 +515,11 @@ export default function TargetPage() {
                       <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
                         <div className="flex items-center gap-1.5">
                           {item.type ? (
-                            <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-gray-100 text-gray-600">
+                            <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)]">
                               {item.type}
                             </span>
                           ) : (
-                            <span className="text-gray-400">-</span>
+                            <span className="text-[var(--color-secondary)]">-</span>
                           )}
                           {Number(item.taxReturn) === 1 && (
                             <span
@@ -624,23 +532,110 @@ export default function TargetPage() {
                         </div>
                       </td>
 
-
+                      {/* Harga */}
                       <td className="px-4 py-3 border-b border-[var(--color-border)] text-right whitespace-nowrap">
-                        {item.harga > 0 ? (
-                          <div className="font-bold text-emerald-700">
-                            {formatCurrency(item.harga)}
-                          </div>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-100 text-amber-800 border border-amber-300 shadow-2xs">
-                            <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
-                            Belum Ada Harga
-                          </span>
-                        )}
-                        {(item.updateBy || item.updateDate) && (
-                          <div className="text-[9px] text-[var(--color-secondary)] mt-0.5">
-                            {item.updateBy} {item.updateDate ? `· ${formatDateTime(item.updateDate)}` : ''}
-                          </div>
-                        )}
+                        <div className="flex flex-col items-end gap-1">
+                          {item.priceStatus === 'MATCH' ? (
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => setPriceCheckItem(item)}
+                                className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                                title="Klik untuk cek detail tarif database"
+                              >
+                                {formatCurrency(item.harga)}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPriceCheckItem(item)}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-transparent border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                                title="Harga sesuai database. Klik untuk cek rincian tarif."
+                              >
+                                <CheckCircle2 className="w-2.5 h-2.5 shrink-0" />
+                                Sesuai
+                              </button>
+                            </div>
+                          ) : item.priceStatus === 'DIFFERENT' ? (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setPriceCheckItem(item)}
+                                  className="font-bold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
+                                  title="Klik untuk cek rincian perbandingan harga"
+                                >
+                                  {formatCurrency(item.harga)}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPriceCheckItem(item)}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-transparent border border-rose-500/50 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                  title={`Terdapat selisih dengan database (DB: ${formatCurrency(item.hargaDb || 0)}). Klik untuk cek rincian.`}
+                                >
+                                  <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                                  Beda DB
+                                </button>
+                              </div>
+                              {item.hargaDb && item.hargaDb > 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPriceCheckItem(item)}
+                                  className="text-[9px] text-[var(--color-secondary)] hover:text-[var(--color-primary)] cursor-pointer"
+                                >
+                                  DB: {formatCurrency(item.hargaDb)}
+                                </button>
+                              )}
+                            </div>
+                          ) : item.priceStatus === 'NOT_SET' ? (
+                            <div className="flex flex-col items-end gap-0.5">
+                              <button
+                                type="button"
+                                onClick={() => setPriceCheckItem(item)}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-transparent border border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors cursor-pointer shadow-2xs"
+                                title={`Tarif tersedia di DB (${formatCurrency(item.hargaDb || 0)}). Klik untuk cek rincian.`}
+                              >
+                                <Info className="w-3 h-3 text-purple-500 shrink-0" />
+                                Ada di DB ({formatCurrency(item.hargaDb || 0)})
+                              </button>
+                            </div>
+                          ) : item.harga > 0 ? (
+                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => setPriceCheckItem(item)}
+                                className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                                title="Klik untuk cek detail tarif database"
+                              >
+                                {formatCurrency(item.harga)}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setPriceCheckItem(item)}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
+                                title="Klik untuk cek tarif database"
+                              >
+                                <Tag className="w-2.5 h-2.5 shrink-0" />
+                                Cek DB
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setPriceCheckItem(item)}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer shadow-2xs"
+                              title="Belum ada harga. Klik untuk cek tarif customer di database."
+                            >
+                              <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                              Belum Ada Harga
+                            </button>
+                          )}
+
+                          {(item.updateBy || item.updateDate) && (
+                            <div className="text-[9px] text-[var(--color-secondary)]">
+                              {item.updateBy} {item.updateDate ? `· ${formatDateTime(item.updateDate)}` : ''}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Status Kirim */}

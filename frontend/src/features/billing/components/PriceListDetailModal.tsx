@@ -23,6 +23,9 @@ interface PriceListDetailModalProps {
   expectedMode?: string | null
   expectedBranch?: string | null
   salesName?: string | null
+  customerName?: string | null
+  customerCode?: string | null
+  hasCustomerPriceList?: boolean
   items: PriceItem[]
 }
 
@@ -34,6 +37,8 @@ export function PriceListDetailModal({
   expectedMode,
   expectedBranch,
   salesName,
+  customerName,
+  customerCode,
   items,
 }: PriceListDetailModalProps) {
   const { t } = useTranslation()
@@ -48,8 +53,9 @@ export function PriceListDetailModal({
     if (isOpen) {
       document.body.style.overflow = 'hidden'
 
+      const hasCustomerItems = items.some((it) => it.sheetType?.toUpperCase() === 'CUSTOMER')
       const isCsSales = salesName?.trim()?.toUpperCase().includes('CS')
-      const defaultSheetType = isCsSales ? 'CS' : 'ALL'
+      const defaultSheetType = hasCustomerItems ? 'CUSTOMER' : (isCsSales ? 'CS' : 'ALL')
 
       setSelectedSheetType(defaultSheetType)
       setSelectedMode(expectedMode ? expectedMode.toUpperCase() : 'ALL')
@@ -62,7 +68,7 @@ export function PriceListDetailModal({
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [isOpen, expectedMode, expectedBranch, salesName])
+  }, [isOpen, expectedMode, expectedBranch, salesName, items])
 
   const availableBranches = useMemo(() => {
     const set = new Set<string>()
@@ -77,7 +83,15 @@ export function PriceListDetailModal({
     items.forEach((it) => {
       if (it.sheetType) set.add(it.sheetType.trim().toUpperCase())
     })
-    return Array.from(set).sort()
+    const order = ['CUSTOMER', 'CS', 'MKT']
+    return Array.from(set).sort((a, b) => {
+      const idxA = order.indexOf(a)
+      const idxB = order.indexOf(b)
+      if (idxA !== -1 && idxB !== -1) return idxA - idxB
+      if (idxA !== -1) return -1
+      if (idxB !== -1) return 1
+      return a.localeCompare(b)
+    })
   }, [items])
 
   const filteredItems = useMemo(() => {
@@ -110,13 +124,13 @@ export function PriceListDetailModal({
     return list
   }, [items, selectedSheetType, filterOnlyRelevant, selectedMode, selectedBranch, search])
 
-  // Group filtered items by sheetType (CS / MKT)
+  // Group filtered items by sheetType (CUSTOMER / CS / MKT)
   const groupedItems = useMemo(() => {
     const groups: { key: string; label: string; items: PriceItem[] }[] = []
     const map = new Map<string, PriceItem[]>()
 
-    // Priority order: CS first, then MKT, then others
-    const order = ['CS', 'MKT']
+    // Priority order: CUSTOMER first, then CS, then MKT, then others
+    const order = ['CUSTOMER', 'CS', 'MKT']
 
     filteredItems.forEach((it) => {
       const st = it.sheetType?.trim().toUpperCase() || 'OTHER'
@@ -136,13 +150,20 @@ export function PriceListDetailModal({
 
     keys.forEach((k) => {
       let label = k
-      if (k === 'CS') label = t('billing.validation.groupCs')
-      else if (k === 'MKT') label = t('billing.validation.groupMkt')
+      if (k === 'CUSTOMER') {
+        label = customerName
+          ? `${t('billing.validation.groupCustomer') || 'Harga Khusus Customer'} (${customerName})`
+          : `${t('billing.validation.groupCustomer') || 'Harga Khusus Customer'} (${customerCode || 'Customer'})`
+      } else if (k === 'CS') {
+        label = t('billing.validation.groupCs')
+      } else if (k === 'MKT') {
+        label = t('billing.validation.groupMkt')
+      }
       groups.push({ key: k, label, items: map.get(k)! })
     })
 
     return groups
-  }, [filteredItems, t])
+  }, [filteredItems, t, customerName, customerCode])
 
   if (!isOpen || typeof document === 'undefined') return null
 
@@ -240,6 +261,9 @@ export function PriceListDetailModal({
                 </button>
                 {availableSheetTypes.map((st) => {
                   const isActive = selectedSheetType === st
+                  const isCust = st === 'CUSTOMER'
+                  const isCs = st === 'CS'
+                  const isMkt = st === 'MKT'
                   return (
                     <button
                       key={st}
@@ -247,15 +271,17 @@ export function PriceListDetailModal({
                       onClick={() => setSelectedSheetType(st)}
                       className={`px-2.5 py-1 text-[11px] font-bold rounded transition-all border ${
                         isActive
-                          ? st === 'CS'
+                          ? isCust
+                            ? 'bg-transparent border-purple-500 text-purple-500 shadow-xs'
+                            : isCs
                             ? 'bg-transparent border-blue-500 text-blue-500 shadow-xs'
-                            : st === 'MKT'
+                            : isMkt
                             ? 'bg-transparent border-amber-500 text-amber-500 shadow-xs'
                             : 'bg-transparent border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs'
                           : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                       }`}
                     >
-                      {st}
+                      {isCust ? (t('billing.validation.groupCustomer') || 'Harga Customer') : st}
                     </button>
                   )
                 })}
@@ -357,6 +383,7 @@ export function PriceListDetailModal({
         <div className="flex-1 overflow-y-auto p-4 sm:p-6 scrollbar-thin bg-[var(--color-surface)] space-y-6">
           {groupedItems.length > 0 ? (
             groupedItems.map((group) => {
+              const isCustGroup = group.key === 'CUSTOMER'
               const isCsGroup = group.key === 'CS'
               const isMktGroup = group.key === 'MKT'
 
@@ -367,14 +394,16 @@ export function PriceListDetailModal({
                     <div className="flex items-center gap-2">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-bold uppercase tracking-wider border ${
-                          isCsGroup
+                          isCustGroup
+                            ? 'bg-transparent text-purple-500 border-purple-500/40'
+                            : isCsGroup
                             ? 'bg-transparent text-blue-500 border-blue-500/40'
                             : isMktGroup
                             ? 'bg-transparent text-amber-500 border-amber-500/40'
                             : 'bg-transparent text-[var(--color-secondary)] border-[var(--color-border)]'
                         }`}
                       >
-                        {group.key}
+                        {isCustGroup ? 'CUSTOMER' : group.key}
                       </span>
                       <h4 className="text-xs sm:text-sm font-bold font-[var(--font-label)] text-[var(--color-primary)]">
                         {group.label}

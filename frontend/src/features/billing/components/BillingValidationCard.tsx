@@ -25,6 +25,8 @@ interface InvoiceDetail {
 interface BillingValidationCardProps {
   listCode: string
   billedM3: number
+  billedKg?: number
+  billedVfc?: number
   invoiceDetails?: InvoiceDetail[]
   billFdTypeComodity?: number | null
 }
@@ -57,6 +59,9 @@ interface M3CheckResponse {
   priceValidation?: {
     fdTglAgent: string | null
     effectiveDate: string | null
+    masterEffectiveDate?: string | null
+    customerEffectiveDate?: string | null
+    hasCustomerPriceList?: boolean
     expectedMode?: string | null
     expectedBranch?: string | null
     items: PriceItem[]
@@ -90,6 +95,15 @@ interface M3CheckResponse {
   countKomplainLC?: number
   countGudangLC?: number
   fdSatuan?: string | null
+  fdBeratList?: number | null
+  fdJmlBeratKomplain?: number | null
+  totalJmlBeratSJ?: number | null
+  fdVFCGudang?: number | null
+  fdVFCPL?: number | null
+  fdVFCKomplain?: number | null
+  vfcGudangPerMarking?: number | null
+  vfcKomplainPerMarking?: number | null
+  minChargeKg?: number | null
   profileHarga?: {
     fdListCode: string
     fdCustCode: string
@@ -105,7 +119,7 @@ interface M3CheckResponse {
   comodityTypes?: ComodityType[]
 }
 
-export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [], billFdTypeComodity }: BillingValidationCardProps) {
+export function BillingValidationCard({ listCode, billedM3, billedKg, billedVfc, invoiceDetails = [], billFdTypeComodity }: BillingValidationCardProps) {
   const { t } = useTranslation()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isCustMarkingModalOpen, setIsCustMarkingModalOpen] = useState(false)
@@ -193,10 +207,37 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
   const isQtyGudangDiff = hasQtyMismatch && qtyGudang !== null && activeQtys.some((q) => q.key !== 'Gudang' && q.val !== qtyGudang)
   const isQtyKomplainDiff = hasQtyMismatch && qtyKomplain !== null && qtyKomplain > 0 && activeQtys.some((q) => q.key !== 'Komplain' && q.val !== qtyKomplain)
 
+  const isAir = res.fdListType === 1 || res.expectedMode === 'BY AIR'
+
+  // Air Mode (By Air) Berat / Weight validation
+  const effectiveBilledKg = billedKg !== undefined && billedKg > 0 ? billedKg : 0
+  const effectiveBilledVfc = billedVfc !== undefined && billedVfc > 0 ? billedVfc : 0
+  const beratList = res.fdBeratList ?? 0
+  const beratKomplain = res.fdJmlBeratKomplain ?? 0
+  const beratSJ = res.totalJmlBeratSJ ?? 0
+  const vfcGudang = res.fdVFCGudang ?? 0
+  const minChargeKg = res.profileHarga?.minChargeKg && res.profileHarga.minChargeKg > 0 ? res.profileHarga.minChargeKg : (res.minChargeKg ?? 3)
+
+  const airCandidates: { sourceKey: string; sourceName: string; val: number; rawVal: number }[] = [
+    { sourceKey: 'EntryList', sourceName: 'Berat EntryList', val: beratList, rawVal: beratList },
+    ...(beratKomplain > 0
+      ? [{ sourceKey: 'Komplain', sourceName: 'Berat Komplain', val: beratKomplain, rawVal: beratKomplain }]
+      : []),
+    ...(beratSJ > 0
+      ? [{ sourceKey: 'SJ', sourceName: 'Berat Surat Jalan', val: beratSJ, rawVal: beratSJ }]
+      : []),
+    ...(minChargeKg > 0
+      ? [{ sourceKey: 'MinCharge', sourceName: `Min. Charge (${formatDecimal(minChargeKg, 2)} kg)`, val: minChargeKg, rawVal: minChargeKg }]
+      : []),
+  ]
+
+  const airPrimaryMatch = isAir ? airCandidates.find((c) => Math.abs(c.val - effectiveBilledKg) < 0.01) : null
+  const isVfcMatched = effectiveBilledVfc > 0 && vfcGudang > 0 && Math.abs(vfcGudang - effectiveBilledVfc) < 0.01
+
   // Helper untuk aturan M3 minimal 0.1 m³
   const normM3 = (v: number) => (v > 0 && v < 0.1 ? 0.1 : v)
 
-  // Check 1: Primary match against PL, Gudang, Komplain, List Batch, dan Komplain Parsial + Gudang
+  // Check 1: Primary match against PL, Gudang, Komplain, List Batch, dan Komplain Parsial + Gudang (Sea)
   const primaryCandidates: { sourceKey: string; sourceName: string; val: number; rawVal: number }[] = [
     ...plValues.map((v) => ({ sourceKey: 'PL', sourceName: t('billing.validation.pl'), val: normM3(v), rawVal: v })),
     ...gudangValues.map((v) => ({ sourceKey: 'Gudang', sourceName: t('billing.validation.gudang'), val: normM3(v), rawVal: v })),
@@ -216,7 +257,7 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
       : []),
   ]
 
-  const primaryMatch = primaryCandidates.find((c) => Math.abs(c.val - billedM3) < 0.001)
+  const seaPrimaryMatch = primaryCandidates.find((c) => Math.abs(c.val - billedM3) < 0.001)
 
   // Check 2: Secondary match against M3 per Marking jika tidak match di primary
   const rawMarkingVal = custMarkingValues.length > 0 ? custMarkingValues[0] : null
@@ -229,21 +270,32 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
   let isMinChargeApplied = false
   let matchedRawVal = 0
 
-  if (primaryMatch) {
-    matchStatus = 'MATCH_PRIMARY'
-    matchedSourceName = primaryMatch.sourceName
-    matchedRawVal = primaryMatch.rawVal
-    isMinChargeApplied = primaryMatch.rawVal > 0 && primaryMatch.rawVal < 0.1
-  } else if (markingCandidate !== undefined) {
-    matchStatus = 'MATCH_MARKING'
-    matchedSourceName = t('billing.validation.custPerMarking')
-    matchedRawVal = rawMarkingVal || 0
-    isMinChargeApplied = matchedRawVal > 0 && matchedRawVal < 0.1
+  if (isAir) {
+    if (airPrimaryMatch) {
+      matchStatus = 'MATCH_PRIMARY'
+      matchedSourceName = airPrimaryMatch.sourceName
+      matchedRawVal = airPrimaryMatch.rawVal
+      isMinChargeApplied = airPrimaryMatch.sourceKey === 'MinCharge'
+    } else {
+      matchStatus = 'NO_MATCH'
+    }
+  } else {
+    if (seaPrimaryMatch) {
+      matchStatus = 'MATCH_PRIMARY'
+      matchedSourceName = seaPrimaryMatch.sourceName
+      matchedRawVal = seaPrimaryMatch.rawVal
+      isMinChargeApplied = seaPrimaryMatch.rawVal > 0 && seaPrimaryMatch.rawVal < 0.1
+    } else if (markingCandidate !== undefined) {
+      matchStatus = 'MATCH_MARKING'
+      matchedSourceName = t('billing.validation.custPerMarking')
+      matchedRawVal = rawMarkingVal || 0
+      isMinChargeApplied = matchedRawVal > 0 && matchedRawVal < 0.1
+    }
   }
 
   const isCodOrUrgent = res.isCodOrUrgent
   const recommendedM3 = res.recommendedM3
-  const isCodUrgentShortfall = isCodOrUrgent && recommendedM3 > billedM3 + 0.001
+  const isCodUrgentShortfall = !isAir && isCodOrUrgent && recommendedM3 > billedM3 + 0.001
 
   // Overall status badge variant
   let badgeVariant: 'success' | 'info' | 'warning' | 'danger' = 'success'
@@ -263,13 +315,21 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
     StatusIcon = X
   }
 
-  const badgeText = isCodUrgentShortfall
-    ? t('billing.validation.statusCodUrgentWarning')
-    : matchStatus === 'NO_MATCH'
-      ? t('billing.validation.statusNoMatch')
-      : isMinChargeApplied
-        ? `COCOK (ATURAN MIN. 0,1 m³ · ${matchedSourceName})`
-        : t('billing.validation.statusMatch', { source: matchedSourceName })
+  const badgeText = isAir
+    ? matchStatus === 'MATCH_PRIMARY'
+      ? isMinChargeApplied
+        ? `COCOK (ATURAN MIN. CHARGE ${formatDecimal(minChargeKg, 2)} KG · Real: ${formatDecimal(beratList, 2)} kg)`
+        : `COCOK (${matchedSourceName.toUpperCase()})`
+      : effectiveBilledKg === 0
+        ? 'TAGIHAN BERAT (0 KG) BELUM DIISI'
+        : `SELISIH BERAT (${formatDecimal(effectiveBilledKg, 2)} kg ≠ Real: ${formatDecimal(beratList, 2)} kg)`
+    : isCodUrgentShortfall
+      ? t('billing.validation.statusCodUrgentWarning')
+      : matchStatus === 'NO_MATCH'
+        ? t('billing.validation.statusNoMatch')
+        : isMinChargeApplied
+          ? `COCOK (ATURAN MIN. 0,1 m³ · ${matchedSourceName})`
+          : t('billing.validation.statusMatch', { source: matchedSourceName })
 
   return (
     <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-sm overflow-hidden animate-fadeIn">
@@ -278,9 +338,14 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
         <div className="flex items-center gap-2">
           <ShieldCheck className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
           <h3 className="text-xs sm:text-sm font-bold font-[var(--font-label)] uppercase tracking-wider text-[var(--color-primary)]">
-            {t('billing.validation.title')}
+            {isAir ? 'Validasi Tagihan Berat (Udara)' : t('billing.validation.title')}
           </h3>
           <span className="text-[11px] text-[var(--color-secondary)] font-normal">({listCode})</span>
+          {isAir && (
+            <Badge variant="default" className="text-[9px] px-1.5 py-0 font-bold uppercase tracking-wider">
+              BY AIR
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
@@ -291,7 +356,7 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
           <button
             onClick={() => refetch()}
             disabled={isFetching}
-            className="p-1 text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors"
+            className="p-1 text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
             title={t('common.refresh')}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
@@ -303,313 +368,529 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
       <div className="p-4 sm:p-5 space-y-4">
         {/* Metric Cards Grid */}
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5 sm:gap-3">
-          {/* M3 Tagihan */}
+          {/* Card 1: Billed Metric */}
           <div className="rounded-[var(--radius-lg)] border-2 border-[var(--color-primary)] bg-[var(--color-neutral)] p-2.5 sm:p-3">
             <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
-              {t('billing.validation.billedM3')}
+              {isAir ? 'Tagihan Berat (Billed KG)' : t('billing.validation.billedM3')}
             </p>
             <p className="mt-1 text-sm sm:text-base font-bold text-[var(--color-primary)] tabular-nums">
-              {formatDecimal(billedM3, 4)} m³
+              {isAir ? `${formatDecimal(effectiveBilledKg, 2)} kg` : `${formatDecimal(billedM3, 4)} m³`}
             </p>
-          </div>
-
-          {/* Group: Per ListCode */}
-          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-4 lg:col-span-4">
-            <div className="flex items-center justify-between gap-1 mb-2">
-              <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
-                {t('billing.validation.referenceGroup') || 'Per ListCode'}
+            {isAir && effectiveBilledVfc > 0 && (
+              <p className="text-[10px] text-purple-600 dark:text-purple-400 mt-0.5 font-semibold">
+                VFC: {formatDecimal(effectiveBilledVfc, 2)} kg
               </p>
-              {hasQtyMismatch ? (
-                <Badge variant="warning" className="text-[10px] px-2 py-0.5 font-semibold flex items-center gap-1">
-                  <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
-                  <span>{t('billing.validation.qtyMismatch') || 'Selisih Qty'}</span>
-                </Badge>
-              ) : activeQtys.length > 0 ? (
-                <Badge variant="success" className="text-[10px] px-2 py-0.5 font-semibold flex items-center gap-1">
-                  <Check className="w-3 h-3 text-emerald-600 shrink-0 stroke-[2.5]" />
-                  <span>{t('billing.validation.qtyMatch') || 'Qty Sama'}</span>
-                </Badge>
-              ) : null}
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {/* EntryList */}
-              <div
-                className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'ListBatch'
-                  ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
-                  : isQtyListDiff
-                    ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
-                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
-                  }`}
-              >
-                <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                  {t('billing.validation.listBatch')}
-                </p>
-                <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
-                  {listBatchValues.length > 0 ? `${formatDecimal(listBatchValues[0], 4)} m³` : '—'}
-                </p>
-                <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
-                  <span className="flex items-center gap-1">
-                    <span>Qty</span>
-                    {isQtyListDiff && (
-                      <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
-                        {t('billing.validation.qtyDiff') || 'Beda'}
-                      </Badge>
-                    )}
-                  </span>
-                  <span className={`font-semibold ${isQtyListDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
-                    {qtyList !== null ? `${formatNumber(qtyList)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
-                  </span>
-                </p>
-              </div>
-
-              {/* Packing List */}
-              <div
-                className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'PL' || primaryMatch?.sourceKey === 'PackingList'
-                  ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
-                  : isQtyPLDiff
-                    ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
-                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
-                  }`}
-              >
-                <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                  {t('billing.validation.pl')}
-                </p>
-                <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
-                  {plValues.length > 0 ? `${formatDecimal(plValues[0], 4)} m³` : '—'}
-                </p>
-                <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
-                  <span className="flex items-center gap-1">
-                    <span>Qty</span>
-                    {isQtyPLDiff && (
-                      <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
-                        {t('billing.validation.qtyDiff') || 'Beda'}
-                      </Badge>
-                    )}
-                  </span>
-                  <span className={`font-semibold ${isQtyPLDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
-                    {qtyPL !== null ? `${formatNumber(qtyPL)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
-                  </span>
-                </p>
-              </div>
-
-              {/* Gudang */}
-              <div
-                className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'Gudang'
-                  ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
-                  : isQtyGudangDiff
-                    ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
-                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
-                  }`}
-              >
-                <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                  {t('billing.validation.gudang')}
-                </p>
-                <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
-                  {gudangValues.length > 0 ? `${formatDecimal(gudangValues[0], 4)} m³` : '—'}
-                </p>
-                <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
-                  <span className="flex items-center gap-1">
-                    <span>Qty</span>
-                    {isQtyGudangDiff && (
-                      <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
-                        {t('billing.validation.qtyDiff') || 'Beda'}
-                      </Badge>
-                    )}
-                  </span>
-                  <span className={`font-semibold ${isQtyGudangDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
-                    {qtyGudang !== null ? `${formatNumber(qtyGudang)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
-                  </span>
-                </p>
-              </div>
-
-              {/* Komplain */}
-              <div
-                className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'Komplain'
-                  ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
-                  : isQtyKomplainDiff
-                    ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
-                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
-                  }`}
-              >
-                <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                  {t('billing.validation.komplain')}
-                </p>
-                <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
-                  {komplainValues.length > 0 ? `${formatDecimal(komplainValues[0], 4)} m³` : '—'}
-                </p>
-                <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
-                  <span className="flex items-center gap-1">
-                    <span>Qty</span>
-                    {qtyKomplain === null || qtyKomplain === 0 ? (
-                      <span className="text-[8px] text-[var(--color-secondary)] font-normal">
-                        ({t('billing.validation.normal') || 'Normal'})
-                      </span>
-                    ) : isQtyKomplainDiff ? (
-                      <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
-                        {t('billing.validation.qtyDiff') || 'Beda'}
-                      </Badge>
-                    ) : null}
-                  </span>
-                  <span className={`font-semibold ${isQtyKomplainDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
-                    {qtyKomplain !== null && qtyKomplain > 0 ? `${formatNumber(qtyKomplain)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
-                  </span>
-                </p>
-              </div>
-            </div>
+            )}
+            {isAir && billedM3 > 0 && (
+              <p className="text-[10px] text-[var(--color-secondary)] mt-0.5 font-mono">
+                Vol: {formatDecimal(billedM3, 4)} m³
+              </p>
+            )}
           </div>
 
-          {/* Group: Per Marking */}
-          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-2 lg:col-span-2">
-            <div className="flex items-center justify-between gap-1 mb-2">
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
-                  {t('billing.validation.perMarkingGroup') || 'Per Marking'}
-                </p>
-                {res.isPartialKomplain && (
-                  <Badge variant="warning" className="text-[8px] px-1.5 py-0 font-bold">
-                    Komplain Parsial ({totalEntryKomplain}/{totalEntryList} LC)
-                  </Badge>
+          {isAir ? (
+            <>
+              {/* Group: Per ListCode (Data Berat Timbangan) */}
+              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-4 lg:col-span-4">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
+                    Data Berat Timbangan & Tarif (Udara)
+                  </p>
+                  {hasQtyMismatch ? (
+                    <Badge variant="warning" className="text-[10px] px-2 py-0.5 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                      <span>{t('billing.validation.qtyMismatch') || 'Selisih Qty'}</span>
+                    </Badge>
+                  ) : activeQtys.length > 0 ? (
+                    <Badge variant="success" className="text-[10px] px-2 py-0.5 font-semibold flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-600 shrink-0 stroke-[2.5]" />
+                      <span>{t('billing.validation.qtyMatch') || 'Qty Sama'}</span>
+                    </Badge>
+                  ) : null}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {/* Berat EntryList */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${
+                      airPrimaryMatch?.sourceKey === 'EntryList'
+                        ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                        : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                    }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      Berat EntryList
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {beratList > 0 ? `${formatDecimal(beratList, 2)} kg` : '0 kg'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span>Qty</span>
+                      <span className="font-semibold text-[var(--color-primary)]">
+                        {qtyList !== null ? `${formatNumber(qtyList)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Berat Komplain */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${
+                      airPrimaryMatch?.sourceKey === 'Komplain'
+                        ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                        : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                    }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      Berat Komplain
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {beratKomplain > 0 ? `${formatDecimal(beratKomplain, 2)} kg` : 'Normal (0 kg)'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span>Qty</span>
+                      <span className="font-semibold text-[var(--color-primary)]">
+                        {qtyKomplain !== null && qtyKomplain > 0 ? `${formatNumber(qtyKomplain)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Min Charge KG */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${
+                      airPrimaryMatch?.sourceKey === 'MinCharge'
+                        ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                        : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                    }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      Min. Charge KG
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {formatDecimal(minChargeKg, 2)} kg
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span>Status</span>
+                      <span className="font-semibold text-[var(--color-primary)]">
+                        {beratList < minChargeKg ? 'Kena Min' : 'Normal'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* VFC Gudang */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${
+                      isVfcMatched
+                        ? 'border-purple-500 dark:border-purple-400 bg-transparent ring-1 ring-purple-500/30'
+                        : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                        VFC Gudang
+                      </p>
+                      {isVfcMatched && (
+                        <span className="text-[8px] px-1 py-0 font-bold border border-purple-500/40 text-purple-500 rounded">
+                          COCOK
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {vfcGudang > 0 ? `${formatDecimal(vfcGudang, 2)} kg` : '—'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span>Vol. Flight</span>
+                      <span className="font-semibold text-[var(--color-primary)]">
+                        {gudangValues.length > 0 ? `${formatDecimal(gudangValues[0], 4)} m³` : '—'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Group: Per Marking & SJ (Air) */}
+              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-2 lg:col-span-2">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
+                    Per Marking & SJ
+                  </p>
+                  {res.customer?.fdCustCode && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCustMarkingModalOpen(true)}
+                      className="text-blue-600 hover:text-blue-800 transition-colors p-0.5 cursor-pointer"
+                      title={t('billing.validation.viewCustMarkingDetail')}
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                  {/* VFC Per Marking */}
+                  <div className="rounded-md border p-2 border-[var(--color-border)] bg-[var(--color-neutral)]">
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      VFC Marking
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {res.vfcGudangPerMarking ? `${formatDecimal(res.vfcGudangPerMarking, 2)} kg` : '—'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span className="text-[9px] truncate mr-1">Total LC</span>
+                      <span className="font-semibold text-[var(--color-primary)]">
+                        {totalEntryList !== null ? `${formatNumber(totalEntryList)}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Berat SJ */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${
+                      airPrimaryMatch?.sourceKey === 'SJ'
+                        ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                        : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                    }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      Berat SJ
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {beratSJ > 0 ? `${formatDecimal(beratSJ, 2)} kg` : '—'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span className="text-[9px] truncate mr-1">Surat Jalan</span>
+                      <span className="font-semibold text-[var(--color-primary)]">
+                        {beratSJ > 0 ? 'Tercatat' : '—'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              {/* Group: Per ListCode (Sea) */}
+              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-4 lg:col-span-4">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
+                    {t('billing.validation.referenceGroup') || 'Per ListCode'}
+                  </p>
+                  {hasQtyMismatch ? (
+                    <Badge variant="warning" className="text-[10px] px-2 py-0.5 font-semibold flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" />
+                      <span>{t('billing.validation.qtyMismatch') || 'Selisih Qty'}</span>
+                    </Badge>
+                  ) : activeQtys.length > 0 ? (
+                    <Badge variant="success" className="text-[10px] px-2 py-0.5 font-semibold flex items-center gap-1">
+                      <Check className="w-3 h-3 text-emerald-600 shrink-0 stroke-[2.5]" />
+                      <span>{t('billing.validation.qtyMatch') || 'Qty Sama'}</span>
+                    </Badge>
+                  ) : null}
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {/* EntryList */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${seaPrimaryMatch?.sourceKey === 'ListBatch'
+                      ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                      : isQtyListDiff
+                        ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
+                        : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                      }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      {t('billing.validation.listBatch')}
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {listBatchValues.length > 0 ? `${formatDecimal(listBatchValues[0], 4)} m³` : '—'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span className="flex items-center gap-1">
+                        <span>Qty</span>
+                        {isQtyListDiff && (
+                          <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                            {t('billing.validation.qtyDiff') || 'Beda'}
+                          </Badge>
+                        )}
+                      </span>
+                      <span className={`font-semibold ${isQtyListDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
+                        {qtyList !== null ? `${formatNumber(qtyList)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Packing List */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${seaPrimaryMatch?.sourceKey === 'PL' || seaPrimaryMatch?.sourceKey === 'PackingList'
+                      ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                      : isQtyPLDiff
+                        ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
+                        : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                      }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      {t('billing.validation.pl')}
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {plValues.length > 0 ? `${formatDecimal(plValues[0], 4)} m³` : '—'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span className="flex items-center gap-1">
+                        <span>Qty</span>
+                        {isQtyPLDiff && (
+                          <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                            {t('billing.validation.qtyDiff') || 'Beda'}
+                          </Badge>
+                        )}
+                      </span>
+                      <span className={`font-semibold ${isQtyPLDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
+                        {qtyPL !== null ? `${formatNumber(qtyPL)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Gudang */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${seaPrimaryMatch?.sourceKey === 'Gudang'
+                      ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                      : isQtyGudangDiff
+                        ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
+                        : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                      }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      {t('billing.validation.gudang')}
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {gudangValues.length > 0 ? `${formatDecimal(gudangValues[0], 4)} m³` : '—'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span className="flex items-center gap-1">
+                        <span>Qty</span>
+                        {isQtyGudangDiff && (
+                          <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                            {t('billing.validation.qtyDiff') || 'Beda'}
+                          </Badge>
+                        )}
+                      </span>
+                      <span className={`font-semibold ${isQtyGudangDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
+                        {qtyGudang !== null ? `${formatNumber(qtyGudang)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* Komplain */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${seaPrimaryMatch?.sourceKey === 'Komplain'
+                      ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                      : isQtyKomplainDiff
+                        ? 'border-amber-400 dark:border-amber-600/60 bg-transparent'
+                        : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                      }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      {t('billing.validation.komplain')}
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {komplainValues.length > 0 ? `${formatDecimal(komplainValues[0], 4)} m³` : '—'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span className="flex items-center gap-1">
+                        <span>Qty</span>
+                        {qtyKomplain === null || qtyKomplain === 0 ? (
+                          <span className="text-[8px] text-[var(--color-secondary)] font-normal">
+                            ({t('billing.validation.normal') || 'Normal'})
+                          </span>
+                        ) : isQtyKomplainDiff ? (
+                          <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                            {t('billing.validation.qtyDiff') || 'Beda'}
+                          </Badge>
+                        ) : null}
+                      </span>
+                      <span className={`font-semibold ${isQtyKomplainDiff ? 'text-amber-700 dark:text-amber-400' : 'text-[var(--color-primary)]'}`}>
+                        {qtyKomplain !== null && qtyKomplain > 0 ? `${formatNumber(qtyKomplain)}${fdSatuan ? ` ${fdSatuan}` : ''}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Group: Per Marking (Sea) */}
+              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-2 lg:col-span-2">
+                <div className="flex items-center justify-between gap-1 mb-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      {t('billing.validation.perMarkingGroup') || 'Per Marking'}
+                    </p>
+                    {res.isPartialKomplain && (
+                      <Badge variant="warning" className="text-[8px] px-1.5 py-0 font-bold">
+                        Komplain Parsial ({totalEntryKomplain}/{totalEntryList} LC)
+                      </Badge>
+                    )}
+                  </div>
+                  {res.customer?.fdCustCode && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCustMarkingModalOpen(true)}
+                      className="text-blue-600 hover:text-blue-800 transition-colors p-0.5 cursor-pointer"
+                      title={t('billing.validation.viewCustMarkingDetail')}
+                    >
+                      <ExternalLink className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {/* M3 PL per Marking */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${seaPrimaryMatch?.sourceKey === 'PLPerMarking'
+                      ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                      : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                      }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      {t('billing.validation.pl')}
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {plPerMarkingValues.length > 0 ? `${formatDecimal(plPerMarkingValues[0], 4)} m³` : '—'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span className="text-[9px] truncate mr-1">Total LC</span>
+                      <span className="font-semibold text-[var(--color-primary)]">
+                        {totalEntryList !== null ? `${formatNumber(totalEntryList)}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* M3 Customer per Marking */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${matchStatus === 'MATCH_MARKING'
+                      ? 'border-sky-500 dark:border-sky-400 bg-transparent ring-1 ring-sky-500/30'
+                      : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                      }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      {t('billing.validation.gudang')}
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {custMarkingValues.length > 0 ? `${formatDecimal(custMarkingValues[0], 4)} m³` : '—'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span className="text-[9px] truncate mr-1">Total LC</span>
+                      <span className="font-semibold text-[var(--color-primary)]">
+                        {totalEntryList !== null ? `${formatNumber(totalEntryList)}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+
+                  {/* M3 Komplain per Marking */}
+                  <div
+                    className={`rounded-md border p-2 transition-colors ${seaPrimaryMatch?.sourceKey === 'KomplainPerMarking'
+                      ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
+                      : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
+                      }`}
+                  >
+                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      {t('billing.validation.komplain')}
+                    </p>
+                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
+                      {komplainPerMarkingValues.length > 0 ? `${formatDecimal(komplainPerMarkingValues[0], 4)} m³` : '—'}
+                    </p>
+                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
+                      <span className="text-[9px] truncate mr-1">Total LC</span>
+                      <span className="font-semibold text-[var(--color-primary)]">
+                        {totalEntryKomplain !== null ? `${formatNumber(totalEntryKomplain)}` : '—'}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* Hybrid Validation Bar if Partial Komplain */}
+                {res.isPartialKomplain && res.m3KomplainPlusGudang !== null && res.m3KomplainPlusGudang !== undefined && res.m3KomplainPlusGudang > 0 && (
+                  <div
+                    className={`mt-2 p-1.5 rounded-md border text-[10px] font-mono flex items-center justify-between transition-colors ${
+                      seaPrimaryMatch?.sourceKey === 'KomplainHybrid'
+                        ? 'border-emerald-500 dark:border-emerald-400 bg-emerald-50/80 dark:bg-transparent text-emerald-950 dark:text-emerald-200'
+                        : 'border-sky-300 dark:border-sky-700 bg-sky-50/50 dark:bg-transparent text-sky-950 dark:text-sky-200'
+                    }`}
+                  >
+                    <span className="font-sans font-semibold text-[9px] flex items-center gap-1">
+                      <span>Validasi Komplain + Gudang:</span>
+                    </span>
+                    <span className="font-bold tabular-nums">
+                      {formatDecimal(res.m3KomplainPlusGudang, 4)} m³
+                    </span>
+                  </div>
                 )}
               </div>
-              {res.customer?.fdCustCode && (
-                <button
-                  type="button"
-                  onClick={() => setIsCustMarkingModalOpen(true)}
-                  className="text-blue-600 hover:text-blue-800 transition-colors p-0.5"
-                  title={t('billing.validation.viewCustMarkingDetail')}
-                >
-                  <ExternalLink className="w-3 h-3" />
-                </button>
-              )}
-            </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {/* M3 PL per Marking -> Packing List */}
-                <div
-                  className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'PLPerMarking'
-                    ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
-                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
-                    }`}
-                >
-                  <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                    {t('billing.validation.pl')}
-                  </p>
-                  <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
-                    {plPerMarkingValues.length > 0 ? `${formatDecimal(plPerMarkingValues[0], 4)} m³` : '—'}
-                  </p>
-                  <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
-                    <span className="text-[9px] truncate mr-1">Total ListCode</span>
-                    <span className="font-semibold text-[var(--color-primary)]">
-                      {totalEntryList !== null ? `${formatNumber(totalEntryList)}` : '—'}
-                    </span>
-                  </p>
-                </div>
-
-                {/* M3 Customer per Marking -> Gudang */}
-                <div
-                  className={`rounded-md border p-2 transition-colors ${matchStatus === 'MATCH_MARKING'
-                    ? 'border-sky-500 dark:border-sky-400 bg-transparent ring-1 ring-sky-500/30'
-                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
-                    }`}
-                >
-                  <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                    {t('billing.validation.gudang')}
-                  </p>
-                  <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
-                    {custMarkingValues.length > 0 ? `${formatDecimal(custMarkingValues[0], 4)} m³` : '—'}
-                  </p>
-                  <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
-                    <span className="text-[9px] truncate mr-1">Total ListCode</span>
-                    <span className="font-semibold text-[var(--color-primary)]">
-                      {totalEntryList !== null ? `${formatNumber(totalEntryList)}` : '—'}
-                    </span>
-                  </p>
-                </div>
-
-                {/* M3 Komplain per Marking -> Komplain */}
-                <div
-                  className={`rounded-md border p-2 transition-colors ${primaryMatch?.sourceKey === 'KomplainPerMarking'
-                    ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
-                    : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
-                    }`}
-                >
-                  <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                    {t('billing.validation.komplain')}
-                  </p>
-                  <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
-                    {komplainPerMarkingValues.length > 0 ? `${formatDecimal(komplainPerMarkingValues[0], 4)} m³` : '—'}
-                  </p>
-                  <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
-                    <span className="text-[9px] truncate mr-1">Total ListCode</span>
-                    <span className="font-semibold text-[var(--color-primary)]">
-                      {totalEntryKomplain !== null ? `${formatNumber(totalEntryKomplain)}` : '—'}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Hybrid Validation Bar if Partial Komplain */}
-              {res.isPartialKomplain && res.m3KomplainPlusGudang !== null && res.m3KomplainPlusGudang !== undefined && res.m3KomplainPlusGudang > 0 && (
-                <div
-                  className={`mt-2 p-1.5 rounded-md border text-[10px] font-mono flex items-center justify-between transition-colors ${
-                    primaryMatch?.sourceKey === 'KomplainHybrid'
-                      ? 'border-emerald-500 dark:border-emerald-400 bg-emerald-50/80 dark:bg-transparent text-emerald-950 dark:text-emerald-200'
-                      : 'border-sky-300 dark:border-sky-700 bg-sky-50/50 dark:bg-transparent text-sky-950 dark:text-sky-200'
-                  }`}
-                >
-                  <span className="font-sans font-semibold text-[9px] flex items-center gap-1">
-                    <span>Validasi Komplain + Gudang:</span>
-                  </span>
-                  <span className="font-bold tabular-nums">
-                    {formatDecimal(res.m3KomplainPlusGudang, 4)} m³
-                  </span>
-                </div>
-              )}
-          </div>
+            </>
+          )}
         </div>
 
         {/* Status Explanation Message */}
         <div className="space-y-2">
-          {matchStatus === 'MATCH_PRIMARY' && (
-            <div className="flex items-start gap-2 text-xs text-[var(--color-success)] bg-emerald-50/80 dark:bg-transparent border border-[var(--color-success)] rounded-[var(--radius-md)] p-2.5">
-              <Check className="w-4 h-4 text-[var(--color-success)] shrink-0 mt-0.5 stroke-[2.5]" />
-              <span className="font-medium">
-                {isMinChargeApplied
-                  ? `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) SESUAI aturan M3 Minimal 0,1 m³ (Data ${matchedSourceName}: ${formatDecimal(matchedRawVal, 4)} m³)`
-                  : `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) COCOK dengan data ${matchedSourceName}`}
-              </span>
-            </div>
-          )}
+          {isAir ? (
+            matchStatus === 'MATCH_PRIMARY' ? (
+              <div className="flex items-start gap-2 text-xs text-[var(--color-success)] bg-emerald-50/80 dark:bg-transparent border border-[var(--color-success)] rounded-[var(--radius-md)] p-2.5">
+                <Check className="w-4 h-4 text-[var(--color-success)] shrink-0 mt-0.5 stroke-[2.5]" />
+                <span className="font-medium">
+                  {isMinChargeApplied
+                    ? `Berat Tagihan (${formatDecimal(effectiveBilledKg, 2)} kg) SESUAI dengan aturan Min. Charge (${formatDecimal(minChargeKg, 2)} kg · Berat Real: ${formatDecimal(beratList, 2)} kg)`
+                    : `Berat Tagihan (${formatDecimal(effectiveBilledKg, 2)} kg) COCOK dengan data ${matchedSourceName}`}
+                </span>
+              </div>
+            ) : (
+              <div className="flex items-start gap-2 text-xs text-[var(--color-danger)] bg-rose-50/80 dark:bg-transparent border border-[var(--color-danger)] rounded-[var(--radius-md)] p-2.5">
+                <X className="w-4 h-4 text-[var(--color-danger)] shrink-0 mt-0.5 stroke-[2.5]" />
+                <span className="font-medium">
+                  {effectiveBilledKg === 0
+                    ? `Tagihan berat belum diisi (0 kg). Berat Real EntryList adalah ${formatDecimal(beratList, 2)} kg${minChargeKg > 0 ? ` (Min. Charge: ${formatDecimal(minChargeKg, 2)} kg)` : ''}.`
+                    : `Berat Tagihan (${formatDecimal(effectiveBilledKg, 2)} kg) TIDAK COCOK dengan Berat Real (${formatDecimal(beratList, 2)} kg)${minChargeKg > 0 ? ` maupun Min. Charge (${formatDecimal(minChargeKg, 2)} kg)` : ''}.`}
+                </span>
+              </div>
+            )
+          ) : (
+            <>
+              {matchStatus === 'MATCH_PRIMARY' && (
+                <div className="flex items-start gap-2 text-xs text-[var(--color-success)] bg-emerald-50/80 dark:bg-transparent border border-[var(--color-success)] rounded-[var(--radius-md)] p-2.5">
+                  <Check className="w-4 h-4 text-[var(--color-success)] shrink-0 mt-0.5 stroke-[2.5]" />
+                  <span className="font-medium">
+                    {isMinChargeApplied
+                      ? `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) SESUAI aturan M3 Minimal 0,1 m³ (Data ${matchedSourceName}: ${formatDecimal(matchedRawVal, 4)} m³)`
+                      : `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) COCOK dengan data ${matchedSourceName}`}
+                  </span>
+                </div>
+              )}
 
-          {matchStatus === 'MATCH_MARKING' && (
-            <div className="flex items-start gap-2 text-xs text-[var(--color-tertiary)] bg-sky-50/80 dark:bg-transparent border border-[var(--color-tertiary)] rounded-[var(--radius-md)] p-2.5">
-              <Info className="w-4 h-4 text-[var(--color-tertiary)] shrink-0 mt-0.5" />
-              <span className="font-medium">
-                {isMinChargeApplied
-                  ? `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) SESUAI aturan M3 Minimal 0,1 m³ (Data M3 per Marking: ${formatDecimal(matchedRawVal, 4)} m³)`
-                  : `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) COCOK dengan M3 per Marking`}
-              </span>
-            </div>
-          )}
+              {matchStatus === 'MATCH_MARKING' && (
+                <div className="flex items-start gap-2 text-xs text-[var(--color-tertiary)] bg-sky-50/80 dark:bg-transparent border border-[var(--color-tertiary)] rounded-[var(--radius-md)] p-2.5">
+                  <Info className="w-4 h-4 text-[var(--color-tertiary)] shrink-0 mt-0.5" />
+                  <span className="font-medium">
+                    {isMinChargeApplied
+                      ? `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) SESUAI aturan M3 Minimal 0,1 m³ (Data M3 per Marking: ${formatDecimal(matchedRawVal, 4)} m³)`
+                      : `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) COCOK dengan M3 per Marking`}
+                  </span>
+                </div>
+              )}
 
-          {matchStatus === 'NO_MATCH' && (
-            <div className="flex items-start gap-2 text-xs text-[var(--color-danger)] bg-rose-50/80 dark:bg-transparent border border-[var(--color-danger)] rounded-[var(--radius-md)] p-2.5">
-              <X className="w-4 h-4 text-[var(--color-danger)] shrink-0 mt-0.5 stroke-[2.5]" />
-              <span className="font-medium">
-                {t('billing.validation.noMatch').replace('{billed}', formatDecimal(billedM3, 4))}
-              </span>
-            </div>
-          )}
+              {matchStatus === 'NO_MATCH' && (
+                <div className="flex items-start gap-2 text-xs text-[var(--color-danger)] bg-rose-50/80 dark:bg-transparent border border-[var(--color-danger)] rounded-[var(--radius-md)] p-2.5">
+                  <X className="w-4 h-4 text-[var(--color-danger)] shrink-0 mt-0.5 stroke-[2.5]" />
+                  <span className="font-medium">
+                    {t('billing.validation.noMatch').replace('{billed}', formatDecimal(billedM3, 4))}
+                  </span>
+                </div>
+              )}
 
-          {/* COD / URGENT Alert */}
-          {isCodUrgentShortfall && (
-            <div className="flex items-start gap-2 text-xs text-[var(--color-warning)] bg-amber-50/80 dark:bg-transparent border border-[var(--color-warning)] rounded-[var(--radius-md)] p-2.5">
-              <AlertTriangle className="w-4 h-4 text-[var(--color-warning)] shrink-0 mt-0.5" />
-              <span className="font-medium">
-                {t('billing.validation.codUrgentWarning').replace('{recommended}', formatDecimal(recommendedM3, 4))}
-              </span>
-            </div>
+              {/* COD / URGENT Alert */}
+              {isCodUrgentShortfall && (
+                <div className="flex items-start gap-2 text-xs text-[var(--color-warning)] bg-amber-50/80 dark:bg-transparent border border-[var(--color-warning)] rounded-[var(--radius-md)] p-2.5">
+                  <AlertTriangle className="w-4 h-4 text-[var(--color-warning)] shrink-0 mt-0.5" />
+                  <span className="font-medium">
+                    {t('billing.validation.codUrgentWarning').replace('{recommended}', formatDecimal(recommendedM3, 4))}
+                  </span>
+                </div>
+              )}
+            </>
           )}
 
           {/* Qty Mismatch Alert */}
@@ -638,6 +919,13 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
             </div>
 
             <div className="flex items-center gap-3">
+              {res.priceValidation.hasCustomerPriceList && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-500 bg-transparent px-2 py-0.5 rounded border border-purple-500/40">
+                  <Tag className="w-3 h-3 text-purple-500" />
+                  <span>{t('billing.validation.customerPriceActive') || 'Price List Khusus Customer'}</span>
+                </span>
+              )}
+
               {res.priceValidation.effectiveDate && (
                 <div className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-secondary)]">
                   <Tag className="w-3.5 h-3.5 text-blue-500 shrink-0" />
@@ -910,13 +1198,23 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                       const branchFilter = res.expectedBranch || null
                       const expectedSheetType = res.customer?.fdBroker === 1 ? 'MKT' : 'CS'
 
-                      // Filter candidate items matching mode, branch, and sheetType
-                      const candidateItems = res.priceValidation.items.filter((p) => {
+                      // Prioritize CUSTOMER price list if available, then fallback to master CS/MKT
+                      const custCandidates = res.priceValidation.items.filter((p) => {
+                        if (p.sheetType?.toUpperCase() !== 'CUSTOMER') return false
+                        if (modeFilter && p.mode && p.mode.toUpperCase() !== modeFilter.toUpperCase()) return false
+                        if (branchFilter && p.branch && p.branch.toUpperCase() !== branchFilter.toUpperCase()) return false
+                        return true
+                      })
+
+                      const masterCandidates = res.priceValidation.items.filter((p) => {
+                        if (p.sheetType?.toUpperCase() === 'CUSTOMER') return false
                         if (modeFilter && p.mode && p.mode.toUpperCase() !== modeFilter.toUpperCase()) return false
                         if (branchFilter && p.branch && p.branch.toUpperCase() !== branchFilter.toUpperCase()) return false
                         if (p.sheetType && p.sheetType.toUpperCase() !== expectedSheetType) return false
                         return true
                       })
+
+                      const candidateItems = custCandidates.length > 0 ? custCandidates : (masterCandidates.length > 0 ? masterCandidates : res.priceValidation.items)
 
                       const itemsToSearch = candidateItems.length > 0 ? candidateItems : res.priceValidation.items
 
@@ -1002,10 +1300,11 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
                     if (isTaxReturnItem) {
                       priceListDisplay = res.profileHarga?.taxReturnPrice && res.profileHarga.taxReturnPrice > 0 ? formatCurrency(res.profileHarga.taxReturnPrice) : '—'
                     } else if (priceItem) {
+                      const isCustPrice = priceItem.sheetType?.toUpperCase() === 'CUSTOMER'
                       if (minTargetPrice !== maxTargetPrice) {
-                        priceListDisplay = `${formatCurrency(minTargetPrice)} - ${formatCurrency(maxTargetPrice)}`
+                        priceListDisplay = `${formatCurrency(minTargetPrice)} - ${formatCurrency(maxTargetPrice)}${isCustPrice ? ' (Cust)' : ''}`
                       } else {
-                        priceListDisplay = formatCurrency(priceItem.price)
+                        priceListDisplay = `${formatCurrency(priceItem.price)}${isCustPrice ? ' (Cust)' : ''}`
                       }
                     }
 
@@ -1073,6 +1372,9 @@ export function BillingValidationCard({ listCode, billedM3, invoiceDetails = [],
         expectedMode={res.expectedMode || res.priceValidation?.expectedMode}
         expectedBranch={res.expectedBranch || res.priceValidation?.expectedBranch}
         salesName={res.customer?.fdSalesNM}
+        customerName={res.customer?.fdCustName}
+        customerCode={res.customer?.fdCustCode}
+        hasCustomerPriceList={res.priceValidation?.hasCustomerPriceList}
         items={res.priceValidation?.items || []}
       />
 

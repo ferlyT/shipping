@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client'
 import { buildPagination, parsePagination } from '../../utils/pagination'
 import { getLastNDays, getLastNMonths, calculateTrend } from '../../utils/dateRange'
 import { logger } from '../../config/logger'
+import { lookupPriceByEntry } from '../price-list/price-list.service'
 
 async function safeRunRaw<T = any>(queryFn: () => Promise<T>, description: string): Promise<T> {
   try {
@@ -11,6 +12,39 @@ async function safeRunRaw<T = any>(queryFn: () => Promise<T>, description: strin
     logger.error(`Error executing ${description}:`, err)
     return [] as unknown as T
   }
+}
+
+function findBestCategoryMatch<T extends { category: string; price?: any }>(
+  items: T[],
+  entryTypeName: string,
+  filterFn?: (item: T) => boolean,
+): T | null {
+  const target = entryTypeName.trim().toUpperCase()
+  if (!target || !items || items.length === 0) return null
+
+  const candidates = filterFn ? items.filter(filterFn) : items
+  if (candidates.length === 0) return null
+
+  // 1. Prioritas Utama: Exact match (case-insensitive & trimmed)
+  const exact = candidates.find((it) => it.category.trim().toUpperCase() === target)
+  if (exact) return exact
+
+  // 2. Normalized match (tanpa spasi / tanda minus, misal: "SEMI-GARMENT" vs "SEMI GARMENT")
+  const normTarget = target.replace(/[^A-Z0-9]/g, '')
+  const normMatch = candidates.find(
+    (it) => it.category.trim().toUpperCase().replace(/[^A-Z0-9]/g, '') === normTarget
+  )
+  if (normMatch) return normMatch
+
+  // 3. Word-Boundary prefix match (misal: "GENERAL GOODS" vs "GENERAL GOODS NORMAL", tapi BUKAN "GARMENT" mencocokkan "SEMI GARMENT")
+  const wordMatch = candidates.find((it) => {
+    const cat = it.category.trim().toUpperCase()
+    if (target.startsWith(`${cat} `) || cat.startsWith(`${target} `)) return true
+    return false
+  })
+  if (wordMatch) return wordMatch
+
+  return null
 }
 
 export async function getBillings(query: Record<string, string | undefined>) {
@@ -523,25 +557,149 @@ export async function getBillingTargetDetails(query: Record<string, string | und
     const spNum = mode === 'laut' ? 2 : 1
     const rawRows = await prisma.$queryRaw<any[]>`exec get_data_billing_and_data_m3 ${spNum}`
     const filtered = rawRows.filter(isTarget)
+    const distinctMarkings = Array.from(new Set(filtered.map((r) => r.Marking_code?.trim()).filter(Boolean)))
 
-    let picMap = new Map<string, string>()
-    if (mode === 'udara') {
-      const markings = filtered.map((r) => r.Marking_code?.trim()).filter(Boolean)
-      if (markings.length > 0) {
-        const picRows = await prisma.$queryRaw<any[]>`
-          SELECT
-            RTRIM(el.fdMarkingCode) AS markingCode,
-            RTRIM(el.fdEmp1) AS emp1,
-            RTRIM(b.fdEmpCode) AS bEmpCode
-          FROM tbEntryList el WITH (NOLOCK)
-          LEFT JOIN tbBilling b WITH (NOLOCK) ON b.fdListCode = el.fdListCode
-          WHERE el.fdMarkingCode IN (${Prisma.join(markings)})
-        `
-        for (const r of picRows) {
-          const p = r.bEmpCode === 'Y001' || r.emp1 === 'Y001' ? 'yati' : 'kiki'
-          picMap.set(r.markingCode, p)
-        }
+    const picMap = new Map<string, string>()
+    const partialMap = new Map<string, number>()
+    const loadDateMap = new Map<string, Date | string>()
+    const entryMap = new Map<string, any>()
+    const hargaMap = new Map<string, any>()
+    const customerBrokerMap = new Map<string, number>()
+    const allMasterUploads: any[] = []
+    const allCustUploads: any[] = []
+
+    if (mode === 'udara' && distinctMarkings.length > 0) {
+      const picRows = await prisma.$queryRaw<any[]>`
+        SELECT
+          RTRIM(el.fdMarkingCode) AS markingCode,
+          RTRIM(el.fdEmp1) AS emp1,
+          RTRIM(b.fdEmpCode) AS bEmpCode
+        FROM tbEntryList el WITH (NOLOCK)
+        LEFT JOIN tbBilling b WITH (NOLOCK) ON b.fdListCode = el.fdListCode
+        WHERE RTRIM(el.fdMarkingCode) IN (${Prisma.join(distinctMarkings)})
+      `
+      for (const r of picRows) {
+        const p = r.bEmpCode === 'Y001' || r.emp1 === 'Y001' ? 'yati' : 'kiki'
+        picMap.set(r.markingCode, p)
       }
+    }
+
+    if (distinctMarkings.length > 0) {
+      try {
+        const [partialRows, entryRows, priceEntries] = await Promise.all([
+          prisma.$queryRaw<any[]>`
+            SELECT 
+              RTRIM(el.fdMarkingCode) AS markingCode,
+              RTRIM(el.fdCustCode) AS custCode,
+              RTRIM(c.fdCustName) AS custName,
+              COUNT(el.fdTerima) AS countTerima
+            FROM tbEntryList el WITH (NOLOCK)
+            LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+            WHERE RTRIM(el.fdMarkingCode) IN (${Prisma.join(distinctMarkings)})
+              AND el.fdTerima IS NOT NULL AND RTRIM(el.fdTerima) <> ''
+            GROUP BY RTRIM(el.fdMarkingCode), RTRIM(el.fdCustCode), RTRIM(c.fdCustName)
+            HAVING COUNT(el.fdTerima) > 1
+          `,
+          prisma.$queryRaw<any[]>`
+            SELECT 
+              RTRIM(el.fdMarkingCode) AS markingCode,
+              RTRIM(el.fdMarkingNo) AS markingNo,
+              RTRIM(c.fdCustName) AS custName,
+              el.fdLoad AS loadDate
+            FROM tbEntryList el WITH (NOLOCK)
+            LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+            WHERE RTRIM(el.fdMarkingCode) IN (${Prisma.join(distinctMarkings)})
+              AND el.fdLoad IS NOT NULL
+          `,
+          prisma.$queryRaw<any[]>`
+            SELECT 
+              RTRIM(el.fdMarkingCode) AS markingCode,
+              RTRIM(el.fdMarkingNo) AS markingNo,
+              RTRIM(el.fdCustCode) AS custCode,
+              RTRIM(el.fdBranchCode) AS branchCode,
+              RTRIM(br.fdBranchName) AS branchName,
+              el.fdTypeComodity,
+              RTRIM(tc.fdComodityName) AS comodityName,
+              el.fdListType,
+              RTRIM(el.fdListCode) AS listCode
+            FROM tbEntryList el WITH (NOLOCK)
+            LEFT JOIN tbCabang br WITH (NOLOCK) ON br.fdBranchCode = el.fdBranchCode
+            LEFT JOIN tbTypeComodity tc WITH (NOLOCK) ON tc.fdTypeComodity = el.fdTypeComodity AND tc.fdListType = el.fdListType
+            WHERE RTRIM(el.fdMarkingCode) IN (${Prisma.join(distinctMarkings)})
+          `
+        ])
+
+        for (const r of partialRows) {
+          if (r.markingCode && r.custName) {
+            partialMap.set(`${r.markingCode.toUpperCase()}:::${r.custName.toUpperCase()}`, Number(r.countTerima))
+          }
+        }
+
+        for (const r of entryRows) {
+          if (r.markingCode && r.markingNo && r.loadDate) {
+            loadDateMap.set(`${r.markingCode.toUpperCase()}:::${r.markingNo.toUpperCase()}`, r.loadDate)
+          }
+          if (r.markingCode && r.custName && r.loadDate && !loadDateMap.has(`${r.markingCode.toUpperCase()}:::${r.custName.toUpperCase()}`)) {
+            loadDateMap.set(`${r.markingCode.toUpperCase()}:::${r.custName.toUpperCase()}`, r.loadDate)
+          }
+        }
+
+        const distinctCustCodes = Array.from(new Set(priceEntries.map((e) => e.custCode).filter(Boolean)))
+        const customerBrokerMap = new Map<string, number>()
+
+        for (const e of priceEntries) {
+          if (e.markingCode && e.markingNo) {
+            entryMap.set(`${e.markingCode}:::${e.markingNo}`.toUpperCase(), e)
+          }
+          if (e.markingCode && !entryMap.has(e.markingCode.toUpperCase())) {
+            entryMap.set(e.markingCode.toUpperCase(), e)
+          }
+        }
+
+        const [custUploads, masterUploads, custRows] = await Promise.all([
+          prisma.tbCustomerPriceListUpload.findMany({
+            where: {
+              fdCustCode: { in: distinctCustCodes },
+              status: { not: 'FAILED' },
+              isSuperseded: false,
+            },
+            orderBy: { effectiveDate: 'desc' },
+            include: { items: true, markings: true },
+          }),
+          prisma.tbPriceListUpload.findMany({
+            where: { status: { not: 'FAILED' }, isSuperseded: false },
+            orderBy: { effectiveDate: 'desc' },
+            include: { items: true, markings: true },
+            take: 10,
+          }),
+          prisma.tbCustomers.findMany({
+            where: { fdCustCode: { in: distinctCustCodes } },
+            select: { fdCustCode: true, fdBroker: true },
+          }),
+        ])
+
+        for (const c of custRows) {
+          if (c.fdCustCode) {
+            customerBrokerMap.set(c.fdCustCode.trim().toUpperCase(), c.fdBroker ?? 0)
+          }
+        }
+
+        allMasterUploads.push(...masterUploads)
+        allCustUploads.push(...custUploads)
+      } catch (err) {
+        logger.warn('[getBillingTargetDetails] Error fetching partial / fdLoad / price data from tbEntryList:', err)
+      }
+    }
+
+    const getBranchCode = (b: string) => {
+      const u = (b || '').toUpperCase().trim()
+      if (u.includes('GUANGZHOU') || u === 'GZ') return 'GZ'
+      if (u.includes('YIWU') || u === 'YW') return 'YW'
+      if (u.includes('SHANGHAI') || u === 'SH') return 'SH'
+      if (u.includes('SHENZHEN') || u === 'SZ') return 'SZ'
+      if (u.includes('HONGKONG') || u === 'HK') return 'HK'
+      if (u.includes('SINGAPORE') || u === 'SG') return 'SG'
+      return u
     }
 
     return filtered.map((r) => {
@@ -558,6 +716,97 @@ export async function getBillingTargetDetails(query: Record<string, string | und
         } else {
           pic = 'rico'
         }
+      }
+
+      const markingCodeUpper = (r.Marking_code?.trim() || '').toUpperCase()
+      const customerUpper = (r.Customer?.trim() || '').toUpperCase()
+      const markingNoUpper = (r.Marking_no?.trim() || '').toUpperCase()
+
+      const partialKey = `${markingCodeUpper}:::${customerUpper}`
+      const countTerima = partialMap.get(partialKey) || 0
+      const isPartial = countTerima > 1
+
+      const loadDate = loadDateMap.get(`${markingCodeUpper}:::${markingNoUpper}`) || loadDateMap.get(partialKey)
+      const fdLoad = loadDate ? new Date(loadDate).toISOString() : null
+
+      // Evaluasi kesesuaian harga menggunakan 4-Tier Price List Engine (sama seperti PriceLookupPage)
+      const entry = entryMap.get(`${markingCodeUpper}:::${markingNoUpper}`) || entryMap.get(markingCodeUpper)
+      const custCode = entry?.custCode || ''
+      const branchName = entry?.branchName || (r.Branch?.trim() || '')
+      const listType = entry?.fdListType || (mode === 'udara' ? 1 : 2)
+      const typeName = entry?.comodityName || (r.Type?.trim() || '')
+
+      let hargaDb = 0
+      let priceSourceType = 'NONE'
+
+      const rowTglAgen = r.Tgl_Agen ? new Date(r.Tgl_Agen) : new Date()
+      const targetBranchCode = getBranchCode(branchName)
+      const targetModeStr = listType === 1 ? 'BY AIR' : 'BY SEA'
+      const entryTypeUpper = typeName.toUpperCase().trim()
+
+      // 1. Coba cari di Customer Price List Upload (Level 1 & Level 2)
+      const customerUploadCandidates = allCustUploads.filter(
+        (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= rowTglAgen
+      )
+
+      if (customerUploadCandidates.length > 0) {
+        const markingOverrideUpload = customerUploadCandidates.find((u) =>
+          u.markings?.some((m: any) => m.markingCode?.trim().toUpperCase() === markingCodeUpper)
+        )
+        const chosenCustUpload = markingOverrideUpload || customerUploadCandidates[0]
+
+        if (chosenCustUpload?.items) {
+          const matchedItem = findBestCategoryMatch(chosenCustUpload.items, entryTypeUpper, (it: any) => {
+            const mMatch = !it.mode || it.mode.toUpperCase() === targetModeStr
+            const bMatch = !it.branch || getBranchCode(it.branch) === targetBranchCode
+            return mMatch && bMatch
+          })
+          if (matchedItem) {
+            hargaDb = Number(matchedItem.price || 0)
+            priceSourceType = markingOverrideUpload ? 'CUSTOMER_MARKING' : 'CUSTOMER_DEFAULT'
+          }
+        }
+      }
+
+      // 2. Jika tidak ada di Customer Price List, fallback ke General Master Price List (Level 3 & Level 4)
+      if (hargaDb === 0 && allMasterUploads.length > 0) {
+        const brokerVal = customerBrokerMap.get(custCode.toUpperCase()) ?? 0
+        const isBroker = Boolean(
+          (brokerVal && (brokerVal === 1 || brokerVal === 2)) ||
+          (r.Sales || '').toUpperCase().includes('BROKER') ||
+          (r.Sales || '').toUpperCase().includes('PA') ||
+          (r.Customer || '').toUpperCase().includes('BROKER')
+        )
+        const targetSheetType = isBroker ? 'MKT' : 'CS'
+
+        const masterUploadCandidates = allMasterUploads.filter((u) => new Date(u.effectiveDate) <= rowTglAgen)
+        const generalUpload = masterUploadCandidates[0] || allMasterUploads[0]
+
+        if (generalUpload?.items) {
+          const matchedItem = findBestCategoryMatch(generalUpload.items, entryTypeUpper, (it: any) => {
+            const sMatch = it.sheetType?.toUpperCase() === targetSheetType
+            const mMatch = !it.mode || it.mode.toUpperCase() === targetModeStr || (listType === 1 ? it.mode.toUpperCase().includes('AIR') : it.mode.toUpperCase().includes('SEA'))
+            const bMatch = !it.branch || getBranchCode(it.branch) === targetBranchCode || it.branch.toUpperCase().includes(targetBranchCode)
+            return sMatch && mMatch && bMatch
+          })
+          if (matchedItem) {
+            hargaDb = Number(matchedItem.price || 0)
+            priceSourceType = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
+          }
+        }
+      }
+
+      const currentHarga = Number(r.Harga ?? r.harga ?? r.fdHarga ?? 0)
+
+      let priceStatus: 'MATCH' | 'DIFFERENT' | 'NOT_SET' | 'NO_RATE' = 'NO_RATE'
+      if (currentHarga > 0 && hargaDb > 0 && Math.abs(currentHarga - hargaDb) < 1) {
+        priceStatus = 'MATCH'
+      } else if (currentHarga > 0 && hargaDb > 0 && Math.abs(currentHarga - hargaDb) >= 1) {
+        priceStatus = 'DIFFERENT'
+      } else if (currentHarga === 0 && hargaDb > 0) {
+        priceStatus = 'NOT_SET'
+      } else {
+        priceStatus = 'NO_RATE'
       }
 
       return {
@@ -580,9 +829,15 @@ export async function getBillingTargetDetails(query: Record<string, string | und
         tglAgen: r.Tgl_Agen ? new Date(r.Tgl_Agen).toISOString() : null,
         exitDate: r.ExitDate ? new Date(r.ExitDate).toISOString() : null,
         statusKirim: r.StatusKirim?.trim() || '',
-        harga: Number(r.harga || 0),
+        harga: currentHarga,
+        hargaDb,
+        priceStatus,
+        comodityNameDb: typeName || '',
         updateBy: r.UpdateBy?.trim() || '',
         updateDate: r.UpdateDate ? new Date(r.UpdateDate).toISOString() : null,
+        isPartial,
+        countTerima,
+        fdLoad,
         // Kolom baru dari get_data_billing_and_data_m3
         m3Komplain: Number(r.fdM3Komplain ?? 0),
         vfcKomplain: Number(r.fdVFCKomplain ?? 0),
@@ -597,10 +852,17 @@ export async function getBillingTargetDetails(query: Record<string, string | und
           const qtyK   = Number(r.fdTotalQtyKomplain ?? 0)
           const beratK = Number(r.fdJmlBeratKomplain ?? 0)
           const berat  = Number(r.Berat ?? 0)
-          if (m3K > 0) {
-            return !(qtyK === jml && qtyK === qtyG && beratK === berat)
+          const hasKomplainM3 = m3K > 0
+          const hasKomplainBerat = beratK > 0
+
+          if (hasKomplainM3) {
+            const isQtyMismatch = !(qtyK === jml && qtyK === qtyG)
+            const isBeratMismatch = hasKomplainBerat ? beratK !== berat : false
+            return isQtyMismatch || isBeratMismatch
           } else {
-            return !(qtyG === jml)
+            const isQtyMismatch = !(qtyG === jml)
+            const isBeratMismatch = hasKomplainBerat ? beratK !== berat : false
+            return isQtyMismatch || isBeratMismatch
           }
         })() : false,
       }
@@ -1233,8 +1495,55 @@ export async function getBillingM3Check(listCode: string) {
 
   const agentDate = tglAgentRes ? new Date(tglAgentRes) : null
 
-  // Fetch price list items effective for agentDate
-  let priceListItems: any[] = []
+  // 1. Fetch customer-specific price list if available
+  let customerPriceListItems: any[] = []
+  let customerPriceEffectiveDate: string | null = null
+  let hasCustomerPriceList = false
+
+  if (resolvedCustCode) {
+    const custUpload = await safeRunRaw(async () => {
+      if (agentDate) {
+        const up = await prisma.tbCustomerPriceListUpload.findFirst({
+          where: {
+            fdCustCode: resolvedCustCode,
+            effectiveDate: { lte: agentDate },
+            status: { not: 'FAILED' },
+            isSuperseded: false,
+          },
+          orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
+          include: { items: true },
+        })
+        if (up) return up
+      }
+
+      return prisma.tbCustomerPriceListUpload.findFirst({
+        where: {
+          fdCustCode: resolvedCustCode,
+          status: { not: 'FAILED' },
+          isSuperseded: false,
+        },
+        orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
+        include: { items: true },
+      })
+    }, 'get_customer_price_list')
+
+    if (custUpload && Array.isArray(custUpload.items) && custUpload.items.length > 0) {
+      hasCustomerPriceList = true
+      customerPriceEffectiveDate = custUpload.effectiveDate ? custUpload.effectiveDate.toISOString() : null
+      customerPriceListItems = custUpload.items.map((it) => ({
+        id: it.id,
+        sheetType: 'CUSTOMER',
+        mode: it.mode,
+        branch: it.branch,
+        category: it.category,
+        price: Number(it.price),
+        isCustomerPrice: true,
+      }))
+    }
+  }
+
+  // 2. Fetch master price list items effective for agentDate
+  let masterPriceListItems: any[] = []
   let priceEffectiveDate: string | null = null
 
   if (agentDate) {
@@ -1252,18 +1561,19 @@ export async function getBillingM3Check(listCode: string) {
 
     if (upload) {
       priceEffectiveDate = upload.effectiveDate.toISOString()
-      priceListItems = upload.items.map((it) => ({
+      masterPriceListItems = upload.items.map((it) => ({
         id: it.id,
         sheetType: it.sheetType,
         mode: it.mode,
         branch: it.branch,
         category: it.category,
         price: Number(it.price),
+        isCustomerPrice: false,
       }))
     }
   }
 
-  if (priceListItems.length === 0) {
+  if (masterPriceListItems.length === 0) {
     const latestUpload = await safeRunRaw(async () => {
       return prisma.tbPriceListUpload.findFirst({
         where: { status: { not: 'FAILED' }, isSuperseded: false },
@@ -1274,16 +1584,19 @@ export async function getBillingM3Check(listCode: string) {
 
     if (latestUpload) {
       priceEffectiveDate = latestUpload.effectiveDate.toISOString()
-      priceListItems = latestUpload.items.map((it) => ({
+      masterPriceListItems = latestUpload.items.map((it) => ({
         id: it.id,
         sheetType: it.sheetType,
         mode: it.mode,
         branch: it.branch,
         category: it.category,
         price: Number(it.price),
+        isCustomerPrice: false,
       }))
     }
   }
+
+  const allPriceListItems = [...customerPriceListItems, ...masterPriceListItems]
 
   return {
     fdListCode: resolvedListCode,
@@ -1296,10 +1609,13 @@ export async function getBillingM3Check(listCode: string) {
     expectedBranch,
     priceValidation: {
       fdTglAgent: agentDate ? agentDate.toISOString() : null,
-      effectiveDate: priceEffectiveDate,
+      effectiveDate: customerPriceEffectiveDate || priceEffectiveDate,
+      masterEffectiveDate: priceEffectiveDate,
+      customerEffectiveDate: customerPriceEffectiveDate,
+      hasCustomerPriceList,
       expectedMode,
       expectedBranch,
-      items: priceListItems,
+      items: allPriceListItems,
     },
     customer: {
       fdListCode: resolvedListCode,
@@ -1358,6 +1674,15 @@ export async function getBillingM3Check(listCode: string) {
     countKomplainLC,
     countGudangLC,
     fdSatuan,
+    fdBeratList: parseM3Val(unifiedRow?.fdBeratList),
+    fdJmlBeratKomplain: parseM3Val(unifiedRow?.fdJmlBeratKomplain),
+    totalJmlBeratSJ: parseM3Val(unifiedRow?.TotalJmlBeratSJ),
+    fdVFCGudang: parseM3Val(unifiedRow?.fdVFCGudang),
+    fdVFCPL: parseM3Val(unifiedRow?.fdVFCPL),
+    fdVFCKomplain: parseM3Val(unifiedRow?.fdVFCKomplain),
+    vfcGudangPerMarking: parseM3Val(unifiedRow?.VFCGudangPerMarking),
+    vfcKomplainPerMarking: parseM3Val(unifiedRow?.VFCKomplainPerMarking),
+    minChargeKg: profileHarga?.minChargeKg ? profileHarga.minChargeKg : (resolvedListType === 1 ? 3 : 0),
     profileHarga,
     comodityTypes: await safeRunRaw(async () => {
       const rows = await prisma.$queryRaw<any[]>`
@@ -1394,6 +1719,348 @@ export async function getM3CustPerMarkingDetails(custCode: string, markingCode: 
     return []
   }
 }
+
+export async function getBillingPartialDetails(query: Record<string, string | undefined>) {
+  const markingCode = query.markingCode?.trim() || ''
+  const customer = query.customer?.trim() || ''
+  const custCode = query.custCode?.trim() || ''
+
+  if (!markingCode) {
+    return []
+  }
+
+  try {
+    const rows = await prisma.$queryRaw<any[]>`
+      SELECT
+        RTRIM(el.fdListCode) AS fdListCode,
+        RTRIM(el.fdMarkingCode) AS fdMarkingCode,
+        RTRIM(el.fdMarkingNo) AS fdMarkingNo,
+        RTRIM(el.fdCustCode) AS fdCustCode,
+        RTRIM(c.fdCustName) AS custName,
+        COALESCE(RTRIM(emp1.fdEmpName), RTRIM(el.fdEmp1), '') AS fdEmp1,
+        el.fdLoad AS fdLoad,
+        RTRIM(el.fdTerima) AS fdTerima,
+        COALESCE(RTRIM(b.fdInvNo), RTRIM(bd.fdInvNo), RTRIM(el.fdInvoiceNo), '') AS fdInvNo,
+        el.fdJmlPack AS fdJmlPack,
+        RTRIM(el.fdSatuan) AS fdSatuan,
+        el.fdM3 AS fdM3,
+        el.fdJmlBerat AS fdJmlBerat,
+        RTRIM(el.fdDesc) AS fdDesc
+      FROM tbEntryList el WITH (NOLOCK)
+      LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+      LEFT JOIN tbEmployees emp1 WITH (NOLOCK) ON emp1.fdEmpCode = el.fdEmp1
+      LEFT JOIN tbBilling b WITH (NOLOCK) ON b.fdListCode = el.fdListCode
+      LEFT JOIN tbBillingDetail bd WITH (NOLOCK) ON bd.fdListCode = el.fdListCode
+      WHERE RTRIM(el.fdMarkingCode) = ${markingCode}
+        AND (
+          (${customer} <> '' AND RTRIM(c.fdCustName) = ${customer})
+          OR (${custCode} <> '' AND RTRIM(el.fdCustCode) = ${custCode})
+          OR (${customer} = '' AND ${custCode} = '')
+        )
+      ORDER BY el.fdLoad ASC, el.fdListCode ASC
+    `
+
+    return rows.map((r) => ({
+      listCode: r.fdListCode?.trim() || '',
+      markingCode: r.fdMarkingCode?.trim() || '',
+      markingNo: r.fdMarkingNo?.trim() || '',
+      custCode: r.fdCustCode?.trim() || '',
+      customer: r.custName?.trim() || customer,
+      fdEmp1: r.fdEmp1?.trim() || '',
+      fdLoad: r.fdLoad ? new Date(r.fdLoad).toISOString() : null,
+      fdTerima: r.fdTerima?.trim() || '',
+      invNo: r.fdInvNo?.trim() || '',
+      jmlPack: Number(r.fdJmlPack || 0),
+      satuan: r.fdSatuan?.trim() || 'COLY',
+      m3: Number(r.fdM3 || 0),
+      berat: Number(r.fdJmlBerat || 0),
+      desc: r.fdDesc?.trim() || '',
+    }))
+  } catch (err) {
+    logger.error(`[getBillingPartialDetails] Error fetching partial details for ${markingCode} / ${customer}:`, err)
+    return []
+  }
+}
+
+/**
+ * Pengecekan harga mendalam untuk item Target Billing terhadap database (vwCustomersHarga, SP profile harga, tbCustomerPriceList)
+ */
+export async function getBillingTargetPriceCheck(query: Record<string, any>) {
+  const markingCode = String(query.markingCode || '').trim()
+  const markingNo = String(query.markingNo || '').trim()
+  const customer = String(query.customer || query.custName || '').trim()
+  const branch = String(query.branch || '').trim()
+  const type = String(query.type || '').trim()
+  const mode = String(query.mode || '').toLowerCase().trim()
+  const currentPrice = Number(query.harga || 0)
+
+  if (!markingCode) {
+    throw new Error('Parameter markingCode wajib diisi')
+  }
+
+  return safeRunRaw(async () => {
+    // 1. Ambil data entry list terkait marking
+    const entryRows = await prisma.$queryRaw<any[]>`
+      SELECT TOP 1
+        RTRIM(el.fdListCode) AS fdListCode,
+        RTRIM(el.fdMarkingCode) AS fdMarkingCode,
+        RTRIM(el.fdMarkingNo) AS fdMarkingNo,
+        RTRIM(el.fdCustCode) AS fdCustCode,
+        RTRIM(c.fdCustName) AS custName,
+        RTRIM(c.fdSalesNM) AS sales,
+        c.fdBlocked AS blocked,
+        RTRIM(el.fdBranchCode) AS branchCode,
+        RTRIM(br.fdBranchName) AS branchName,
+        el.fdTypeComodity,
+        RTRIM(tc.fdComodityName) AS comodityName,
+        RTRIM(el.fdComodity) AS comodityText,
+        el.fdListType,
+        el.fdTglAgent,
+        el.fdM3,
+        el.fdJmlBerat,
+        el.fdJmlPack,
+        RTRIM(el.fdSatuan) AS satuan,
+        el.fdTaxRebates
+      FROM tbEntryList el WITH (NOLOCK)
+      LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+      LEFT JOIN tbCabang br WITH (NOLOCK) ON br.fdBranchCode = el.fdBranchCode
+      LEFT JOIN tbTypeComodity tc WITH (NOLOCK) ON tc.fdTypeComodity = el.fdTypeComodity AND tc.fdListType = el.fdListType
+      WHERE RTRIM(el.fdMarkingCode) = ${markingCode}
+        AND (${markingNo} = '' OR RTRIM(el.fdMarkingNo) = ${markingNo})
+      ORDER BY el.fdLoad DESC
+    `
+
+    const entry = entryRows[0] || null
+    const custCode = entry?.fdCustCode || ''
+    const resolvedBranch = entry?.branchName || branch || ''
+    const resolvedListType = entry?.fdListType || (mode === 'udara' ? 1 : 2)
+    const listCode = entry?.fdListCode || ''
+    const agentDate = entry?.fdTglAgent ? new Date(entry.fdTglAgent) : null
+
+    // 2. Ambil seluruh tarif yang terdaftar di vwCustomersHarga untuk customer ini
+    let customerTariffs: any[] = []
+    if (custCode) {
+      const tariffRows = await prisma.$queryRaw<any[]>`
+        SELECT 
+          RTRIM(fdCustCode) AS custCode,
+          RTRIM(fdCustName) AS custName,
+          RTRIM(fdBranchName) AS branchName,
+          fdListType,
+          jenis,
+          fdTypeComodity,
+          RTRIM(fdComodityName) AS comodityName,
+          Harga,
+          RTRIM(UpdateBy) AS updateBy,
+          UpdateDate AS updateDate
+        FROM vwCustomersHarga WITH (NOLOCK)
+        WHERE RTRIM(fdCustCode) = ${custCode}
+          AND (${resolvedBranch} = '' OR RTRIM(fdBranchName) = ${resolvedBranch})
+          AND (${resolvedListType} = 0 OR fdListType = ${resolvedListType})
+        ORDER BY fdBranchName ASC, fdComodityName ASC
+      `
+      customerTariffs = tariffRows.map((r) => ({
+        custCode: r.custCode,
+        custName: r.custName,
+        branchName: r.branchName,
+        listType: r.fdListType,
+        jenis: r.jenis,
+        typeComodity: r.fdTypeComodity,
+        comodityName: r.comodityName,
+        harga: Number(r.Harga || 0),
+        updateBy: r.updateBy || '',
+        updateDate: r.updateDate ? new Date(r.updateDate).toISOString() : null,
+      }))
+    }
+
+    // 3. Ambil SP profile harga dari dbo.get_profile_harga_dari_listcode jika ada listCode
+    let profileHarga: any = null
+    if (listCode) {
+      try {
+        const spRes = await prisma.$queryRaw<any[]>`
+          EXEC dbo.get_profile_harga_dari_listcode ${listCode}
+        `
+        if (spRes && spRes[0]) {
+          profileHarga = {
+            harga: Number(spRes[0].Harga || 0),
+            rasio: Number(spRes[0].Rasio || 0),
+            typeTagihan: Number(spRes[0].fdTypeTagihan || 0),
+            kg: Number(spRes[0].Kg || 0),
+            minChargeM3: Number(spRes[0].MinChargeM3 || 0),
+            minChargeKg: Number(spRes[0].MinChargeKG || 0),
+            taxReturnPrice: Number(spRes[0].fdTaxReturnPrice || 0),
+            taxReturnMinCharge: Number(spRes[0].fdTaxReturnMinCharge || 0),
+          }
+        }
+      } catch (err) {
+        logger.warn(`[getBillingTargetPriceCheck] SP profile error for ${listCode}:`, err)
+      }
+    }
+
+    // 4. Jalankan 4-Tier Price List Lookup Engine (Sama persis seperti PriceLookupPage)
+    const lookupEntryCode = entry?.fdListCode || markingCode
+    const priceLookupRes = await lookupPriceByEntry(lookupEntryCode)
+
+    let priceCS: number | null = null
+    let priceMKT: number | null = null
+    let customerPriceList: any = null
+    let masterPriceList: any = null
+    let dbPrice = 0
+    let priceSource: 'CUSTOMER_TARIFF' | 'PRICE_LIST_CS' | 'PRICE_LIST_MKT' | 'PROFILE_SP' = 'PRICE_LIST_MKT'
+    let priceSourceLabel = 'Tarif Price List'
+    let matchedWith: 'CUSTOMER' | 'MASTER_CS' | 'MASTER_MKT' | 'PROFILE_SP' | 'NONE' = 'NONE'
+    let appliedTierLabel = 'Level 4: Tarif Price List Umum Standar'
+
+    const customerInfo = custCode
+      ? await prisma.tbCustomers.findUnique({
+          where: { fdCustCode: custCode },
+          select: { fdCustCode: true, fdCustName: true, fdBroker: true, fdSalesNM: true },
+        })
+      : null
+
+    const isBroker = Boolean(
+      (customerInfo?.fdBroker && (customerInfo.fdBroker === 1 || customerInfo.fdBroker === 2)) ||
+      (entry?.sales || '').toUpperCase().includes('BROKER') ||
+      (entry?.sales || '').toUpperCase().includes('PA') ||
+      (customerInfo?.fdCustName || '').toUpperCase().includes('BROKER')
+    )
+
+    const entryTypeName = (entry?.comodityName || type || '').toUpperCase().trim()
+
+    if (priceLookupRes.found && priceLookupRes.priceValidation) {
+      const pv = priceLookupRes.priceValidation
+      const appliedRule = priceLookupRes.appliedRule
+
+      if (pv.source === 'CUSTOMER') {
+        appliedTierLabel =
+          appliedRule === 'CUSTOMER_MARKING'
+            ? 'Level 1: Tarif Khusus Customer (Marking Agen)'
+            : 'Level 2: Tarif Khusus Customer (Default)'
+        customerPriceList = {
+          uploadId: pv.uploadInfo?.uploadId,
+          fileName: pv.uploadInfo?.fileName,
+          effectiveDate: pv.effectiveDate,
+          items: pv.items || [],
+        }
+
+        const matchedItem = findBestCategoryMatch(pv.items, entryTypeName)
+
+        if (matchedItem && Number(matchedItem.price) > 0) {
+          dbPrice = Number(matchedItem.price)
+          priceSource = 'CUSTOMER_TARIFF'
+          priceSourceLabel = appliedTierLabel
+          matchedWith = 'CUSTOMER'
+        }
+      } else {
+        // Source is GENERAL Price List
+        appliedTierLabel =
+          appliedRule === 'GENERAL_MARKING'
+            ? 'Level 3: Tarif Price List Umum (Marking Agen)'
+            : 'Level 4: Tarif Price List Umum Standar'
+        masterPriceList = {
+          uploadId: pv.uploadInfo?.uploadId,
+          fileName: pv.uploadInfo?.fileName,
+          effectiveDate: pv.effectiveDate,
+          items: pv.items || [],
+        }
+
+        const csItem = findBestCategoryMatch(pv.items, entryTypeName, (it: any) => it.sheetType?.toUpperCase() === 'CS')
+        const mktItem = findBestCategoryMatch(pv.items, entryTypeName, (it: any) => it.sheetType?.toUpperCase() === 'MKT')
+
+        priceCS = csItem ? Number(csItem.price) : null
+        priceMKT = mktItem ? Number(mktItem.price) : null
+
+        if (isBroker && priceMKT) {
+          dbPrice = priceMKT
+          priceSource = 'PRICE_LIST_MKT'
+          priceSourceLabel = `${appliedTierLabel} (MKT - Broker)`
+          matchedWith = 'MASTER_MKT'
+        } else if (!isBroker && priceCS) {
+          dbPrice = priceCS
+          priceSource = 'PRICE_LIST_CS'
+          priceSourceLabel = `${appliedTierLabel} (CS - Non-Broker)`
+          matchedWith = 'MASTER_CS'
+        } else if (priceMKT || priceCS) {
+          dbPrice = (isBroker ? priceMKT : priceCS) || priceCS || priceMKT || 0
+          priceSource = isBroker ? 'PRICE_LIST_MKT' : 'PRICE_LIST_CS'
+          priceSourceLabel = `${appliedTierLabel} (${isBroker ? 'MKT' : 'CS'})`
+          matchedWith = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
+        }
+      }
+    }
+
+    const matchedTariff =
+      customerTariffs.find(
+        (t) =>
+          (entry?.fdTypeComodity && t.typeComodity === entry.fdTypeComodity) ||
+          (entryTypeName && t.comodityName?.toUpperCase() === entryTypeName)
+      ) || (customerTariffs.length === 1 ? customerTariffs[0] : null)
+
+    let status: 'MATCH' | 'DIFFERENT' | 'NOT_SET' | 'NO_RATE' = 'NO_RATE'
+    let statusLabel = ''
+    let statusDescription = ''
+
+    const effectiveDateStr = priceLookupRes.priceValidation?.effectiveDate
+      ? new Date(priceLookupRes.priceValidation.effectiveDate).toLocaleDateString('id-ID', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        })
+      : 'Aktif'
+
+    if (currentPrice > 0 && dbPrice > 0 && Math.abs(currentPrice - dbPrice) < 1) {
+      status = 'MATCH'
+      statusLabel = 'Harga Sesuai Price List'
+      statusDescription = `Harga saat ini (Rp ${currentPrice.toLocaleString('id-ID')}) SESUAI dengan acuan ${priceSourceLabel} (Periode ${effectiveDateStr}).`
+    } else if (currentPrice > 0 && dbPrice > 0 && Math.abs(currentPrice - dbPrice) >= 1) {
+      const diff = currentPrice - dbPrice
+      status = 'DIFFERENT'
+      statusLabel = 'Terdapat Selisih Harga'
+      statusDescription = `Harga di Target Bill (Rp ${currentPrice.toLocaleString('id-ID')}) BERBEDA dengan Acuan Price List Rp ${dbPrice.toLocaleString('id-ID')} (${priceSourceLabel}, Periode ${effectiveDateStr}). Selisih: ${diff > 0 ? '+' : ''}Rp ${diff.toLocaleString('id-ID')}.`
+    } else if (currentPrice === 0 && dbPrice > 0) {
+      status = 'NOT_SET'
+      statusLabel = 'Tarif Tersedia di DB (Belum Terisi di Target)'
+      statusDescription = `Acuan tarif price list tersedia sebesar Rp ${dbPrice.toLocaleString('id-ID')} (${priceSourceLabel}, Periode ${effectiveDateStr}), namun harga pada target bill masih 0.`
+    } else {
+      status = 'NO_RATE'
+      statusLabel = 'Belum Ada Tarif di Price List'
+      statusDescription = `Tidak ditemukan acuan tarif yang aktif pada tanggal agen ${entry?.fdTglAgent ? new Date(entry.fdTglAgent).toLocaleDateString('id-ID') : 'terkait'} untuk komoditi ${entryTypeName} di cabang ${resolvedBranch}.`
+    }
+
+    return {
+      markingCode,
+      markingNo: entry?.fdMarkingNo || markingNo,
+      customer: entry?.custName || customer,
+      custCode,
+      sales: entry?.sales || '',
+      isBroker,
+      matchedWith,
+      appliedTierLabel,
+      branch: resolvedBranch,
+      mode: resolvedListType === 1 ? 'UDARA' : 'LAUT',
+      listType: resolvedListType,
+      currentType: entry?.comodityName || type || '—',
+      currentComodityText: entry?.comodityText || '',
+      tglAgen: entry?.fdTglAgent ? new Date(entry.fdTglAgent).toISOString() : null,
+      effectiveDate: priceLookupRes.priceValidation?.effectiveDate || null,
+      priceSource,
+      priceSourceLabel,
+      priceCS,
+      priceMKT,
+      currentPrice,
+      dbPrice,
+      difference: currentPrice > 0 && dbPrice > 0 ? currentPrice - dbPrice : 0,
+      status,
+      statusLabel,
+      statusDescription,
+      matchedTariff,
+      profileHarga,
+      customerTariffs,
+      customerPriceList,
+      masterPriceList,
+    }
+  }, 'get_billing_target_price_check')
+}
+
 
 
 
