@@ -53,6 +53,10 @@ export const customerPriceListApi = {
   updateEffectiveDate: (id: number, effectiveDate: string) =>
     apiClient.patch<{ data: CustomerUploadHistory }>(`/customer-price-list/uploads/${id}/effective-date`, { effectiveDate }),
 
+  // DELETE /api/customer-price-list/uploads/:id
+  deleteUpload: (id: number) =>
+    apiClient.delete<{ data: CustomerUploadHistory }>(`/customer-price-list/uploads/${id}`),
+
   // GET /api/customer-price-list/uploads/:id/markings
   getUploadMarkings: (uploadId: number) =>
     apiClient.get<{ data: { id: number; uploadId: number; markingCode: string; agentName: string | null }[] }>(
@@ -77,6 +81,39 @@ export const customerPriceListApi = {
       formData,
       { headers: { 'Content-Type': 'multipart/form-data' } },
     ),
+
+  // ─── SPECIAL COMMODITY PRICES ───────────────────────────────────────
+
+  // GET /api/customer-price-list/items
+  listSpecialPrices: (params?: {
+    custCode?: string
+    search?: string
+    mode?: string
+    branch?: string
+    status?: 'ALL' | 'ACTIVE' | 'EXPIRED'
+    page?: number
+    limit?: number
+  }) =>
+    apiClient.get<{
+      data: import('../types').CustomerSpecialPriceItem[]
+      meta: { page: number; limit: number; total: number; totalPages: number }
+    }>('/customer-price-list/items', { params }),
+
+  // POST /api/customer-price-list/items
+  createSpecialPrice: (data: import('../types').CreateCustomerSpecialPriceInput) =>
+    apiClient.post<{ data: import('../types').CustomerSpecialPriceItem }>('/customer-price-list/items', data),
+
+  // PUT /api/customer-price-list/items/:id
+  updateSpecialPrice: (id: number, data: import('../types').UpdateCustomerSpecialPriceInput) =>
+    apiClient.put<{ data: import('../types').CustomerSpecialPriceItem }>(`/customer-price-list/items/${id}`, data),
+
+  // PUT /api/customer-price-list/items/:id/deactivate
+  deactivateSpecialPrice: (id: number) =>
+    apiClient.put<{ data: import('../types').CustomerSpecialPriceItem }>(`/customer-price-list/items/${id}/deactivate`),
+
+  // DELETE /api/customer-price-list/items/:id
+  deleteSpecialPrice: (id: number) =>
+    apiClient.delete(`/customer-price-list/items/${id}`),
 }
 
 

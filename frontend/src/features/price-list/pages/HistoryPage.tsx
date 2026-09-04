@@ -8,7 +8,6 @@ import type { UploadRow } from '../types'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EditEffectiveDateModal } from '../components/EditEffectiveDateModal'
 import { MarkingManagerModal } from '../components/MarkingManagerModal'
 
@@ -130,8 +129,20 @@ export function HistoryPage() {
         {/* Mobile list view */}
         <div className="sm:hidden">
           {loading ? (
-            <div className="p-6 flex justify-center">
-              <LoadingSpinner message={t('common.loading')} />
+            <div className="p-3 space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="p-3.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] space-y-2.5">
+                  <div className="flex justify-between items-center">
+                    <div className="h-4 w-28 rounded skeleton-shimmer" />
+                    <div className="h-5 w-16 rounded-full skeleton-shimmer" />
+                  </div>
+                  <div className="h-3.5 w-40 rounded skeleton-shimmer" />
+                  <div className="flex justify-between items-center pt-1">
+                    <div className="h-3 w-24 rounded skeleton-shimmer" />
+                    <div className="h-3 w-16 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : rows.length === 0 ? (
             <div className="px-6 py-16 text-center">
@@ -191,7 +202,7 @@ export function HistoryPage() {
                             })}
                           </span>
                           <span className="shrink-0 font-mono flex items-center gap-1 text-[var(--color-tertiary)] font-semibold">
-                            {row._count.items.toLocaleString('id-ID')} baris
+                            {row._count.items.toLocaleString('en-US')} baris
                             <ArrowRight size={12} />
                           </span>
                         </div>
@@ -244,11 +255,18 @@ export function HistoryPage() {
 
             {loading ? (
               <tbody className="divide-y divide-[var(--color-border)]">
-                <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
-                    <LoadingSpinner message={t('common.loading')} />
-                  </td>
-                </tr>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="border-b border-[var(--color-border)]">
+                    <td className="px-6 py-4"><div className="h-4 w-24 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-36 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-12 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-5 w-16 rounded-full skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-24 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4 text-center"><div className="h-7 w-16 rounded-lg skeleton-shimmer mx-auto" /></td>
+                  </tr>
+                ))}
               </tbody>
             ) : rows.length === 0 ? (
               <tbody>
@@ -382,7 +400,7 @@ export function HistoryPage() {
                           })}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-[0.9rem] font-mono text-[var(--color-secondary)]">
-                          {row._count.items.toLocaleString('id-ID')}
+                          {row._count.items.toLocaleString('en-US')}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={STATUS_CLASS[row.status]}>{STATUS_LABEL[row.status]}</span>

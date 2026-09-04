@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -10,11 +11,15 @@ import {
   Building2,
   FileSpreadsheet,
   RefreshCw,
+  Calendar,
+  Plane,
+  Ship,
+  Sparkles,
+  TrendingUp,
 } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
-import { formatCurrency, formatDateTime } from '@/lib/utils'
+import { formatCurrency, formatDate, formatDateTime, cn } from '@/lib/utils'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { Badge } from '@/components/ui/Badge'
 import type { TargetBillingItem, TargetPriceCheckData } from '../types/billing.types'
 
 interface TargetPriceCheckModalProps {
@@ -24,62 +29,127 @@ interface TargetPriceCheckModalProps {
 }
 
 export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPriceCheckModalProps) {
-  const modeParam = activeMode === 'udara' ? 'udara' : activeMode === 'laut' ? 'laut' : ''
+  useModalEscape(Boolean(item), onClose)
+  const itemMode = (item as any)?.mode?.toLowerCase() === 'udara' ? 'udara' : (item as any)?.mode?.toLowerCase() === 'laut' ? 'laut' : ''
+  const isAirMarking = !!item?.markingCode && /^26A|^A[A-Z]{2}|AGZ|ASH|AYW|ASZ|AHK|ASG|AIR/i.test(item.markingCode.trim())
+  const modeParam = itemMode || (isAirMarking ? 'udara' : (activeMode === 'udara' ? 'udara' : activeMode === 'laut' ? 'laut' : ''))
 
   const { data: resData, isLoading, isError, refetch, isFetching } = useQuery({
-    queryKey: ['targetPriceCheck', item?.markingCode, item?.markingNo, item?.branch, item?.customer, item?.harga],
+    queryKey: ['targetPriceCheck', item?.listCode, item?.listNo, item?.markingCode, item?.markingNo, item?.branch, item?.customer, item?.sales, item?.type, item?.comodity, item?.harga, modeParam],
     queryFn: async () => {
-      if (!item?.markingCode) return null
+      if (!item?.markingCode && !item?.listCode && !item?.listNo) return null
       const res = await billingApi.targetPriceCheck({
+        listCode: item.listCode || item.listNo || '',
         markingCode: item.markingCode,
         markingNo: item.markingNo,
         customer: item.customer,
+        custCode: (item as any)?.custCode || (item as any)?.fdCustCode || '',
         branch: item.branch,
+        sales: item.sales,
         type: item.type,
+        comodity: item.comodity,
         mode: modeParam,
         harga: item.harga,
       })
       return res.data?.data as TargetPriceCheckData
     },
-    enabled: !!item?.markingCode,
+    enabled: !!(item?.markingCode || item?.listCode || item?.listNo),
     staleTime: 30000,
   })
 
   if (!item) return null
 
   const data = resData
+  const currentMode = (data as any)?.mode || (modeParam === 'udara' ? 'UDARA' : modeParam === 'laut' ? 'LAUT' : '')
+  const isAir = currentMode.toUpperCase() === 'UDARA' || modeParam === 'udara'
 
-  const getStatusBadge = (status?: string) => {
-    switch (status) {
-      case 'MATCH':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-transparent border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 shadow-2xs">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            Sesuai Database
-          </span>
-        )
-      case 'DIFFERENT':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-transparent border border-rose-500/50 text-rose-600 dark:text-rose-400 shadow-2xs">
-            <AlertTriangle className="w-3.5 h-3.5 text-rose-500 shrink-0" />
-            Terdapat Selisih Harga
-          </span>
-        )
-      case 'NOT_SET':
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-transparent border border-purple-500/50 text-purple-600 dark:text-purple-400 shadow-2xs">
-            <Info className="w-3.5 h-3.5 text-purple-500 shrink-0" />
-            Tarif Ada di DB (Belum Diisi)
-          </span>
-        )
-      default:
-        return (
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-transparent border border-amber-500/50 text-amber-600 dark:text-amber-400 shadow-2xs">
-            <HelpCircle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-            Belum Ada Tarif di Database
-          </span>
-        )
+  const isBranchMatch = (tBranch?: string | null) => {
+    if (!tBranch || !data?.branch) return true
+    const b1 = tBranch.trim().toUpperCase()
+    const b2 = data.branch.trim().toUpperCase()
+    if (b1 === b2) return true
+    const norm1 = b1.includes('SINGAPORE') || b1 === 'SG' ? 'SG' : b1.includes('GUANGZHOU') || b1 === 'GZ' ? 'GZ' : b1.includes('HONGKONG') || b1 === 'HK' ? 'HK' : b1.includes('SHENZHEN') || b1 === 'SZ' ? 'SZ' : b1.includes('YIWU') || b1 === 'YW' ? 'YW' : b1.includes('SHANGHAI') || b1 === 'SH' ? 'SH' : b1
+    const norm2 = b2.includes('SINGAPORE') || b2 === 'SG' ? 'SG' : b2.includes('GUANGZHOU') || b2 === 'GZ' ? 'GZ' : b2.includes('HONGKONG') || b2 === 'HK' ? 'HK' : b2.includes('SHENZHEN') || b2 === 'SZ' ? 'SZ' : b2.includes('YIWU') || b2 === 'YW' ? 'YW' : b2.includes('SHANGHAI') || b2 === 'SH' ? 'SH' : b2
+    return norm1 === norm2
+  }
+
+  const isModeMatch = (t: any) => {
+    if (isAir) {
+      return t.listType === 1 || t.jenis === 'UC' || (t.jenis && String(t.jenis).toUpperCase().includes('UC'))
     }
+    return t.listType === 2 || t.jenis === 'LR' || (t.jenis && String(t.jenis).toUpperCase().includes('LR'))
+  }
+
+  const getNormalizedCategoryKey = (cat?: string | null): string => {
+    const s = String(cat || '').toUpperCase().trim().replace(/[\s\-_]+/g, '')
+    if (s.includes('LARTASN') || s.includes('LARTASNORMAL') || s === 'LN') return 'LARTAS_N'
+    if (s.includes('LARTASS') || s.includes('LARTASSUPER') || s.includes('LARTASSPECIAL') || s === 'LS') return 'LARTAS_S'
+    if (s.includes('SEMIGARMENT') || s.includes('SEMI')) return 'SEMI_GARMENT'
+    if (s.includes('GARMENT')) return 'GARMENT'
+    if (s.includes('TEKSTIL') || s.includes('TEXTILE')) return 'TEKSTIL'
+    if (s.includes('UMUM') || s.includes('GENERAL') || s.includes('GEN')) return 'UMUM'
+    if (s.includes('BRANDED') || s.includes('BRAND')) return 'BRANDED'
+    if (s.includes('FOOD') || s.includes('MAKANAN')) return 'FOOD'
+    if (s.includes('SHOES') || s.includes('SEPATU')) return 'SHOES'
+    return s
+  }
+
+  const isCategoryMatch = (t: any) => {
+    const tCatKey = getNormalizedCategoryKey(t.comodityName)
+    const curTypeKey = getNormalizedCategoryKey(data?.currentType)
+    const matchedCatKey = getNormalizedCategoryKey(data?.matchedCategory)
+
+    if (data?.matchedTariff?.typeComodity && t.typeComodity === data.matchedTariff.typeComodity) return true
+    if (tCatKey && curTypeKey && tCatKey === curTypeKey) return true
+    if (tCatKey && matchedCatKey && tCatKey === matchedCatKey) return true
+    return false
+  }
+
+  const isRowMatch = (t: any) => {
+    return isBranchMatch(t.branchName) && isModeMatch(t) && isCategoryMatch(t)
+  }
+
+  const matchingCustomerTariffs = (data?.customerTariffs || []).filter(isRowMatch)
+
+  const getStatusBadge = (status?: string, difference?: number) => {
+    if (status === 'MATCH') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/10 border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 shadow-2xs">
+          <CheckCircle2 className="hidden sm:inline-block w-3.5 h-3.5 text-emerald-500 shrink-0" />
+          Sesuai Database
+        </span>
+      )
+    }
+    if (status === 'DIFFERENT') {
+      if ((difference ?? 0) > 0) {
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-500/10 border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 shadow-2xs">
+            <TrendingUp className="hidden sm:inline-block w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            Harga di Atas Acuan
+          </span>
+        )
+      }
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-transparent border border-rose-500/50 text-rose-600 dark:text-rose-400 shadow-2xs">
+          <AlertTriangle className="hidden sm:inline-block w-3.5 h-3.5 text-rose-500 shrink-0" />
+          Terdapat Selisih Harga
+        </span>
+      )
+    }
+    if (status === 'NOT_SET') {
+      return (
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-transparent border border-purple-500/50 text-purple-600 dark:text-purple-400 shadow-2xs">
+          <Info className="hidden sm:inline-block w-3.5 h-3.5 text-purple-500 shrink-0" />
+          Tarif Ada di DB (Belum Diisi)
+        </span>
+      )
+    }
+    return (
+      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold rounded-full bg-transparent border border-amber-500/50 text-amber-600 dark:text-amber-400 shadow-2xs">
+        <HelpCircle className="hidden sm:inline-block w-3.5 h-3.5 text-amber-500 shrink-0" />
+        Belum Ada Tarif di Database
+      </span>
+    )
   }
 
   return createPortal(
@@ -92,58 +162,80 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Modal */}
-        <div className="px-5 py-4 sm:px-6 sm:py-4.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2.5 rounded-xl bg-transparent border border-[var(--color-tertiary)]/40 text-[var(--color-tertiary)] shrink-0">
-              <Tag className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm sm:text-base lg:text-lg font-bold font-[var(--font-heading)] text-[var(--color-primary)] truncate">
-                  Cek Kesesuaian Harga Database
+        <div className="px-4 py-3.5 sm:px-6 sm:py-4.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex flex-col gap-2 sm:gap-2.5 shrink-0">
+          {/* Top Row: Title + Code/Mode + Action Buttons */}
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <div className="hidden sm:flex p-1.5 sm:p-2.5 rounded-xl bg-transparent border border-[var(--color-tertiary)]/40 text-[var(--color-tertiary)] shrink-0">
+                <Tag className="w-4 h-4 sm:w-5 sm:h-5" />
+              </div>
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+                <h3 className="text-xs sm:text-base lg:text-lg font-bold font-[var(--font-heading)] text-[var(--color-primary)] truncate">
+                  Cek Kesesuaian Harga
                 </h3>
-                <span className="text-xs px-2.5 py-0.5 rounded font-mono font-semibold bg-transparent border border-[var(--color-border)] text-[var(--color-primary)]">
-                  {item.markingCode}
-                </span>
-                {data?.mode && (
-                  <Badge variant="default" className="text-[10px] px-2 py-0.5 font-bold uppercase">
-                    {data.mode}
-                  </Badge>
-                )}
-                {data?.tglAgen && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-transparent border border-blue-500/40 text-blue-600 dark:text-blue-400">
-                    Tgl Agen: {formatDateTime(data.tglAgen)}
+                {(data?.listCode || item.listCode || item.listNo) && (
+                  <span className="text-[11px] sm:text-xs px-2 py-0.5 rounded font-mono font-bold bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0" title="Nomor List Entry (Unik)">
+                    #{data?.listCode || item.listCode || item.listNo}
                   </span>
                 )}
-                {data?.effectiveDate && (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-transparent border border-purple-500/40 text-purple-600 dark:text-purple-400">
-                    Periode PL: {formatDateTime(data.effectiveDate)}
+                <span className="text-[11px] sm:text-xs px-2 py-0.5 rounded font-mono font-bold bg-transparent border border-[var(--color-border)] text-[var(--color-primary)] shrink-0">
+                  {item.markingCode}
+                </span>
+                {currentMode && (
+                  <span
+                    className={cn(
+                      'inline-flex items-center gap-1 text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold uppercase shrink-0 border shadow-2xs',
+                      isAir
+                        ? 'bg-sky-500/10 border-sky-500/40 text-sky-600 dark:text-sky-400'
+                        : 'bg-teal-500/10 border-teal-500/40 text-teal-600 dark:text-teal-400'
+                    )}
+                  >
+                    {isAir ? <Plane className="w-3 h-3" /> : <Ship className="w-3 h-3" />}
+                    {currentMode}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-[var(--color-secondary)] truncate mt-0.5">
-                {item.customer || data?.customer || 'Customer'} · Cabang: {item.branch || data?.branch || '—'} · Sales PIC: <span className="font-semibold text-[var(--color-primary)]">{item.sales || data?.sales || '—'}</span>
-              </p>
+            </div>
+
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => refetch()}
+                disabled={isFetching}
+                className="p-1.5 sm:p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
+                title="Refresh Data"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFetching ? 'animate-spin' : ''}`} />
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="p-1.5 sm:p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
+              >
+                <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              </button>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => refetch()}
-              disabled={isFetching}
-              className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
-              title="Refresh Data"
-            >
-              <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              className="p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
-            >
-              <X className="w-4 h-4" />
-            </button>
+          {/* Sub Header & Meta Chips Row */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 text-xs">
+            <p className="text-[11px] sm:text-xs text-[var(--color-secondary)] truncate">
+              <strong className="text-[var(--color-primary)]">{item.customer || data?.customer || 'Customer'}</strong> · Cabang: <span className="font-semibold text-[var(--color-primary)]">{item.branch || data?.branch || '—'}</span> {item.sales || data?.sales ? <>· Sales: <span className="font-semibold text-[var(--color-primary)]">{item.sales || data?.sales}</span></> : null}
+            </p>
+
+            <div className="flex items-center gap-1.5 flex-wrap shrink-0">
+              {data?.tglAgen && (
+                <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 font-mono">
+                  <Calendar className="hidden sm:inline-block w-3 h-3 text-blue-500" />
+                  <span>Tgl Agen: <strong>{formatDate(data.tglAgen)}</strong></span>
+                </span>
+              )}
+              {data?.effectiveDate && (
+                <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-400 font-mono">
+                  <span>Periode PL: <strong>{formatDate(data.effectiveDate)}</strong></span>
+                </span>
+              )}
+            </div>
           </div>
         </div>
 
@@ -169,7 +261,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
               {/* Status Banner */}
               <div
                 className={`p-4 sm:p-5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
-                  data.status === 'MATCH'
+                  data.status === 'MATCH' || data.difference > 0
                     ? 'border-emerald-500/40 bg-emerald-500/5'
                     : data.status === 'DIFFERENT'
                       ? 'border-rose-500/40 bg-rose-500/5'
@@ -180,18 +272,26 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
               >
                 <div className="space-y-1.5">
                   <div className="flex items-center gap-2.5 flex-wrap">
-                    {getStatusBadge(data.status)}
+                    {getStatusBadge(data.status, data.difference)}
                     <span className="text-xs sm:text-sm font-bold text-[var(--color-primary)]">
-                      {data.statusLabel}
+                      {data.difference > 0 ? 'Harga di Atas Acuan Database' : data.statusLabel}
                     </span>
                     {data.priceSourceLabel && (
                       <span className="text-[10px] font-extrabold uppercase px-2 py-0.5 rounded bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)]">
                         Sumber: {data.priceSourceLabel}
                       </span>
                     )}
+                    {data.isCommodityOverride && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-300 inline-flex items-center gap-1">
+                        <Sparkles className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                        Override Komoditi: {data.commodityOverrideDetail || data.matchedCategory}
+                      </span>
+                    )}
                   </div>
                   <p className="text-xs text-[var(--color-secondary)] leading-relaxed">
-                    {data.statusDescription}
+                    {data.difference > 0
+                      ? `Harga saat ini (${formatCurrency(data.currentPrice)}) berada DI ATAS acuan database (${formatCurrency(data.dbPrice)}). Selisih: +${formatCurrency(data.difference)}.`
+                      : data.statusDescription}
                   </p>
                 </div>
 
@@ -200,7 +300,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                     <p className="text-[10px] uppercase tracking-wider font-bold text-[var(--color-secondary)]">
                       Selisih Tarif
                     </p>
-                    <p className={`text-base sm:text-lg font-bold tabular-nums ${data.difference > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                    <p className={`text-base sm:text-lg font-bold tabular-nums ${data.difference > 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400'}`}>
                       {data.difference > 0 ? `+${formatCurrency(data.difference)}` : formatCurrency(data.difference)}
                     </p>
                   </div>
@@ -226,24 +326,52 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                 </div>
 
                 {/* Card 2: Tarif Acuan Database / Price List */}
-                <div className={`p-4 rounded-xl border space-y-1.5 ${data.dbPrice > 0 ? 'border-[var(--color-tertiary)]/50 bg-transparent' : 'border-[var(--color-border)] bg-[var(--color-neutral)]/40'}`}>
+                <div className={`p-4 rounded-xl border space-y-1.5 ${
+                  data.difference > 0
+                    ? 'border-emerald-500/40 bg-emerald-500/5'
+                    : data.dbPrice > 0
+                      ? 'border-[var(--color-tertiary)]/50 bg-transparent'
+                      : 'border-[var(--color-border)] bg-[var(--color-neutral)]/40'
+                }`}>
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
                       Acuan Price List Database
                     </p>
-                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-transparent border border-[var(--color-tertiary)]/40 text-[var(--color-tertiary)]">
-                      {data.appliedTierLabel ? data.appliedTierLabel.split(':')[0] : 'Price List'}
-                    </span>
+                    {data.difference > 0 ? (
+                      <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-0.5 shadow-2xs">
+                        <TrendingUp className="w-2.5 h-2.5 text-emerald-500" />
+                        Di Atas Acuan
+                      </span>
+                    ) : (
+                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-transparent border border-[var(--color-tertiary)]/40 text-[var(--color-tertiary)]">
+                        {data.appliedTierLabel ? data.appliedTierLabel.split(':')[0] : 'Price List'}
+                      </span>
+                    )}
                   </div>
                   <p className="text-lg sm:text-xl font-bold text-[var(--color-tertiary)] tabular-nums whitespace-nowrap">
-                    {data.dbPrice > 0 ? formatCurrency(data.dbPrice) : 'Belum Terdaftar'}
+                    {data.dbPrice > 0 ? (
+                      <>
+                        {formatCurrency(data.dbPrice)}
+                        <span className="text-xs font-normal text-[var(--color-secondary)] ml-1">
+                          {isAir ? '/ kg' : '/ m³'}
+                        </span>
+                      </>
+                    ) : 'Belum Terdaftar'}
                   </p>
                   <div className="text-[11px] text-[var(--color-secondary)] pt-1.5 border-t border-[var(--color-border)]/60 flex items-center justify-between">
                     <span>Acuan Komoditi:</span>
-                    <span className="font-semibold text-[var(--color-primary)] truncate max-w-[150px]" title={data.currentType}>
-                      {data.currentType || '—'}
+                    <span className="font-semibold text-[var(--color-primary)] truncate max-w-[150px]" title={data.matchedCategory || data.currentType}>
+                      {data.matchedCategory || data.currentType || '—'}
                     </span>
                   </div>
+                  {data.isCommodityOverride && (
+                    <div className="mt-1 flex items-center gap-1 text-[10px] font-bold text-purple-600 dark:text-purple-400 bg-purple-500/10 px-1.5 py-0.5 rounded border border-purple-500/30">
+                      <Sparkles className="w-3 h-3 text-purple-600 dark:text-purple-400 shrink-0" />
+                      <span className="truncate" title={`Override Komoditi: ${data.commodityOverrideDetail || data.matchedCategory}`}>
+                        {data.commodityOverrideDetail || 'Override: SEMI GARMENT'}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Card 3: Acuan Master Rate CS vs MKT (Berdasarkan Tgl. Agen) */}
@@ -254,7 +382,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                     </p>
                     {data.effectiveDate && (
                       <span className="text-[9px] text-[var(--color-secondary)]">
-                        PL {formatDateTime(data.effectiveDate)}
+                        PL {formatDate(data.effectiveDate)}
                       </span>
                     )}
                   </div>
@@ -264,7 +392,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                         Harga CS:
                       </span>
                       <span className="font-bold tabular-nums text-[var(--color-primary)]">
-                        {data.priceCS ? formatCurrency(data.priceCS) : '—'}
+                        {data.priceCS ? `${formatCurrency(data.priceCS)} ${isAir ? '/ kg' : '/ m³'}` : '—'}
                       </span>
                     </div>
                     <div className="flex items-center justify-between text-xs">
@@ -272,7 +400,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                         Harga MKT:
                       </span>
                       <span className="font-bold tabular-nums text-[var(--color-primary)]">
-                        {data.priceMKT ? formatCurrency(data.priceMKT) : '—'}
+                        {data.priceMKT ? `${formatCurrency(data.priceMKT)} ${isAir ? '/ kg' : '/ m³'}` : '—'}
                       </span>
                     </div>
                   </div>
@@ -285,7 +413,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                           : 'border border-blue-500/40 text-blue-600 dark:text-blue-400 bg-transparent'
                       }`}
                     >
-                      {data.isBroker ? 'Broker ➔ Acuan MKT' : 'Non-Broker ➔ Acuan CS'}
+                      {data.isBroker ? 'Acuan MKT (Broker / Sales MKT)' : 'Acuan CS (Non-Broker)'}
                     </span>
                   </div>
                 </div>
@@ -307,21 +435,24 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                 </div>
               </div>
 
-              {/* Section 1: Daftar Seluruh Tarif Terdaftar Customer di Cabang Ini (vwCustomersHarga) */}
-              <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden space-y-0">
-                <div className="px-5 py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-[var(--color-primary)]" />
-                    <h4 className="text-xs sm:text-sm font-bold font-[var(--font-heading)] text-[var(--color-primary)]">
-                      Daftar Seluruh Tarif Customer di Cabang {data.branch || 'Semua Cabang'} (vwCustomersHarga)
-                    </h4>
+              {/* Section 1: Tarif Terdaftar Customer di Database (vwCustomersHarga) - Hanya Tampil Jika Ada yang Cocok */}
+              {matchingCustomerTariffs.length > 0 && (
+                <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden space-y-0">
+                  <div className="px-5 py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      <Building2 className="hidden sm:inline-block w-4 h-4 text-[var(--color-primary)]" />
+                      <h4 className="text-xs sm:text-sm font-bold font-[var(--font-heading)] text-[var(--color-primary)]">
+                        Tarif Khusus Customer (vwCustomersHarga - {data.branch || 'Cabang'})
+                      </h4>
+                      <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
+                        {matchingCustomerTariffs.length} Kategori Cocok
+                      </span>
+                    </div>
+                    <span className="text-xs font-semibold text-[var(--color-secondary)]">
+                      {matchingCustomerTariffs.length} Baris
+                    </span>
                   </div>
-                  <span className="text-xs font-semibold text-[var(--color-secondary)]">
-                    {data.customerTariffs.length} Kategori Terdaftar
-                  </span>
-                </div>
 
-                {data.customerTariffs.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead>
@@ -336,93 +467,66 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--color-border)]">
-                        {data.customerTariffs.map((t, idx) => {
-                          const isCurrentMatch =
-                            (data.matchedTariff?.typeComodity && t.typeComodity === data.matchedTariff.typeComodity) ||
-                            (t.comodityName?.toUpperCase() === data.currentType?.toUpperCase())
-
-                          return (
-                            <tr
-                              key={idx}
-                              className={`transition-colors whitespace-nowrap ${
-                                isCurrentMatch
-                                  ? 'bg-emerald-500/10 dark:bg-emerald-500/15 font-semibold text-[var(--color-primary)]'
-                                  : 'hover:bg-[var(--color-neutral)]/40'
-                              }`}
-                            >
-                              <td className="px-5 py-3 font-medium">
-                                <div className="flex items-center gap-2">
-                                  <span>{t.comodityName || '—'}</span>
-                                  {isCurrentMatch && (
-                                    <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500 text-white dark:bg-emerald-600">
-                                      Item Target
-                                    </span>
-                                  )}
-                                </div>
-                              </td>
-                              <td className="px-5 py-3 text-[var(--color-secondary)]">
-                                {t.jenis || (t.listType === 1 ? 'UC' : 'LR')}
-                              </td>
-                              <td className="px-5 py-3 text-[var(--color-secondary)]">
-                                {t.branchName || '—'}
-                              </td>
-                              <td className="px-5 py-3 text-right font-bold tabular-nums text-[var(--color-primary)]">
-                                {formatCurrency(t.harga)}
-                              </td>
-                              <td className="px-5 py-3 text-[var(--color-secondary)]">
-                                {t.updateBy || '—'}
-                              </td>
-                              <td className="px-5 py-3 text-[var(--color-secondary)]">
-                                {t.updateDate ? formatDateTime(t.updateDate) : '—'}
-                              </td>
-                              <td className="px-5 py-3 text-center">
-                                {isCurrentMatch ? (
-                                  data.currentPrice === t.harga ? (
-                                    <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded font-bold border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-transparent">
-                                      <CheckCircle2 className="w-3 h-3" /> Cocok (Tarif Customer)
-                                    </span>
-                                  ) : (
-                                    <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded font-bold border border-rose-500/50 text-rose-600 dark:text-rose-400 bg-transparent">
-                                      <AlertTriangle className="w-3 h-3" /> Selisih ({formatCurrency(data.currentPrice - t.harga)})
-                                    </span>
-                                  )
-                                ) : (
-                                  <span className="text-[10px] text-[var(--color-secondary)]">
-                                    —
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          )
-                        })}
+                        {matchingCustomerTariffs.map((t, idx) => (
+                          <tr
+                            key={idx}
+                            className="bg-emerald-500/10 dark:bg-emerald-500/15 font-semibold text-[var(--color-primary)] transition-colors whitespace-nowrap"
+                          >
+                            <td className="px-5 py-3 font-medium">
+                              <div className="flex items-center gap-2">
+                                <span>{t.comodityName || '—'}</span>
+                                <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500 text-white dark:bg-emerald-600">
+                                  Item Target (Cocok)
+                                </span>
+                              </div>
+                            </td>
+                            <td className="px-5 py-3 text-[var(--color-secondary)]">
+                              {t.jenis || (t.listType === 1 ? 'UC' : 'LR')}
+                            </td>
+                            <td className="px-5 py-3 text-[var(--color-secondary)]">
+                              {t.branchName || '—'}
+                            </td>
+                            <td className="px-5 py-3 text-right font-bold tabular-nums text-[var(--color-primary)]">
+                              {formatCurrency(t.harga)}
+                            </td>
+                            <td className="px-5 py-3 text-[var(--color-secondary)]">
+                              {t.updateBy || '—'}
+                            </td>
+                            <td className="px-5 py-3 text-[var(--color-secondary)]">
+                              {t.updateDate ? formatDateTime(t.updateDate) : '—'}
+                            </td>
+                            <td className="px-5 py-3 text-center">
+                              {data.currentPrice === t.harga ? (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded font-bold border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-transparent">
+                                  <CheckCircle2 className="hidden sm:inline-block w-3 h-3" /> Cocok (Tarif Customer)
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded font-bold border border-rose-500/50 text-rose-600 dark:text-rose-400 bg-transparent">
+                                  <AlertTriangle className="hidden sm:inline-block w-3 h-3" /> Selisih ({formatCurrency(data.currentPrice - t.harga)})
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
                       </tbody>
                     </table>
                   </div>
-                ) : (
-                  <div className="p-8 text-center space-y-2">
-                    <p className="text-xs text-[var(--color-secondary)]">
-                      Customer ini belum memiliki daftar tarif khusus di tabel <code className="px-1.5 py-0.5 rounded bg-[var(--color-neutral)] text-[var(--color-primary)]">vwCustomersHarga</code> untuk cabang ini.
-                    </p>
-                    <p className="text-xs font-semibold text-[var(--color-primary)]">
-                      Perbandingan dicocokkan otomatis ke <u>Harga Umum {data.isBroker ? 'Marketing (MKT)' : 'Customer Service (CS)'}</u> sesuai status Broker customer.
-                    </p>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
 
               {/* Section 2: Uploaded Customer Price List (tbCustomerPriceListUpload) jika ada */}
               {data.customerPriceList && data.customerPriceList.items.length > 0 && (
                 <div className="rounded-xl border border-purple-500/40 bg-purple-500/5 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <FileSpreadsheet className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+                      <FileSpreadsheet className="hidden sm:inline-block w-4 h-4 text-purple-600 dark:text-purple-400" />
                       <h4 className="text-xs sm:text-sm font-bold text-purple-700 dark:text-purple-300">
                         Price List Khusus Customer (Upload File)
                       </h4>
                     </div>
                     {data.customerPriceList.effectiveDate && (
                       <span className="text-[11px] text-[var(--color-secondary)]">
-                        Berlaku: {formatDateTime(data.customerPriceList.effectiveDate)}
+                        Berlaku: {formatDate(data.customerPriceList.effectiveDate)}
                       </span>
                     )}
                   </div>

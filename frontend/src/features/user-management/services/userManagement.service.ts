@@ -9,6 +9,9 @@ export const userManagementApi = {
     apiClient.patch<{ data: User }>(`/users/${userId}/status`, { isActive }),
   updateUserRole: (userId: string, role: string) =>
     apiClient.patch<{ data: User }>(`/users/${userId}/role`, { role }),
+  updateUserEmployee: (userId: string, fdEmpCode: string | null) =>
+    apiClient.patch<{ data: User }>(`/users/${userId}/employee`, { fdEmpCode }),
+  getEmployees: () => apiClient.get<{ data: import('../types').EmployeeOption[] }>('/users/employees'),
   softDeleteUser: (userId: string) => apiClient.delete(`/users/${userId}`),
   permanentDeleteUser: (userId: string) => apiClient.delete(`/users/${userId}/permanent`),
   restoreUser: (userId: string) => apiClient.patch(`/users/${userId}/restore`),

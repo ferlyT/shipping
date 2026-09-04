@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Clock, Ship, Plane, ChevronLeft, ChevronRight, CalendarDays } from 'lucide-react'
@@ -110,7 +111,9 @@ interface PredictedExitModalProps {
 
 const WEEKDAYS = ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min']
 
-export function PredictedExitModal({ isOpen, onClose, data }: PredictedExitModalProps) {
+export function PredictedExitModal({
+ isOpen, onClose, data }: PredictedExitModalProps) {
+  useModalEscape(isOpen, onClose)
   const today = useMemo(() => new Date(), [])
   const [viewMonth, setViewMonth] = useState<Date>(() => new Date())
   const [selectedKey, setSelectedKey] = useState<string | null>(null)
@@ -185,7 +188,7 @@ export function PredictedExitModal({ isOpen, onClose, data }: PredictedExitModal
         {/* Header */}
         <div className="flex-shrink-0 px-4 py-3 sm:px-6 sm:py-4 border-b border-[var(--color-border)] flex items-center justify-between gap-3 bg-[var(--color-surface)]">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
+            <div className="hidden sm:flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
               <Clock className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
@@ -354,7 +357,7 @@ export function PredictedExitModal({ isOpen, onClose, data }: PredictedExitModal
                         )}
                       >
                         <div className="flex items-center gap-2.5 sm:gap-4 min-w-0">
-                          <div className={cn('flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg', meta.bg)}>
+                          <div className={cn('hidden sm:flex h-9 w-9 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-lg', meta.bg)}>
                             {item.fdListType === 1 ? (
                               <Plane className={cn('h-4 w-4 sm:h-5 sm:w-5', meta.text)} />
                             ) : (

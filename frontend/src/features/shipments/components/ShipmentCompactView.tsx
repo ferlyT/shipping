@@ -1,6 +1,6 @@
-import { ChevronRight, PackageSearch } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { PackageSearch } from 'lucide-react'
 import { STATUS_STYLES, STATUS_ORDER } from '../utils/status'
+import { ShipmentMobileCard } from './ShipmentMobileCard'
 import type { Shipment } from '../types/shipments.types'
 
 // Kelompokkan data per statusStep, mempertahankan urutan STATUS_ORDER
@@ -25,14 +25,44 @@ interface ShipmentCompactViewProps {
 
 function CompactSkeleton() {
   return (
-    <div className="divide-y divide-[var(--color-border)] bg-[var(--color-surface)]">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="px-4 py-3.5 flex items-center justify-between gap-3 animate-pulse">
-          <div className="space-y-1.5 flex-1">
-            <div className="h-4 bg-[var(--color-border)] rounded w-2/5" />
-            <div className="h-3 bg-[var(--color-neutral)] rounded w-3/5" />
+    <div className="bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
+      {[0, 1].map((groupIndex) => (
+        <div key={groupIndex}>
+          {/* Sticky group header skeleton */}
+          <div className="flex items-center justify-between px-4 sm:px-6 py-2 bg-[var(--color-neutral)] border-y border-[var(--color-border)]">
+            <div className="h-3.5 w-28 rounded skeleton-shimmer" />
+            <div className="h-4 w-16 rounded-full skeleton-shimmer" />
           </div>
-          <div className="w-20 h-5 bg-[var(--color-neutral)] rounded-full" />
+
+          <div className="divide-y divide-[var(--color-border)]">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="p-3.5 flex flex-col gap-2.5 bg-[var(--color-surface)]">
+                <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <div className="w-20 h-5 rounded-full skeleton-shimmer" />
+                    <div className="w-12 h-5 rounded skeleton-shimmer" />
+                    <div className="w-16 h-5 rounded skeleton-shimmer" />
+                  </div>
+                  <div className="w-24 h-5 rounded skeleton-shimmer" />
+                </div>
+                <div className="space-y-1.5">
+                  <div className="h-4 w-2/5 rounded-md skeleton-shimmer" />
+                  <div className="h-3 w-1/4 rounded skeleton-shimmer" />
+                </div>
+                <div className="p-2.5 rounded-xl bg-[var(--color-neutral)] border border-[var(--color-border)] space-y-2">
+                  <div className="flex justify-between items-center">
+                    <div className="h-3.5 w-24 rounded skeleton-shimmer" />
+                    <div className="h-4 w-16 rounded skeleton-shimmer" />
+                  </div>
+                  <div className="h-3 w-2/3 rounded skeleton-shimmer" />
+                  <div className="flex justify-between items-center pt-1 border-t border-[var(--color-border)]/50">
+                    <div className="h-3.5 w-32 rounded skeleton-shimmer" />
+                    <div className="w-4 h-4 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ))}
     </div>
@@ -66,67 +96,20 @@ export function ShipmentCompactView({ data, isLoading, selectedCode, onRowClick 
               {group.label}
             </span>
             <span className="text-xs font-semibold text-[var(--color-secondary)] bg-[var(--color-surface)] px-2 py-0.5 rounded-full border border-[var(--color-border)]">
-              {group.items.length.toLocaleString('id-ID')} resi
+              {group.items.length.toLocaleString('en-US')} resi
             </span>
           </div>
 
-          {group.items.map((row) => {
-            const isSelected = selectedCode === row.fdListCode
-            const markingFull = [row.fdMarkingCode, row.fdMarkingNo].filter(Boolean).join(' ')
-            const style = STATUS_STYLES[row.shipmentStatus?.statusStep ?? 0] || STATUS_STYLES[0]
-
-            return (
-              <div
+          <div className="divide-y divide-[var(--color-border)]">
+            {group.items.map((row) => (
+              <ShipmentMobileCard
                 key={row.fdListCode}
+                item={row}
+                isSelected={selectedCode === row.fdListCode}
                 onClick={() => onRowClick(row)}
-                className={cn(
-                  'flex items-center gap-3 px-4 sm:px-6 py-3.5 cursor-pointer transition-colors duration-150',
-                  isSelected ? 'bg-[var(--color-primary)]/8 ring-1 ring-inset ring-[var(--color-primary)]/20' : 'hover:bg-[var(--color-neutral)]'
-                )}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="font-mono text-xs font-bold text-[var(--color-text)] bg-[var(--color-neutral)] px-1.5 py-0.5 rounded">
-                        {row.fdListCode}
-                      </span>
-                      <span className="font-semibold text-sm text-[var(--color-text)] truncate">
-                        {row.fdCustName || 'Customer Tidak Dikenal'}
-                      </span>
-                    </div>
-                    <span
-                      className={cn(
-                        'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold whitespace-nowrap shrink-0',
-                        style.bg,
-                        style.text
-                      )}
-                    >
-                      <span className={cn('w-1.5 h-1.5 rounded-full', style.dot)} />
-                      {row.shipmentStatus?.statusLabel || style.label}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 mt-1.5 text-xs text-[var(--color-secondary)] flex-wrap">
-                    {markingFull && (
-                      <span className="uppercase font-semibold text-[var(--color-text)]">
-                        {markingFull}
-                      </span>
-                    )}
-                    {row.fdTerima && <span className="text-[var(--color-border)]">·</span>}
-                    {row.fdTerima && <span className="font-mono text-[var(--color-secondary)]">Resi: {row.fdTerima}</span>}
-                    {row.fdComodity && <span className="text-[var(--color-border)]">·</span>}
-                    {row.fdComodity && <span className="truncate max-w-[200px]">{row.fdComodity}</span>}
-                    <span className="text-[var(--color-border)]">·</span>
-                    <span className="font-medium text-[var(--color-text)]">
-                      {Number(row.fdJmlPack || 0).toLocaleString('id-ID')} {row.fdSatuan?.trim() || 'koli'}
-                    </span>
-                  </div>
-                </div>
-
-                <ChevronRight size={16} className="shrink-0 text-[var(--color-border)] group-hover:text-[var(--color-secondary)]" />
-              </div>
-            )
-          })}
+              />
+            ))}
+          </div>
         </div>
       ))}
     </div>

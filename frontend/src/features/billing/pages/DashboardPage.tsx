@@ -2,7 +2,6 @@ import { useState } from 'react'
 import { CreditCard, CalendarDays, Plane, Ship } from 'lucide-react'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { TrendChart } from '../components/TrendChart'
 import { EmployeeChart } from '../components/EmployeeChart'
 import { SjVsBillChart } from '../components/SjVsBillChart'
@@ -57,7 +56,7 @@ export default function DashboardPage() {
 
   const { handleTouchStart, handleTouchEnd } = useSwipeTab(chartTabs, activeTab, setActiveTab)
 
-  if (isLoadingKpi && !kpis) return <LoadingSpinner message={t('common.loadingBilling')} />
+  const isKpiLoading = isLoadingKpi && !kpis
 
   return (
     <div
@@ -88,10 +87,19 @@ export default function DashboardPage() {
                 <card.icon className="w-4 h-4 sm:w-5 sm:h-5" />
               </div>
             </div>
-            <h3 className="text-lg sm:text-2xl font-bold text-[var(--color-primary)] font-[var(--font-display)] mb-1 truncate" title={card.value}>
-              {card.value}
-            </h3>
-            <p className="text-[10px] sm:text-xs text-[var(--color-secondary)] truncate">{card.desc}</p>
+            {isKpiLoading ? (
+              <div className="space-y-1.5">
+                <div className="h-6 sm:h-7 w-28 rounded-md skeleton-shimmer" />
+                <div className="h-3 w-20 rounded skeleton-shimmer" />
+              </div>
+            ) : (
+              <>
+                <h3 className="text-lg sm:text-2xl font-bold text-[var(--color-primary)] font-[var(--font-display)] mb-1 truncate" title={card.value}>
+                  {card.value}
+                </h3>
+                <p className="text-[10px] sm:text-xs text-[var(--color-secondary)] truncate">{card.desc}</p>
+              </>
+            )}
           </div>
         ))}
       </div>

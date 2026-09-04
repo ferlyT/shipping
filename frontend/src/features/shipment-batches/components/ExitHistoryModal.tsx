@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { createPortal } from 'react-dom'
 import { X, CalendarDays, ChevronLeft, ChevronRight, TrendingUp, Flame, CalendarCheck2, Plane, Ship } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -124,6 +125,7 @@ export function ExitHistoryModal({
   isLoading,
   onSelectDay,
 }: ExitHistoryModalProps) {
+  useModalEscape(isOpen, onClose)
   if (!isOpen || typeof document === 'undefined') return null
 
   const today = new Date()
@@ -161,7 +163,7 @@ export function ExitHistoryModal({
         {/* Header */}
         <div className="flex-shrink-0 px-4 py-3 sm:px-6 sm:py-4 border-b border-[var(--color-border)] flex items-center justify-between gap-3 bg-[var(--color-surface)]">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
+            <div className="hidden sm:flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
               <CalendarDays className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div className="min-w-0">
@@ -213,7 +215,7 @@ export function ExitHistoryModal({
                 </button>
               )}
               <span className="text-[11px] sm:text-xs text-[var(--color-secondary)] ml-1 sm:ml-2 whitespace-nowrap">
-                {monthTotal.toLocaleString()} batch bulan ini
+                {monthTotal.toLocaleString('en-US')} batch bulan ini
               </span>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
@@ -233,7 +235,7 @@ export function ExitHistoryModal({
           <div className="grid grid-cols-3 gap-2 sm:gap-3 px-4 sm:px-6 pt-4 sm:pt-5">
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)] px-2.5 py-2 sm:px-4 sm:py-3 flex flex-col gap-1">
               <div className="flex items-center gap-1 sm:gap-1.5 text-[var(--color-secondary)]">
-                <TrendingUp className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                <TrendingUp className="hidden sm:inline-block w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
                 <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider truncate">
                   Total Exit
                 </span>
@@ -243,14 +245,14 @@ export function ExitHistoryModal({
               ) : (
                 <>
                   <span className="text-lg sm:text-2xl font-bold text-[var(--color-primary)] font-[var(--font-display)] tabular-nums">
-                    {monthTotal.toLocaleString()}
+                    {monthTotal.toLocaleString('en-US')}
                   </span>
                   <div className="flex items-center gap-2 sm:gap-3 mt-0.5">
                     <span className="flex items-center gap-1 text-[9px] sm:text-[11px] text-[var(--color-secondary)] tabular-nums">
-                      <Plane className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-sky-500" /> {modeTotals.udara.toLocaleString()}
+                      <Plane className="hidden sm:inline-block w-2.5 h-2.5 sm:w-3 sm:h-3 text-sky-500" /> {modeTotals.udara.toLocaleString('en-US')}
                     </span>
                     <span className="flex items-center gap-1 text-[9px] sm:text-[11px] text-[var(--color-secondary)] tabular-nums">
-                      <Ship className="w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-500" /> {modeTotals.laut.toLocaleString()}
+                      <Ship className="hidden sm:inline-block w-2.5 h-2.5 sm:w-3 sm:h-3 text-emerald-500" /> {modeTotals.laut.toLocaleString('en-US')}
                     </span>
                   </div>
                 </>
@@ -258,7 +260,7 @@ export function ExitHistoryModal({
             </div>
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)] px-2.5 py-2 sm:px-4 sm:py-3 flex flex-col gap-1">
               <div className="flex items-center gap-1 sm:gap-1.5 text-[var(--color-secondary)]">
-                <CalendarCheck2 className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                <CalendarCheck2 className="hidden sm:inline-block w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
                 <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider truncate">
                   Rata-rata/Hari
                 </span>
@@ -267,13 +269,13 @@ export function ExitHistoryModal({
                 <div className="h-6 sm:h-7 w-12 bg-[var(--color-border)] animate-pulse rounded" />
               ) : (
                 <span className="text-lg sm:text-2xl font-bold text-[var(--color-primary)] font-[var(--font-display)] tabular-nums">
-                  {avgPerActiveDay > 0 ? avgPerActiveDay.toLocaleString() : '—'}
+                  {avgPerActiveDay > 0 ? avgPerActiveDay.toLocaleString('en-US') : '—'}
                 </span>
               )}
             </div>
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)] px-2.5 py-2 sm:px-4 sm:py-3 flex flex-col gap-1">
               <div className="flex items-center gap-1 sm:gap-1.5 text-[var(--color-secondary)]">
-                <Flame className="w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
+                <Flame className="hidden sm:inline-block w-3 h-3 sm:w-3.5 sm:h-3.5 shrink-0" />
                 <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-wider truncate">
                   Puncak
                 </span>

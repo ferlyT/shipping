@@ -6,6 +6,8 @@ export interface User {
   username: string
   fullName: string
   role: string
+  fdEmpCode?: string | null
+  fdEmpName?: string | null
   avatarUrl?: string | null
   permissions?: string[]
   defaultRoute?: string | null

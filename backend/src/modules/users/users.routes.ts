@@ -58,6 +58,32 @@ usersRoutes.patch('/:id/role', zValidator('json', roleSchema), async (c) => {
   }
 })
 
+usersRoutes.get('/employees', async (c) => {
+  try {
+    const { getAllEmployees } = await import('./users.service')
+    const employees = await getAllEmployees()
+    return successResponse(c, employees)
+  } catch (err) {
+    return errorResponse(c, (err as Error).message, 500)
+  }
+})
+
+const employeeSchema = z.object({
+  fdEmpCode: z.string().nullable().optional()
+})
+
+usersRoutes.patch('/:id/employee', zValidator('json', employeeSchema), async (c) => {
+  try {
+    const id = c.req.param('id')
+    const { fdEmpCode } = c.req.valid('json')
+    const { updateUserEmployee } = await import('./users.service')
+    const user = await updateUserEmployee(id, fdEmpCode || null)
+    return successResponse(c, user)
+  } catch (err) {
+    return errorResponse(c, (err as Error).message, 500)
+  }
+})
+
 usersRoutes.delete('/:id', async (c) => {
   try {
     const id = c.req.param('id')

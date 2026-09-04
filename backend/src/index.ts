@@ -18,6 +18,9 @@ import { shipmentsRoutes } from './modules/shipments/shipments.routes'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
 import { priceListRoutes } from './modules/price-list/price-list.routes'
 import { customerPriceListRoutes } from './modules/customer-price-list/customer-price-list.routes'
+import { commodityMappingRoutes } from './modules/commodity-mapping/commodity-mapping.routes'
+import { priceCheckRoutes } from './modules/price-check/price-check.routes'
+import { m3CheckRoutes } from './modules/m3-check/m3-check.routes'
 
 
 import path from 'path'
@@ -121,6 +124,9 @@ apiApp.route('/shipments', shipmentsRoutes)
 apiApp.route('/dashboard', dashboardRoutes)
 apiApp.route('/price-list', priceListRoutes)
 apiApp.route('/customer-price-list', customerPriceListRoutes)
+apiApp.route('/commodity-mapping', commodityMappingRoutes)
+apiApp.route('/price-check', priceCheckRoutes)
+apiApp.route('/m3-check', m3CheckRoutes)
 
 // OpenAPI JSON & Swagger UI
 apiApp.get('/openapi.json', (c) => c.json(openApiSpec))

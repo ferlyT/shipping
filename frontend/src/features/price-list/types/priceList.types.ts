@@ -105,6 +105,7 @@ export interface EntrySearchResult {
   fdMarkingNo: string | null
   fdListType: number | null
   fdTypeComodity: number | null
+  fdComodity?: string | null
   fdTglAgent: string | null
   fdCustCode: string | null
   fdTerima: string | null
@@ -125,6 +126,7 @@ export interface PriceByEntryResult {
   fdMarkingNo: string | null
   fdListType: number | null
   fdTypeComodity: number | null
+  fdComodity?: string | null
   fdTglAgent: string | null
   expectedMode: string | null
   expectedBranch: string | null

@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import React, { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Tag, Plus, Building2, AlertCircle, Check, Loader2, Plane, Ship, FileSpreadsheet, Calendar } from 'lucide-react'
@@ -29,12 +30,13 @@ export const MarkingManagerModal: React.FC<MarkingManagerModalProps> = ({
   initialMarkings = [],
   onSave,
 }) => {
+  useModalEscape(isOpen, onClose)
   const [markings, setMarkings] = useState<ItemMarking[]>(initialMarkings)
   const [newCode, setNewCode] = useState('')
   const [newAgentName, setNewAgentName] = useState('')
   const [newMode, setNewMode] = useState<'BY SEA' | 'BY AIR'>('BY SEA')
   const [branchOptions, setBranchOptions] = useState<string[]>([])
-  const [isSaving, setIsSaving] = useState(false)
+const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedSuccess, setSavedSuccess] = useState(false)
 

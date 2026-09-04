@@ -8,7 +8,6 @@ import type { DiffResponse, DiffRow } from '../types'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { SegmentedControl } from '../components/DashboardFilters'
 import { EditEffectiveDateModal } from '../components/EditEffectiveDateModal'
 import { MarkingManagerModal } from '../components/MarkingManagerModal'
@@ -126,7 +125,7 @@ export function DetailPage() {
                   size="sm"
                   onClick={() => setIsManagingMarkings(true)}
                 >
-                  <Tag className="w-4 h-4 mr-1.5 text-amber-500" />
+                  <Tag className="hidden sm:inline-block w-4 h-4 mr-1.5 text-amber-500" />
                   Agen / Marking ({uploadMarkings.length})
                 </Button>
                 <Button
@@ -134,7 +133,7 @@ export function DetailPage() {
                   size="sm"
                   onClick={() => setIsEditingEffectiveDate(true)}
                 >
-                  <Calendar className="w-4 h-4 mr-1.5" />
+                  <Calendar className="hidden sm:inline-block w-4 h-4 mr-1.5" />
                   Edit Tgl Efektif
                 </Button>
               </>
@@ -153,7 +152,7 @@ export function DetailPage() {
       {!loading && data && (
         <div className="flex items-center justify-between p-3.5 sm:p-4 rounded-2xl bg-amber-500/5 border border-amber-500/20 gap-3 flex-wrap">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
+            <div className="hidden sm:flex w-8 h-8 rounded-xl bg-amber-500/10 items-center justify-center text-amber-600 dark:text-amber-400 shrink-0">
               <Tag size={16} />
             </div>
             <div>
@@ -252,7 +251,16 @@ export function DetailPage() {
       )}
 
       {/* Stats Cards */}
-      {!loading && stats && (
+      {loading ? (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] space-y-2">
+              <div className="h-4 w-16 rounded skeleton-shimmer" />
+              <div className="h-7 w-12 rounded skeleton-shimmer" />
+            </div>
+          ))}
+        </div>
+      ) : stats ? (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
           <StatCard
             icon={<TrendingUp size={18} className="text-rose-500" />}
@@ -287,7 +295,7 @@ export function DetailPage() {
             onClick={() => setActiveKpi((prev) => (prev === 'baru' ? 'all' : 'baru'))}
           />
         </div>
-      )}
+      ) : null}
 
       {/* Table */}
       <div className="bg-[var(--color-surface)] shadow-xs border border-[var(--color-border)] rounded-xl overflow-hidden">
@@ -295,7 +303,11 @@ export function DetailPage() {
         <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between gap-4 flex-wrap">
           <div className="flex items-center gap-2">
             <h2 className="text-[1rem] font-semibold text-[var(--color-primary)]">
-              {rows.length.toLocaleString('id-ID')} baris harga
+              {loading ? (
+                <div className="h-5 w-32 rounded skeleton-shimmer" />
+              ) : (
+                `${rows.length.toLocaleString('en-US')} baris harga`
+              )}
             </h2>
           </div>
           <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -334,11 +346,18 @@ export function DetailPage() {
             </thead>
             <tbody className="divide-y divide-[var(--color-border)]">
               {loading ? (
-                <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
-                    <LoadingSpinner message={t('common.loading')} />
-                  </td>
-                </tr>
+                Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="border-b border-[var(--color-border)]">
+                    <td className="px-6 py-4"><div className="h-4 w-12 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-16 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-10 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-36 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4 text-right"><div className="h-4 w-20 rounded skeleton-shimmer ml-auto" /></td>
+                    <td className="px-6 py-4 text-right"><div className="h-4 w-20 rounded skeleton-shimmer ml-auto" /></td>
+                    <td className="px-6 py-4 text-right"><div className="h-4 w-14 rounded skeleton-shimmer ml-auto" /></td>
+                  </tr>
+                ))
               ) : rows.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="px-6 py-16 text-center">
@@ -492,7 +511,7 @@ function StatCard({
       } ${isActive ? activeClassMap[color] : ''}`}
       onClick={onClick}
     >
-      <div className="p-2 rounded-lg bg-transparent border border-[var(--color-border)]">{icon}</div>
+      <div className="hidden sm:flex p-2 rounded-lg bg-transparent border border-[var(--color-border)]">{icon}</div>
       <div>
         <div className="text-[1.5rem] font-bold font-mono text-[var(--color-primary)] leading-none">{value}</div>
         <div className="text-[0.72rem] uppercase tracking-wider text-[var(--color-secondary)] font-semibold mt-0.5">{label}</div>

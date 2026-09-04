@@ -11,28 +11,34 @@ import {
   ChevronRight,
   ArrowLeft,
   Calendar,
+  Tag,
+  Sparkles,
+  Trash2,
 } from 'lucide-react'
 
 import type { CustomerUploadHistory } from '../types'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useCustomerPriceHistory } from '../hooks/useCustomerPriceHistory'
 import { customerPriceListApi } from '../services/customerPriceList.service'
 import { EditEffectiveDateModal } from '@/features/price-list/components/EditEffectiveDateModal'
 import { MarkingManagerModal } from '@/features/price-list/components/MarkingManagerModal'
+import { CustomerCommodityPriceModal } from '../components/CustomerCommodityPriceModal'
+import { toast } from '@/stores/toastStore'
 
-const STATUS_CLASS: Record<CustomerUploadHistory['status'], string> = {
+const STATUS_CLASS: Record<string, string> = {
   PARSED: 'badge bg-emerald-500/10 text-emerald-600 border-emerald-500/25',
   PARTIAL: 'badge bg-amber-500/10 text-amber-600 border-amber-500/25',
   FAILED: 'badge bg-rose-500/10 text-rose-600 border-rose-500/25',
+  DELETED: 'badge bg-gray-500/10 text-gray-500 border-gray-500/25 line-through',
 }
 
-const STATUS_LABEL: Record<CustomerUploadHistory['status'], string> = {
+const STATUS_LABEL: Record<string, string> = {
   PARSED: 'Berhasil',
   PARTIAL: 'Sebagian',
   FAILED: 'Gagal',
+  DELETED: 'Dihapus',
 }
 
 export function HistoryPage() {
@@ -53,9 +59,33 @@ export function HistoryPage() {
 
   const [editingUpload, setEditingUpload] = useState<CustomerUploadHistory | null>(null)
   const [selectedUploadForMarking, setSelectedUploadForMarking] = useState<CustomerUploadHistory | null>(null)
-
+  const [isPriceModalOpen, setIsPriceModalOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
 
   const pageSize = 20
+
+  const handleDeleteUpload = async (upload: CustomerUploadHistory) => {
+    const formattedDate = new Date(upload.effectiveDate).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+    const isConfirmed = window.confirm(
+      `Yakin ingin menghapus / menonaktifkan riwayat upload:\n"${upload.fileName}" (Mulai berlaku: ${formattedDate})?\n\nRiwayat dan seluruh tarif di dalam upload ini akan dinonaktifkan (Soft Delete).`
+    )
+    if (!isConfirmed) return
+
+    try {
+      setDeletingId(upload.id)
+      await customerPriceListApi.deleteUpload(upload.id)
+      toast.success('Riwayat upload berhasil dinonaktifkan (Soft Delete)')
+      reload()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Gagal menghapus riwayat upload')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 w-full min-w-0 space-y-6 sm:space-y-8 bg-[var(--color-surface)] font-[var(--font-body)] animate-fadeIn pb-24">
@@ -73,7 +103,22 @@ export function HistoryPage() {
           { label: custCode || 'History' },
         ]}
         actions={
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsPriceModalOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
+            >
+              <Sparkles className="w-4 h-4 mr-1.5" />
+              + Input Harga Khusus
+            </Button>
+            <Link to={`${ROUTES.COMMODITY_MAPPING}?scope=customer&search=${custCode || ''}`}>
+              <Button variant="secondary" size="sm">
+                <Tag className="w-4 h-4 mr-1.5 text-blue-600 dark:text-blue-400" />
+                Pemetaan Komoditas
+              </Button>
+            </Link>
             <Link to={ROUTES.CUSTOMER_PRICE_LIST}>
               <Button variant="secondary" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-1.5" />
@@ -81,9 +126,9 @@ export function HistoryPage() {
               </Button>
             </Link>
             <Link to={ROUTES.CUSTOMER_PRICE_LIST_UPLOAD}>
-              <Button variant="primary" size="sm">
+              <Button variant="secondary" size="sm">
                 <Upload className="w-4 h-4 mr-1.5" />
-                Upload Price List
+                Upload File
               </Button>
             </Link>
           </div>
@@ -102,8 +147,20 @@ export function HistoryPage() {
         {/* Mobile list view */}
         <div className="sm:hidden">
           {loading ? (
-            <div className="p-6 flex justify-center">
-              <LoadingSpinner message={t('common.loading')} />
+            <div className="p-3 space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="p-3.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] space-y-2.5">
+                  <div className="flex justify-between items-center">
+                    <div className="h-4 w-28 rounded skeleton-shimmer" />
+                    <div className="h-5 w-16 rounded-full skeleton-shimmer" />
+                  </div>
+                  <div className="h-3.5 w-40 rounded skeleton-shimmer" />
+                  <div className="flex justify-between items-center pt-1">
+                    <div className="h-3 w-24 rounded skeleton-shimmer" />
+                    <div className="h-3 w-16 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : rows.length === 0 ? (
             <div className="px-6 py-16 text-center">
@@ -165,9 +222,26 @@ export function HistoryPage() {
                               {row.fileName}
                             </span>
                           </div>
-                          <span className={`${STATUS_CLASS[row.status]} shrink-0 text-xs`}>
-                            {STATUS_LABEL[row.status]}
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`${STATUS_CLASS[row.status]} text-xs`}>
+                              {STATUS_LABEL[row.status]}
+                            </span>
+                            {row.status !== 'DELETED' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  handleDeleteUpload(row)
+                                }}
+                                disabled={deletingId === row.id}
+                                className="p-1 text-rose-600 hover:bg-rose-500/10 rounded-md transition-colors inline-flex items-center"
+                                title="Hapus (Soft Delete)"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center justify-between gap-2 text-[0.78rem] text-[var(--color-secondary)]">
                           <span className="truncate">
@@ -180,7 +254,7 @@ export function HistoryPage() {
                             })}
                           </span>
                           <span className="shrink-0 font-mono flex items-center gap-1 text-[var(--color-tertiary)] font-semibold">
-                            {(row._count?.items ?? 0).toLocaleString('id-ID')} baris
+                            {(row._count?.items ?? 0).toLocaleString('en-US')} baris
                             <ArrowRight size={12} />
                           </span>
                         </div>
@@ -233,11 +307,18 @@ export function HistoryPage() {
 
             {loading ? (
               <tbody className="divide-y divide-[var(--color-border)]">
-                <tr>
-                  <td colSpan={8} className="px-6 py-12 text-center">
-                    <LoadingSpinner message={t('common.loading')} />
-                  </td>
-                </tr>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="border-b border-[var(--color-border)]">
+                    <td className="px-6 py-4"><div className="h-4 w-24 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-36 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-12 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-5 w-16 rounded-full skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-24 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4 text-center"><div className="h-7 w-16 rounded-lg skeleton-shimmer mx-auto" /></td>
+                  </tr>
+                ))}
               </tbody>
             ) : rows.length === 0 ? (
               <tbody>
@@ -377,7 +458,7 @@ export function HistoryPage() {
                           })}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-[0.9rem] font-mono text-[var(--color-secondary)]">
-                          {(row._count?.items ?? 0).toLocaleString('id-ID')}
+                          {(row._count?.items ?? 0).toLocaleString('en-US')}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={STATUS_CLASS[row.status]}>
@@ -403,6 +484,17 @@ export function HistoryPage() {
                               <span className="hidden sm:inline">Detail</span>
                               <ArrowRight size={14} />
                             </Link>
+                            {row.status !== 'DELETED' && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUpload(row)}
+                                disabled={deletingId === row.id}
+                                className="p-1.5 text-rose-600 hover:bg-rose-500/10 rounded-md transition-colors inline-flex items-center gap-1 text-[0.82rem] cursor-pointer disabled:opacity-50"
+                                title="Hapus / Nonaktifkan (Soft Delete)"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
                           </div>
                         </td>
                       </tr>
@@ -482,6 +574,17 @@ export function HistoryPage() {
           }}
         />
       )}
+
+      {/* Customer Commodity Price Modal */}
+      <CustomerCommodityPriceModal
+        isOpen={isPriceModalOpen}
+        onClose={() => setIsPriceModalOpen(false)}
+        onSuccess={() => {
+          setIsPriceModalOpen(false)
+          reload()
+        }}
+        defaultCustCode={custCode}
+      />
     </div>
   )
 }

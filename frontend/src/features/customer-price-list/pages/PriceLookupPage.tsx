@@ -4,22 +4,23 @@ import {
   Search,
   AlertCircle,
   CheckCircle2,
-  Anchor,
-  Plane,
-  Ship,
   X,
   ExternalLink,
   SlidersHorizontal,
   RotateCcw,
+  Sparkles,
   Loader2,
 } from 'lucide-react'
+import { useState } from 'react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatDate } from '@/lib/utils'
 import { ROUTES } from '@/lib/constants'
 import { ModeSegmentedControl } from '../components/ModeSegmentedControl'
 import { BranchPillToggle } from '../components/BranchPillToggle'
 import { CategoryMultiCombobox } from '../components/CategoryMultiCombobox'
+import { CustomerCategoryGroupedPriceTable } from '../components/CustomerCategoryGroupedPriceTable'
+import { CustomerCommodityPriceModal } from '../components/CustomerCommodityPriceModal'
 import { useCustomerPriceLookup } from '../hooks/useCustomerPriceLookup'
 
 export function PriceLookupPage() {
@@ -60,6 +61,30 @@ export function PriceLookupPage() {
   } = useCustomerPriceLookup()
 
 
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingItem, setEditingItem] = useState<any | null>(null)
+
+  const handleOpenCreateModal = () => {
+    setEditingItem(null)
+    setIsModalOpen(true)
+  }
+
+  const handleEditItem = (item: any) => {
+    setEditingItem({
+      id: item.id,
+      fdCustCode: custCode,
+      category: item.category,
+      mode: item.mode,
+      branch: item.branch,
+      price: item.price,
+      effectiveDate: item.effectiveDate || targetDate,
+      endDate: item.endDate,
+      notes: item.notes,
+      aliases: item.aliases || [],
+    })
+    setIsModalOpen(true)
+  }
+
   return (
     <div className="p-4 sm:p-6 lg:p-8 w-full min-w-0 space-y-5 bg-[var(--color-surface)] font-[var(--font-body)] animate-fadeIn pb-24">
       {/* Page Header */}
@@ -71,6 +96,16 @@ export function PriceLookupPage() {
           { label: t('nav.customerPriceList'), path: ROUTES.CUSTOMER_PRICE_LIST },
           { label: 'Cari Harga' },
         ]}
+        actions={
+          <Button
+            size="sm"
+            onClick={handleOpenCreateModal}
+            className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+          >
+            <Sparkles className="w-4 h-4 mr-1.5 text-emerald-600 dark:text-emerald-400" />
+            + Input Harga Khusus
+          </Button>
+        }
       />
 
       {/* Filter Card — Mirror DashboardFilters Layout */}
@@ -241,6 +276,31 @@ export function PriceLookupPage() {
         </div>
       )}
 
+      {/* Loading State */}
+      {loading && (
+        <div className="space-y-4">
+          <div className="card border border-[var(--color-border)] bg-[var(--color-surface)] rounded-xl p-3 flex justify-between items-center shadow-xs">
+            <div className="flex items-center gap-2">
+              <div className="h-6 w-36 rounded-md skeleton-shimmer" />
+              <div className="h-4 w-48 rounded skeleton-shimmer" />
+            </div>
+            <div className="h-4 w-16 rounded skeleton-shimmer" />
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 flex justify-between items-center">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-4 h-4 rounded skeleton-shimmer" />
+                  <div className="h-4 w-36 rounded skeleton-shimmer" />
+                  <div className="h-4 w-12 rounded-full skeleton-shimmer" />
+                </div>
+                <div className="h-5 w-24 rounded skeleton-shimmer" />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Results Section */}
       {hasSearched && !loading && result && (
         <div className="space-y-3 animate-fadeIn">
@@ -285,106 +345,37 @@ export function PriceLookupPage() {
                 )}
               </div>
 
-              {/* Table Toolbar & Search */}
-              <div className="flex items-center justify-between gap-3">
-                <div className="relative max-w-xs w-full">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={tableSearch}
-                    onChange={(e) => setTableSearch(e.target.value)}
-                    placeholder="Filter hasil tabel..."
-                    className="w-full h-8 pl-8 pr-3 text-xs bg-white border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-1 focus:ring-blue-500"
-                  />
-                </div>
-                <span className="text-[0.7rem] text-[var(--color-secondary)] font-mono">
-                  Menampilkan {filteredItems.length} dari {result.items.length} item
-                </span>
-              </div>
-
-              {/* Table */}
-              <div className="bg-white rounded-xl border border-[var(--color-border)] shadow-xs overflow-hidden">
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[650px] text-xs text-left">
-                    <thead className="bg-[var(--color-neutral)] text-[var(--color-secondary)] uppercase font-semibold text-[0.68rem] tracking-wider border-b border-[var(--color-border)]">
-                      <tr>
-                        <th className="px-4 py-2.5">Mode</th>
-                        <th className="px-4 py-2.5">Branch</th>
-                        <th className="px-4 py-2.5">Kategori</th>
-                        <th className="px-4 py-2.5">Agen / Marking</th>
-                        <th className="px-4 py-2.5">Estimasi Transit</th>
-                        <th className="px-4 py-2.5 text-right">Harga Tarif</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-[var(--color-border)]">
-                      {filteredItems.map((item) => (
-                        <tr key={item.id} className="hover:bg-slate-50 dark:hover:bg-[var(--color-neutral)]/40 transition-colors">
-                          <td className="px-4 py-2">
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[0.68rem] font-semibold uppercase ${
-                                item.mode.toUpperCase().includes('SEA')
-                                  ? 'bg-blue-50 text-blue-700 border border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20'
-                                  : 'bg-cyan-50 text-cyan-700 border border-cyan-200 dark:bg-cyan-500/10 dark:text-cyan-400 dark:border-cyan-500/20'
-                              }`}
-                            >
-                              {item.mode.toUpperCase().includes('SEA') ? <Anchor size={11} /> : <Plane size={11} />}
-                              {item.mode}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2 font-semibold text-slate-800 dark:text-[var(--color-primary)] font-mono">{item.branch}</td>
-                          <td className="px-4 py-2 text-slate-700 dark:text-[var(--color-primary)]">{item.category}</td>
-                          <td className="px-4 py-2">
-                            {item.markings && item.markings.length > 0 ? (
-                              <div className="flex items-center gap-1 flex-wrap">
-                                {item.markings.map((m, mi) => (
-                                  <span
-                                    key={`${m.markingCode}-${m.mode || 'ALL'}-${mi}`}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/25"
-                                    title={
-                                      m.agentName
-                                        ? `${m.markingCode} (${m.agentName}${m.mode ? ` · ${m.mode}` : ''})`
-                                        : `${m.markingCode}${m.mode ? ` (${m.mode})` : ''}`
-                                    }
-                                  >
-                                    {m.mode?.toUpperCase().includes('AIR') && <Plane size={9} className="text-sky-500" />}
-                                    {m.mode?.toUpperCase().includes('SEA') && <Ship size={9} className="text-blue-500" />}
-                                    <span>{m.markingCode}</span>
-                                    {m.agentName && (
-                                      <span className="text-[9px] font-normal text-[var(--color-secondary)]">
-                                        · {m.agentName}
-                                      </span>
-                                    )}
-                                  </span>
-                                ))}
-                              </div>
-                            ) : (
-                              <span className="text-[11px] font-medium text-[var(--color-secondary)]/60 italic">
-                                Semua Agen
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-4 py-2 text-slate-500 dark:text-[var(--color-secondary)]">{item.transitTime || '—'}</td>
-                          <td className="px-4 py-2 text-right font-semibold font-mono text-emerald-700 dark:text-emerald-400">
-                            {formatCurrency(item.price)}
-                          </td>
-                        </tr>
-                      ))}
-                      {filteredItems.length === 0 && (
-                        <tr>
-                          <td colSpan={6} className="px-4 py-8 text-center text-slate-500 text-xs">
-                            Tidak ada tarif yang sesuai dengan filter yang dipilih.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-
-                </div>
-              </div>
+              {/* Grouped Accordion / Flat Responsive Price Table */}
+              <CustomerCategoryGroupedPriceTable
+                items={filteredItems}
+                totalOriginalCount={result.items.length}
+                searchQuery={tableSearch}
+                onSearchChange={setTableSearch}
+                emptyMessage="Tidak ada tarif yang sesuai dengan filter yang dipilih."
+                onEdit={handleEditItem}
+              />
             </div>
           )}
         </div>
       )}
+
+      {/* Customer Commodity Price Modal */}
+      <CustomerCommodityPriceModal
+        isOpen={isModalOpen}
+        initialData={editingItem}
+        onClose={() => {
+          setIsModalOpen(false)
+          setEditingItem(null)
+        }}
+        onSuccess={() => {
+          setIsModalOpen(false)
+          setEditingItem(null)
+          if (custCode) {
+            handleLookup()
+          }
+        }}
+        defaultCustCode={custCode}
+      />
     </div>
   )
 }

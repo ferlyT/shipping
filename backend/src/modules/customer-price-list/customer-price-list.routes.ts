@@ -8,11 +8,17 @@ import {
   getActiveCustomerPriceList,
   getCustomerUploadDiff,
   updateCustomerUploadEffectiveDate,
+  softDeleteCustomerUpload,
   getCustomerPriceListFilters,
   lookupCustomerPriceList,
   getCustomerUploadMarkings,
   setCustomerUploadMarkings,
   deleteCustomerUploadMarking,
+  createOrUpdateCustomerCommodityPrice,
+  updateCustomerCommodityPriceItem,
+  deactivateCustomerCommodityPriceItem,
+  deleteCustomerCommodityPriceItem,
+  listCustomerCommodityPrices,
 } from './customer-price-list.service'
 
 
@@ -155,6 +161,20 @@ customerPriceListRoutes.patch('/uploads/:id/effective-date', async (c) => {
   return successResponse(c, updated)
 })
 
+// DELETE /api/customer-price-list/uploads/:id
+// Soft delete customer price list upload & its items
+customerPriceListRoutes.delete('/uploads/:id', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID upload tidak valid', 400)
+
+  try {
+    const result = await softDeleteCustomerUpload(id)
+    return successResponse(c, result)
+  } catch (err: any) {
+    return errorResponse(c, err.message || 'Gagal menghapus riwayat upload', 400)
+  }
+})
+
 // POST /api/customer-price-list/:custCode/upload  (multipart/form-data)
 customerPriceListRoutes.post('/:custCode/upload', async (c) => {
   const user = c.get('user')
@@ -207,6 +227,96 @@ customerPriceListRoutes.post('/:custCode/upload', async (c) => {
   } catch (err: any) {
     return errorResponse(c, `Gagal memproses file: ${err?.message ?? 'Unknown error'}`, 500)
   }
+})
+
+// ─── SPECIAL COMMODITY PRICE ITEMS ENDPOINTS ─────────────────────────
+
+// GET /api/customer-price-list/items
+customerPriceListRoutes.get('/items', async (c) => {
+  const fdCustCode = c.req.query('custCode')
+  const search = c.req.query('search')
+  const mode = c.req.query('mode')
+  const branch = c.req.query('branch')
+  const status = c.req.query('status') as 'ALL' | 'ACTIVE' | 'EXPIRED' | undefined
+  const page = Number(c.req.query('page') || 1)
+  const pageSize = Number(c.req.query('limit') || c.req.query('pageSize') || 20)
+
+  const result = await listCustomerCommodityPrices({
+    fdCustCode,
+    search,
+    mode,
+    branch,
+    status,
+    page,
+    pageSize,
+  })
+
+  return successResponse(c, result.data, result.meta)
+})
+
+// POST /api/customer-price-list/items
+customerPriceListRoutes.post('/items', async (c) => {
+  const user = c.get('user')
+  const body = await c.req.json<{
+    fdCustCode: string
+    category: string
+    mode: string
+    branch: string
+    price: number
+    effectiveDate: string
+    endDate?: string | null
+    notes?: string | null
+    aliases?: string[]
+  }>()
+
+  if (!body.fdCustCode || !body.category || !body.mode || !body.branch || !body.price || !body.effectiveDate) {
+    return errorResponse(c, 'Customer, kategori komoditi, moda, branch, harga, dan tanggal berlaku wajib diisi', 400)
+  }
+
+  const result = await createOrUpdateCustomerCommodityPrice({
+    ...body,
+    uploadedBy: user.username,
+  })
+
+  return c.json({ success: true, data: result }, 201)
+})
+
+// PUT /api/customer-price-list/items/:id
+customerPriceListRoutes.put('/items/:id', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
+
+  const body = await c.req.json<{
+    category?: string
+    mode?: string
+    branch?: string
+    price?: number
+    effectiveDate?: string
+    endDate?: string | null
+    notes?: string | null
+    aliases?: string[]
+  }>()
+
+  const result = await updateCustomerCommodityPriceItem(id, body)
+  return successResponse(c, result)
+})
+
+// PUT /api/customer-price-list/items/:id/deactivate
+customerPriceListRoutes.put('/items/:id/deactivate', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
+
+  const result = await deactivateCustomerCommodityPriceItem(id)
+  return successResponse(c, result)
+})
+
+// DELETE /api/customer-price-list/items/:id
+customerPriceListRoutes.delete('/items/:id', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
+
+  const result = await deleteCustomerCommodityPriceItem(id)
+  return successResponse(c, result)
 })
 
 export { customerPriceListRoutes }

@@ -37,7 +37,7 @@ export function DimItemCard({ dim, index }: DimItemCardProps) {
         </div>
         <div className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-[var(--color-primary)]/10 text-[var(--color-primary)] text-xs font-semibold tabular-nums">
           <Box size={11} className="text-[var(--color-primary)]" />
-          <span>{volume.toLocaleString('id-ID', { maximumFractionDigits: 4 })} m³</span>
+          <span>{volume.toLocaleString('en-US', { maximumFractionDigits: 4 })} m³</span>
         </div>
       </div>
 
@@ -51,7 +51,7 @@ export function DimItemCard({ dim, index }: DimItemCardProps) {
           <div key={label} className="bg-[var(--color-neutral)] rounded-xl p-2 sm:p-2.5 text-center flex flex-col justify-center">
             <span className="text-[10px] font-medium text-[var(--color-secondary)] uppercase tracking-tight">{label}</span>
             <div className="text-[13px] sm:text-sm font-bold text-[var(--color-text)] tabular-nums mt-0.5">
-              {val != null ? val.toLocaleString('id-ID') : '—'}
+              {val != null ? val.toLocaleString('en-US') : '—'}
               <span className="text-[10px] text-[var(--color-secondary)] font-normal ml-0.5">{unit}</span>
             </div>
           </div>

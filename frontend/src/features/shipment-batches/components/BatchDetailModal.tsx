@@ -1,8 +1,9 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
 import { X, Box, Activity, Truck, Ship, LogOut, Clock, RotateCcw } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, formatDateTimeShort } from '@/lib/utils'
 import { markingApi } from '../services/marking.service'
 import type { Marking } from '../types/marking.types'
 import { getSeaTargetDays, getAirTargetDays } from '../types/marking.types'
@@ -16,12 +17,13 @@ export function BatchDetailModal({
   listTypeFilter: 'ALL' | '1' | '2'
   onClose: () => void
 }) {
+  useModalEscape(Boolean(selectedRow), onClose)
   const [modalTab, setModalTab] = useState<'detail' | 'timeline'>('detail')
 
   const { data: detailData, isLoading: isLoadingDetail } = useQuery({
     queryKey: ['markingDetail', selectedRow?.fdMarkingCode],
     queryFn: async () => {
-      if (!selectedRow) return null
+if (!selectedRow) return null
       const res = await markingApi.detail(selectedRow.fdMarkingCode)
       return res.data as { data: Marking }
     },
@@ -47,7 +49,7 @@ export function BatchDetailModal({
           {/* Header Panel */}
           <div className="flex-shrink-0 px-5 sm:px-8 pt-5 sm:pt-6 pb-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-surface)] sticky top-0 z-10">
             <div className="flex items-start gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary)]/5 text-[var(--color-primary)] border border-[var(--color-border)]">
+              <div className="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary)]/5 text-[var(--color-primary)] border border-[var(--color-border)]">
                 <Box className="h-5 w-5" />
               </div>
               <div>
@@ -174,22 +176,6 @@ export function BatchDetailModal({
                         </div>
                       )}
                     </div>
-
-                    {/* Timestamps */}
-                    <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] sm:text-[11px] md:text-xs text-[var(--color-secondary)] gap-2 mt-4 pt-4 border-t border-[var(--color-border)]">
-                      {selectedMarking.fdSysDate && (
-                        <div>
-                          <span className="font-medium">Created:</span> {new Date(selectedMarking.fdSysDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          {selectedMarking.fdCreated ? ` by ${selectedMarking.fdCreated.trim()}` : ''}
-                        </div>
-                      )}
-                      {selectedMarking.fdUpdate && (
-                        <div>
-                          <span className="font-medium">Last Update:</span> {new Date(selectedMarking.fdUpdate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
-                          {selectedMarking.fdUpdateBy ? ` by ${selectedMarking.fdUpdateBy.trim()}` : ''}
-                        </div>
-                      )}
-                    </div>
                   </>
                 )}
 
@@ -251,7 +237,7 @@ export function BatchDetailModal({
                       return (
                         <div>
                           <h3 className="mb-4 text-xs sm:text-[13px] md:text-[14px] font-bold font-[var(--font-label)] uppercase tracking-widest text-[var(--color-secondary)] flex items-center gap-2">
-                            <Activity size={14} />
+                            <Activity size={14} className="hidden sm:inline-block" />
                             Timeline
                           </h3>
                           <div className="relative">
@@ -316,7 +302,7 @@ export function BatchDetailModal({
                       return (
                         <div>
                           <h3 className="mb-4 text-xs sm:text-sm font-bold font-[var(--font-label)] uppercase tracking-widest text-[var(--color-secondary)] flex items-center gap-2">
-                            <Clock size={14} />
+                            <Clock size={14} className="hidden sm:inline-block" />
                             Performance
                           </h3>
                           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -376,6 +362,24 @@ export function BatchDetailModal({
                         </div>
                       )
                     })()}
+                  </div>
+                )}
+
+                {/* Timestamps Footer (Created & Last Update with Time) */}
+                {(selectedMarking.fdSysDate || selectedMarking.fdUpdate) && (
+                  <div className="flex flex-col sm:flex-row justify-between items-center text-[10px] sm:text-[11px] md:text-xs text-[var(--color-secondary)] gap-2 mt-6 pt-4 border-t border-[var(--color-border)]">
+                    {selectedMarking.fdSysDate && (
+                      <div title={formatDateTimeShort(selectedMarking.fdSysDate, true)}>
+                        <span className="font-medium">Created:</span> {formatDateTimeShort(selectedMarking.fdSysDate)}
+                        {selectedMarking.fdCreated ? ` by ${selectedMarking.fdCreated.trim()}` : ''}
+                      </div>
+                    )}
+                    {selectedMarking.fdUpdate && (
+                      <div title={formatDateTimeShort(selectedMarking.fdUpdate, true)}>
+                        <span className="font-medium">Last Update:</span> {formatDateTimeShort(selectedMarking.fdUpdate)}
+                        {selectedMarking.fdUpdateBy ? ` by ${selectedMarking.fdUpdateBy.trim()}` : ''}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

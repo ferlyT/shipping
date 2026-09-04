@@ -1,4 +1,3 @@
-import { Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 interface PillProps {
@@ -16,7 +15,6 @@ export function Pill({
   children,
   title,
   className = '',
-  isLoading = false,
 }: PillProps) {
   return (
     <button
@@ -31,9 +29,6 @@ export function Pill({
         className
       )}
     >
-      {active && isLoading && (
-        <Loader2 className="w-3 h-3 animate-spin shrink-0 text-current" />
-      )}
       {children}
     </button>
   )

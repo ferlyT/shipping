@@ -23,21 +23,21 @@ export function ShipmentInfoTab({
       <div className="grid grid-cols-3 gap-2.5 sm:gap-3">
         <MetricCard
           label="Total Koli"
-          value={Number(shipment.fdJmlPack || 0).toLocaleString('id-ID')}
+          value={Number(shipment.fdJmlPack || 0).toLocaleString('en-US')}
           unit={shipment.fdSatuan?.trim() || 'colly'}
           icon={Package}
           tone="amber"
         />
         <MetricCard
           label="Total Berat"
-          value={Number(shipment.fdJmlBerat || 0).toLocaleString('id-ID')}
+          value={Number(shipment.fdJmlBerat || 0).toLocaleString('en-US')}
           unit="kg"
           icon={Weight}
           tone="blue"
         />
         <MetricCard
           label="Total Volume"
-          value={Number(shipment.fdM3 || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })}
+          value={Number(shipment.fdM3 || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}
           unit="m³"
           icon={Box}
           tone="purple"
@@ -82,24 +82,42 @@ export function ShipmentInfoTab({
         />
       </div>
 
-      {/* Commodity & Notes Panel */}
-      {(shipment.fdComodity || shipment.fdDesc) && (
-        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-sm p-4">
-          <div className="flex items-center gap-2 mb-2 text-[var(--color-secondary)]">
-            <FileText size={13} />
-            <span className="text-[11px] font-semibold uppercase tracking-wider">Komoditas & Keterangan</span>
-          </div>
-          {shipment.fdComodity && (
-            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-[var(--color-neutral)] text-[var(--color-text)] text-xs font-semibold mb-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-secondary)]" />
-              {shipment.fdComodity}
+      {/* Commodity Panel */}
+      {(shipment.fdComodity || shipment.fdComodityName) && (
+        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-sm p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[var(--color-secondary)]">
+              <Package size={13} className="hidden sm:inline-block text-[var(--color-primary)]" />
+              <span className="text-[11px] font-semibold uppercase tracking-wider">Komoditas</span>
             </div>
-          )}
-          {shipment.fdDesc && (
-            <p className="text-xs text-[var(--color-secondary)] leading-relaxed bg-[var(--color-neutral)] p-3 rounded-xl border border-[var(--color-border)]">
-              {shipment.fdDesc}
+            {shipment.fdComodityName && (
+              <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 uppercase">
+                {shipment.fdComodityName}
+              </span>
+            )}
+          </div>
+          {shipment.fdComodity ? (
+            <p className="text-xs font-semibold text-[var(--color-text)] bg-[var(--color-neutral)] p-3 rounded-xl border border-[var(--color-border)] leading-relaxed">
+              {shipment.fdComodity}
+            </p>
+          ) : (
+            <p className="text-xs text-[var(--color-secondary)] italic bg-[var(--color-neutral)] p-2.5 rounded-xl border border-[var(--color-border)]">
+              Tidak ada nama komoditas spesifik
             </p>
           )}
+        </div>
+      )}
+
+      {/* Notes / Description Panel */}
+      {shipment.fdDesc && (
+        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-sm p-4 space-y-2">
+          <div className="flex items-center gap-2 text-[var(--color-secondary)]">
+            <FileText size={13} className="hidden sm:inline-block text-[var(--color-secondary)]" />
+            <span className="text-[11px] font-semibold uppercase tracking-wider">Keterangan</span>
+          </div>
+          <p className="text-xs text-[var(--color-secondary)] leading-relaxed bg-[var(--color-neutral)] p-3 rounded-xl border border-[var(--color-border)] whitespace-pre-wrap">
+            {shipment.fdDesc}
+          </p>
         </div>
       )}
     </div>

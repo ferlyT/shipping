@@ -41,17 +41,17 @@ export function BatchToolbar({
   const currentScope = BATCH_SEARCH_SCOPES.find((s) => s.value === searchScope) || BATCH_SEARCH_SCOPES[0]
 
   return (
-    <div className="bg-[var(--color-surface)] px-4 sm:px-5 py-2.5 sm:py-3">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="bg-[var(--color-surface)] px-3.5 sm:px-5 py-2.5 sm:py-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
         {/* Left: Scoped Search Bar */}
         <div className="flex items-center gap-2 flex-1 sm:max-w-[560px]">
           <div className="relative flex-1 flex items-center rounded-xl border border-[var(--color-border)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/20 transition-all bg-[var(--color-surface)] shadow-2xs overflow-hidden">
             {/* Scope selector */}
-            <div className="relative shrink-0 border-r border-[var(--color-border)] bg-[var(--color-neutral)] hover:bg-[var(--color-border)]/50 transition-colors">
+            <div className="relative shrink-0 border-r border-[var(--color-border)] bg-[var(--color-neutral)] hover:bg-[var(--color-border)]/50 transition-colors max-w-[110px] sm:max-w-none">
               <select
                 value={searchScope}
                 onChange={(e) => onSearchScopeChange(e.target.value as BatchSearchScope)}
-                className="appearance-none bg-transparent pl-3 pr-7 py-2 text-xs font-semibold text-[var(--color-secondary)] cursor-pointer outline-none"
+                className="appearance-none bg-transparent pl-2.5 sm:pl-3 pr-6 sm:pr-7 py-2 text-xs font-semibold text-[var(--color-secondary)] cursor-pointer outline-none w-full truncate"
               >
                 {BATCH_SEARCH_SCOPES.map((sc) => (
                   <option key={sc.value} value={sc.value} className="bg-[var(--color-surface)] text-[var(--color-primary)]">
@@ -61,13 +61,13 @@ export function BatchToolbar({
               </select>
               <ChevronDown
                 size={12}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none"
+                className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none"
               />
             </div>
 
             {/* Input search */}
             <div className="relative flex-1 flex items-center">
-              <Search size={14} className="absolute left-3 text-[var(--color-secondary)] pointer-events-none shrink-0" />
+              <Search size={14} className="absolute left-2.5 sm:left-3 text-[var(--color-secondary)] pointer-events-none shrink-0" />
               <input
                 type="text"
                 value={search}
@@ -89,21 +89,21 @@ export function BatchToolbar({
         </div>
 
         {/* Right: Batch Counts & View Mode Switch */}
-        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+        <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 shrink-0">
           {/* Summary KPI Badges */}
-          <div className="flex items-center gap-2 text-xs font-medium text-[var(--color-secondary)]">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[11px] font-semibold">
+          <div className="flex items-center gap-1.5 sm:gap-2 text-xs font-medium text-[var(--color-secondary)]">
+            <span className="inline-flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] sm:text-[11px] font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
               {activeBatches} Aktif
             </span>
             <span className="text-[var(--color-secondary)] opacity-50">/</span>
-            <span className="text-[11px] text-[var(--color-secondary)] font-semibold">
-              {totalBatches} Total Batch
+            <span className="text-[10px] sm:text-[11px] text-[var(--color-secondary)] font-semibold">
+              {totalBatches} Total
             </span>
           </div>
 
           {/* View mode switcher */}
-          <div className="flex items-center bg-[var(--color-neutral)] p-1 rounded-xl border border-[var(--color-border)] gap-1 shrink-0">
+          <div className="flex items-center bg-[var(--color-neutral)] p-0.5 sm:p-1 rounded-xl border border-[var(--color-border)] gap-1 shrink-0">
             <button
               type="button"
               onClick={() => onViewModeChange('table')}

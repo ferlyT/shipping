@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Search, Tag, ShieldCheck, Filter, Plane, Ship } from 'lucide-react'
@@ -5,6 +6,7 @@ import { Button } from '@/components/ui/Button'
 import { CurrencyValue } from '@/components/ui/CurrencyValue'
 import { formatDate } from '@/lib/utils'
 import { useTranslation } from '@/hooks/useTranslation'
+import { isMktCustomer, isBranchMatched } from '../utils/billing.utils'
 
 export interface PriceItem {
   id: number
@@ -39,8 +41,10 @@ export function PriceListDetailModal({
   salesName,
   customerName,
   customerCode,
+  hasCustomerPriceList,
   items,
 }: PriceListDetailModalProps) {
+  useModalEscape(isOpen, onClose)
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [selectedSheetType, setSelectedSheetType] = useState<string>('ALL')
@@ -54,8 +58,8 @@ export function PriceListDetailModal({
       document.body.style.overflow = 'hidden'
 
       const hasCustomerItems = items.some((it) => it.sheetType?.toUpperCase() === 'CUSTOMER')
-      const isCsSales = salesName?.trim()?.toUpperCase().includes('CS')
-      const defaultSheetType = hasCustomerItems ? 'CUSTOMER' : (isCsSales ? 'CS' : 'ALL')
+      const isMktSales = isMktCustomer({ fdSalesNM: salesName }, salesName)
+      const defaultSheetType = (hasCustomerPriceList || hasCustomerItems) ? 'CUSTOMER' : (isMktSales ? 'MKT' : 'CS')
 
       setSelectedSheetType(defaultSheetType)
       setSelectedMode(expectedMode ? expectedMode.toUpperCase() : 'ALL')
@@ -68,7 +72,7 @@ export function PriceListDetailModal({
     return () => {
       document.body.style.overflow = 'unset'
     }
-  }, [isOpen, expectedMode, expectedBranch, salesName, items])
+  }, [isOpen, expectedMode, expectedBranch, salesName, hasCustomerPriceList, items])
 
   const availableBranches = useMemo(() => {
     const set = new Set<string>()
@@ -106,7 +110,7 @@ export function PriceListDetailModal({
         list = list.filter((it) => it.mode?.trim().toUpperCase() === selectedMode)
       }
       if (selectedBranch !== 'ALL') {
-        list = list.filter((it) => it.branch?.trim().toUpperCase() === selectedBranch)
+        list = list.filter((it) => isBranchMatched(it.branch, selectedBranch))
       }
     }
 
@@ -114,10 +118,10 @@ export function PriceListDetailModal({
       const q = search.toLowerCase()
       list = list.filter(
         (it) =>
-          it.category.toLowerCase().includes(q) ||
-          it.branch.toLowerCase().includes(q) ||
-          it.mode.toLowerCase().includes(q) ||
-          it.sheetType.toLowerCase().includes(q)
+          (it.category?.toLowerCase() || '').includes(q) ||
+          (it.branch?.toLowerCase() || '').includes(q) ||
+          (it.mode?.toLowerCase() || '').includes(q) ||
+          (it.sheetType?.toLowerCase() || '').includes(q)
       )
     }
 
@@ -198,7 +202,7 @@ export function PriceListDetailModal({
               {t('billing.validation.modalSubtitle').replace('{date}', tglAgent ? formatDate(tglAgent) : '—')}
               {effectiveDate && (
                 <span className="ml-2 inline-flex items-center gap-1 font-semibold text-blue-500">
-                  <Tag className="w-3.5 h-3.5" />
+                  <Tag className="hidden sm:inline-block w-3.5 h-3.5" />
                   {t('billing.validation.effectivePriceDate')}: {formatDate(effectiveDate)}
                 </span>
               )}
@@ -237,7 +241,7 @@ export function PriceListDetailModal({
                   : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)]'
               }`}
             >
-              <Filter className="w-3.5 h-3.5" />
+              <Filter className="hidden sm:inline-block w-3.5 h-3.5" />
               <span>{filterOnlyRelevant ? t('billing.validation.filterRelevant') : t('billing.validation.showAll')}</span>
             </button>
           </div>
@@ -315,7 +319,7 @@ export function PriceListDetailModal({
                       : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                   }`}
                 >
-                  <Plane className="w-3 h-3" />
+                  <Plane className="hidden sm:inline-block w-3 h-3" />
                   <span>Udara</span>
                 </button>
                 <button
@@ -330,7 +334,7 @@ export function PriceListDetailModal({
                       : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                   }`}
                 >
-                  <Ship className="w-3 h-3" />
+                  <Ship className="hidden sm:inline-block w-3 h-3" />
                   <span>Laut</span>
                 </button>
               </div>

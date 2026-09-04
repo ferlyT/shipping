@@ -20,6 +20,7 @@ import type { PriceListLookupItem } from '../types'
 
 export interface CategoryGroupedPriceTableProps {
   items: (PriceListLookupItem & { isMatch?: boolean })[]
+  isLoading?: boolean
   totalOriginalCount?: number
   searchQuery?: string
   onSearchChange?: (val: string) => void
@@ -42,6 +43,7 @@ interface CategoryGroup {
 
 export function CategoryGroupedPriceTable({
   items,
+  isLoading,
   totalOriginalCount,
   searchQuery,
   onSearchChange,
@@ -355,7 +357,22 @@ export function CategoryGroupedPriceTable({
       </div>
 
       {/* Main Content Area */}
-      {items.length === 0 ? (
+      {isLoading ? (
+        <div className="space-y-3">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xs overflow-hidden">
+              <div className="p-4 flex justify-between items-center bg-[var(--color-neutral)]/40">
+                <div className="flex items-center gap-2.5">
+                  <div className="h-4 w-4 rounded skeleton-shimmer" />
+                  <div className="h-4 w-36 rounded skeleton-shimmer" />
+                  <div className="h-4 w-12 rounded-full skeleton-shimmer" />
+                </div>
+                <div className="h-5 w-24 rounded skeleton-shimmer" />
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : items.length === 0 ? (
         <div className="p-12 text-center border border-[var(--color-border)] rounded-2xl bg-[var(--color-surface)] shadow-xs space-y-2">
           <p className="text-sm font-semibold text-[var(--color-primary)]">
             {emptyMessage || t('priceList.lookup.noMatch')}

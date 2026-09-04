@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import { cn, formatNumber } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
+import { ShipmentMobileCard } from './ShipmentMobileCard'
 import { getCommodityIcon } from '../utils/commodity'
 import type { Shipment, ShipmentDimension } from '../types/shipments.types'
 
@@ -125,7 +126,7 @@ function buildColumns({ onDetail, isGrouped }: BuildColumnsOptions) {
     {
       key: 'tracking',
       header: isGrouped ? 'Local Tracking' : 'Resi / Tracking',
-      className: 'w-[170px]',
+      className: 'w-[155px]',
       render: (row: Shipment) => (
         <div className="flex flex-col gap-1">
           {!isGrouped && row.fdTerima && (
@@ -146,11 +147,11 @@ function buildColumns({ onDetail, isGrouped }: BuildColumnsOptions) {
       ),
     },
 
-    // Kolom 3: Komoditas & Keterangan - Diperkecil
+    // Kolom 3: Komoditas & Keterangan (Diperlebar)
     {
       key: 'commodity',
       header: 'Komoditas & Keterangan',
-      className: 'w-[180px]',
+      className: 'w-[320px]',
       render: (row: Shipment) => {
         const comodityInfo = getCommodityIcon(row.fdComodityName)
         const Icon = comodityInfo.Icon
@@ -163,11 +164,11 @@ function buildColumns({ onDetail, isGrouped }: BuildColumnsOptions) {
               <Icon size={14} />
             </div>
             <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-              <span className="font-semibold text-[var(--color-text)] text-xs leading-snug truncate block max-w-[130px]" title={row.fdComodity || '—'}>
+              <span className="font-semibold text-[var(--color-text)] text-xs leading-snug line-clamp-2 break-words" title={row.fdComodity || '—'}>
                 {row.fdComodity || '—'}
               </span>
               {row.fdDesc && row.fdDesc.trim() !== row.fdComodity?.trim() && (
-                <span className="text-[11px] text-[var(--color-secondary)] leading-tight truncate block max-w-[130px]" title={row.fdDesc.trim()}>
+                <span className="text-[11px] text-[var(--color-secondary)] leading-tight line-clamp-2 break-words" title={row.fdDesc.trim()}>
                   {row.fdDesc.trim()}
                 </span>
               )}
@@ -185,15 +186,15 @@ function buildColumns({ onDetail, isGrouped }: BuildColumnsOptions) {
       render: (row: Shipment) => (
         <div className="flex flex-col gap-0.5 text-xs text-right items-end font-medium">
           <div className="text-[var(--color-text)] font-semibold tabular-nums">
-            <span>{Number(row.fdJmlPack || 0).toLocaleString('id-ID')}</span>
+            <span>{Number(row.fdJmlPack || 0).toLocaleString('en-US')}</span>
             <span className="text-[var(--color-secondary)] font-normal text-[11px] ml-1 uppercase">{row.fdSatuan?.trim() || 'koli'}</span>
           </div>
           <div className="text-[var(--color-secondary)] tabular-nums text-xs">
-            <span>{Number(row.fdJmlBerat || 0).toLocaleString('id-ID')}</span>
+            <span>{Number(row.fdJmlBerat || 0).toLocaleString('en-US')}</span>
             <span className="text-[var(--color-secondary)] ml-1">kg</span>
           </div>
           <div className="text-[var(--color-primary)] tabular-nums text-xs font-semibold">
-            <span>{Number(row.fdM3 || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })}</span>
+            <span>{Number(row.fdM3 || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}</span>
             <span className="text-[var(--color-primary)]/60 ml-1 font-normal">m³</span>
           </div>
         </div>
@@ -243,33 +244,117 @@ export const dimColumns = [
 
 function TableSkeleton() {
   return (
-    <div className="w-full divide-y divide-[var(--color-border)]">
-      {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="px-5 py-3.5 flex items-center justify-between gap-4 animate-pulse bg-[var(--color-surface)]">
-          <div className="flex items-center gap-3 w-1/4">
-            <div className="w-8 h-8 rounded-lg bg-[var(--color-border)] shrink-0" />
-            <div className="space-y-1.5 flex-1">
-              <div className="h-3.5 bg-[var(--color-border)] rounded w-3/4" />
-              <div className="h-2.5 bg-[var(--color-neutral)] rounded w-1/2" />
+    <>
+      {/* ── MOBILE CARD SKELETON (< sm) ── */}
+      <div className="sm:hidden divide-y divide-[var(--color-border)]">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="p-3.5 flex flex-col gap-2.5 bg-[var(--color-surface)]">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <div className="w-16 h-5 rounded-full skeleton-shimmer" />
+                <div className="w-12 h-5 rounded skeleton-shimmer" />
+                <div className="w-14 h-5 rounded skeleton-shimmer" />
+              </div>
+              <div className="w-20 h-5 rounded skeleton-shimmer" />
+            </div>
+            <div className="space-y-1.5">
+              <div className="h-4 w-3/5 rounded-md skeleton-shimmer" />
+              <div className="h-3 w-2/5 rounded skeleton-shimmer" />
+            </div>
+            <div className="p-2.5 rounded-xl bg-[var(--color-neutral)] border border-[var(--color-border)] space-y-2">
+              <div className="flex justify-between items-center">
+                <div className="h-3.5 w-24 rounded skeleton-shimmer" />
+                <div className="h-4 w-16 rounded skeleton-shimmer" />
+              </div>
+              <div className="h-3 w-3/4 rounded skeleton-shimmer" />
+              <div className="flex justify-between items-center pt-1 border-t border-[var(--color-border)]/50">
+                <div className="h-3.5 w-32 rounded skeleton-shimmer" />
+                <div className="w-4 h-4 rounded skeleton-shimmer" />
+              </div>
             </div>
           </div>
-          <div className="w-1/6 space-y-1.5">
-            <div className="h-3 bg-[var(--color-border)] rounded w-2/3" />
-            <div className="h-2.5 bg-[var(--color-neutral)] rounded w-1/2" />
-          </div>
-          <div className="w-1/4 space-y-1.5">
-            <div className="h-3 bg-[var(--color-border)] rounded w-3/4" />
-            <div className="h-2 bg-[var(--color-neutral)] rounded w-1/3" />
-          </div>
-          <div className="w-1/8 space-y-1 text-right flex flex-col items-end">
-            <div className="h-3 bg-[var(--color-border)] rounded w-12" />
-            <div className="h-2.5 bg-[var(--color-neutral)] rounded w-8" />
-          </div>
-          <div className="w-24 h-6 bg-[var(--color-border)] rounded-full" />
-          <div className="w-8 h-8 bg-[var(--color-neutral)] rounded-lg shrink-0" />
-        </div>
-      ))}
-    </div>
+        ))}
+      </div>
+
+      {/* ── DESKTOP TABLE SKELETON (>= sm) ── */}
+      <div className="hidden sm:block w-full relative">
+        <table className="w-full text-xs sm:text-sm table-fixed min-w-[1020px]">
+          <thead className="sticky top-0 z-20 shadow-xs bg-[var(--color-neutral)] border-b border-[var(--color-border)]">
+            <tr>
+              <th className="px-4 sm:px-5 py-3 text-left font-semibold text-[var(--color-secondary)] text-[11px] tracking-wider uppercase whitespace-nowrap w-[340px]">
+                Customer & No. List
+              </th>
+              <th className="px-4 sm:px-5 py-3 text-left font-semibold text-[var(--color-secondary)] text-[11px] tracking-wider uppercase whitespace-nowrap w-[170px]">
+                Resi / Tracking
+              </th>
+              <th className="px-4 sm:px-5 py-3 text-left font-semibold text-[var(--color-secondary)] text-[11px] tracking-wider uppercase whitespace-nowrap w-[180px]">
+                Komoditas & Keterangan
+              </th>
+              <th className="px-4 sm:px-5 py-3 text-right font-semibold text-[var(--color-secondary)] text-[11px] tracking-wider uppercase whitespace-nowrap w-[160px]">
+                Fisik Pengiriman
+              </th>
+              <th className="px-4 sm:px-5 py-3 text-right font-semibold text-[var(--color-secondary)] text-[11px] tracking-wider uppercase whitespace-nowrap w-[140px]">
+                Status
+              </th>
+              <th className="px-4 sm:px-5 py-3 text-right w-[48px]" />
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)] bg-[var(--color-surface)]">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <tr key={i} className="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
+                {/* Kolom 1: Customer & No List */}
+                <td className="px-4 sm:px-5 py-3 align-middle w-[340px]">
+                  <div className="flex flex-col gap-2 py-1">
+                    <div className="h-4 w-48 rounded-md skeleton-shimmer" />
+                    <div className="flex items-center gap-2">
+                      <div className="h-4 w-20 rounded skeleton-shimmer" />
+                      <div className="h-3.5 w-24 rounded skeleton-shimmer" />
+                    </div>
+                  </div>
+                </td>
+                {/* Kolom 2: Tracking / Resi */}
+                <td className="px-4 sm:px-5 py-3 align-middle w-[170px]">
+                  <div className="flex flex-col gap-1.5">
+                    <div className="h-3.5 w-24 rounded skeleton-shimmer" />
+                    <div className="h-3 w-28 rounded skeleton-shimmer" />
+                  </div>
+                </td>
+                {/* Kolom 3: Komoditas */}
+                <td className="px-4 sm:px-5 py-3 align-middle w-[180px]">
+                  <div className="flex items-start gap-2">
+                    <div className="w-7 h-7 rounded-lg skeleton-shimmer shrink-0" />
+                    <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                      <div className="h-3.5 w-28 rounded skeleton-shimmer" />
+                      <div className="h-3 w-20 rounded skeleton-shimmer" />
+                    </div>
+                  </div>
+                </td>
+                {/* Kolom 4: Fisik Pengiriman */}
+                <td className="px-4 sm:px-5 py-3 align-middle text-right w-[160px]">
+                  <div className="flex flex-col items-end gap-1">
+                    <div className="h-3.5 w-16 rounded skeleton-shimmer" />
+                    <div className="h-3 w-14 rounded skeleton-shimmer" />
+                    <div className="h-3 w-12 rounded skeleton-shimmer" />
+                  </div>
+                </td>
+                {/* Kolom 5: Status */}
+                <td className="px-4 sm:px-5 py-3 align-middle text-right w-[140px]">
+                  <div className="flex justify-end">
+                    <div className="h-6 w-24 rounded-full skeleton-shimmer" />
+                  </div>
+                </td>
+                {/* Kolom 6: Aksi */}
+                <td className="px-4 sm:px-5 py-3 align-middle text-right w-[48px]">
+                  <div className="flex justify-end">
+                    <div className="w-8 h-8 rounded-lg skeleton-shimmer" />
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
   )
 }
 
@@ -334,8 +419,22 @@ export function ShipmentTableView({
   }
 
   return (
-    <div className="w-full relative">
-      <table className="w-full text-xs sm:text-sm table-fixed min-w-[1020px]">
+    <>
+      {/* ── MOBILE CARD LIST (< sm) ── */}
+      <div className="sm:hidden divide-y divide-[var(--color-border)]">
+        {data.map((row) => (
+          <ShipmentMobileCard
+            key={row.fdListCode}
+            item={row}
+            isSelected={selectedCode === row.fdListCode}
+            onClick={() => onRowClick(row)}
+          />
+        ))}
+      </div>
+
+      {/* ── DESKTOP TABLE VIEW (>= sm) ── */}
+      <div className="hidden sm:block w-full relative">
+        <table className="w-full text-xs sm:text-sm table-fixed min-w-[1020px]">
         <thead className="sticky top-0 z-20 shadow-xs bg-[var(--color-neutral)] border-b border-[var(--color-border)]">
           <tr>
             {columns.map((col) => (
@@ -404,15 +503,15 @@ export function ShipmentTableView({
                         <div className="flex items-center gap-3 sm:gap-4 text-xs text-[var(--color-secondary)] shrink-0">
                           <div className="flex items-center gap-1">
                             <span className="text-[var(--color-secondary)]">Koli:</span>
-                            <strong className="text-[var(--color-text)] font-semibold tabular-nums">{group.totalPack.toLocaleString('id-ID')}</strong>
+                            <strong className="text-[var(--color-text)] font-semibold tabular-nums">{group.totalPack.toLocaleString('en-US')}</strong>
                           </div>
                           <div className="flex items-center gap-1">
                             <span className="text-[var(--color-secondary)]">Berat:</span>
-                            <strong className="text-[var(--color-text)] font-semibold tabular-nums">{group.totalBerat.toLocaleString('id-ID')} kg</strong>
+                            <strong className="text-[var(--color-text)] font-semibold tabular-nums">{group.totalBerat.toLocaleString('en-US')} kg</strong>
                           </div>
                           <div className="flex items-center gap-1">
                             <span className="text-[var(--color-secondary)]">Volume:</span>
-                            <strong className="text-[var(--color-primary)] font-semibold tabular-nums">{group.totalVolume.toLocaleString('id-ID', { maximumFractionDigits: 2 })} m³</strong>
+                            <strong className="text-[var(--color-primary)] font-semibold tabular-nums">{group.totalVolume.toLocaleString('en-US', { maximumFractionDigits: 2 })} m³</strong>
                           </div>
                         </div>
                       </div>
@@ -484,5 +583,6 @@ export function ShipmentTableView({
         )}
       </table>
     </div>
+    </>
   )
 }

@@ -1,9 +1,10 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Package, Layers, Truck, FileText,
   ChevronLeft, ChevronDown, UserCog, Shield, BarChart2, Target, Search, Upload, History,
-  Activity, PieChart, LineChart, ListOrdered, Table, ScrollText, ClipboardCheck, Tags, Landmark, FileSearch, FileUp, BookOpen
+  Activity, PieChart, LineChart, ListOrdered, Table, ScrollText, ClipboardCheck, Tags, Landmark, FileSearch, FileUp, BookOpen, Tag
 } from 'lucide-react'
 import { useUiStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -69,7 +70,14 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
             { label: t('nav.batchList'), path: ROUTES.SHIPMENT_BATCHES_LIST, icon: Table },
           ],
         },
-        { label: t('nav.deliveryOrder'), path: ROUTES.DELIVERY_ORDERS, icon: Truck },
+        {
+          label: t('nav.deliveryOrder'),
+          icon: Truck,
+          children: [
+            { label: t('nav.dashboard'), path: ROUTES.DELIVERY_ORDERS, icon: LayoutDashboard },
+            { label: t('nav.deliveryOrderList'), path: ROUTES.DELIVERY_ORDERS_LIST, icon: ListOrdered },
+          ],
+        },
       ],
     },
     {
@@ -105,6 +113,11 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
             { label: t('nav.customerPriceListLookup'), path: ROUTES.CUSTOMER_PRICE_LIST_LOOKUP, icon: FileSearch },
             { label: t('nav.customerPriceListUpload'), path: ROUTES.CUSTOMER_PRICE_LIST_UPLOAD, icon: FileUp },
           ],
+        },
+        {
+          label: t('nav.commodityMapping'),
+          path: ROUTES.COMMODITY_MAPPING,
+          icon: Tag,
         },
       ],
     },
@@ -156,250 +169,201 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
   return allModules
 }
 
-function NavLeaf({
-  item,
-  isActive,
-  isSidebarCollapsed,
-  onNavigate,
-  indent = false,
-}: {
-  item: LeafItem
-  isActive: boolean
-  isSidebarCollapsed: boolean
-  onNavigate: () => void
-  indent?: boolean
-}) {
-  return (
-    <Link
-      to={item.path}
-      onClick={onNavigate}
-      className={cn(
-        'flex items-center rounded-[var(--radius-md)] text-sm font-medium transition-all duration-200 overflow-hidden',
-        isActive
-          ? 'bg-[var(--color-tertiary)]/15 text-white border-l-2 border-[var(--color-tertiary)] font-semibold shadow-xs'
-          : 'text-white/70 hover:text-white hover:bg-white/5',
-        isSidebarCollapsed ? 'p-2.5 justify-center mx-2' : cn('px-3 py-2 gap-3', indent ? 'ml-4 mr-0 text-xs' : 'mx-0')
-      )}
-      title={isSidebarCollapsed ? item.label : undefined}
-    >
-      <item.icon className={cn("w-4 h-4 flex-shrink-0", isActive ? "text-[var(--color-tertiary)]" : "text-white/70")} />
-      <span
-        className={cn(
-          'whitespace-nowrap transition-all duration-200',
-          isSidebarCollapsed ? 'max-w-0 opacity-0' : 'max-w-[200px] opacity-100'
-        )}
-      >
-        {item.label}
-      </span>
-    </Link>
-  )
+interface SidebarProps {
+  isOpen?: boolean
+  onClose?: () => void
 }
 
-const checkIsActive = (pathname: string, path: string) => {
-  if (
-    path === ROUTES.DASHBOARD ||
-    path === ROUTES.SHIPMENTS ||
-    path === ROUTES.CUSTOMERS ||
-    path === ROUTES.SHIPMENT_BATCHES ||
-    path === ROUTES.BILLING ||
-    path === ROUTES.PRICE_LIST ||
-    path === ROUTES.PRICE_LIST_LOOKUP ||
-    path === ROUTES.PRICE_LIST_UPLOAD ||
-    path === ROUTES.CUSTOMER_PRICE_LIST ||
-    path === ROUTES.CUSTOMER_PRICE_LIST_LOOKUP ||
-    path === ROUTES.CUSTOMER_PRICE_LIST_UPLOAD ||
-    path === ROUTES.DELIVERY_ORDERS
-  ) {
-    return pathname === path
-  }
-  if (path === ROUTES.PRICE_LIST_HISTORY) {
-    return pathname.startsWith(path) || pathname.startsWith('/mshipping/finance/price-list/uploads')
-  }
-  return pathname === path || pathname.startsWith(path + '/')
-}
-
-function NavGroupItem({
-  item,
-  pathname,
-  isSidebarCollapsed,
-  onNavigate,
-}: {
-  item: Extract<NavItem, { children: LeafItem[] }>
-  pathname: string
-  isSidebarCollapsed: boolean
-  onNavigate: () => void
-}) {
-  const isChildActive = item.children.some((child) => checkIsActive(pathname, child.path))
-  const [isExpanded, setIsExpanded] = useState(isChildActive)
-
-  if (isSidebarCollapsed) {
-    return (
-      <div className="group relative hover:z-50">
-        <Link
-          to={item.children[0].path}
-          onClick={onNavigate}
-          className={cn(
-            'flex items-center justify-center p-2.5 mx-2 rounded-[var(--radius-md)] text-sm font-medium transition-all duration-200',
-            isChildActive
-              ? 'bg-[var(--color-tertiary)]/15 text-white border-l-2 border-[var(--color-tertiary)]'
-              : 'text-white/70 hover:text-white hover:bg-white/5'
-          )}
-        >
-          <item.icon className={cn("w-5 h-5 flex-shrink-0", isChildActive ? "text-[var(--color-tertiary)]" : "text-white/70")} />
-        </Link>
-        
-        {/* Flyout Submenu */}
-        <div 
-          className="absolute left-full top-0 ml-2 hidden group-hover:flex flex-col bg-[#1A1C1E] rounded-xl shadow-2xl py-2 w-52 border border-white/10"
-          style={{ zIndex: 100 }}
-        >
-          <div className="px-4 py-2 text-[10px] font-bold text-white/40 uppercase tracking-widest border-b border-white/5 mb-1">
-            {item.label}
-          </div>
-          {item.children.map((child) => {
-            const active = checkIsActive(pathname, child.path)
-            return (
-              <Link
-                key={child.path}
-                to={child.path}
-                onClick={onNavigate}
-                className={cn(
-                  'flex items-center gap-2.5 px-4 py-2 text-xs font-medium transition-colors',
-                  active ? 'text-white bg-[var(--color-tertiary)]/15 font-semibold' : 'text-white/70 hover:text-white hover:bg-white/5'
-                )}
-              >
-                <child.icon className={cn("w-4 h-4", active ? "text-[var(--color-tertiary)]" : "text-white/70")} />
-                {child.label}
-              </Link>
-            )
-          })}
-        </div>
-      </div>
-    )
-  }
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setIsExpanded((prev) => !prev)}
-        className={cn(
-          'flex w-full items-center gap-3 px-3 py-2 rounded-[var(--radius-md)] text-sm font-medium transition-colors cursor-pointer',
-          isChildActive ? 'text-white font-semibold bg-white/5' : 'text-white/70 hover:text-white hover:bg-white/5'
-        )}
-      >
-        <item.icon className={cn("w-4 h-4 flex-shrink-0", isChildActive ? "text-[var(--color-tertiary)]" : "text-white/70")} />
-        <span className="flex-1 text-left whitespace-nowrap text-xs font-medium tracking-wide">{item.label}</span>
-        <ChevronDown className={cn('w-3.5 h-3.5 transition-transform duration-200 opacity-60', isExpanded && 'rotate-180')} />
-      </button>
-      {isExpanded && (
-        <div className="mt-1 space-y-1">
-          {item.children.map((child) => (
-            <NavLeaf
-              key={child.path}
-              item={child}
-              isActive={checkIsActive(pathname, child.path)}
-              isSidebarCollapsed={isSidebarCollapsed}
-              onNavigate={onNavigate}
-              indent
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-export function Sidebar({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const { pathname } = useLocation()
-  const { isSidebarCollapsed, toggleSidebarCollapse } = useUiStore()
+export function Sidebar({ isOpen, onClose }: SidebarProps = {}) {
+  const { isSidebarOpen: storeOpen, setSidebarOpen } = useUiStore()
+  const isSidebarOpen = isOpen ?? storeOpen
+  const handleClose = onClose ?? (() => setSidebarOpen(false))
   const { user } = useAuthStore()
   const { t } = useTranslation()
-  const modules = getERPNavModules(t, user?.role, user?.permissions)
+  const location = useLocation()
 
-  const handleNavigate = () => {
-    if (window.innerWidth < 1024) onClose()
+  useModalEscape(isSidebarOpen, handleClose)
+
+  // Track expanded groups per module-item combination
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
+    'logistics-nav.shipment': true,
+    'logistics-nav.batchMarking': true,
+    'logistics-nav.deliveryOrder': true,
+    'finance-nav.billing': true,
+    'finance-nav.priceList': true,
+    'finance-nav.customerPriceList': true,
+  })
+
+  const navModules = getERPNavModules(t, user?.role, user?.permissions)
+
+  const toggleGroup = (key: string) => {
+    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }))
+  }
+
+  const isChildActive = (item: NavItem): boolean => {
+    if ('children' in item) {
+      return item.children.some((child) => location.pathname === child.path)
+    }
+    return location.pathname === item.path
   }
 
   return (
     <>
-      {/* Mobile Overlay */}
-      {isOpen && (
+      {/* Backdrop for mobile */}
+      {isSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/50 lg:hidden z-40"
-          onClick={onClose}
+          className="fixed inset-0 z-40 bg-black/50 lg:hidden transition-opacity"
+          onClick={() => setSidebarOpen(false)}
+          aria-hidden="true"
         />
       )}
 
-      {/* Sidebar Content */}
+      {/* Sidebar container */}
       <aside
         className={cn(
-          'fixed top-0 bottom-0 left-0 z-40 lg:z-20 bg-[var(--color-sidebar-bg)] text-white transition-all duration-300 ease-in-out flex flex-col shadow-xl shrink-0 border-r border-white/10',
-          'lg:relative lg:translate-x-0 lg:h-full',
-          isOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0',
-          isSidebarCollapsed ? 'w-[var(--sidebar-mini-width)]' : 'w-[var(--sidebar-width)]'
+          'fixed top-0 left-0 z-50 h-screen w-64 flex flex-col',
+          'bg-[var(--color-surface)] border-r border-[var(--color-border)]',
+          'transition-all duration-300 ease-in-out shrink-0 overflow-hidden',
+          isSidebarOpen
+            ? 'translate-x-0 lg:static lg:translate-x-0 lg:w-64'
+            : '-translate-x-full lg:w-0 lg:-translate-x-full lg:border-r-0'
         )}
       >
-        <div className={cn(
-          'flex h-[var(--topbar-height)] items-center font-[var(--font-display)] text-xl font-semibold tracking-tight border-b border-white/5',
-          isSidebarCollapsed ? 'justify-center px-0' : 'px-6'
-        )}>
-          {isSidebarCollapsed ? (
-            <span>m<span className="text-[var(--color-tertiary)]">.</span></span>
-          ) : (
-            <span>mshipping<span className="text-[var(--color-tertiary)]">.</span></span>
-          )}
+        {/* Brand header */}
+        <div className="flex items-center justify-between h-16 px-6 border-b border-[var(--color-border)] shrink-0">
+          <Link
+            to={ROUTES.DASHBOARD}
+            className="flex items-center gap-3 font-semibold text-lg text-[var(--color-primary)] truncate"
+            onClick={() => {
+              if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                setSidebarOpen(false)
+              }
+            }}
+          >
+            <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-[var(--color-primary)] text-[var(--color-surface)] shrink-0">
+              <Package className="w-5 h-5" />
+            </div>
+            <span className="tracking-tight font-bold truncate">M-Shipping</span>
+          </Link>
+          <button
+            onClick={handleClose}
+            className="p-1.5 rounded-lg text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer shrink-0"
+            aria-label="Sembunyikan sidebar"
+            title="Sembunyikan Sidebar"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
         </div>
 
-        <nav className={cn(
-          "flex-1 space-y-6 px-3 py-5 scrollbar-none dark-scrollbar",
-          isSidebarCollapsed ? "overflow-visible" : "overflow-y-auto overflow-x-hidden"
-        )}>
-          {modules.map((group) => (
-            <div key={group.module} className="space-y-1">
-              {!isSidebarCollapsed && (
-                <div className="flex items-center gap-2 px-3 text-[10px] font-bold uppercase tracking-widest text-white/40 mb-2">
-                  {group.accentColor && (
-                    <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: group.accentColor }} />
-                  )}
-                  {group.label}
-                </div>
-              )}
-              {isSidebarCollapsed && (
-                <div className="mx-auto w-4 border-t border-white/10 mb-2 mt-4 first:mt-0" />
-              )}
-              {group.items.map((item) =>
-                'children' in item ? (
-                  <NavGroupItem
-                    key={item.label}
-                    item={item}
-                    pathname={pathname}
-                    isSidebarCollapsed={isSidebarCollapsed}
-                    onNavigate={handleNavigate}
-                  />
-                ) : (
-                  <NavLeaf
+        {/* Scrollable Navigation */}
+        <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+          {navModules.map((mod) => (
+            <div key={mod.module} className="space-y-1">
+              {/* Module Header Pill */}
+              <div className="px-3 mb-2 flex items-center gap-2">
+                <span
+                  className="w-1.5 h-3.5 rounded-full inline-block shrink-0"
+                  style={{ backgroundColor: mod.accentColor ?? '#6B7280' }}
+                />
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)] opacity-75">
+                  {mod.label}
+                </span>
+              </div>
+
+              {/* Module Items */}
+              {mod.items.map((item) => {
+                if ('children' in item) {
+                  const groupKey = `${mod.module}-${item.label}`
+                  const isOpen = openGroups[groupKey] ?? isChildActive(item)
+                  const hasActiveChild = isChildActive(item)
+                  const Icon = item.icon
+
+                  return (
+                    <div key={item.label} className="space-y-0.5">
+                      {/* Parent expandable button */}
+                      <button
+                        type="button"
+                        onClick={() => toggleGroup(groupKey)}
+                        className={cn(
+                          'w-full flex items-center justify-between px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                          hasActiveChild
+                            ? 'text-[var(--color-primary)] font-semibold bg-[var(--color-neutral)]/60'
+                            : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
+                        )}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Icon className="w-4 h-4 shrink-0" />
+                          <span>{item.label}</span>
+                        </div>
+                        <ChevronDown
+                          className={cn(
+                            'w-4 h-4 transition-transform duration-200 text-[var(--color-secondary)]',
+                            isOpen && 'rotate-180'
+                          )}
+                        />
+                      </button>
+
+                      {/* Sub-items */}
+                      {isOpen && (
+                        <div className="pl-4 pr-1 py-0.5 space-y-0.5 border-l-2 border-[var(--color-border)] ml-5">
+                          {item.children.map((child) => {
+                            const ChildIcon = child.icon
+                            const isCurrent = location.pathname === child.path
+
+                            return (
+                              <Link
+                                key={child.path}
+                                to={child.path}
+                                onClick={() => {
+                                  if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                                    setSidebarOpen(false)
+                                  }
+                                }}
+                                className={cn(
+                                  'flex items-center gap-2.5 px-2.5 py-1.5 text-xs font-medium rounded-md transition-colors',
+                                  isCurrent
+                                    ? 'bg-[var(--color-primary)] text-[var(--color-surface)] shadow-xs'
+                                    : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
+                                )}
+                              >
+                                <ChildIcon className="w-3.5 h-3.5 shrink-0" />
+                                <span>{child.label}</span>
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                }
+
+                // Single Leaf Item
+                const Icon = item.icon
+                const isCurrent = location.pathname === item.path
+
+                return (
+                  <Link
                     key={item.path}
-                    item={item}
-                    isActive={checkIsActive(pathname, item.path)}
-                    isSidebarCollapsed={isSidebarCollapsed}
-                    onNavigate={handleNavigate}
-                  />
+                    to={item.path}
+                    onClick={() => {
+                      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                        setSidebarOpen(false)
+                      }
+                    }}
+                    className={cn(
+                      'flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-colors',
+                      isCurrent
+                        ? 'bg-[var(--color-primary)] text-[var(--color-surface)] shadow-xs'
+                        : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
+                    )}
+                  >
+                    <Icon className="w-4 h-4 shrink-0" />
+                    <span>{item.label}</span>
+                  </Link>
                 )
-              )}
+              })}
             </div>
           ))}
-        </nav>
-
-        {/* Toggle Collapse Button (Desktop Only) */}
-        <div className="hidden lg:flex items-center p-3 border-t border-white/10">
-          <button
-            onClick={toggleSidebarCollapse}
-            className="flex items-center justify-center text-white/60 hover:text-white hover:bg-white/5 p-2 rounded-lg transition-colors w-full"
-            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <ChevronLeft className={cn('w-5 h-5 transition-transform duration-300', isSidebarCollapsed && 'rotate-180')} />
-          </button>
         </div>
       </aside>
     </>

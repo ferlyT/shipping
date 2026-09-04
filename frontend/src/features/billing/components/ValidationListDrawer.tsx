@@ -1,9 +1,9 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { X, Search, Plane, Ship, LayoutGrid, Check, ChevronRight, FileText, User } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
 import { CurrencyValue } from '@/components/ui/CurrencyValue'
@@ -45,6 +45,7 @@ export function ValidationListDrawer({
   currentInvNo,
   onSelectInvoice,
 }: ValidationListDrawerProps) {
+  useModalEscape(isOpen, onClose)
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
@@ -264,8 +265,20 @@ export function ValidationListDrawer({
         {/* List Content */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-2">
           {isLoading ? (
-            <div className="py-16 flex items-center justify-center">
-              <LoadingSpinner message={t('billing.validation.loadingDrawer')} />
+            <div className="space-y-2.5 animate-fadeIn">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] space-y-2 shadow-2xs">
+                  <div className="flex justify-between items-center">
+                    <div className="h-4 w-32 rounded skeleton-shimmer" />
+                    <div className="h-4 w-12 rounded-full skeleton-shimmer" />
+                  </div>
+                  <div className="h-4 w-44 rounded skeleton-shimmer" />
+                  <div className="flex justify-between items-center pt-1 border-t border-[var(--color-border)]/50">
+                    <div className="h-3 w-20 rounded skeleton-shimmer" />
+                    <div className="h-3.5 w-24 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : isError ? (
             <div className="p-4 text-center text-xs text-red-600 bg-red-50 rounded-lg">

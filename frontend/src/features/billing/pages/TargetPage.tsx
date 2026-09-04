@@ -1,12 +1,11 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Plane, Ship, Download, Users, Layers, Clock, X, FileSpreadsheet, AlertTriangle, CheckCircle2, Tag, Info } from 'lucide-react'
+import { Search, Plane, Ship, Download, Users, Layers, Clock, X, FileSpreadsheet, AlertTriangle, CheckCircle2, Tag, Info, Sparkles, TrendingUp } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { billingApi } from '../services/billing.service'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslation } from '@/hooks/useTranslation'
 import { formatDateTime, formatCurrency, formatDecimal, cn } from '@/lib/utils'
 import { AgingBadge } from '../components/AgingBadge'
@@ -15,6 +14,7 @@ import { StatusKirimBadge } from '../components/StatusKirimBadge'
 import { MismatchModal } from '../components/MismatchModal'
 import { PartialDetailModal } from '../components/PartialDetailModal'
 import { TargetPriceCheckModal } from '../components/TargetPriceCheckModal'
+import { BrokerBadge } from '@/features/customers/components/CustomerBadges'
 import type { TargetBillingItem, GroupKey } from '../types/billing.types'
 
 const PIC_BADGES: Record<string, { label: string; bg: string; text: string }> = {
@@ -38,7 +38,85 @@ const GROUP_OPTIONS: { key: GroupKey; name: string; borderAccent?: string; activ
   { key: 'cod',     name: 'COD',            borderAccent: 'border-rose-500/40 text-rose-600 dark:text-rose-400',     activeClass: 'border-rose-500 text-rose-600 dark:text-rose-400 bg-rose-500/10' },
   { key: 'urgent',  name: 'URGENT',         borderAccent: 'border-orange-500/40 text-orange-600 dark:text-orange-400', activeClass: 'border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-500/10' },
   { key: 'aging',   name: 'Aging > 7 Hari', borderAccent: 'border-amber-500/40 text-amber-600 dark:text-amber-400',   activeClass: 'border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/10' },
+  { key: 'no_type', name: 'Belum Set Tipe', borderAccent: 'border-amber-500/40 text-amber-600 dark:text-amber-400',   activeClass: 'border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/10' },
 ]
+
+function TargetTableSkeleton() {
+  return (
+    <>
+      {/* Mobile skeleton */}
+      <div className="sm:hidden divide-y divide-[var(--color-border)]">
+        {Array.from({ length: 6 }).map((_, idx) => (
+          <div key={idx} className="p-3.5 flex flex-col gap-2.5 bg-[var(--color-surface)]">
+            <div className="flex items-center justify-between gap-1.5 flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <div className="w-14 h-5 rounded-full skeleton-shimmer" />
+                <div className="w-14 h-5 rounded-full skeleton-shimmer" />
+                <div className="w-16 h-5 rounded skeleton-shimmer" />
+              </div>
+              <div className="w-16 h-5 rounded skeleton-shimmer" />
+            </div>
+            <div className="space-y-1">
+              <div className="h-4 w-40 rounded-md skeleton-shimmer" />
+              <div className="h-3 w-28 rounded skeleton-shimmer" />
+            </div>
+            <div className="p-2.5 rounded-xl bg-[var(--color-neutral)] border border-[var(--color-border)] space-y-2">
+              <div className="flex justify-between items-center">
+                <div className="h-3.5 w-24 rounded skeleton-shimmer" />
+                <div className="h-4 w-16 rounded skeleton-shimmer" />
+              </div>
+              <div className="h-3 w-48 rounded skeleton-shimmer" />
+              <div className="h-3 w-32 rounded skeleton-shimmer" />
+            </div>
+            <div className="flex justify-between items-center pt-1">
+              <div className="h-3 w-20 rounded skeleton-shimmer" />
+              <div className="h-6 w-24 rounded-lg skeleton-shimmer" />
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop skeleton */}
+      <div className="hidden sm:block overflow-x-auto">
+        <table className="w-full min-w-[1200px] text-left text-xs">
+          <thead className="sticky top-0 z-10 text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)] bg-[var(--color-neutral)] font-[var(--font-display)]">
+            <tr>
+              <th className="px-4 py-3 w-[72px] border-b border-[var(--color-border)]">Aging</th>
+              <th className="px-4 py-3 border-b border-[var(--color-border)]">PIC</th>
+              <th className="px-4 py-3 border-b border-[var(--color-border)]">Customer & Status</th>
+              <th className="px-4 py-3 border-b border-[var(--color-border)]">Cabang & Sales</th>
+              <th className="px-4 py-3 border-b border-[var(--color-border)]">Marking & Kargo</th>
+              <th className="px-4 py-3 border-b border-[var(--color-border)]">Komoditi</th>
+              <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
+              <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
+              <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[var(--color-border)]">
+            {Array.from({ length: 8 }).map((_, idx) => (
+              <tr key={idx} className="border-b border-[var(--color-border)]">
+                <td className="px-4 py-3.5"><div className="h-4 w-12 rounded skeleton-shimmer" /></td>
+                <td className="px-4 py-3.5"><div className="h-4 w-14 rounded-full skeleton-shimmer" /></td>
+                <td className="px-4 py-3.5">
+                  <div className="space-y-1">
+                    <div className="h-4 w-36 rounded-md skeleton-shimmer" />
+                    <div className="h-3 w-16 rounded skeleton-shimmer" />
+                  </div>
+                </td>
+                <td className="px-4 py-3.5"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                <td className="px-4 py-3.5"><div className="h-4 w-28 rounded skeleton-shimmer" /></td>
+                <td className="px-4 py-3.5"><div className="h-4 w-32 rounded skeleton-shimmer" /></td>
+                <td className="px-4 py-3.5"><div className="h-4 w-14 rounded skeleton-shimmer" /></td>
+                <td className="px-4 py-3.5 text-right"><div className="h-6 w-24 rounded-lg skeleton-shimmer ml-auto" /></td>
+                <td className="px-4 py-3.5"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )
+}
 
 export default function TargetPage() {
   const { t } = useTranslation()
@@ -79,20 +157,72 @@ export default function TargetPage() {
   }
 
   const { data: resData, isLoading } = useQuery({
-    queryKey: ['targetBillDetails', activeType, activePic],
+    queryKey: ['targetBillDetails', activeType],
     queryFn: async () => {
-      const res = await billingApi.targetDetails({ type: activeType, pic: activePic })
-      return res.data as { data: TargetBillingItem[] }
+      const res = await billingApi.targetDetails({ type: activeType })
+      return res.data
     },
-    staleTime: 30_000,
+    staleTime: 60_000,
   })
 
-  const rawList: TargetBillingItem[] = resData?.data || []
+  const rawList: TargetBillingItem[] = useMemo(() => {
+    if (!resData) return []
+    const payload = (resData as any)?.data !== undefined ? (resData as any).data : resData
+    let items: any[] = []
+    if (Array.isArray(payload)) items = payload
+    else if (Array.isArray(payload?.items)) items = payload.items
+    else if (Array.isArray((resData as any)?.items)) items = (resData as any).items
+    else return []
 
-  // Summary counts per group (always from rawList)
+    return items.map((r: any) => ({
+      ...r,
+      hari: Number(r.hari ?? r.Hari ?? 0),
+      pic: String(r.pic ?? r.Pic ?? '').trim(),
+      customer: String(r.customer ?? r.Customer ?? '').trim(),
+      branch: String(r.branch ?? r.Branch ?? '').trim(),
+      sales: String(r.sales ?? r.Sales ?? '').trim(),
+      markingCode: String(r.markingCode ?? r.Marking_code ?? r.marking_code ?? '').trim(),
+      markingNo: String(r.markingNo ?? r.Marking_no ?? r.marking_no ?? '').trim(),
+      status: String(r.status ?? r.Status ?? '').trim(),
+      jmlPack: Number(r.jmlPack ?? r.Jml_pack ?? r.jml_pack ?? 0),
+      satuan: String(r.satuan ?? r.Satuan ?? '').trim(),
+      berat: Number(r.berat ?? r.Berat ?? 0),
+      m3List: Number(r.m3List ?? r.M3_List ?? r.fdM3List ?? 0),
+      m3Gudang: Number(r.m3Gudang ?? r.M3_Gudang ?? r.fdM3Gudang ?? 0),
+      type: String(r.type ?? r.Type ?? '').trim(),
+      taxReturn: Number(r.taxReturn ?? r.TaxReturn ?? 0),
+      comodity: String(r.comodity ?? r.Comodity ?? '').trim(),
+      tglAgen: r.tglAgen ?? r.Tgl_Agen ?? null,
+      exitDate: r.exitDate ?? r.ExitDate ?? null,
+      statusKirim: String(r.statusKirim ?? r.StatusKirim ?? '').trim(),
+      harga: Number(r.harga ?? r.Harga ?? 0),
+      updateBy: String(r.updateBy ?? r.UpdateBy ?? '').trim(),
+      updateDate: r.updateDate ?? r.UpdateDate ?? null,
+      isPartial: Boolean(r.isPartial),
+      countTerima: Number(r.countTerima || 0),
+      priceStatus: r.priceStatus || 'NO_RATE',
+      hargaDb: Number(r.hargaDb || 0),
+      diffAmount: Number(r.diffAmount || 0),
+      priceSourceType: r.priceSourceType || '',
+      matchedTier: r.matchedTier || '',
+      isBroker: Boolean(r.isBroker),
+      isCommodityOverride: Boolean(r.isCommodityOverride),
+      commodityOverrideDetail: r.commodityOverrideDetail || '',
+      matchedCategory: r.matchedCategory || '',
+      mode: r.mode || (/^26A|^A[A-Z]{2}|AGZ|ASH|AYW|ASZ|AHK|ASG|AIR/i.test(String(r.markingCode ?? r.Marking_code ?? '')) ? 'udara' : 'laut'),
+    }))
+  }, [resData])
+
+  // Filtered by PIC in-memory for 0ms instant tab switching
+  const picFilteredList = useMemo(() => {
+    if (activePic === 'all') return rawList
+    return rawList.filter((item) => item.pic.toLowerCase() === activePic.toLowerCase())
+  }, [rawList, activePic])
+
+  // Summary counts per group (from picFilteredList)
   const groupCounts = useMemo(() => {
-    const counts: Record<GroupKey, number> = { all: rawList.length, partial: 0, fcl: 0, cod: 0, urgent: 0, aging: 0 }
-    for (const item of rawList) {
+    const counts: Record<GroupKey, number> = { all: picFilteredList.length, partial: 0, fcl: 0, cod: 0, urgent: 0, aging: 0, no_type: 0 }
+    for (const item of picFilteredList) {
       const typeStr     = String(item.type     || '').toUpperCase().trim()
       const comodityStr = String(item.comodity || '').toUpperCase().trim()
       const st          = String(item.status   || '').toUpperCase().trim()
@@ -102,14 +232,15 @@ export default function TargetPage() {
       if (st.includes('COD'))    counts.cod++
       if (st.includes('URGENT')) counts.urgent++
       if (hari > 7)              counts.aging++
+      if (!typeStr || typeStr === '-' || typeStr === '0') counts.no_type++
     }
     return counts
-  }, [rawList])
+  }, [picFilteredList])
 
   // Filtered by group
   const groupedList = useMemo(() => {
-    if (activeGroup === 'all') return rawList
-    return rawList.filter((item) => {
+    if (activeGroup === 'all') return picFilteredList
+    return picFilteredList.filter((item) => {
       const typeStr     = String(item.type     || '').toUpperCase().trim()
       const comodityStr = String(item.comodity || '').toUpperCase().trim()
       const st          = String(item.status   || '').toUpperCase().trim()
@@ -119,9 +250,10 @@ export default function TargetPage() {
       if (activeGroup === 'cod')    return st.includes('COD')
       if (activeGroup === 'urgent') return st.includes('URGENT')
       if (activeGroup === 'aging')  return hari > 7
+      if (activeGroup === 'no_type') return !typeStr || typeStr === '-' || typeStr === '0'
       return true
     })
-  }, [rawList, activeGroup])
+  }, [picFilteredList, activeGroup])
 
   // Filtered by search query (client-side)
   const filteredList = useMemo(() => {
@@ -180,15 +312,20 @@ export default function TargetPage() {
     XLSX.writeFile(wb, fileName)
   }
 
-  if (isLoading && !resData) return <LoadingSpinner message={t('common.loadingBilling')} />
-
   const activeGroupOpt = GROUP_OPTIONS.find((g) => g.key === activeGroup)
 
   return (
     <div className="p-4 sm:p-6 w-full space-y-5 animate-fadeIn pb-24 min-h-screen bg-[var(--color-neutral)] font-[var(--font-body)]">
       <MismatchModal item={mismatchItem} onClose={() => setMismatchItem(null)} />
       <PartialDetailModal item={partialModalItem} onClose={() => setPartialModalItem(null)} />
-      <TargetPriceCheckModal item={priceCheckItem} activeMode={activeType} onClose={() => setPriceCheckItem(null)} />
+      {priceCheckItem && (
+        <TargetPriceCheckModal
+          key={priceCheckItem.listCode || priceCheckItem.listNo || priceCheckItem.markingCode}
+          item={priceCheckItem}
+          activeMode={activeType}
+          onClose={() => setPriceCheckItem(null)}
+        />
+      )}
       
       <PageHeader
         title={`Target Bill ${activeType === 'all' ? 'Semua Mode' : activeType.toUpperCase()}`}
@@ -208,15 +345,15 @@ export default function TargetPage() {
       <div className="bg-[var(--color-surface)] rounded-2xl shadow-xs border border-[var(--color-border)] overflow-hidden">
 
         {/* Row 1 — Mode + PIC */}
-        <div className="px-4 py-3 flex flex-wrap items-center gap-3 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/50">
+        <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-center gap-2.5 sm:gap-3 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/50">
 
           {/* Mode toggle */}
-          <div className="flex items-center gap-0.5 p-0.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)] shrink-0">
+          <div className="grid grid-cols-3 sm:flex items-center gap-1 p-1 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)] shrink-0 w-full sm:w-auto">
             <button
               onClick={() => handleTypeChange('all')}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`py-1.5 px-2 sm:px-3.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 activeType === 'all'
-                  ? 'bg-transparent border border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                  ? 'bg-[var(--color-surface)] sm:bg-transparent border border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-2xs font-bold'
                   : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
@@ -224,31 +361,31 @@ export default function TargetPage() {
             </button>
             <button
               onClick={() => handleTypeChange('udara')}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`py-1.5 px-2 sm:px-3.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 activeType === 'udara'
-                  ? 'bg-amber-500/15 border border-amber-500 text-amber-600 dark:text-amber-400 shadow-xs'
+                  ? 'bg-amber-500/15 border border-amber-500 text-amber-600 dark:text-amber-400 shadow-2xs font-bold'
                   : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
-              <Plane className="w-3.5 h-3.5" /> Udara
+              <Plane className="w-3.5 h-3.5 shrink-0" /> Udara
             </button>
             <button
               onClick={() => handleTypeChange('laut')}
-              className={`px-4 py-1.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
+              className={`py-1.5 px-2 sm:px-3.5 text-xs font-semibold rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
                 activeType === 'laut'
-                  ? 'bg-emerald-500/15 border border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-xs'
+                  ? 'bg-emerald-500/15 border border-emerald-500 text-emerald-600 dark:text-emerald-400 shadow-2xs font-bold'
                   : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
-              <Ship className="w-3.5 h-3.5" /> Laut
+              <Ship className="w-3.5 h-3.5 shrink-0" /> Laut
             </button>
           </div>
 
           <div className="h-5 w-px bg-[var(--color-border)] hidden sm:block" />
 
           {/* PIC pills */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wide">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wide shrink-0">
               <Users className="w-3 h-3" /> PIC
             </span>
             {picOptions.map((opt) => {
@@ -258,7 +395,7 @@ export default function TargetPage() {
                 <button
                   key={opt.key}
                   onClick={() => handlePicChange(opt.key)}
-                  className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-all cursor-pointer border ${
+                  className={`px-3 py-1 text-[11px] font-semibold rounded-full transition-all cursor-pointer border shrink-0 ${
                     isActive && badge
                       ? 'border-transparent shadow-xs'
                       : isActive
@@ -275,11 +412,11 @@ export default function TargetPage() {
         </div>
 
         {/* Row 2 — Group filter cards + Search + Export */}
-        <div className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="px-3.5 sm:px-4 py-2.5 sm:py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
 
-          {/* Group filter */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wide">
+          {/* Group filter pills */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
+            <span className="flex items-center gap-1 text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wide shrink-0">
               <Layers className="w-3 h-3" /> Kategori
             </span>
             {GROUP_OPTIONS.map((opt) => {
@@ -289,15 +426,15 @@ export default function TargetPage() {
                 <button
                   key={opt.key}
                   onClick={() => setActiveGroup(opt.key)}
-                  className={`relative flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer ${
+                  className={`relative flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer shrink-0 ${
                     isActive
-                      ? opt.activeClass || 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                      ? opt.activeClass || 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs font-bold'
                       : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)] hover:text-[var(--color-primary)]'
                   }`}
                 >
-                  {opt.key === 'aging' && <Clock className="w-3 h-3" />}
-                  {opt.name}
-                  <span className={`ml-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center border ${
+                  {opt.key === 'aging' && <Clock className="w-3 h-3 shrink-0" />}
+                  <span>{opt.name}</span>
+                  <span className={`ml-0.5 text-[9px] font-bold px-1.5 py-0.2 rounded-full min-w-[16px] text-center border ${
                     isActive
                       ? 'border-current bg-current/10 text-current'
                       : 'border-[var(--color-border)] bg-[var(--color-neutral)] text-[var(--color-secondary)]'
@@ -312,10 +449,10 @@ export default function TargetPage() {
           {/* Search + Export */}
           <div className="flex items-center gap-2 w-full sm:w-auto">
             <div className="relative flex-1 sm:w-60">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-secondary)]" />
+              <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-secondary)]" />
               <input
                 type="text"
-                placeholder="Cari customer, marking, komoditi..."
+                placeholder="Cari customer, marking..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-8 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-tertiary)]/20 focus:border-[var(--color-tertiary)] text-[var(--color-primary)] transition-all"
@@ -332,7 +469,7 @@ export default function TargetPage() {
             <button
               onClick={handleExportExcel}
               disabled={filteredList.length === 0}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors shadow-xs shrink-0 cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white rounded-lg transition-colors shadow-xs shrink-0 cursor-pointer"
             >
               <FileSpreadsheet className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Export Excel</span>
@@ -343,7 +480,7 @@ export default function TargetPage() {
 
         {/* Active filters summary bar */}
         {(activeType !== 'all' || activePic !== 'all' || activeGroup !== 'all' || searchQuery) && (
-          <div className="px-4 py-2 border-t border-[var(--color-border)] bg-[var(--color-neutral)]/40 flex items-center gap-2 flex-wrap">
+          <div className="px-3.5 sm:px-4 py-2 border-t border-[var(--color-border)] bg-[var(--color-neutral)]/40 flex items-center gap-1.5 sm:gap-2 flex-wrap">
             <span className="text-[10px] font-semibold text-[var(--color-tertiary)] uppercase tracking-wide">Filter aktif:</span>
             {activeType !== 'all' && (
               <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 text-[10px] font-semibold rounded-full">
@@ -376,11 +513,11 @@ export default function TargetPage() {
         )}
       </div>
 
-      {/* ── TABLE CARD ───────────────────────────────────────── */}
+      {/* ── TABLE / CARD CONTAINER ────────────────────────────── */}
       <div className="bg-[var(--color-surface)] rounded-2xl shadow-xs border border-[var(--color-border)] overflow-hidden">
 
         {/* Table header info */}
-        <div className="px-5 py-3 border-b border-[var(--color-border)] flex items-center justify-between">
+        <div className="px-4 sm:px-5 py-2.5 sm:py-3 border-b border-[var(--color-border)] flex items-center justify-between">
           <div>
             <span className="text-xs font-semibold text-[var(--color-primary)] font-[var(--font-display)]">
               {filteredList.length} item
@@ -395,7 +532,9 @@ export default function TargetPage() {
           </span>
         </div>
 
-        {filteredList.length === 0 ? (
+        {isLoading && !resData ? (
+          <TargetTableSkeleton />
+        ) : filteredList.length === 0 ? (
           <div className="h-72 flex flex-col items-center justify-center gap-3 text-center px-8">
             <div className="w-14 h-14 rounded-2xl bg-[var(--color-neutral)] flex items-center justify-center">
               <Download className="w-6 h-6 text-[var(--color-secondary)]" />
@@ -406,248 +545,479 @@ export default function TargetPage() {
             </div>
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[1200px] text-left text-xs">
-              <thead
-                className="sticky top-0 z-10 text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)] bg-[var(--color-neutral)] font-[var(--font-display)]"
-              >
-                <tr>
-                  <th className="px-4 py-3 w-[72px] border-b border-[var(--color-border)]">Aging</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">PIC</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Customer & Status</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Cabang & Sales</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Marking & Kargo</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Komoditi</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
-                  <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
-                  <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredList.map((item, idx) => {
-                  const badge = PIC_BADGES[item.pic] || { label: item.pic, bg: '#4B5563', text: '#fff' }
-                  const isEven = idx % 2 === 0
-                  return (
-                    <tr
-                      key={idx}
-                      className={cn(
-                        "group transition-colors hover:bg-[var(--color-neutral)]/40",
-                        isEven ? "bg-[var(--color-surface)]" : "bg-[var(--color-neutral)]/20"
-                      )}
-                    >
-                      {/* Aging */}
-                      <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+          <>
+            {/* ── MOBILE CARD LIST (< sm) ── */}
+            <div className="sm:hidden divide-y divide-[var(--color-border)]">
+              {filteredList.map((item, idx) => {
+                const badge = PIC_BADGES[item.pic] || { label: item.pic, bg: '#4B5563', text: '#fff' }
+                return (
+                  <div key={item.listCode || item.listNo || `${item.markingCode}-${idx}`} className="p-3.5 flex flex-col gap-2 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/20 transition-colors">
+                    {/* Top: Aging + PIC + Status + Broker + StatusKirim */}
+                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <AgingBadge hari={item.hari} />
-                      </td>
-
-                      {/* PIC */}
-                      <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
                         <span
-                          className="inline-block px-2.5 py-0.5 text-[10px] font-bold rounded-full"
+                          className="inline-block px-2 py-0.5 text-[10px] font-bold rounded-full"
                           style={{ background: badge.bg, color: badge.text }}
                         >
                           {badge.label}
                         </span>
-                      </td>
+                        <StatusBadge status={item.status} />
+                        {item.isBroker && (
+                          <BrokerBadge size="xs" />
+                        )}
+                      </div>
+                      <StatusKirimBadge status={item.statusKirim} />
+                    </div>
 
-                      {/* Customer & Status */}
-                      <td className="px-4 py-3 border-b border-[var(--color-border)] max-w-[220px]" title={item.customer}>
-                        <div className="font-semibold text-[var(--color-primary)] truncate leading-tight">{item.customer || '-'}</div>
-                        <div className="mt-0.5">
-                          <StatusBadge status={item.status} />
-                        </div>
-                      </td>
+                    {/* Customer & Branch */}
+                    <div className="min-w-0">
+                      <div className="font-bold text-[var(--color-primary)] text-sm leading-tight truncate" title={item.customer}>
+                        {item.customer || '-'}
+                      </div>
+                      <div className="text-[11px] text-[var(--color-secondary)] mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span>{item.branch || '-'}</span>
+                        {item.sales && <span>· Sales: {item.sales}</span>}
+                      </div>
+                    </div>
 
-                      {/* Cabang & Sales */}
-                      <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
-                        <div className="font-medium text-[var(--color-primary)]">{item.branch || '-'}</div>
-                        {item.sales && <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">{item.sales}</div>}
-                      </td>
-
-                      {/* Marking & Kargo */}
-                      <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap" title={`${item.markingCode} ${item.markingNo}`}>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="font-semibold text-[var(--color-primary)]">{item.markingCode || '-'}</span>
-                          {item.isPartial && (
-                            <button
-                              type="button"
-                              onClick={() => setPartialModalItem(item)}
-                              className="inline-flex items-center cursor-pointer group/parsial"
-                              title={`Klik untuk melihat ${item.countTerima || 1} data pengiriman parsial terkait di tbEntryList`}
-                            >
-                              <span
-                                className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-transparent border border-purple-500/50 text-purple-600 dark:text-purple-400 group-hover/parsial:bg-purple-500/10 group-hover/parsial:border-purple-500 transition-colors shadow-2xs shrink-0"
+                    {/* Marking & Badges Card */}
+                    <div className="p-2.5 rounded-xl bg-[var(--color-neutral)]/50 border border-[var(--color-border)]/80 flex flex-col gap-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex flex-col gap-0.5 min-w-0">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-bold text-[var(--color-primary)] font-mono text-xs">
+                              {item.markingCode || '-'}
+                            </span>
+                            {item.isPartial && (
+                              <button
+                                type="button"
+                                onClick={() => setPartialModalItem(item)}
+                                className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-purple-500/10 border border-purple-500/40 text-purple-600 dark:text-purple-400 cursor-pointer"
                               >
                                 PARSIAL
-                              </span>
-                            </button>
-                          )}
-                          {item.validasiMismatch && activeType !== 'udara' && (
-                            <button
-                              onClick={() => setMismatchItem(item)}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-transparent border border-rose-500/50 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
-                              title="Klik untuk lihat detail mismatch"
-                            >
-                              <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
-                              Mismatch
-                            </button>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">
-                          {item.markingNo ? `${item.markingNo} · ` : ''}
-                          <span className="font-bold text-[var(--color-primary)]">{item.jmlPack} {item.satuan}</span>
-                        </div>
-                        {(item.m3Gudang > 0 || item.m3List > 0 || item.berat > 0) && (
-                          <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">
-                            {item.m3Gudang > 0 ? `M3 Gdg: ${item.m3Gudang}` : ''}
-                            {item.m3List   > 0 ? ` (List: ${item.m3List})` : ''}
-                            {item.berat    > 0 ? ` · ${formatDecimal(item.berat, 2)} kg` : ''}
+                              </button>
+                            )}
+                            {item.validasiMismatch && activeType !== 'udara' && (
+                              <button
+                                onClick={() => setMismatchItem(item)}
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-rose-500/10 border border-rose-500/40 text-rose-600 dark:text-rose-400 cursor-pointer"
+                              >
+                                <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                                Mismatch
+                              </button>
+                            )}
                           </div>
-                        )}
-                      </td>
+                          {item.markingNo && (
+                            <span className="text-[11px] text-[var(--color-secondary)] font-mono font-medium truncate" title={item.markingNo}>
+                              #{item.markingNo}
+                            </span>
+                          )}
+                        </div>
 
-                      {/* Komoditi */}
-                      <td className="px-4 py-3 border-b border-[var(--color-border)] max-w-[150px] truncate text-[var(--color-secondary)]" title={item.comodity}>
-                        {item.comodity || '-'}
-                      </td>
-
-                      {/* Type */}
-                      <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
-                        <div className="flex items-center gap-1.5">
-                          {item.type ? (
-                            <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)]">
+                        <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
+                          {item.type && item.type.trim() !== '' && item.type.trim() !== '-' && item.type.trim() !== '0' ? (
+                            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)]">
                               {item.type}
                             </span>
                           ) : (
-                            <span className="text-[var(--color-secondary)]">-</span>
+                            <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide rounded bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400">
+                              Belum Set Tipe
+                            </span>
                           )}
                           {Number(item.taxReturn) === 1 && (
-                            <span
-                              className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider uppercase rounded bg-indigo-600 text-white shadow-2xs cursor-help shrink-0"
-                              title="Tax Return"
-                            >
+                            <span className="px-1.5 py-0.2 text-[9px] font-extrabold tracking-wider uppercase rounded bg-indigo-600 text-white">
                               TAX
                             </span>
                           )}
                         </div>
-                      </td>
+                      </div>
 
-                      {/* Harga */}
-                      <td className="px-4 py-3 border-b border-[var(--color-border)] text-right whitespace-nowrap">
-                        <div className="flex flex-col items-end gap-1">
-                          {item.priceStatus === 'MATCH' ? (
-                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                      {/* Baris 1: Nama Komoditi (Satu Baris Penuh) */}
+                      <div className="pt-1.5 border-t border-[var(--color-border)]/50">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="text-xs font-semibold text-[var(--color-primary)] leading-snug break-words">
+                            {item.comodity || '-'}
+                          </p>
+                          {item.isCommodityOverride && item.commodityOverrideDetail && (
+                            <span
+                              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-300 max-w-full truncate"
+                              title={`Override Komoditi: ${item.commodityOverrideDetail}`}
+                            >
+                              <Sparkles className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                              <span className="truncate">{item.commodityOverrideDetail}</span>
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Baris 2: Qty, Berat, dan M3 */}
+                      <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-secondary)] font-mono flex-wrap">
+                        <span className="font-bold text-[var(--color-primary)]">
+                          {item.jmlPack} {item.satuan || 'COLY'}
+                        </span>
+                        {item.m3Gudang > 0 && (
+                          <>
+                            <span className="text-[var(--color-border)]">·</span>
+                            <span>{item.m3Gudang} m³</span>
+                          </>
+                        )}
+                        {item.berat > 0 && (
+                          <>
+                            <span className="text-[var(--color-border)]">·</span>
+                            <span>{formatDecimal(item.berat, 2)} kg</span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Price & Action Row */}
+                    <div className="flex items-center justify-between gap-2 pt-0.5">
+                      <div className="text-[10px] text-[var(--color-secondary)] truncate">
+                        {item.updateBy ? `${item.updateBy}` : 'Tarif Database'}
+                      </div>
+
+                      {/* Price status button */}
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {item.priceStatus === 'MATCH' ? (
+                          <button
+                            type="button"
+                            onClick={() => setPriceCheckItem(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 cursor-pointer shadow-2xs"
+                          >
+                            <CheckCircle2 className="w-3 h-3 shrink-0" />
+                            {formatCurrency(item.harga)}
+                          </button>
+                        ) : item.priceStatus === 'DIFFERENT' ? (
+                          <button
+                            type="button"
+                            onClick={() => setPriceCheckItem(item)}
+                            className={`inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg ${
+                              (item.diffAmount ?? 0) > 0
+                                ? 'bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
+                                : 'bg-rose-500/10 border border-rose-500/40 text-rose-600 dark:text-rose-400'
+                            } cursor-pointer shadow-2xs`}
+                          >
+                            {(item.diffAmount ?? 0) > 0 ? (
+                              <TrendingUp className="w-3 h-3 shrink-0 text-emerald-500" />
+                            ) : (
+                              <AlertTriangle className="w-3 h-3 shrink-0" />
+                            )}
+                            {formatCurrency(item.harga)} {(item.diffAmount ?? 0) > 0 ? '(Di Atas DB)' : '(Beda DB)'}
+                          </button>
+                        ) : item.priceStatus === 'NOT_SET' ? (
+                          <button
+                            type="button"
+                            onClick={() => setPriceCheckItem(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-purple-500/10 border border-purple-500/40 text-purple-600 dark:text-purple-400 cursor-pointer shadow-2xs"
+                          >
+                            <Info className="w-3 h-3 shrink-0" />
+                            Ada di DB ({formatCurrency(item.hargaDb || 0)})
+                          </button>
+                        ) : item.harga > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => setPriceCheckItem(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-primary)] hover:border-[var(--color-tertiary)] cursor-pointer"
+                          >
+                            <Tag className="w-3 h-3 shrink-0" />
+                            {formatCurrency(item.harga)}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setPriceCheckItem(item)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400 cursor-pointer shadow-2xs"
+                          >
+                            <AlertTriangle className="w-3 h-3 shrink-0" />
+                            Belum Ada Harga
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* ── DESKTOP TABLE (>= sm) ── */}
+            <div className="hidden sm:block overflow-x-auto">
+              <table className="w-full min-w-[1200px] text-left text-xs">
+                <thead
+                  className="sticky top-0 z-10 text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)] bg-[var(--color-neutral)] font-[var(--font-display)]"
+                >
+                  <tr>
+                    <th className="px-4 py-3 w-[72px] border-b border-[var(--color-border)]">Aging</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">PIC</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Customer & Status</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Cabang & Sales</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Marking & Kargo</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Komoditi</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
+                    <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
+                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredList.map((item, idx) => {
+                    const badge = PIC_BADGES[item.pic] || { label: item.pic, bg: '#4B5563', text: '#fff' }
+                    const isEven = idx % 2 === 0
+                    return (
+                      <tr
+                        key={item.listCode || item.listNo || `${item.markingCode}-${idx}`}
+                        className={cn(
+                          "group transition-colors hover:bg-[var(--color-neutral)]/40",
+                          isEven ? "bg-[var(--color-surface)]" : "bg-[var(--color-neutral)]/20"
+                        )}
+                      >
+                        {/* Aging */}
+                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+                          <AgingBadge hari={item.hari} />
+                        </td>
+
+                        {/* PIC */}
+                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+                          <span
+                            className="inline-block px-2.5 py-0.5 text-[10px] font-bold rounded-full"
+                            style={{ background: badge.bg, color: badge.text }}
+                          >
+                            {badge.label}
+                          </span>
+                        </td>
+
+                        {/* Customer & Status */}
+                        <td className="px-4 py-3 border-b border-[var(--color-border)] max-w-[240px]">
+                          <div className="font-semibold text-[var(--color-primary)] text-xs truncate leading-snug" title={item.customer}>
+                            {item.customer || '-'}
+                          </div>
+                          <div className="mt-1 flex items-center gap-1.5 flex-nowrap">
+                            <StatusBadge status={item.status} />
+                            {item.isBroker && (
+                              <BrokerBadge size="xs" />
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Cabang & Sales */}
+                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+                          <div className="font-medium text-[var(--color-primary)]">{item.branch || '-'}</div>
+                          {item.sales && <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">{item.sales}</div>}
+                        </td>
+
+                        {/* Marking & Kargo */}
+                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap" title={`${item.markingCode} ${item.markingNo}`}>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-[var(--color-primary)]">{item.markingCode || '-'}</span>
+                            {item.isPartial && (
                               <button
                                 type="button"
-                                onClick={() => setPriceCheckItem(item)}
-                                className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                                title="Klik untuk cek detail tarif database"
+                                onClick={() => setPartialModalItem(item)}
+                                className="inline-flex items-center cursor-pointer group/parsial"
+                                title={`Klik untuk melihat ${item.countTerima || 1} data pengiriman parsial terkait di tbEntryList`}
                               >
-                                {formatCurrency(item.harga)}
+                                <span
+                                  className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-transparent border border-purple-500/50 text-purple-600 dark:text-purple-400 group-hover/parsial:bg-purple-500/10 group-hover/parsial:border-purple-500 transition-colors shadow-2xs shrink-0"
+                                >
+                                  PARSIAL
+                                </span>
                               </button>
+                            )}
+                            {item.validasiMismatch && activeType !== 'udara' && (
                               <button
-                                type="button"
-                                onClick={() => setPriceCheckItem(item)}
-                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-transparent border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors cursor-pointer"
-                                title="Harga sesuai database. Klik untuk cek rincian tarif."
+                                onClick={() => setMismatchItem(item)}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-transparent border border-rose-500/50 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
+                                title="Klik untuk lihat detail mismatch"
                               >
-                                <CheckCircle2 className="w-2.5 h-2.5 shrink-0" />
-                                Sesuai
+                                <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                                Mismatch
                               </button>
+                            )}
+                          </div>
+                          <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">
+                            {item.markingNo ? `${item.markingNo} · ` : ''}
+                            <span className="font-bold text-[var(--color-primary)]">{item.jmlPack} {item.satuan}</span>
+                          </div>
+                          {(item.m3Gudang > 0 || item.m3List > 0 || item.berat > 0) && (
+                            <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">
+                              {item.m3Gudang > 0 ? `M3 Gdg: ${item.m3Gudang}` : ''}
+                              {item.m3List   > 0 ? ` (List: ${item.m3List})` : ''}
+                              {item.berat    > 0 ? ` · ${formatDecimal(item.berat, 2)} kg` : ''}
                             </div>
-                          ) : item.priceStatus === 'DIFFERENT' ? (
-                            <div className="flex flex-col items-end gap-0.5">
+                          )}
+                        </td>
+
+                        {/* Komoditi */}
+                        <td className="px-4 py-3 border-b border-[var(--color-border)] max-w-[220px] text-[var(--color-secondary)]" title={item.comodity}>
+                          <div className="flex flex-col gap-1 items-start max-w-full overflow-hidden">
+                            <span className="truncate max-w-full font-medium text-[var(--color-primary)]">{item.comodity || '-'}</span>
+                            {item.isCommodityOverride && item.commodityOverrideDetail && (
+                              <span
+                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-bold rounded bg-purple-500/10 border border-purple-500/30 text-purple-700 dark:text-purple-300 max-w-full truncate overflow-hidden"
+                                title={`Override Komoditi: ${item.commodityOverrideDetail}`}
+                              >
+                                <Sparkles className="w-2.5 h-2.5 text-purple-600 dark:text-purple-400 shrink-0" />
+                                <span className="truncate">{item.commodityOverrideDetail}</span>
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Type */}
+                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+                          <div className="flex items-center gap-1.5">
+                            {item.type && item.type.trim() !== '' && item.type.trim() !== '-' && item.type.trim() !== '0' ? (
+                              <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)]">
+                                {item.type}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide rounded bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400">
+                                Belum Set Tipe
+                              </span>
+                            )}
+                            {Number(item.taxReturn) === 1 && (
+                              <span
+                                className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider uppercase rounded bg-indigo-600 text-white shadow-2xs cursor-help shrink-0"
+                                title="Tax Return"
+                              >
+                                TAX
+                              </span>
+                            )}
+                          </div>
+                        </td>
+
+                        {/* Harga */}
+                        <td className="px-4 py-3 border-b border-[var(--color-border)] text-right whitespace-nowrap">
+                          <div className="flex flex-col items-end gap-1">
+                            {item.priceStatus === 'MATCH' ? (
                               <div className="flex items-center justify-end gap-1.5 flex-wrap">
                                 <button
                                   type="button"
                                   onClick={() => setPriceCheckItem(item)}
-                                  className="font-bold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer"
-                                  title="Klik untuk cek rincian perbandingan harga"
+                                  className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                                  title="Klik untuk cek detail tarif database"
                                 >
                                   {formatCurrency(item.harga)}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setPriceCheckItem(item)}
-                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-transparent border border-rose-500/50 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
-                                  title={`Terdapat selisih dengan database (DB: ${formatCurrency(item.hargaDb || 0)}). Klik untuk cek rincian.`}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-transparent border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10 transition-colors cursor-pointer"
+                                  title="Harga sesuai database. Klik untuk cek rincian tarif."
                                 >
-                                  <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
-                                  Beda DB
+                                  <CheckCircle2 className="w-2.5 h-2.5 shrink-0" />
+                                  Sesuai
                                 </button>
                               </div>
-                              {item.hargaDb && item.hargaDb > 0 && (
+                            ) : item.priceStatus === 'DIFFERENT' ? (
+                              <div className="flex flex-col items-end gap-0.5">
+                                <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                  <button
+                                    type="button"
+                                    onClick={() => setPriceCheckItem(item)}
+                                    className={`font-bold ${
+                                      (item.diffAmount ?? 0) > 0
+                                        ? 'text-emerald-600 dark:text-emerald-400'
+                                        : 'text-rose-600 dark:text-rose-400'
+                                    } hover:underline cursor-pointer`}
+                                    title="Klik untuk cek rincian perbandingan harga"
+                                  >
+                                    {formatCurrency(item.harga)}
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setPriceCheckItem(item)}
+                                    className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-transparent ${
+                                      (item.diffAmount ?? 0) > 0
+                                        ? 'border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'
+                                        : 'border border-rose-500/50 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10'
+                                    } transition-colors cursor-pointer`}
+                                    title={
+                                      (item.diffAmount ?? 0) > 0
+                                        ? `Harga di atas acuan database (DB: ${formatCurrency(item.hargaDb || 0)}, Selisih: +${formatCurrency(item.diffAmount || 0)}). Klik untuk cek rincian.`
+                                        : `Terdapat selisih dengan database (DB: ${formatCurrency(item.hargaDb || 0)}). Klik untuk cek rincian.`
+                                    }
+                                  >
+                                    {(item.diffAmount ?? 0) > 0 ? (
+                                      <TrendingUp className="w-2.5 h-2.5 shrink-0 text-emerald-500" />
+                                    ) : (
+                                      <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
+                                    )}
+                                    {(item.diffAmount ?? 0) > 0 ? 'Di Atas DB' : 'Beda DB'}
+                                  </button>
+                                </div>
+                                {item.hargaDb && item.hargaDb > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPriceCheckItem(item)}
+                                    className="text-[9px] text-[var(--color-secondary)] hover:text-[var(--color-primary)] cursor-pointer"
+                                  >
+                                    DB: {formatCurrency(item.hargaDb)}
+                                  </button>
+                                )}
+                              </div>
+                            ) : item.priceStatus === 'NOT_SET' ? (
+                              <div className="flex flex-col items-end gap-0.5">
                                 <button
                                   type="button"
                                   onClick={() => setPriceCheckItem(item)}
-                                  className="text-[9px] text-[var(--color-secondary)] hover:text-[var(--color-primary)] cursor-pointer"
+                                  className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-transparent border border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors cursor-pointer shadow-2xs"
+                                  title={`Tarif tersedia di DB (${formatCurrency(item.hargaDb || 0)}). Klik untuk cek rincian.`}
                                 >
-                                  DB: {formatCurrency(item.hargaDb)}
+                                  <Info className="w-3 h-3 text-purple-500 shrink-0" />
+                                  Ada di DB ({formatCurrency(item.hargaDb || 0)})
                                 </button>
-                              )}
-                            </div>
-                          ) : item.priceStatus === 'NOT_SET' ? (
-                            <div className="flex flex-col items-end gap-0.5">
+                              </div>
+                            ) : item.harga > 0 ? (
+                              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                                <button
+                                  type="button"
+                                  onClick={() => setPriceCheckItem(item)}
+                                  className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                                  title="Klik untuk cek detail tarif database"
+                                >
+                                  {formatCurrency(item.harga)}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setPriceCheckItem(item)}
+                                  className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
+                                  title="Klik untuk cek tarif database"
+                                >
+                                  <Tag className="w-2.5 h-2.5 shrink-0" />
+                                  Cek DB
+                                </button>
+                              </div>
+                            ) : (
                               <button
                                 type="button"
                                 onClick={() => setPriceCheckItem(item)}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-transparent border border-purple-500/40 text-purple-600 dark:text-purple-400 hover:bg-purple-500/10 transition-colors cursor-pointer shadow-2xs"
-                                title={`Tarif tersedia di DB (${formatCurrency(item.hargaDb || 0)}). Klik untuk cek rincian.`}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer shadow-2xs"
+                                title="Belum ada harga. Klik untuk cek tarif customer di database."
                               >
-                                <Info className="w-3 h-3 text-purple-500 shrink-0" />
-                                Ada di DB ({formatCurrency(item.hargaDb || 0)})
+                                <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
+                                Belum Ada Harga
                               </button>
-                            </div>
-                          ) : item.harga > 0 ? (
-                            <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                              <button
-                                type="button"
-                                onClick={() => setPriceCheckItem(item)}
-                                className="font-bold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
-                                title="Klik untuk cek detail tarif database"
-                              >
-                                {formatCurrency(item.harga)}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setPriceCheckItem(item)}
-                                className="inline-flex items-center gap-0.5 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
-                                title="Klik untuk cek tarif database"
-                              >
-                                <Tag className="w-2.5 h-2.5 shrink-0" />
-                                Cek DB
-                              </button>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => setPriceCheckItem(item)}
-                              className="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded-full bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer shadow-2xs"
-                              title="Belum ada harga. Klik untuk cek tarif customer di database."
-                            >
-                              <AlertTriangle className="w-3 h-3 text-amber-500 shrink-0" />
-                              Belum Ada Harga
-                            </button>
-                          )}
+                            )}
 
-                          {(item.updateBy || item.updateDate) && (
-                            <div className="text-[9px] text-[var(--color-secondary)]">
-                              {item.updateBy} {item.updateDate ? `· ${formatDateTime(item.updateDate)}` : ''}
-                            </div>
-                          )}
-                        </div>
-                      </td>
+                            {(item.updateBy || item.updateDate) && (
+                              <div className="text-[9px] text-[var(--color-secondary)]">
+                                {item.updateBy} {item.updateDate ? `· ${formatDateTime(item.updateDate)}` : ''}
+                              </div>
+                            )}
+                          </div>
+                        </td>
 
-                      {/* Status Kirim */}
-                      <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
-                        <StatusKirimBadge status={item.statusKirim} />
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+                        {/* Status Kirim */}
+                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+                          <StatusKirimBadge status={item.statusKirim} />
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -77,7 +77,7 @@ export function UserToolbar({
         </div>
 
         {/* Role Pill Filter */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 sm:pb-0 -mx-4 px-4 sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
           <span className="text-xs font-semibold text-[var(--color-secondary)] mr-1 shrink-0 flex items-center gap-1">
             <Shield size={13} />
             {t('users.filterRole')}:
@@ -85,9 +85,9 @@ export function UserToolbar({
           <button
             type="button"
             onClick={() => setSelectedRoleFilter('all')}
-            className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+            className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-all cursor-pointer shrink-0 ${
               selectedRoleFilter === 'all'
-                ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]'
+                ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xs font-bold'
                 : 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] hover:bg-[var(--color-border)]/50'
             }`}
           >
@@ -100,9 +100,9 @@ export function UserToolbar({
                 key={r}
                 type="button"
                 onClick={() => setSelectedRoleFilter(r)}
-                className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-all cursor-pointer capitalize ${
+                className={`px-2.5 py-1 rounded-md text-xs font-semibold whitespace-nowrap transition-all cursor-pointer capitalize shrink-0 ${
                   selectedRoleFilter.toLowerCase() === r.toLowerCase()
-                    ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)]'
+                    ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xs font-bold'
                     : 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] hover:bg-[var(--color-border)]/50'
                 }`}
               >

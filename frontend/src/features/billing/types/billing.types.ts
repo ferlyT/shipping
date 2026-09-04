@@ -45,7 +45,40 @@ export interface Billing {
   fdTypeComodity?: number | null
   customer?: BillingCustomer | null
   employee?: BillingEmployee | null
+  giveEmployee?: { fdEmpId: string | null; fdEmpName: string | null } | null
+  resiSummary?: {
+    isPartial: boolean
+    totalResi: number
+    resiList: string[]
+    primaryResi?: string | null
+  } | null
   details?: BillingDetail[]
+  fdTglAgent?: string | null
+  fdConsignee?: string | null
+  fdComodity?: string | null
+  fdTypeComodityName?: string | null
+  isPaid?: boolean
+  paymentStatus?: 'LUNAS' | 'SEBAGIAN' | 'BELUM LUNAS' | 'PARTIAL' | 'OVERDUE' | 'UNPAID' | 'ISSUED' | 'DRAFT'
+  cashierID?: string | null
+  cashierDate?: string | null
+  totalPaid?: number
+  cashierDetails?: {
+    fdCashierID: string | null
+    fdDate: string | null
+    fdType: string | null
+    fdCCYCode: string | null
+    fdAmount: number
+    fdTotal: number
+  }[]
+  totalJumlah?: number
+  totalBayar?: number
+  sisaBayar?: number
+  totals?: {
+    fdJumlah: number | null
+    fdBayar: number | null
+    fdSLunas: number | null
+    fdFinish: string | null
+  }[]
 }
 
 export interface TargetBillingItem {
@@ -70,6 +103,9 @@ export interface TargetBillingItem {
   statusKirim: string
   harga: number
   hargaDb?: number
+  diffAmount?: number
+  priceSourceType?: string
+  matchedTier?: string
   priceStatus?: 'MATCH' | 'DIFFERENT' | 'NOT_SET' | 'NO_RATE'
   comodityNameDb?: string
   updateBy: string
@@ -83,7 +119,13 @@ export interface TargetBillingItem {
   totalQtyGudang?: number
   jmlBeratKomplain?: number
   validasiMismatch?: boolean
+  isBroker?: boolean
+  isCommodityOverride?: boolean
+  commodityOverrideDetail?: string
+  matchedCategory?: string
+  custCode?: string
   listNo?: string
+  listCode?: string
   createdDate?: string | null
   qty?: number
   qtyPL?: number
@@ -108,6 +150,7 @@ export interface CustomerTariffItem {
 }
 
 export interface TargetPriceCheckData {
+  listCode?: string
   markingCode: string
   markingNo: string
   customer: string
@@ -133,6 +176,9 @@ export interface TargetPriceCheckData {
   status: 'MATCH' | 'DIFFERENT' | 'NOT_SET' | 'NO_RATE'
   statusLabel: string
   statusDescription: string
+  matchedCategory?: string
+  isCommodityOverride?: boolean
+  commodityOverrideDetail?: string
   matchedTariff: CustomerTariffItem | null
   profileHarga?: {
     harga: number
@@ -158,7 +204,7 @@ export interface TargetPriceCheckData {
   } | null
 }
 
-export type GroupKey = 'all' | 'partial' | 'fcl' | 'cod' | 'urgent' | 'aging'
+export type GroupKey = 'all' | 'partial' | 'fcl' | 'cod' | 'urgent' | 'aging' | 'no_type'
 export type PicKey = 'all' | 'yati' | 'kiki' | 'thara' | 'ferly' | 'rico'
 
 export interface BillingByEmployeeDailySeries {
@@ -276,3 +322,212 @@ export interface PartialDetailItem {
   desc: string
 }
 
+export interface CustomerTariffAudit {
+  fdAuditID: string | number
+  fdCustCode: string
+  fdAction: 'INSERT' | 'UPDATE' | 'DELETE' | string
+  fdColumnName: string
+  mapping?: {
+    branchCode?: string | null
+    branchName?: string | null
+    mode?: 'BY SEA' | 'BY AIR' | null
+    serviceType?: string | null
+    commodityType?: string | null
+    displayName: string
+    isCurrency: boolean
+  }
+  fdOldValue: string | null
+  fdNewValue: string | null
+  fdUpdatedBy: string
+  fdUpdateDate: string
+  fdHostName?: string | null
+  fdIPAddress?: string | null
+  fdAppName?: string | null
+  fdTransactionID?: string | null
+}
+
+export interface FreightChargeItem {
+  fdListCode: string
+  fdCustCode: string
+  fdMarkingCode: string
+  fdMarkingNo: string
+  fdInvoiceNo: string
+  fdContainerNo: string
+  fdJmlPack: number
+  fdSatuan: string
+  fdJmlBerat: number
+  fdM3: number
+  fdFc: number
+  fdCurrFc: string
+  fdFcCurr: number
+  fdComodity: string
+  fdTrackingNo: string
+  fdKeteranganSJ: string
+  fdListDate: string | null
+  fdTgl_IN: string | null
+  fdCreatedDate: string | null
+}
+
+export interface FreightChargeCurrencySummary {
+  currency: string
+  totalFc: number
+  totalColly: number
+  totalBerat: number
+  totalM3: number
+  count: number
+}
+
+export interface FreightChargeResponse {
+  custCode: string
+  markingCode: string
+  totalLists: number
+  listsWithFcCount: number
+  totalColly: number
+  totalBerat: number
+  totalM3: number
+  currencySummaries: FreightChargeCurrencySummary[]
+  items: FreightChargeItem[]
+}
+
+export interface CustomerBillingHistoryDetail {
+  fdID: string
+  fdItemName: string | null
+  prevItemName?: string | null
+  fdQty: number | null
+  prevQty?: number | null
+  fdItemPrice: number | null
+  prevItemPrice?: number | null
+  fdTotal: number | null
+  prevTotal?: number | null
+  fdCurr: string | null
+  prevCurr?: string | null
+  fdListCode: string | null
+  fdComodity?: string | null
+  changeStatus?: 'UNCHANGED' | 'UPDATE' | 'INSERT' | 'DELETE'
+  hasAdjustment?: boolean
+  diffs?: {
+    itemName?: { old: string | null; new: string | null }
+    qty?: { old: number | null; new: number | null }
+    price?: { old: number | null; new: number | null }
+    total?: { old: number | null; new: number | null }
+    curr?: { old: string | null; new: string | null }
+  }
+}
+
+export interface CustomerBillingHistoryTotal {
+  fdID: string
+  fdCCYCode: string | null
+  fdJumlah: number | null
+  fdBayar: number | null
+  fdSLunas: number | null
+}
+
+export interface CustomerBillingHistoryItem {
+  fdInvNo: string
+  fdInvDate: string
+  fdCustCode: string
+  fdMarkingCode: string | null
+  fdMarkingNo: string | null
+  fdListCode: string | null
+  fdListType: number | null
+  moda: 'Udara' | 'Laut' | 'Unknown'
+  fdDescr: string
+  commodities: string[]
+  fdJumlah1: number
+  fdJumlah2: number
+  fdCurr1: string | null
+  totalAmount: number
+  fdEmpCode: string | null
+  empName: string | null
+  isIssued: boolean
+  paymentStatus: 'LUNAS' | 'PARTIAL' | 'OVERDUE' | 'UNPAID' | 'ISSUED' | 'DRAFT'
+  ageDays: number
+  isOverdue: boolean
+  totalBayar: number
+  sisaBayar: number
+  fdGive: number | null
+  fdGive2: number | null
+  fdGiveDate: string | null
+  fdCekDate: string | null
+  fdCekBy: string | null
+  detailsCount: number
+  details?: CustomerBillingHistoryDetail[]
+  totals: CustomerBillingHistoryTotal[]
+}
+
+export interface CustomerBillingHistoryResponse {
+  customer: {
+    fdCustCode: string
+    fdCustName: string | null
+    fdSalesNM: string | null
+    fdBroker: number | null
+  } | null
+  summary: {
+    totalInvoices: number
+    totalAmountIdr: number
+    totalAirInvoices: number
+    totalSeaInvoices: number
+    issuedCount: number
+    draftCount: number
+    lunasCount: number
+    partialCount: number
+    overdueCount: number
+    unpaidCount: number
+    issuedRecentCount: number
+    latestInvoiceDate: string | null
+    earliestInvoiceDate: string | null
+    yearsAvailable: number[]
+  }
+  items: CustomerBillingHistoryItem[]
+}
+
+export interface BillResiRecord {
+  fdListCode: string
+  fdCustCode: string
+  fdCustName: string
+  fdMarkingCode: string
+  fdMarkingNo: string
+  fdInvoiceNo: string
+  isCurrentBill: boolean
+  isCurrentMarking: boolean
+  isSameCustomer: boolean
+  fdListDate: string | null
+  fdJmlPack: number
+  fdSatuan: string
+  fdJmlBerat: number
+  fdM3: number
+  fdComodity: string
+  fdAWB?: string | null
+  fdEtd?: string | null
+  fdExitDate?: string | null
+}
+
+export interface BillResiItem {
+  fdTerima: string
+  isPartial: boolean
+  isCrossMarking: boolean
+  markingCodes: string[]
+  totalRecords: number
+  totalColly: number
+  totalBerat: number
+  totalM3: number
+  records: BillResiRecord[]
+}
+
+export interface BillResiCheckResponse {
+  invNo: string
+  custCode: string
+  custName: string
+  markingCode: string
+  markingNo: string
+  summary: {
+    totalResi: number
+    isPartial: boolean
+    partialCount: number
+    crossMarkingCount: number
+    totalColly: number
+    totalBerat: number
+    totalM3: number
+  }
+  resiList: BillResiItem[]
+}

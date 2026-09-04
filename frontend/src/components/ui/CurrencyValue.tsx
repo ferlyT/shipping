@@ -24,7 +24,7 @@ export function formatWithCurrency(value: number | string | null | undefined, cu
   if (numeric == null || Number.isNaN(numeric)) return '—'
   let symbol = (currency || 'Rp.').trim()
   if (symbol.toUpperCase() === 'RP' || symbol.toUpperCase() === 'RP.') symbol = 'Rp.'
-  return `${symbol} ${new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric)}`
+  return `${symbol} ${new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric)}`
 }
 
 export function CurrencyValue({
@@ -43,7 +43,7 @@ export function CurrencyValue({
   const amount =
     numeric == null || Number.isNaN(numeric)
       ? '—'
-      : new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric)
+      : new Intl.NumberFormat('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(numeric)
 
   return (
     <span className={`inline-flex w-full items-baseline justify-between gap-2 ${className}`}>

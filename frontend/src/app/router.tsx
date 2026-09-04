@@ -23,10 +23,33 @@ export function PermissionGuard() {
     return <Outlet />
   }
 
+  // If user has wildcard permission
+  if (user?.permissions?.includes('/*')) {
+    return <Outlet />
+  }
+
+  // Special check: validation routes require explicit validation permissions
+  if (pathname.startsWith('/mshipping/finance/billing/validation')) {
+    const hasValAccess = user?.permissions?.some(
+      (p) =>
+        p === '/mshipping/finance/billing/validation' ||
+        p === '/mshipping/finance/billing/validation/list' ||
+        p === '/mshipping/finance/billing/validation/summary' ||
+        pathname === p ||
+        pathname.startsWith(p + '/')
+    )
+    if (!hasValAccess) {
+      return <DefaultRouteRedirect />
+    }
+    return <Outlet />
+  }
+
   // Check if current path is in the user's permissions
-  const hasAccess = user?.permissions?.some(p => {
-    if (p === '/*') return true
-    return pathname === p || pathname.startsWith(p + '/')
+  const hasAccess = user?.permissions?.some((p) => {
+    if (pathname === p || pathname.startsWith(p + '/')) return true
+    if (p.startsWith('/mshipping/finance/billing') && pathname.startsWith('/mshipping/finance/billing')) return true
+    if (p.startsWith('/mshipping/logistics/shipments') && pathname.startsWith('/mshipping/logistics/shipments')) return true
+    return false
   })
 
   if (!hasAccess) {
@@ -79,6 +102,7 @@ const ShipmentsListPage  = lazy(() => import('@/features/shipments').then(m => (
 const ShipmentBatchesDashboardPage = lazy(() => import('@/features/shipment-batches').then(m => ({ default: m.ShipmentBatchesDashboardPage })))
 const ShipmentBatchesListPage = lazy(() => import('@/features/shipment-batches').then(m => ({ default: m.ShipmentBatchesListPage })))
 const DeliveryOrdersPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryOrdersPage })))
+const DeliveryOrdersListPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryOrdersListPage })))
 const DeliveryDetailPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryDetailPage })))
 const BillingDashboardPage = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingDashboardPage })))
 const BillingTargetPage    = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingTargetPage })))
@@ -96,6 +120,7 @@ const CustomerPriceListUploadPage = lazy(() => import('@/features/customer-price
 const CustomerPriceListHistoryPage = lazy(() => import('@/features/customer-price-list').then(m => ({ default: m.HistoryPage })))
 const CustomerPriceListDiffPage = lazy(() => import('@/features/customer-price-list').then(m => ({ default: m.DiffPage })))
 const CustomerPriceListLookupPage = lazy(() => import('@/features/customer-price-list').then(m => ({ default: m.PriceLookupPage })))
+const CommodityMappingPage = lazy(() => import('@/features/commodity-mapping').then(m => ({ default: m.CommodityMappingPage })))
 const UserManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.UserManagementPage })))
 const RoleManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.RoleManagementPage })))
 const AccountPage        = lazy(() => import('@/features/profile').then(m => ({ default: m.AccountPage })))
@@ -119,6 +144,7 @@ export function AppRouter() {
                 <Route path={ROUTES.SHIPMENT_BATCHES}  element={<ShipmentBatchesDashboardPage />} />
                 <Route path={ROUTES.SHIPMENT_BATCHES_LIST}  element={<ShipmentBatchesListPage />} />
                 <Route path={ROUTES.DELIVERY_ORDERS}   element={<DeliveryOrdersPage />} />
+                <Route path={ROUTES.DELIVERY_ORDERS_LIST} element={<DeliveryOrdersListPage />} />
                 <Route path={ROUTES.DELIVERY_DETAIL(':id')} element={<DeliveryDetailPage />} />
                 <Route path={ROUTES.BILLING}           element={<BillingDashboardPage />} />
                 <Route path={ROUTES.BILLING_TARGET}    element={<BillingTargetPage />} />
@@ -138,6 +164,9 @@ export function AppRouter() {
                 <Route path={ROUTES.CUSTOMER_PRICE_LIST_UPLOAD} element={<CustomerPriceListUploadPage />} />
                 <Route path={ROUTES.CUSTOMER_PRICE_LIST_DETAIL(':custCode')} element={<CustomerPriceListHistoryPage />} />
                 <Route path="/mshipping/finance/customer-price-list/uploads/:id" element={<CustomerPriceListDiffPage />} />
+
+                {/* Commodity Mapping */}
+                <Route path={ROUTES.COMMODITY_MAPPING} element={<CommodityMappingPage />} />
               </Route>
               
               {/* Admin Only Routes */}

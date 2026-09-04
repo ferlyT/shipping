@@ -1,4 +1,4 @@
-import { type LucideIcon, Plane, Ship } from 'lucide-react'
+import { type LucideIcon, Plane, Ship, TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface StatCardProps {
@@ -13,6 +13,13 @@ export interface StatCardProps {
   variant?: 'default' | 'warning' | 'danger' | 'success' | 'info' | 'purple'
   airValue?: string | number
   seaValue?: string | number
+  subValue?: string | number
+  yoy?: {
+    percent: number
+    lastYearValue?: number
+    isPositive?: boolean
+    label?: string
+  }
 }
 
 const VARIANT_BORDER_HOVER: Record<NonNullable<StatCardProps['variant']>, string> = {
@@ -79,7 +86,7 @@ export function StatCard({
           <div className="flex flex-col gap-1.5">
             <div className="flex items-baseline gap-1">
               <h3 className="text-3xl sm:text-[2rem] md:text-[2.2rem] font-semibold text-[var(--color-primary)] font-[var(--font-display)] tabular-nums leading-none">
-                {typeof value === 'number' ? value.toLocaleString() : value}
+                {typeof value === 'number' ? value.toLocaleString('en-US') : value}
               </h3>
               {unit && (
                 <span className="text-xs sm:text-[13px] md:text-[14px] font-bold text-[var(--color-secondary)] uppercase">
@@ -93,13 +100,13 @@ export function StatCard({
                 {airValue !== undefined && (
                   <span className="inline-flex items-center gap-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded border border-sky-500/20 font-semibold">
                     <Plane className="w-3 h-3 text-sky-500 shrink-0" />
-                    <span>{typeof airValue === 'number' ? airValue.toLocaleString() : airValue}</span>
+                    <span>{typeof airValue === 'number' ? airValue.toLocaleString('en-US') : airValue}</span>
                   </span>
                 )}
                 {seaValue !== undefined && (
                   <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-semibold">
                     <Ship className="w-3 h-3 text-emerald-500 shrink-0" />
-                    <span>{typeof seaValue === 'number' ? seaValue.toLocaleString() : seaValue}</span>
+                    <span>{typeof seaValue === 'number' ? seaValue.toLocaleString('en-US') : seaValue}</span>
                   </span>
                 )}
               </div>
@@ -126,6 +133,7 @@ export function StatCard({
 export interface StatCardGroupItem {
   label: string
   value: string | number
+  subValue?: string | number
   unit?: string
   valueColorClass?: string
   isLoading?: boolean
@@ -133,6 +141,12 @@ export interface StatCardGroupItem {
   actionLabel?: string
   airValue?: string | number
   seaValue?: string | number
+  yoy?: {
+    percent: number
+    lastYearValue?: number
+    isPositive?: boolean
+    label?: string
+  }
 }
 
 const ITEMS_FLOW_CLASSES: Record<'sm' | 'lg' | 'xl', string> = {
@@ -156,6 +170,7 @@ export interface StatCardGroupProps {
   isOpen?: boolean
   onToggle?: () => void
   itemsBreakpoint?: 'sm' | 'lg' | 'xl'
+  mobileLayout?: 'auto' | '2-cols' | '3-cols' | 'stack'
 }
 
 export function StatCardGroup({
@@ -168,6 +183,7 @@ export function StatCardGroup({
   isOpen = true,
   onToggle,
   itemsBreakpoint = 'sm',
+  mobileLayout = 'auto',
 }: StatCardGroupProps) {
   const headerContent = (
     <>
@@ -178,76 +194,135 @@ export function StatCardGroup({
     </>
   )
 
+  const is2Cols = mobileLayout === '2-cols' || (mobileLayout === 'auto' && (items.length === 2 || items.length === 4))
+  const is3Cols = mobileLayout === '3-cols' || (mobileLayout === 'auto' && items.length === 3)
+
   return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-sm overflow-hidden h-full flex flex-col">
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-xs overflow-hidden h-full flex flex-col">
       {/* Header internal card */}
       {collapsible ? (
         <button
           type="button"
           onClick={onToggle}
-          className="flex w-full items-center gap-2 px-4 sm:px-5 py-3.5 text-left cursor-pointer hover:bg-[var(--color-neutral)]/40 transition-colors border-b border-[var(--color-border)] shrink-0"
+          className="flex w-full items-center gap-2 px-3.5 sm:px-5 py-3 sm:py-3.5 text-left cursor-pointer hover:bg-[var(--color-neutral)]/40 transition-colors border-b border-[var(--color-border)] shrink-0"
           aria-expanded={isOpen}
         >
           {headerContent}
         </button>
       ) : (
-        <div className="flex items-center gap-2 px-4 sm:px-5 py-3.5 border-b border-[var(--color-border)] shrink-0">
+        <div className="flex items-center gap-2 px-3.5 sm:px-5 py-3 sm:py-3.5 border-b border-[var(--color-border)] shrink-0">
           {headerContent}
         </div>
       )}
 
       {/* Kolom data */}
       {isOpen && (
-        <div className={cn("grid grid-cols-1 flex-1", ITEMS_FLOW_CLASSES[itemsBreakpoint])}>
+        <div className={cn(
+          "flex-1 grid",
+          is2Cols
+            ? (items.length === 4
+                ? "grid-cols-2 sm:grid-cols-4 xl:grid-flow-col xl:auto-cols-fr"
+                : "grid-cols-2 xl:grid-flow-col xl:auto-cols-fr")
+            : is3Cols
+              ? "grid-cols-1 sm:grid-cols-3 xl:grid-flow-col xl:auto-cols-fr"
+              : cn("grid-cols-1", ITEMS_FLOW_CLASSES[itemsBreakpoint])
+        )}>
           {items.map((item, idx) => {
             const isClickable = Boolean(item.onClick)
+
+            let borderClasses = ""
+            if (is2Cols) {
+              if (items.length === 2) {
+                borderClasses = idx === 0
+                  ? "border-r border-[var(--color-border)]"
+                  : "xl:border-l border-[var(--color-border)]"
+              } else if (items.length === 4) {
+                if (idx === 0) borderClasses = "border-r border-b sm:border-b-0 border-[var(--color-border)]"
+                if (idx === 1) borderClasses = "border-b sm:border-b-0 sm:border-l border-[var(--color-border)]"
+                if (idx === 2) borderClasses = "border-r sm:border-l border-[var(--color-border)]"
+                if (idx === 3) borderClasses = "sm:border-l border-[var(--color-border)]"
+              }
+            } else if (is3Cols) {
+              borderClasses = idx > 0
+                ? "border-t sm:border-t-0 sm:border-l border-[var(--color-border)]"
+                : ""
+            } else {
+              borderClasses = idx > 0
+                ? cn(ITEMS_DIVIDER_CLASSES[itemsBreakpoint], "border-[var(--color-border)]")
+                : ""
+            }
+
             return (
               <div
                 key={item.label}
                 onClick={item.onClick}
                 className={cn(
-                  "p-4 sm:p-5 flex flex-col justify-between transition-colors",
-                  idx > 0 && cn(ITEMS_DIVIDER_CLASSES[itemsBreakpoint], "border-[var(--color-border)]"),
-                  isClickable && "cursor-pointer hover:bg-[var(--color-neutral)]/40"
+                  "p-3 sm:p-4 lg:p-5 flex flex-col justify-between transition-colors",
+                  borderClasses,
+                  isClickable && "cursor-pointer hover:bg-[var(--color-neutral)]/40 active:bg-[var(--color-neutral)]/70"
                 )}
               >
                 <div>
-                  <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wide text-[var(--color-secondary)]">
+                  <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wide text-[var(--color-secondary)] line-clamp-1">
                     {item.label}
                   </span>
 
-                  <div className="mt-1.5">
+                  <div className="mt-1 sm:mt-1.5">
                     {item.isLoading ? (
-                      <div className="h-7 w-14 bg-[var(--color-border)] animate-pulse rounded" />
+                      <div className="h-6 sm:h-7 w-12 sm:w-14 bg-[var(--color-border)] animate-pulse rounded" />
                     ) : (
-                      <div className="flex items-baseline gap-1">
+                      <div className="flex items-baseline gap-1.5 flex-wrap">
                         <h3 className={cn(
-                          "text-2xl sm:text-[1.7rem] font-semibold font-[var(--font-display)] tabular-nums leading-none",
+                          "text-xl sm:text-2xl md:text-[1.7rem] font-bold font-[var(--font-display)] tabular-nums leading-none",
                           item.valueColorClass || "text-[var(--color-primary)]"
                         )}>
-                          {typeof item.value === 'number' ? item.value.toLocaleString() : item.value}
+                          {typeof item.value === 'number' ? item.value.toLocaleString('en-US') : item.value}
                         </h3>
                         {item.unit && (
-                          <span className="text-[11px] font-bold text-[var(--color-secondary)] uppercase">
+                          <span className="text-[10px] sm:text-[11px] font-bold text-[var(--color-secondary)] uppercase">
                             {item.unit}
+                          </span>
+                        )}
+                        {item.yoy !== undefined && (
+                          <span
+                            className={cn(
+                              "inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] sm:text-[11px] font-bold border tabular-nums",
+                              item.yoy.percent >= 0
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                                : "bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20"
+                            )}
+                            title={item.yoy.label || `YoY vs tahun lalu: ${item.yoy.percent >= 0 ? '+' : ''}${item.yoy.percent.toFixed(1)}%`}
+                          >
+                            {item.yoy.percent >= 0 ? (
+                              <TrendingUp className="w-3 h-3 text-emerald-500 shrink-0" />
+                            ) : (
+                              <TrendingDown className="w-3 h-3 text-rose-500 shrink-0" />
+                            )}
+                            <span>{item.yoy.percent >= 0 ? '+' : ''}{item.yoy.percent.toFixed(1)}% YoY</span>
                           </span>
                         )}
                       </div>
                     )}
                   </div>
 
+                  {item.subValue && !item.isLoading && (
+                    <div className="mt-1 text-[10px] sm:text-[11px] text-[var(--color-secondary)] font-medium leading-tight">
+                      {item.subValue}
+                    </div>
+                  )}
+
                   {(item.airValue !== undefined || item.seaValue !== undefined) && !item.isLoading && (
-                    <div className="mt-2.5 flex items-center gap-1.5 flex-wrap text-[11px]">
+                    <div className="mt-2 flex items-center gap-1 sm:gap-1.5 flex-wrap text-[10px] sm:text-[11px]">
                       {item.airValue !== undefined && (
-                        <span className="inline-flex items-center gap-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded border border-sky-500/20 font-semibold">
+                        <span className="inline-flex items-center gap-1 bg-sky-500/10 text-sky-600 dark:text-sky-400 px-1.5 py-0.5 rounded border border-sky-500/20 font-bold">
                           <Plane className="w-3 h-3 text-sky-500 shrink-0" />
-                          <span>{typeof item.airValue === 'number' ? item.airValue.toLocaleString() : item.airValue}</span>
+                          <span>{typeof item.airValue === 'number' ? item.airValue.toLocaleString('en-US') : item.airValue}</span>
                         </span>
                       )}
                       {item.seaValue !== undefined && (
-                        <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-semibold">
+                        <span className="inline-flex items-center gap-1 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-1.5 py-0.5 rounded border border-emerald-500/20 font-bold">
                           <Ship className="w-3 h-3 text-emerald-500 shrink-0" />
-                          <span>{typeof item.seaValue === 'number' ? item.seaValue.toLocaleString() : item.seaValue}</span>
+                          <span>{typeof item.seaValue === 'number' ? item.seaValue.toLocaleString('en-US') : item.seaValue}</span>
                         </span>
                       )}
                     </div>
@@ -255,7 +330,7 @@ export function StatCardGroup({
                 </div>
 
                 {item.actionLabel && !item.isLoading && (
-                  <span className="mt-2.5 inline-block text-[10px] text-[var(--color-secondary)] underline decoration-dashed underline-offset-2">
+                  <span className="mt-2 inline-block text-[10px] text-[var(--color-primary)] font-semibold underline decoration-dashed underline-offset-2">
                     {item.actionLabel}
                   </span>
                 )}

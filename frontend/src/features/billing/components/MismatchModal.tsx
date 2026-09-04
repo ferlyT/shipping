@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { createPortal } from 'react-dom'
 import { X, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react'
 import { formatDecimal } from '@/lib/utils'
@@ -9,6 +10,7 @@ interface MismatchModalProps {
 }
 
 export function MismatchModal({ item, onClose }: MismatchModalProps) {
+  useModalEscape(Boolean(item), onClose)
   if (!item) return null
 
   const m3K    = Number(item.m3Komplain || 0)
@@ -109,7 +111,7 @@ export function MismatchModal({ item, onClose }: MismatchModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-[var(--color-border)] bg-[var(--color-neutral)]">
           <div className="flex items-center gap-2">
-            <AlertTriangle className="w-5 h-5 text-rose-500" />
+            <AlertTriangle className="hidden sm:inline-block w-5 h-5 text-rose-500" />
             <div>
               <span className="text-sm font-bold text-rose-600 dark:text-rose-400">Penyebab Data Mismatch</span>
               <span className="text-[10px] block text-[var(--color-secondary)]">
@@ -139,7 +141,7 @@ export function MismatchModal({ item, onClose }: MismatchModalProps) {
           <div className="px-5 pt-4">
             <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/25 space-y-1.5">
               <div className="text-[11px] font-bold text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <AlertTriangle className="hidden sm:inline-block w-3.5 h-3.5 shrink-0" />
                 Ditemukan {issues.length} Ketidaksesuaian:
               </div>
               <ul className="space-y-1 pl-4 list-disc text-[11px] text-rose-700 dark:text-rose-300 font-medium">
@@ -174,11 +176,11 @@ export function MismatchModal({ item, onClose }: MismatchModalProps) {
                 </div>
                 {c.ok ? (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                    <CheckCircle2 className="w-3.5 h-3.5" /> Sesuai
+                    <CheckCircle2 className="hidden sm:inline-block w-3.5 h-3.5" /> Sesuai
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400">
-                    <XCircle className="w-3.5 h-3.5" /> Selisih
+                    <XCircle className="hidden sm:inline-block w-3.5 h-3.5" /> Selisih
                   </span>
                 )}
               </div>

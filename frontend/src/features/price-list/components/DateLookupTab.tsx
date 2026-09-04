@@ -208,6 +208,7 @@ export function DateLookupTab({
       ) : (
         <CategoryGroupedPriceTable
           items={filteredDateItems}
+          isLoading={isLoadingDate}
           totalOriginalCount={dateResult?.items.length || 0}
           searchQuery={tableSearch}
           onSearchChange={setTableSearch}

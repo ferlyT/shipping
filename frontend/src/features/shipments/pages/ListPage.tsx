@@ -6,7 +6,6 @@ import { useQuery } from '@tanstack/react-query'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Pagination } from '@/components/ui/Pagination'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { shipmentsApi, type SearchFieldType } from '../services/shipments.service'
 import { useShipmentsList } from '../hooks/useShipmentsList'
 import { useShipmentDetail } from '../hooks/useShipmentDetail'
@@ -97,8 +96,7 @@ export default function ShipmentsListPage() {
     goToPage(1)
   }
 
-  // ── Loading guard ────────────────────────────────────────────────────────
-  if (isLoading && !shipmentsData) return <LoadingSpinner message={t('common.loadingShipment')} />
+  const isDataLoading = isLoading || isFetching
 
   return (
     <div className="flex flex-col min-h-full bg-[var(--color-neutral)]">
@@ -153,31 +151,16 @@ export default function ShipmentsListPage() {
               displayCount={dataList.length}
               total={total}
               isFetching={isFetching}
-              isLoading={isLoading}
+              isLoading={isDataLoading}
             />
           </div>
-
-          {/* Progress bar */}
-          <div className="relative h-px bg-[var(--color-border)] shrink-0">
-            {isFetching && !isLoading && (
-              <div className="absolute inset-x-0 top-0 h-[2px] bg-[var(--color-primary)]/10 overflow-hidden z-10">
-                <div className="h-full w-1/3 bg-[var(--color-primary)] rounded-full animate-[loaderSlide_1.1s_ease-in-out_infinite]" />
-              </div>
-            )}
-          </div>
-          <style>{`
-            @keyframes loaderSlide {
-              0% { transform: translateX(-100%); }
-              100% { transform: translateX(400%); }
-            }
-          `}</style>
 
           {/* Data area — scrollable */}
           <div className="flex-1 overflow-auto min-h-0 bg-[var(--color-neutral)]">
             {viewMode === 'table' && (
               <ShipmentTableView
                 data={dataList}
-                isLoading={isLoading}
+                isLoading={isDataLoading}
                 selectedCode={selectedRow?.fdListCode}
                 onRowClick={setSelectedRow}
                 search={search}
@@ -186,7 +169,7 @@ export default function ShipmentsListPage() {
             {viewMode === 'compact' && (
               <ShipmentCompactView
                 data={dataList}
-                isLoading={isLoading}
+                isLoading={isDataLoading}
                 selectedCode={selectedRow?.fdListCode}
                 onRowClick={setSelectedRow}
               />
@@ -195,7 +178,7 @@ export default function ShipmentsListPage() {
               <div className="p-4 sm:p-5 h-full">
                 <ShipmentGridView
                   data={dataList}
-                  isLoading={isLoading}
+                  isLoading={isDataLoading}
                   selectedCode={selectedRow?.fdListCode}
                   onRowClick={setSelectedRow}
                 />
@@ -204,7 +187,7 @@ export default function ShipmentsListPage() {
           </div>
 
           {/* Pagination footer */}
-          {totalPages > 0 && (
+          {!isDataLoading && totalPages > 0 && (
             <div className="shrink-0 flex items-center justify-between gap-3 px-4 sm:px-5 py-2.5 bg-[var(--color-surface)] border-t border-[var(--color-border)]">
               <Pagination
                 page={page}
@@ -230,7 +213,7 @@ export default function ShipmentsListPage() {
                     }}
                     className="w-14 text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-xs text-[var(--color-primary)] font-semibold focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]/30 transition-all"
                   />
-                  <span className="tabular-nums">/ {totalPages.toLocaleString('id-ID')}</span>
+                  <span className="tabular-nums">/ {totalPages.toLocaleString('en-US')}</span>
                 </div>
               )}
             </div>

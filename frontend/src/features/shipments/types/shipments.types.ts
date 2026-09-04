@@ -74,6 +74,7 @@ export interface Shipment {
   fdJmlPack: number | null
   fdSatuan: string | null
   fdJmlBerat: number | null
+  fdListType?: number | null
   fdM3: number | null
   fdCancel?: number | null
   fdLocalTrackingNo?: string | null

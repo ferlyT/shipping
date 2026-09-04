@@ -11,7 +11,6 @@ import { BatchFilterBar, type BatchListTypeFilter } from '../components/BatchFil
 import { BatchToolbar, type BatchSearchScope } from '../components/BatchToolbar'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import type { Marking, MarkingGroupMode } from '../types/marking.types'
 
 export default function ShipmentBatchesListPage() {
@@ -32,7 +31,7 @@ export default function ShipmentBatchesListPage() {
   const [isCodeModalOpen, setIsCodeModalOpen] = useState(false)
 
   // Fetch KPI data for totals
-  const { data: kpiData, isLoading: isLoadingKpi, isFetching: isFetchingKpi } = useQuery({
+  const { data: kpiData, isFetching: isFetchingKpi } = useQuery({
     queryKey: ['markingKpi', listTypeFilter, debouncedSearch],
     queryFn: async () => {
       const res = await markingApi.getKPIs({ listType: listTypeFilter, search: debouncedSearch })
@@ -66,8 +65,6 @@ export default function ShipmentBatchesListPage() {
     setSearch('')
     setSearchScope('ALL')
   }
-
-  if (isLoadingKpi && !kpiData) return <LoadingSpinner message={t('common.loadingBatch')} />
 
   return (
     <div className="flex flex-col min-h-full bg-[var(--color-neutral)]">
@@ -115,21 +112,6 @@ export default function ShipmentBatchesListPage() {
               isFetching={isFetchingKpi}
             />
           </div>
-
-          {/* Progress bar */}
-          <div className="relative h-px bg-[var(--color-border)] shrink-0">
-            {isFetchingKpi && (
-              <div className="absolute inset-x-0 top-0 h-[2px] bg-[var(--color-primary)]/10 overflow-hidden z-10">
-                <div className="h-full w-1/3 bg-[var(--color-primary)] rounded-full animate-[loaderSlide_1.1s_ease-in-out_infinite]" />
-              </div>
-            )}
-          </div>
-          <style>{`
-            @keyframes loaderSlide {
-              0% { transform: translateX(-100%); }
-              100% { transform: translateX(400%); }
-            }
-          `}</style>
 
           {/* Grouped Table Area */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 bg-[var(--color-neutral)] min-h-0 space-y-4">

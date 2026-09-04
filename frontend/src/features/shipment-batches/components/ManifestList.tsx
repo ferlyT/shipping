@@ -420,15 +420,15 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
         <div className="grid grid-cols-3 gap-3 sm:flex sm:gap-6">
           <div className="flex flex-col items-center sm:items-end">
             <span className="text-[10px] sm:text-[11px] uppercase tracking-wide text-[var(--color-secondary)]">Jumlah Pack</span>
-            <b className="text-[var(--color-tertiary)] whitespace-nowrap">{totalPkgs.toLocaleString()}</b>
+            <b className="text-[var(--color-tertiary)] whitespace-nowrap">{totalPkgs.toLocaleString('en-US')}</b>
           </div>
           <div className="flex flex-col items-center sm:items-end">
             <span className="text-[10px] sm:text-[11px] uppercase tracking-wide text-[var(--color-secondary)]">Berat</span>
-            <b className="text-[var(--color-primary)] whitespace-nowrap">{totalWeight.toLocaleString(undefined, { maximumFractionDigits: 2 })} KG</b>
+            <b className="text-[var(--color-primary)] whitespace-nowrap">{totalWeight.toLocaleString('en-US', { maximumFractionDigits: 2 })} KG</b>
           </div>
           <div className="flex flex-col items-center sm:items-end">
             <span className="text-[10px] sm:text-[11px] uppercase tracking-wide text-[var(--color-secondary)]">Volume</span>
-            <b className="text-[var(--color-primary)] whitespace-nowrap">{totalVol.toLocaleString(undefined, { maximumFractionDigits: 4 })} M3</b>
+            <b className="text-[var(--color-primary)] whitespace-nowrap">{totalVol.toLocaleString('en-US', { maximumFractionDigits: 4 })} M3</b>
           </div>
         </div>
       </div>

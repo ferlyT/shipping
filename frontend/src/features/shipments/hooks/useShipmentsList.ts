@@ -21,7 +21,7 @@ export function useShipmentsList({ page, limit, search, searchField, customer, m
 
   return useQuery({
     queryKey: ['shipments', page, limit, search, searchField, customer, marking, listTypeKey, branchKey, statusKey],
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const res = await shipmentsApi.getList({
         page,
         limit,
@@ -32,7 +32,7 @@ export function useShipmentsList({ page, limit, search, searchField, customer, m
         ...(listType && listType !== 'ALL' && { listType }),
         ...(branch && branch !== 'ALL' && { branch }),
         ...(status !== undefined && status !== 'ALL' && { status }),
-      })
+      }, signal)
       return res
     },
     placeholderData: keepPreviousData,

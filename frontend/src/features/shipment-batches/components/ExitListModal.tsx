@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Search, LogOut, Package, Plane, Ship } from 'lucide-react';
@@ -22,6 +23,7 @@ interface ExitListModalProps {
 }
 
 export function ExitListModal({ isOpen, onClose, data, title, description, iconColorClass = "text-blue-500", iconBgClass = "bg-blue-50/10" }: ExitListModalProps) {
+  useModalEscape(isOpen, onClose)
   const [search, setSearch] = useState('');
 
   const filteredData = useMemo(() => {
@@ -51,7 +53,7 @@ export function ExitListModal({ isOpen, onClose, data, title, description, iconC
         <div className={`px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between ${iconBgClass}`}>
           <div>
             <h2 className="text-xl font-bold font-[var(--font-display)] text-[var(--color-primary)] flex items-center gap-2">
-              <LogOut className={`w-5 h-5 ${iconColorClass}`} /> {title}
+              <LogOut className={`hidden sm:inline-block w-5 h-5 ${iconColorClass}`} /> {title}
             </h2>
             <p className="text-sm text-[var(--color-secondary)] mt-1">{description}</p>
           </div>
@@ -107,7 +109,7 @@ export function ExitListModal({ isOpen, onClose, data, title, description, iconC
                 return (
                   <div key={group.title} className="flex flex-col gap-3">
                     <div className="flex items-center gap-2 pb-1 border-b border-[var(--color-border)]">
-                      <GroupIcon className={`w-4 h-4 ${group.color}`} />
+                      <GroupIcon className={`hidden sm:inline-block w-4 h-4 ${group.color}`} />
                       <h3 className={`text-sm font-bold ${group.color}`}>{group.title}</h3>
                       <span className="text-xs bg-[var(--color-neutral)] px-2 py-0.5 rounded-full text-[var(--color-secondary)]">
                         {groupData.length}
@@ -116,7 +118,7 @@ export function ExitListModal({ isOpen, onClose, data, title, description, iconC
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {groupData.map((item, idx) => (
                         <div key={idx} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3 shadow-sm hover:shadow transition-shadow flex items-start gap-3">
-                          <div className={`p-2 rounded-md ${group.bg}`}>
+                          <div className={`hidden sm:flex p-2 rounded-md ${group.bg}`}>
                             <GroupIcon className={`w-4 h-4 ${group.color}`} />
                           </div>
                           <div className="min-w-0 flex-1">

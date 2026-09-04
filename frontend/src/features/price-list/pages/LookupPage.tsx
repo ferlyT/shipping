@@ -1,7 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 import { Calendar, Search } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { ROUTES } from '@/lib/constants'
 import { useDateLookup, useEntryLookup } from '../hooks'
 import { DateLookupTab } from '../components/DateLookupTab'
@@ -31,15 +30,6 @@ export function LookupPage() {
     }
   }, [activeTab])
 
-  if (
-    dateLookup.isLoadingDate &&
-    !dateLookup.dateResult &&
-    dateLookup.isLoadingFilters &&
-    activeTab === 'entry'
-  ) {
-    return <LoadingSpinner message={dateLookup.t('common.loading')} />
-  }
-
   return (
     <div className="p-4 sm:p-6 lg:p-8 w-full min-w-0 space-y-6 bg-[var(--color-surface)] font-[var(--font-body)] animate-fadeIn pb-24">
       {/* Page Header */}
@@ -56,7 +46,7 @@ export function LookupPage() {
       {/* Tab Selector — single seamless surface with a sliding active indicator */}
       <div
         role="tablist"
-        className="relative inline-flex items-center gap-0.5 p-1 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)] w-fit"
+        className="relative grid grid-cols-2 sm:inline-flex items-center gap-0.5 p-1 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)] w-full sm:w-fit"
       >
         <div
           aria-hidden
@@ -75,14 +65,14 @@ export function LookupPage() {
               role="tab"
               aria-selected={isActive}
               onClick={() => setActiveTab(key)}
-              className={`relative z-10 flex items-center gap-2 px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors duration-200 cursor-pointer ${
+              className={`relative z-10 flex items-center justify-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-2 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors duration-200 cursor-pointer text-center ${
                 isActive
-                  ? 'text-[var(--color-primary)]'
+                  ? 'text-[var(--color-primary)] font-bold'
                   : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
               <Icon size={14} className={isActive ? 'text-[var(--color-primary)]' : ''} />
-              {label}
+              <span className="truncate">{label}</span>
             </button>
           )
         })}

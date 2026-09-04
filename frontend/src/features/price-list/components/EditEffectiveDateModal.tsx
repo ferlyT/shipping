@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Calendar, AlertCircle, Loader2, Check } from 'lucide-react'
@@ -21,6 +22,7 @@ export function EditEffectiveDateModal({
   currentEffectiveDate,
   onSave,
 }: EditEffectiveDateModalProps) {
+  useModalEscape(isOpen, onClose)
   const [effectiveDate, setEffectiveDate] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)

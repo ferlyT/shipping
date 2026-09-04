@@ -3,7 +3,6 @@ import { useTranslation } from '@/hooks/useTranslation'
 import { Package, Weight, Box, Receipt, ListChecks, Layers, ArrowRight } from 'lucide-react'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useShipmentKpis } from '../hooks/useShipmentKpis'
 
 export default function ShipmentsDashboardPage() {
@@ -11,8 +10,7 @@ export default function ShipmentsDashboardPage() {
   const { data: kpiData, isLoading: isLoadingKpi } = useShipmentKpis({})
 
   const kpis = kpiData
-
-  if (isLoadingKpi && !kpis) return <LoadingSpinner message={t('common.loadingShipment')} />
+  const isLoading = isLoadingKpi && !kpis
 
   return (
     <div className="flex flex-col gap-6 p-4 sm:p-6 pb-24">
@@ -38,11 +36,11 @@ export default function ShipmentsDashboardPage() {
             <span className="text-xs font-bold uppercase tracking-wider">{t('shipments.totalResi')}</span>
           </div>
           <div className="mt-3">
-            {isLoadingKpi ? (
-              <div className="h-8 w-16 bg-[var(--color-border)] animate-pulse rounded"></div>
+            {isLoading ? (
+              <div className="h-8 w-24 rounded-md skeleton-shimmer" />
             ) : (
               <h3 className="text-3xl font-semibold text-[var(--color-primary)] font-[var(--font-display)] tabular-nums">
-                {Number(kpis?.totalResi || 0).toLocaleString('id-ID')}
+                {Number(kpis?.totalResi || 0).toLocaleString('en-US')}
               </h3>
             )}
           </div>
@@ -58,11 +56,11 @@ export default function ShipmentsDashboardPage() {
             <span className="text-xs font-bold uppercase tracking-wider">{t('shipments.totalPackages')}</span>
           </div>
           <div className="mt-3">
-            {isLoadingKpi ? (
-              <div className="h-8 w-16 bg-[var(--color-border)] animate-pulse rounded"></div>
+            {isLoading ? (
+              <div className="h-8 w-24 rounded-md skeleton-shimmer" />
             ) : (
               <h3 className="text-3xl font-semibold text-[var(--color-primary)] font-[var(--font-display)] tabular-nums">
-                {Number(kpis?.totalPackages || 0).toLocaleString('id-ID')}
+                {Number(kpis?.totalPackages || 0).toLocaleString('en-US')}
               </h3>
             )}
           </div>
@@ -78,11 +76,11 @@ export default function ShipmentsDashboardPage() {
             <span className="text-xs font-bold uppercase tracking-wider">{t('shipments.totalWeight')}</span>
           </div>
           <div className="mt-3 flex items-baseline gap-1">
-            {isLoadingKpi ? (
-              <div className="h-8 w-16 bg-[var(--color-border)] animate-pulse rounded"></div>
+            {isLoading ? (
+              <div className="h-8 w-24 rounded-md skeleton-shimmer" />
             ) : (
               <h3 className="text-3xl font-semibold text-[var(--color-primary)] font-[var(--font-display)] tabular-nums">
-                {Number(kpis?.totalBerat || 0).toLocaleString('id-ID')}
+                {Number(kpis?.totalBerat || 0).toLocaleString('en-US')}
               </h3>
             )}
           </div>
@@ -98,12 +96,12 @@ export default function ShipmentsDashboardPage() {
             <span className="text-xs font-bold uppercase tracking-wider">{t('shipments.totalVolume')}</span>
           </div>
           <div className="mt-3 flex items-baseline gap-1">
-            {isLoadingKpi ? (
-              <div className="h-8 w-16 bg-[var(--color-border)] animate-pulse rounded"></div>
+            {isLoading ? (
+              <div className="h-8 w-24 rounded-md skeleton-shimmer" />
             ) : (
               <>
                 <h3 className="text-3xl font-semibold text-[var(--color-primary)] font-[var(--font-display)] tabular-nums">
-                  {Number(kpis?.totalVolume || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })}
+                  {Number(kpis?.totalVolume || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })}
                 </h3>
                 <span className="text-sm font-bold text-[var(--color-secondary)] ml-1">m³</span>
               </>

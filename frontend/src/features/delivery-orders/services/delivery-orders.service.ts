@@ -1,7 +1,7 @@
 import apiClient from '@/api/client'
 
 export const deliveryOrdersApi = {
-  list: (params?: Record<string, string | number>) =>
+  list: (params?: Record<string, string | number | undefined>) =>
     apiClient.get('/delivery-orders', { params }),
 
   detail: (id: string) => {

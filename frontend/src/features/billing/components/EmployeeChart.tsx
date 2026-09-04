@@ -29,7 +29,7 @@ export function EmployeeChart({ data, series, isLoading, isMobile, metric }: Emp
   const { t } = useTranslation()
 
   if (isLoading) {
-    return <div className="h-[260px] sm:h-[320px] w-full bg-[var(--color-border)] animate-pulse rounded-lg" />
+    return <div className="h-[260px] sm:h-[320px] w-full skeleton-shimmer rounded-xl" />
   }
 
   if (data.length === 0 || series.length === 0) {

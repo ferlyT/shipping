@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react'
 import {
-  X, Search, Rows3, LayoutGrid, List, Loader2, ChevronDown,
+  X, Search, Rows3, LayoutGrid, List, ChevronDown,
   Layers, HelpCircle, Sparkles, Tag, User, Receipt, Info
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -9,10 +9,12 @@ import type { SearchFieldType } from '../services/shipments.service'
 type ViewMode = 'table' | 'grid' | 'compact'
 
 export const SEARCH_SCOPES: { value: SearchFieldType; label: string; placeholder: string }[] = [
-  { value: 'ALL', label: 'Semua Field', placeholder: 'Cari customer, marking, resi, tracking, list code...' },
+  { value: 'ALL', label: 'Semua Field', placeholder: 'Cari customer, marking, marking no, resi, tracking, list code...' },
   { value: 'customer_marking', label: 'Customer & Marking', placeholder: 'Cari kombinasi customer & marking (contoh: PT Maju MRK-01)...' },
   { value: 'customer', label: 'Customer', placeholder: 'Cari customer (contoh: PT Maju, CV Sinar)...' },
-  { value: 'marking', label: 'Marking', placeholder: 'Cari marking (contoh: MRK-1, MRK-2)...' },
+  { value: 'marking', label: 'Marking (Semua)', placeholder: 'Cari kode / no marking (contoh: MRK-1, MRK-2)...' },
+  { value: 'markingNo', label: 'Marking No', placeholder: 'Cari spesifik nomor marking (contoh: 01, 102, 999)...' },
+  { value: 'markingCode', label: 'Marking Code', placeholder: 'Cari kode marking (contoh: MRK, JKT)...' },
   { value: 'resi', label: 'No. Resi', placeholder: 'Cari resi (contoh: TR-001, TR-002)...' },
   { value: 'tracking', label: 'Tracking', placeholder: 'Cari tracking lokal (contoh: TK01, TK02)...' },
   { value: 'listCode', label: 'No. List', placeholder: 'Cari no. list (contoh: L01, L02, L03)...' },
@@ -30,7 +32,7 @@ interface ShipmentToolbarProps {
   onPageReset: () => void
   displayCount: number
   total: number
-  isFetching: boolean
+  isFetching?: boolean
   isLoading: boolean
 }
 
@@ -46,7 +48,6 @@ export function ShipmentToolbar({
   onPageReset,
   displayCount,
   total,
-  isFetching,
   isLoading,
 }: ShipmentToolbarProps) {
   const [showTooltip, setShowTooltip] = useState(false)
@@ -80,39 +81,39 @@ export function ShipmentToolbar({
   }
 
   return (
-    <div className="bg-[var(--color-surface)] px-4 sm:px-5 py-2.5 sm:py-3">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+    <div className="bg-[var(--color-surface)] px-3.5 sm:px-5 py-2.5 sm:py-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
         {/* Left: Scoped multi-value search bar + Info Tooltip */}
         <div className="flex items-center gap-2 flex-1 sm:max-w-[560px]">
           <div className="relative flex-1 flex items-center rounded-xl border border-[var(--color-border)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/20 transition-all bg-[var(--color-surface)] shadow-2xs overflow-hidden">
             {/* Scope selector */}
-            <div className="relative shrink-0 border-r border-[var(--color-border)] bg-[var(--color-neutral)] hover:opacity-90 transition-colors">
+            <div className="relative shrink-0 border-r border-[var(--color-border)] bg-[var(--color-neutral)] hover:opacity-90 transition-colors max-w-[110px] sm:max-w-none">
               <select
                 value={searchField}
                 onChange={(e) => onSearchFieldChange(e.target.value as SearchFieldType)}
-                className="appearance-none bg-transparent pl-3 pr-7 py-2 text-xs font-semibold text-[var(--color-text)] cursor-pointer outline-none"
+                className="appearance-none bg-transparent pl-2.5 sm:pl-3 pr-6 sm:pr-7 py-2 text-xs font-semibold text-[var(--color-text)] cursor-pointer outline-none w-full truncate"
               >
                 {SEARCH_SCOPES.map((sc) => (
                   <option key={sc.value} value={sc.value}>{sc.label}</option>
                 ))}
               </select>
-              <ChevronDown size={12} className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none" />
+              <ChevronDown size={12} className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none" />
             </div>
 
             {/* Search Input */}
             <div className="relative flex-1 flex items-center min-w-0">
-              <Search size={14} className="absolute left-3 text-[var(--color-secondary)] pointer-events-none" />
+              <Search size={14} className="absolute left-2.5 sm:left-3 text-[var(--color-secondary)] pointer-events-none" />
               <input
                 value={search}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder={currentScope.placeholder}
-                className="w-full pl-9 pr-14 py-2 text-sm text-[var(--color-text)] outline-none bg-transparent placeholder:text-[var(--color-secondary)]"
+                className="w-full pl-8 sm:pl-9 pr-12 sm:pr-14 py-2 text-xs sm:text-sm text-[var(--color-text)] outline-none bg-transparent placeholder:text-[var(--color-secondary)]"
               />
 
               {/* Multi-item badge count */}
               {isMultiSearch && (
                 <span
-                  className="absolute right-8 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 text-[10px] font-bold"
+                  className="absolute right-7 sm:right-8 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 text-[10px] font-bold"
                   title={`${tokens.length} keyword pencarian terdeteksi`}
                 >
                   <Layers size={10} />
@@ -124,7 +125,7 @@ export function ShipmentToolbar({
                 <button
                   type="button"
                   onClick={() => onSearchChange('')}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-text)] p-0.5 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer transition-colors"
+                  className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-text)] p-0.5 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer transition-colors"
                   title="Hapus pencarian"
                 >
                   <X size={13} />
@@ -152,97 +153,104 @@ export function ShipmentToolbar({
 
             {/* Tooltip / Popover Panel */}
             {showTooltip && (
-              <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-2 w-[min(380px,calc(100vw-2rem))] z-40 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xl shadow-black/10 p-4 text-xs animate-in fade-in-50 zoom-in-95 duration-150">
-                {/* Header */}
-                <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[var(--color-border)] mb-3">
-                  <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] text-sm">
-                    <Sparkles size={14} className="text-[var(--color-primary)]" />
-                    <span>Panduan Pencarian Cerdas</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowTooltip(false)}
-                    className="text-[var(--color-secondary)] hover:text-[var(--color-text)] p-1 rounded-md hover:bg-[var(--color-neutral)]"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-
-                {/* Guide Items */}
-                <div className="space-y-3 text-[var(--color-secondary)]">
-                  {/* 1. Customer + Marking */}
-                  <div className="p-2.5 bg-[var(--color-primary)]/5 rounded-xl border border-[var(--color-primary)]/15">
-                    <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] mb-1">
-                      <User size={12} className="text-[var(--color-primary)]" />
-                      <span>Kombinasi Customer & Marking</span>
+              <>
+                {/* Backdrop on mobile */}
+                <div className="fixed inset-0 bg-black/40 z-30 sm:hidden" onClick={() => setShowTooltip(false)} />
+                <div className="fixed sm:absolute inset-x-4 sm:inset-x-auto sm:left-auto sm:right-0 top-20 sm:top-full sm:mt-2 sm:w-[min(380px,calc(100vw-2rem))] z-40 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xl shadow-black/10 p-4 text-xs animate-in fade-in-50 zoom-in-95 duration-150 max-h-[80vh] overflow-y-auto">
+                  {/* Header */}
+                  <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[var(--color-border)] mb-3">
+                    <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] text-sm">
+                      <Sparkles size={14} className="text-[var(--color-primary)]" />
+                      <span>Panduan Pencarian Cerdas</span>
                     </div>
-                    <p className="text-xs text-[var(--color-secondary)] leading-snug mb-1.5">
-                      Ketik nama customer dan marking dipisahkan spasi untuk mencari data yang cocok pada keduanya.
-                    </p>
                     <button
                       type="button"
-                      onClick={() => applyExample('PT Maju MRK-01', 'customer_marking')}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--color-surface)] hover:bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 rounded-md font-mono text-[11px] font-semibold text-[var(--color-primary)] transition-colors cursor-pointer"
+                      onClick={() => setShowTooltip(false)}
+                      className="text-[var(--color-secondary)] hover:text-[var(--color-text)] p-1 rounded-md hover:bg-[var(--color-neutral)]"
                     >
-                      <span>Contoh:</span> <span className="underline">PT Maju MRK-01</span>
+                      <X size={13} />
                     </button>
                   </div>
 
-                  {/* 2. Multi-Item / Bulk Search */}
-                  <div className="p-2.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)]">
-                    <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] mb-1">
-                      <Receipt size={12} className="text-[var(--color-secondary)]" />
-                      <span>Multi Nomor Resi / No. List</span>
+                  {/* Guide Items */}
+                  <div className="space-y-3 text-[var(--color-secondary)]">
+                    {/* 1. Customer + Marking */}
+                    <div className="p-2.5 bg-[var(--color-primary)]/5 rounded-xl border border-[var(--color-primary)]/15">
+                      <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] mb-1">
+                        <User size={12} className="text-[var(--color-primary)]" />
+                        <span>Kombinasi Customer & Marking</span>
+                      </div>
+                      <p className="text-xs text-[var(--color-secondary)] leading-snug mb-1.5">
+                        Ketik nama customer dan marking dipisahkan spasi untuk mencari data yang cocok pada keduanya.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => applyExample('PT Maju MRK-01', 'customer_marking')}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--color-surface)] hover:bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 rounded-md font-mono text-[11px] font-semibold text-[var(--color-primary)] transition-colors cursor-pointer"
+                      >
+                        <span>Contoh:</span> <span className="underline">PT Maju MRK-01</span>
+                      </button>
                     </div>
-                    <p className="text-xs text-[var(--color-secondary)] leading-snug mb-1.5">
-                      Cari banyak nomor sekaligus dengan pemisah koma (<code className="bg-[var(--color-border)]/40 px-1 rounded">,</code>) atau baris baru (*paste multi-line*).
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => applyExample('TR-2026-001, TR-2026-002, TR-2026-003', 'resi')}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md font-mono text-[11px] font-semibold text-[var(--color-text)] transition-colors cursor-pointer truncate max-w-full"
-                    >
-                      <span>Contoh:</span> <span className="underline truncate">TR-2026-001, TR-2026-002</span>
-                    </button>
+
+                    {/* 2. Multi-Item / Bulk Search */}
+                    <div className="p-2.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)]">
+                      <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] mb-1">
+                        <Receipt size={12} className="text-[var(--color-secondary)]" />
+                        <span>Multi Nomor Resi / No. List</span>
+                      </div>
+                      <p className="text-xs text-[var(--color-secondary)] leading-snug mb-1.5">
+                        Cari banyak nomor sekaligus dengan pemisah koma (<code className="bg-[var(--color-border)]/40 px-1 rounded">,</code>) atau baris baru (*paste multi-line*).
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => applyExample('TR-2026-001, TR-2026-002, TR-2026-003', 'resi')}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md font-mono text-[11px] font-semibold text-[var(--color-text)] transition-colors cursor-pointer truncate max-w-full"
+                      >
+                        <span>Contoh:</span> <span className="underline truncate">TR-2026-001, TR-2026-002</span>
+                      </button>
+                    </div>
+
+                    {/* 3. Multi Marking */}
+                    <div className="p-2.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)]">
+                      <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] mb-1">
+                        <Tag size={12} className="text-amber-500" />
+                        <span>Multi Marking Code</span>
+                      </div>
+                      <p className="text-xs text-[var(--color-secondary)] leading-snug mb-1.5">
+                        Ketik beberapa kode marking sekaligus untuk menampilkan seluruh resi terkait.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => applyExample('MRK-A, MRK-B', 'marking')}
+                        className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md font-mono text-[11px] font-semibold text-[var(--color-text)] transition-colors cursor-pointer"
+                      >
+                        <span>Contoh:</span> <span className="underline">MRK-A, MRK-B</span>
+                      </button>
+                    </div>
                   </div>
 
-                  {/* 3. Multi Marking */}
-                  <div className="p-2.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)]">
-                    <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] mb-1">
-                      <Tag size={12} className="text-amber-500" />
-                      <span>Multi Marking Code</span>
-                    </div>
-                    <p className="text-xs text-[var(--color-secondary)] leading-snug mb-1.5">
-                      Ketik beberapa kode marking sekaligus untuk menampilkan seluruh resi terkait.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => applyExample('MRK-A, MRK-B', 'marking')}
-                      className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md font-mono text-[11px] font-semibold text-[var(--color-text)] transition-colors cursor-pointer"
-                    >
-                      <span>Contoh:</span> <span className="underline">MRK-A, MRK-B</span>
-                    </button>
+                  {/* Footer Note */}
+                  <div className="mt-3 pt-2 border-t border-[var(--color-border)] flex items-center gap-1.5 text-[10px] text-[var(--color-secondary)]">
+                    <Info size={11} className="shrink-0" />
+                    <span>Gunakan dropdown di kiri untuk mengunci lingkup pencarian tertentu.</span>
                   </div>
                 </div>
-
-                {/* Footer Note */}
-                <div className="mt-3 pt-2 border-t border-[var(--color-border)] flex items-center gap-1.5 text-[10px] text-[var(--color-secondary)]">
-                  <Info size={11} className="shrink-0" />
-                  <span>Gunakan dropdown di kiri untuk mengunci lingkup pencarian tertentu.</span>
-                </div>
-              </div>
+              </>
             )}
           </div>
         </div>
 
         {/* Right side: data count info + view toggle + page size */}
-        <div className="flex items-center justify-between sm:justify-end gap-3 text-xs text-[var(--color-secondary)] shrink-0">
+        <div className="flex items-center justify-between sm:justify-end gap-2 sm:gap-3 text-xs text-[var(--color-secondary)] shrink-0">
           {/* Counter info */}
           <div className="flex items-center gap-1.5 font-medium">
-            {isFetching && !isLoading && <Loader2 size={13} className="animate-spin text-[var(--color-primary)]" />}
-            <span className="tabular-nums text-[var(--color-secondary)]">
-              Menampilkan <strong className="text-[var(--color-text)] font-semibold">{displayCount.toLocaleString('id-ID')}</strong> dari <strong className="text-[var(--color-text)] font-semibold">{total.toLocaleString('id-ID')}</strong> resi
-            </span>
+            {isLoading ? (
+              <div className="h-4 w-24 rounded skeleton-shimmer" />
+            ) : (
+              <span className="tabular-nums text-[var(--color-secondary)] text-[11px] sm:text-xs">
+                <strong className="text-[var(--color-text)] font-semibold">{displayCount.toLocaleString('en-US')}</strong> / <strong className="text-[var(--color-text)] font-semibold">{total.toLocaleString('en-US')}</strong> resi
+              </span>
+            )}
           </div>
 
           <div className="w-px h-4 bg-[var(--color-border)] hidden sm:block" />
@@ -275,7 +283,7 @@ export function ShipmentToolbar({
           <select
             value={limit}
             onChange={(e) => { onLimitChange(Number(e.target.value)); onPageReset() }}
-            className="text-xs font-semibold text-[var(--color-text)] border border-[var(--color-border)] rounded-lg px-2.5 py-1.5 outline-none bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] cursor-pointer shadow-2xs transition-colors"
+            className="text-xs font-semibold text-[var(--color-text)] border border-[var(--color-border)] rounded-lg px-2 sm:px-2.5 py-1.5 outline-none bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] cursor-pointer shadow-2xs transition-colors"
           >
             {[10, 20, 50, 100].map((n) => (
               <option key={n} value={n}>{n} baris</option>

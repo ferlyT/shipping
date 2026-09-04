@@ -94,9 +94,9 @@ export function GroupSection({
     <div className="border-b border-[var(--color-border)] last:border-0">
       <button
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 bg-[var(--color-neutral)]/95 px-4 sm:px-6 py-3 text-left transition-colors hover:bg-[var(--color-neutral)] border-y border-[var(--color-border)]"
+        className="flex w-full items-center justify-between gap-2 sm:gap-3 bg-[var(--color-neutral)]/95 px-3.5 sm:px-6 py-2.5 sm:py-3 text-left transition-colors hover:bg-[var(--color-neutral)] border-y border-[var(--color-border)]"
       >
-        <span className="flex items-center gap-2 min-w-0">
+        <span className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           <span className="flex h-5 w-5 shrink-0 items-center justify-center text-[var(--color-secondary)]">
             {open ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
           </span>
@@ -107,7 +107,7 @@ export function GroupSection({
             {displayCount}
           </span>
         </span>
-        <span className="flex items-center gap-1.5 text-xs font-semibold text-[var(--color-secondary)] shrink-0 tabular-nums">
+        <span className="flex items-center gap-1 sm:gap-1.5 text-[11px] sm:text-xs font-semibold text-[var(--color-secondary)] shrink-0 tabular-nums">
           <span className="whitespace-nowrap">{groupMeta.totalPkgs.toLocaleString('en-US')} pkgs</span>
           <span className="text-[var(--color-border)]">·</span>
           <span className="whitespace-nowrap">{groupMeta.totalWeight.toLocaleString('en-US', { maximumFractionDigits: 0 })} kg</span>
@@ -116,27 +116,32 @@ export function GroupSection({
 
       {open && (
         <div className="bg-[var(--color-surface)]">
-          {isLoading ? (
-            <div className="flex justify-center p-6">
-              <div className="animate-spin w-5 h-5 border-2 border-[var(--color-primary)] border-t-transparent rounded-full" />
-            </div>
-          ) : (
-            <>
-              {/* Desktop Table */}
-              <div className={cn('overflow-x-auto', viewMode === 'shortlist' ? 'hidden' : 'hidden sm:block')}>
-                <table className="w-full min-w-[1000px] border-collapse bg-[var(--color-surface)]">
-                  <thead>
-                    <tr className="text-left font-[var(--font-label)] text-xs tracking-[0.08em] uppercase text-[var(--color-secondary)] border-b border-[var(--color-border)] bg-[var(--color-neutral)]/50">
-                      <th className="py-3.5 pl-4 pr-3">Kode Marking</th>
-                      <th className="py-3.5 px-3">Consignee</th>
-                      <th className="py-3.5 px-3">Dokumen</th>
-                      <th className="py-3.5 px-3">Volume / Berat</th>
-                      <th className="py-3.5 px-3">LOAD / ETD / ETA / EXIT</th>
-                      <th className="py-3.5 pr-4 pl-3 text-right">Aksi</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.length === 0 ? (
+          {/* Desktop Table */}
+          <div className={cn('overflow-x-auto', viewMode === 'shortlist' ? 'hidden' : 'hidden sm:block')}>
+            <table className="w-full min-w-[1000px] border-collapse bg-[var(--color-surface)]">
+              <thead>
+                <tr className="text-left font-[var(--font-label)] text-xs tracking-[0.08em] uppercase text-[var(--color-secondary)] border-b border-[var(--color-border)] bg-[var(--color-neutral)]/50">
+                  <th className="py-3.5 pl-4 pr-3">Kode Marking</th>
+                  <th className="py-3.5 px-3">Consignee</th>
+                  <th className="py-3.5 px-3">Dokumen</th>
+                  <th className="py-3.5 px-3">Volume / Berat</th>
+                  <th className="py-3.5 px-3">LOAD / ETD / ETA / EXIT</th>
+                  <th className="py-3.5 pr-4 pl-3 text-right">Aksi</th>
+                </tr>
+              </thead>
+              <tbody>
+                {isLoading ? (
+                      Array.from({ length: 5 }).map((_, i) => (
+                        <tr key={i} className="border-b border-[var(--color-border)] last:border-0 bg-[var(--color-surface)]">
+                          <td className="py-3.5 pl-4 pr-3"><div className="h-4 w-28 rounded-md skeleton-shimmer" /></td>
+                          <td className="py-3.5 px-3"><div className="h-4 w-40 rounded-md skeleton-shimmer" /></td>
+                          <td className="py-3.5 px-3"><div className="h-4 w-20 rounded-md skeleton-shimmer" /></td>
+                          <td className="py-3.5 px-3"><div className="h-4 w-24 rounded-md skeleton-shimmer" /></td>
+                          <td className="py-3.5 px-3"><div className="h-4 w-32 rounded-md skeleton-shimmer" /></td>
+                          <td className="py-3.5 pr-4 pl-3 text-right"><div className="h-6 w-16 rounded-md skeleton-shimmer ml-auto" /></td>
+                        </tr>
+                      ))
+                    ) : rows.length === 0 ? (
                       <tr>
                         <td colSpan={6} className="py-6 text-center text-sm text-[var(--color-secondary)] font-medium">
                           Tidak ada data yang ditemukan.
@@ -153,13 +158,29 @@ export function GroupSection({
 
               {/* Mobile List */}
               <div className={cn('flex flex-col divide-y divide-[var(--color-border)] border-y border-[var(--color-border)]', viewMode === 'shortlist' ? 'block' : 'sm:hidden')}>
-                {rows.length === 0 ? (
+                {isLoading ? (
+                  Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="p-3.5 space-y-2 bg-[var(--color-surface)]">
+                      <div className="flex justify-between">
+                        <div className="h-4 w-24 rounded-md skeleton-shimmer" />
+                        <div className="h-4 w-16 rounded-full skeleton-shimmer" />
+                      </div>
+                      <div className="h-3.5 w-3/4 rounded-md skeleton-shimmer" />
+                      <div className="h-3.5 w-1/2 rounded-md skeleton-shimmer" />
+                    </div>
+                  ))
+                ) : rows.length === 0 ? (
                   <div className="py-8 text-center text-sm text-[var(--color-secondary)] font-medium bg-[var(--color-surface)]">
                     Tidak ada data yang ditemukan.
                   </div>
                 ) : (
                   rows.map((row) => (
-                    <BatchListRow key={row.fdMarkingCode} row={row} onView={onView} />
+                    <BatchListRow
+                      key={row.fdMarkingCode}
+                      row={row}
+                      onView={onView}
+                      onViewManifest={onViewManifest}
+                    />
                   ))
                 )}
               </div>
@@ -188,8 +209,6 @@ export function GroupSection({
                   </span>
                 </div>
               ) : null}
-            </>
-          )}
         </div>
       )}
     </div>
@@ -284,9 +303,20 @@ export function StatusBlock({
       {expanded && (
         <div>
           {isLoading ? (
-            <div className="flex flex-col justify-center items-center p-8 bg-[var(--color-surface)] gap-4">
-              <span className="w-10 h-10 border-4 border-[var(--color-tertiary)] border-t-transparent rounded-full animate-spin" />
-              <p className="text-[var(--color-secondary)] text-sm animate-pulse">Memuat data batch...</p>
+            <div className="divide-y divide-[var(--color-border)] bg-[var(--color-surface)]">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="px-4 sm:px-6 py-3 bg-[var(--color-neutral)]/50 border-y border-[var(--color-border)] flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-4 h-4 rounded skeleton-shimmer" />
+                    <div className="h-4 w-32 rounded skeleton-shimmer" />
+                    <div className="h-4 w-10 rounded-full skeleton-shimmer" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-3.5 w-16 rounded skeleton-shimmer" />
+                    <div className="h-3.5 w-16 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : groups.length === 0 ? (
             <p className="px-5 py-6 text-sm text-[var(--color-secondary)] font-medium text-center bg-[var(--color-surface)]">

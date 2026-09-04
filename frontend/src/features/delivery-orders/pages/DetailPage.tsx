@@ -64,7 +64,7 @@ export default function DeliveryDetailPage() {
       <div className="bg-[var(--color-surface)] rounded-xl shadow-xs flex flex-col border border-[var(--color-border)]">
         <div className="px-6 py-5 border-b border-[var(--color-border)] flex items-center justify-between">
           <div className="flex items-start gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-transparent border border-[var(--color-tertiary)]/40 text-[var(--color-tertiary)]">
+            <div className="hidden sm:flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-transparent border border-[var(--color-tertiary)]/40 text-[var(--color-tertiary)]">
               <Truck className="h-5 w-5" />
             </div>
             <div>
@@ -103,7 +103,7 @@ export default function DeliveryDetailPage() {
           {/* Info Grid Pengiriman */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xs flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-[var(--color-neutral)] text-[var(--color-secondary)]">
+              <div className="hidden sm:flex p-2 rounded-lg bg-[var(--color-neutral)] text-[var(--color-secondary)]">
                 <Truck className="w-4 h-4" />
               </div>
               <div>
@@ -113,21 +113,21 @@ export default function DeliveryDetailPage() {
               </div>
             </div>
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xs flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-[var(--color-neutral)] text-[var(--color-secondary)]">
+              <div className="hidden sm:flex p-2 rounded-lg bg-[var(--color-neutral)] text-[var(--color-secondary)]">
                 <Package className="w-4 h-4" />
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--color-secondary)]">Total Packages</p>
-                <p className="mt-1 text-lg font-bold font-mono text-[var(--color-primary)] tabular-nums">{Number(data.fdJmlPackSJ || 0).toLocaleString('id-ID')}</p>
+                <p className="mt-1 text-lg font-bold font-mono text-[var(--color-primary)] tabular-nums">{Number(data.fdJmlPackSJ || 0).toLocaleString('en-US')}</p>
               </div>
             </div>
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xs flex items-start gap-3">
-              <div className="p-2 rounded-lg bg-[var(--color-neutral)] text-[var(--color-secondary)]">
+              <div className="hidden sm:flex p-2 rounded-lg bg-[var(--color-neutral)] text-[var(--color-secondary)]">
                 <Weight className="w-4 h-4" />
               </div>
               <div>
                 <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--color-secondary)]">Total Weight</p>
-                <p className="mt-1 text-lg font-bold font-mono text-[var(--color-primary)] tabular-nums">{Number(data.fdJmlBeratSJ || 0).toLocaleString('id-ID')}</p>
+                <p className="mt-1 text-lg font-bold font-mono text-[var(--color-primary)] tabular-nums">{Number(data.fdJmlBeratSJ || 0).toLocaleString('en-US')}</p>
               </div>
             </div>
           </div>

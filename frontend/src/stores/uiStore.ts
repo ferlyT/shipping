@@ -8,8 +8,10 @@ interface UiState {
   toggleSidebarCollapse: () => void
 }
 
+const isDesktop = typeof window !== 'undefined' ? window.innerWidth >= 1024 : true
+
 export const useUiStore = create<UiState>((set) => ({
-  isSidebarOpen: false,
+  isSidebarOpen: isDesktop,
   isSidebarCollapsed: false,
   toggleSidebar: () => set((s) => ({ isSidebarOpen: !s.isSidebarOpen })),
   setSidebarOpen: (open) => set({ isSidebarOpen: open }),

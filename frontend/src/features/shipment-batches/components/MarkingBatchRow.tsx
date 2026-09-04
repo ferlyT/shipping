@@ -1,7 +1,7 @@
 // Shared row components untuk tabel/list marking
 // DILARANG: mendefinisikan ulang BatchRow atau BatchListRow di halaman manapun
 
-import { MapPin, Calendar, ClipboardList, Eye, Ship, Plane, ChevronRight } from 'lucide-react'
+import { MapPin, Calendar, ClipboardList, Eye, Ship, Plane } from 'lucide-react'
 import { cn, formatDateShort } from '@/lib/utils'
 import { MarkingStatusBadge } from './MarkingStatusBadge'
 import type { Marking } from '../types/marking.types'
@@ -122,49 +122,142 @@ export function BatchRow({ row, onView, onViewManifest }: BatchRowProps) {
 interface BatchListRowProps {
   row: Marking
   onView: (row: Marking) => void
+  onViewManifest?: (row: Marking) => void
 }
 
-export function BatchListRow({ row, onView }: BatchListRowProps) {
+export function BatchListRow({ row, onView, onViewManifest }: BatchListRowProps) {
   const isAir = row.fdListType === 1
 
   return (
-    <button
-      type="button"
-      onClick={() => onView(row)}
-      className="flex w-full flex-col gap-3 p-3.5 sm:p-4 text-left hover:bg-[var(--color-neutral)] active:opacity-80 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]/40"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[var(--color-primary)]/5 text-[var(--color-primary)] border border-[var(--color-border)]">
-            {isAir ? <Plane className="h-3.5 w-3.5" /> : <Ship className="h-3.5 w-3.5" />}
+    <div className="p-3.5 sm:p-4 flex flex-col gap-2.5 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/20 transition-colors">
+      {/* Top Row: Mode badge + Marking Code + Status Badge */}
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+          <span
+            className={cn(
+              'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider',
+              isAir
+                ? 'bg-sky-500/10 border border-sky-500/30 text-sky-600 dark:text-sky-400'
+                : 'bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400'
+            )}
+          >
+            {isAir ? <Plane size={11} /> : <Ship size={11} />}
+            {isAir ? 'UDARA' : 'LAUT'}
+          </span>
+
+          <span className="font-mono text-xs sm:text-sm font-bold text-[var(--color-primary)]">
+            {row.fdMarkingCode}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <MarkingStatusBadge
+            status={row.fdStatus}
+            exitDate={row.fdExitDate}
+            loadDate={row.fdLoadDate}
+            etdDate={row.fdETD}
+            etaDate={row.fdETA}
+            sysDate={row.fdSysDate}
+          />
+        </div>
+      </div>
+
+      {/* Consignee & Wilayah */}
+      <div className="min-w-0 cursor-pointer" onClick={() => onView(row)}>
+        <div className="font-bold text-[var(--color-primary)] text-sm leading-tight truncate" title={row.fdConsignee || '-'}>
+          {row.fdConsignee || 'Consignee Tidak Diketahui'}
+        </div>
+        <div className="text-[11px] text-[var(--color-secondary)] mt-0.5 flex items-center gap-1 flex-wrap">
+          <MapPin className="h-3 w-3 text-[var(--color-secondary)] shrink-0" />
+          <span>{row.fdWilayah || 'Wilayah tidak diketahui'}</span>
+        </div>
+      </div>
+
+      {/* Inner Details Box */}
+      <div className="p-2.5 rounded-xl bg-[var(--color-neutral)]/50 border border-[var(--color-border)]/80 flex flex-col gap-2">
+        {/* Dokumen & Container */}
+        <div className="flex items-start justify-between gap-2 text-xs flex-wrap">
+          <div className="flex items-center gap-1.5 font-mono font-medium text-[var(--color-primary)]">
+            <span className="text-[10px] text-[var(--color-secondary)] font-bold uppercase">{isAir ? 'AWB:' : 'BL:'}</span>
+            <span>{isAir ? (row.fdAWB || '—') : (row.fdBLNo || '—')}</span>
           </div>
-          <div>
-            <div className="font-bold font-[var(--font-display)] text-[var(--color-primary)] text-[13px] sm:text-[14px] md:text-[15px] leading-none">
-              {row.fdMarkingCode}
+
+          {!isAir && (row.fdContNo || row.fdContSize) && (
+            <div className="text-[11px] text-[var(--color-secondary)] font-mono">
+              Cont: <strong className="text-[var(--color-primary)]">{row.fdContNo || '—'}</strong>
+              {row.fdContSize && <span> ({row.fdContSize.trim()})</span>}
             </div>
-            <div className="text-[10px] sm:text-[11px] md:text-xs text-[var(--color-secondary)] mt-0.5 line-clamp-1">
-              {row.fdConsignee || 'Consignee tidak diketahui'}
-            </div>
+          )}
+        </div>
+
+        {row.fdKet && row.fdKet.trim() !== '' && (
+          <div className="text-[11px] text-[var(--color-secondary)] bg-[var(--color-surface)] px-2 py-1 rounded-md border border-[var(--color-border)]/60 break-words">
+            <span className="font-semibold text-[var(--color-primary)]">Ket:</span> {row.fdKet}
+          </div>
+        )}
+
+        {/* Milestones Flow: 4 clean boxes (LOAD, ETD, ETA, EXIT) */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 pt-1.5 border-t border-[var(--color-border)]/60 text-[11px] font-mono">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-[var(--color-secondary)]">LOAD:</span>
+            <span className="text-[var(--color-primary)] font-medium">{formatDateShort(row.fdLoadDate)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-[var(--color-secondary)]">ETD:</span>
+            <span className="text-[var(--color-primary)] font-medium">{formatDateShort(row.fdETD)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-[var(--color-secondary)]">ETA:</span>
+            <span className="text-[var(--color-primary)] font-medium">{formatDateShort(row.fdETA)}</span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-bold text-[var(--color-secondary)]">EXIT:</span>
+            <span className={cn(
+              'font-medium',
+              row.fdExitDate ? 'text-emerald-600 dark:text-emerald-400 font-bold' : 'text-[var(--color-secondary)]/50'
+            )}>
+              {formatDateShort(row.fdExitDate)}
+            </span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
-          <div className="flex flex-col items-end gap-1">
-            <MarkingStatusBadge
-              status={row.fdStatus}
-              exitDate={row.fdExitDate}
-              loadDate={row.fdLoadDate}
-              etdDate={row.fdETD}
-              etaDate={row.fdETA}
-              sysDate={row.fdSysDate}
-            />
-            <div className="text-[10px] font-medium text-[var(--color-secondary)]">
-              {row.fdJmlPack || 0} PKGS
-            </div>
+        {/* Totals & Action Buttons */}
+        <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-[var(--color-border)]/60">
+          <div className="flex items-center gap-1.5 text-xs font-mono text-[var(--color-secondary)]">
+            <span className="font-bold text-[var(--color-primary)]">
+              {Number(row.fdJmlPack || 0).toLocaleString('en-US')} PKGS
+            </span>
+            <span className="text-[var(--color-border)]">·</span>
+            <span>
+              {Number(row.fdJmlBerat || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })} KG
+            </span>
           </div>
-          <ChevronRight className="w-4 h-4 text-[var(--color-secondary)] shrink-0" />
+
+          <div className="flex items-center gap-1.5 shrink-0">
+            {onViewManifest && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onViewManifest(row)
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-primary)] transition-colors cursor-pointer shadow-2xs"
+              >
+                <ClipboardList className="w-3 h-3 text-[var(--color-secondary)]" />
+                Manifest
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => onView(row)}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[var(--color-primary)]/10 hover:bg-[var(--color-primary)]/20 text-[var(--color-primary)] transition-colors cursor-pointer"
+            >
+              <Eye className="w-3 h-3" />
+              Detail
+            </button>
+          </div>
         </div>
       </div>
-    </button>
+    </div>
   )
 }

@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { Clock, CheckCircle2, ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
-import { BatchTable } from './BatchTable'
+import { Clock, CheckCircle2, ChevronDown, ChevronRight } from 'lucide-react'
+import { BatchTable, BatchTableSkeleton } from './BatchTable'
 import { TableFooter } from './TableFooter'
 import { DataGroupSection } from './DataGroupSection'
 import type { GroupedDataRow, GroupMeta, GroupMode, SentValue } from '../types/delivery-orders.types'
@@ -98,9 +98,16 @@ export function StatusBlock({
         <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)]">
           {isGroupedMode ? (
             isGroupsLoading ? (
-              <div className="flex flex-col justify-center items-center py-12 gap-3">
-                <Loader2 className="w-8 h-8 text-[var(--color-tertiary)] animate-spin" />
-                <p className="text-[var(--color-secondary)] text-xs animate-pulse">Memuat groups...</p>
+              <div className="divide-y divide-[var(--color-border)] bg-[var(--color-surface)]">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="px-6 py-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded skeleton-shimmer" />
+                      <div className="h-4 w-36 rounded skeleton-shimmer" />
+                      <div className="h-4 w-8 rounded-full skeleton-shimmer" />
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : groups.length === 0 ? (
               <p className="px-6 py-12 text-center text-sm text-[var(--color-secondary)]">Tidak ada data untuk status ini.</p>
@@ -121,10 +128,7 @@ export function StatusBlock({
               </div>
             )
           ) : isLoading ? (
-            <div className="flex flex-col justify-center items-center py-12 gap-3">
-              <Loader2 className="w-8 h-8 text-[var(--color-tertiary)] animate-spin" />
-              <p className="text-[var(--color-secondary)] text-xs animate-pulse">Memuat data...</p>
-            </div>
+            <BatchTableSkeleton />
           ) : rows.length === 0 ? (
             <p className="px-6 py-12 text-center text-sm text-[var(--color-secondary)]">Tidak ada data untuk status ini.</p>
           ) : (

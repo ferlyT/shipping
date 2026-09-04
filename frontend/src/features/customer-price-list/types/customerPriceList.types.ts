@@ -49,7 +49,7 @@ export interface CustomerUploadHistory {
   uploadedAt: string
   priceDate: string | null
   effectiveDate: string
-  status: 'PARSED' | 'PARTIAL' | 'FAILED'
+  status: 'PARSED' | 'PARTIAL' | 'FAILED' | 'DELETED'
   isSuperseded: boolean
   _count: { items: number }
   markings?: CustomerItemMarking[]
@@ -65,6 +65,7 @@ export interface CustomerPriceListDiffRow {
   delta: number | null
   deltaPct: number | null
   markings?: CustomerItemMarking[]
+  aliases?: string[]
 }
 
 
@@ -115,5 +116,45 @@ export interface CustomerPriceLookupResult {
     uploadedAt: string
   } | null
   items: CustomerPriceListItem[]
+}
+
+export interface CustomerSpecialPriceItem {
+  id: number
+  uploadId: number
+  fdCustCode: string
+  custName?: string
+  category: string
+  mode: string
+  branch: string
+  price: number
+  effectiveDate: string
+  endDate?: string | null
+  notes?: string | null
+  isExpired?: boolean
+  aliases?: string[]
+  fileName?: string
+}
+
+export interface CreateCustomerSpecialPriceInput {
+  fdCustCode: string
+  category: string
+  mode: string
+  branch: string
+  price: number
+  effectiveDate: string
+  endDate?: string | null
+  notes?: string | null
+  aliases?: string[]
+}
+
+export interface UpdateCustomerSpecialPriceInput {
+  category?: string
+  mode?: string
+  branch?: string
+  price?: number
+  effectiveDate?: string
+  endDate?: string | null
+  notes?: string | null
+  aliases?: string[]
 }
 

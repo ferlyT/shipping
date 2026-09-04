@@ -14,17 +14,24 @@ export function isCommodityMatch(
   const normCom = comodityName.toUpperCase().replace(/[\s\-_]+/g, ' ').trim()
   const normCat = category.toUpperCase().replace(/[\s\-_]+/g, ' ').trim()
 
+  const isAir = isAirMode || (mode || '').toUpperCase().includes('AIR')
+
+  const isBattery =
+    normCom.includes('BATTERY') ||
+    normCom.includes('BATERAI') ||
+    normCom.includes('POWERBANK') ||
+    normCom.includes('ACCU') ||
+    normCom.includes('AKI')
+
   // 1. Explicit distinction: SEMI GARMENT vs GARMENT
-  const isComSemiGarment = normCom.includes('SEMI GARMENT')
-  const isCatSemiGarment = normCat.includes('SEMI GARMENT')
+  const isComSemiGarment = normCom.includes('SEMI GARMENT') || (!isAir && isBattery)
+  const isCatSemiGarment = normCat.includes('SEMI GARMENT') || normCat.includes('BATTERY') || normCat.includes('POWERBANK')
 
   if (isComSemiGarment) return isCatSemiGarment
   if (isCatSemiGarment) return false
 
   // 2. Direct exact match
   if (normCat === normCom) return true
-
-  const isAir = isAirMode || (mode || '').toUpperCase().includes('AIR')
 
   if (isAir) {
     if (normCom.includes('GENERAL') && normCat.includes('GENERAL GOODS')) return true

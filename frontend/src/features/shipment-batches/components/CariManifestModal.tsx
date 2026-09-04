@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { X, Loader2, PackageSearch } from 'lucide-react'
@@ -12,6 +13,7 @@ interface CariManifestModalProps {
 }
 
 export function CariManifestModal({ isOpen, onClose, onSelect }: CariManifestModalProps) {
+  useModalEscape(isOpen, onClose)
   const [inputCode, setInputCode] = useState('')
   const debouncedInput = useDebounce(inputCode, 300)
   const inputRef = useRef<HTMLInputElement>(null)
@@ -67,7 +69,7 @@ export function CariManifestModal({ isOpen, onClose, onSelect }: CariManifestMod
         {/* Header */}
         <div className="px-4 py-3 sm:px-6 sm:py-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-neutral)] shrink-0">
           <div className="flex items-center gap-2">
-            <PackageSearch className="w-4 h-4 sm:w-5 sm:h-5 text-[var(--color-primary)]" />
+            <PackageSearch className="hidden sm:inline-block w-4 h-4 sm:w-5 sm:h-5 text-[var(--color-primary)]" />
             <h2 className="text-base sm:text-lg font-bold font-[var(--font-display)] text-[var(--color-primary)]">Cari Manifest</h2>
           </div>
           <button
