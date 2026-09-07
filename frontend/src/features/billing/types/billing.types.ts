@@ -23,6 +23,22 @@ export interface BillingDetail {
   fdCurr: string | null
   fdTypeComodity?: number | null
   fdComodity?: string | null
+  fdSatuan?: string | null
+  fdItemCode?: string | null
+}
+
+export interface BillingDetailInput {
+  fdID?: string
+  fdItemName: string
+  fdQty: number
+  fdItemPrice: number
+  fdTotal?: number
+  fdListCode?: string | null
+  fdItemCode?: string | null
+  fdCurr?: string | null
+  fdSatuan?: string | null
+  fdComodity?: string | null
+  fdTypeComodity?: number | null
 }
 
 export interface Billing {

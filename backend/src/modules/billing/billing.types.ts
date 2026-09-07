@@ -139,3 +139,18 @@ export interface SjVsBillComparisonItem {
   differenceM3: number
   status: 'balanced' | 'surplus_sj' | 'surplus_bill'
 }
+
+export interface BillingDetailUpdateItem {
+  fdID?: string
+  fdItemName: string
+  fdQty: number
+  fdItemPrice: number
+  fdTotal?: number
+  fdListCode?: string | null
+  fdItemCode?: string | null
+  fdCurr?: string | null
+  fdSatuan?: string | null
+  fdComodity?: string | null
+  fdTypeComodity?: number | null
+}
+

@@ -16,14 +16,15 @@ export interface PriceCheckParams {
 export type PriceStatus = 'MATCH' | 'DIFFERENT' | 'NOT_SET' | 'NO_RATE'
 
 export type PriceSourceType =
-  | 'CUSTOMER_MARKING'       // Level 1: Customer Marking Override
-  | 'CUSTOMER_DEFAULT'       // Level 2: Customer Default Upload
-  | 'CUSTOMER_TARIFF'        // Level 2: Customer Tariff dari vwCustomersHarga
-  | 'MASTER_MKT_OVERRIDE'    // Level 3: Master Marking Override (Sheet MKT)
-  | 'MASTER_CS_OVERRIDE'     // Level 3: Master Marking Override (Sheet CS)
-  | 'MASTER_MKT'             // Level 4: Master Standar (Sheet MKT)
-  | 'MASTER_CS'              // Level 4: Master Standar (Sheet CS)
-  | 'PROFILE_SP'             // Fallback: SP Profile ERP
+  | 'CUSTOMER_COMMODITY'     // Tier 1: Harga Customer Commodity (Manual Entry / Mapping Customer)
+  | 'CUSTOMER_MARKING'       // Tier 2: Customer Marking Override
+  | 'CUSTOMER_DEFAULT'       // Tier 3: Customer Default Upload
+  | 'GLOBAL_COMMODITY'       // Tier 4: Harga Commodity Global (Global Mapping / Special Commodity Master)
+  | 'GLOBAL_MARKING'         // Tier 5: Master Marking Override
+  | 'MASTER_MKT_OVERRIDE'    // Tier 5: Master Marking Override (Sheet MKT)
+  | 'MASTER_CS_OVERRIDE'     // Tier 5: Master Marking Override (Sheet CS)
+  | 'MASTER_MKT'             // Tier 6: Master Standar (Sheet MKT)
+  | 'MASTER_CS'              // Tier 6: Master Standar (Sheet CS)
   | 'NONE'
 
 export interface UnifiedPriceCheckResult {
@@ -37,7 +38,7 @@ export interface UnifiedPriceCheckResult {
   appliedTierLabel: string
   priceSource: string
   priceSourceLabel: string
-  matchedWith: 'CUSTOMER' | 'MASTER_CS' | 'MASTER_MKT' | 'PROFILE_SP' | 'NONE'
+  matchedWith: 'CUSTOMER' | 'MASTER_CS' | 'MASTER_MKT' | 'NONE'
   isBroker: boolean
   isMarkingOverride: boolean
   matchedMarkingCode?: string
@@ -55,6 +56,17 @@ export interface UnifiedPriceCheckResult {
   customerTariffs?: any[]
   matchedTariff?: any
   profileTariff?: any
+  isUndercharge?: boolean
+  isOvercharge?: boolean
+  validationVerdict?: 'MATCH' | 'UNDERCHARGE_WARNING' | 'OVERCHARGE_WARNING' | 'NO_RATE'
+  currentType?: string
+  currentComodityText?: string
+  sales?: string
+  branch?: string
+  markingCode?: string
+  customer?: string
+  custCode?: string
+  tglAgen?: string | null
 }
 
 export interface BatchPreloadedContext {

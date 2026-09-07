@@ -18,6 +18,9 @@ import {
   Info,
   Layers,
   Calendar,
+  TrendingUp,
+  TrendingDown,
+  Check,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
@@ -513,9 +516,10 @@ export function BillingValidationSummaryModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Modal */}
-        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/60 flex items-center justify-between gap-3 shrink-0">
-          <div className="space-y-1 min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
+        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/60 shrink-0 space-y-2.5">
+          {/* Top Row: Title + Status + Close Button */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 flex-wrap min-w-0">
               <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
                 isAllValid
                   ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
@@ -575,44 +579,80 @@ export function BillingValidationSummaryModal({
               )}
             </div>
 
-            {/* Metadata Subtitle */}
-            <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-secondary)] flex-wrap">
-              <span className="font-mono font-bold text-[var(--color-primary)] px-1.5 py-0.2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded">
-                {billingData.fdInvNo}
-              </span>
-              <span>·</span>
-              <span className="font-bold text-[var(--color-primary)] truncate max-w-[200px]">
-                {billingData.customer?.fdCustName || billingData.fdCustCode}
-              </span>
-              {isMktCustomer(billingData.customer, billingData.customer?.fdSalesNM || (billingData as any)?.sales) && (
-                <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30">
-                  {billingData.customer?.fdBroker === 1 ? 'BROKER' : 'MKT'}
-                </span>
-              )}
-              <span>·</span>
-              <span>{formatDate(billingData.fdInvDate)}</span>
-              {billingData.fdMarkingCode && (
-                <>
-                  <span>·</span>
-                  <span className="font-mono text-[var(--color-primary)]">
-                    {billingData.fdMarkingCode.trim()} {billingData.fdMarkingNo ? `(${billingData.fdMarkingNo.trim()})` : ''}
-                  </span>
-                </>
-              )}
-              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-500/20">
-                {isAir ? <><Plane size={9} /> AIR</> : 'SEA'}
-              </span>
-            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 -mr-1 rounded-lg text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer shrink-0"
+              title="Tutup Modal"
+            >
+              <X size={18} />
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="p-1.5 -mr-1 rounded-lg text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer shrink-0"
-            title="Tutup Modal"
-          >
-            <X size={18} />
-          </button>
+          {/* 3 Cards Sejajar */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-2.5">
+            {/* Card 1: Tagihan, Tanggal & Mode */}
+            <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs flex flex-col justify-center min-w-0">
+              <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] tracking-wider mb-1 block">
+                Tagihan & Mode
+              </span>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-mono font-bold text-xs text-[var(--color-primary)] px-1.5 py-0.5 rounded bg-[var(--color-neutral)] border border-[var(--color-border)]">
+                  {billingData.fdInvNo}
+                </span>
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/30 shrink-0">
+                  {isAir ? <><Plane size={10} /> AIR</> : <><Truck size={10} /> SEA</>}
+                </span>
+              </div>
+              <div className="text-[11px] text-[var(--color-secondary)] flex items-center gap-1 mt-1 font-medium">
+                <Calendar size={11} className="text-[var(--color-secondary)] shrink-0" />
+                <span>{formatDate(billingData.fdInvDate)}</span>
+              </div>
+            </div>
+
+            {/* Card 2: Customer & Status MKT */}
+            <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs flex flex-col justify-center min-w-0">
+              <div className="flex items-center justify-between gap-1 mb-1">
+                <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] tracking-wider">
+                  Customer
+                </span>
+                {isMktCustomer(billingData.customer, billingData.customer?.fdSalesNM || (billingData as any)?.sales) && (
+                  <span className="px-1.5 py-0.2 rounded text-[9px] font-bold bg-amber-500/10 text-amber-700 dark:text-amber-300 border border-amber-500/30 shrink-0">
+                    {billingData.customer?.fdBroker === 1 ? 'BROKER' : 'MKT'}
+                  </span>
+                )}
+              </div>
+              <p className="font-bold text-xs text-[var(--color-primary)] truncate" title={
+                billingData.fdCustCode && billingData.customer?.fdCustName
+                  ? `${billingData.fdCustCode.trim()}/${billingData.customer.fdCustName.trim()}`
+                  : billingData.customer?.fdCustName || billingData.fdCustCode || '—'
+              }>
+                {billingData.fdCustCode && billingData.customer?.fdCustName
+                  ? `${billingData.fdCustCode.trim()}/${billingData.customer.fdCustName.trim()}`
+                  : billingData.customer?.fdCustName || billingData.fdCustCode || '—'}
+              </p>
+              {billingData.customer?.fdSalesNM && (
+                <p className="text-[10px] text-[var(--color-secondary)] truncate mt-0.5">
+                  Sales: <span className="font-medium text-[var(--color-primary)]">{billingData.customer.fdSalesNM.trim()}</span>
+                </p>
+              )}
+            </div>
+
+            {/* Card 3: Marking Code & No */}
+            <div className="p-2 sm:p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs flex flex-col justify-center min-w-0">
+              <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] tracking-wider mb-1 block">
+                Marking
+              </span>
+              <p className="font-mono font-bold text-xs text-[var(--color-primary)] truncate" title={`${billingData.fdMarkingCode || '—'} ${billingData.fdMarkingNo ? `(${billingData.fdMarkingNo.trim()})` : ''}`}>
+                {billingData.fdMarkingCode ? billingData.fdMarkingCode.trim() : '—'}
+              </p>
+              {billingData.fdMarkingNo && (
+                <p className="font-mono text-[11px] text-[var(--color-secondary)] truncate mt-0.5" title={billingData.fdMarkingNo.trim()}>
+                  ({billingData.fdMarkingNo.trim()})
+                </p>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Modal Body */}
@@ -1133,76 +1173,82 @@ export function BillingValidationSummaryModal({
                     </div>
                   )}
 
-                  {/* Grid 4 Kartu Metrik Ringkas Item */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs">
-                    <div className="p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] space-y-1">
-                      <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] block">Total Baris Item</span>
-                      <span className="text-base font-bold font-mono text-[var(--color-primary)] block">{details.length} item</span>
-                      <span className="text-[10px] text-[var(--color-secondary)] block truncate">Rincian invoice</span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] space-y-1">
-                      <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] block">Tarif Sesuai</span>
-                      <span className="text-base font-bold font-mono text-emerald-600 dark:text-emerald-400 block">
-                        {itemsWithTarget.filter((i) => i.isMatched).length} item
-                      </span>
-                      <span className="text-[10px] text-[var(--color-secondary)] block truncate">Cocok dengan acuan</span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] space-y-1">
-                      <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] block">Undercharge</span>
-                      <span className={`text-base font-bold font-mono block ${hasUnderchargePrice ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--color-secondary)]'}`}>
-                        {underchargedItems.length} item
-                      </span>
-                      <span className="text-[10px] text-[var(--color-secondary)] block truncate">Di bawah acuan</span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] space-y-1">
-                      <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] block">Overcharge</span>
-                      <span className="text-base font-bold font-mono text-amber-600 dark:text-amber-400 block">
-                        {overchargedItems.length} item
-                      </span>
-                      <span className="text-[10px] text-[var(--color-secondary)] block truncate">Di atas acuan</span>
-                    </div>
-                  </div>
+                  {/* Per-item card list */}
+                  <div className="space-y-1.5">
+                    {itemEvaluations.map((evalRes, idx) => {
+                      const item = details[idx]
+                      const billedPrice = Number(item?.fdItemPrice || 0)
 
-                  {/* Undercharge Alert Cards jika ada */}
-                  {hasUnderchargePrice && (
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-1.5 text-xs font-bold text-rose-600 dark:text-rose-400">
-                        <AlertTriangle size={14} />
-                        <span>Item Di Bawah Tarif Acuan (Undercharge):</span>
-                      </div>
-                      {underchargedItems.map((item, idx) => {
-                        const invoiceRate = item.minTargetPrice + item.difference
-                        const diffAmt = Math.abs(item.difference)
-                        return (
-                          <div
-                            key={`undercharge-${idx}`}
-                            className="bg-rose-500/10 dark:bg-rose-950/20 p-3 rounded-xl border border-rose-500/30 text-xs flex items-center justify-between gap-2 flex-wrap"
-                          >
-                            <div className="space-y-0.5">
-                              <span className="font-bold text-rose-700 dark:text-rose-300 block">{item.comodityName}</span>
-                              <span className="text-[11px] text-[var(--color-secondary)]">
-                                Invoice: <strong className="font-mono text-[var(--color-primary)]">{formatCurrency(invoiceRate)}</strong> vs Acuan {item.targetColName}: <strong className="font-mono text-blue-600 dark:text-blue-400">{item.priceListDisplay}</strong>
+                      const statusBadge = evalRes.isMatched ? (
+                        <Badge variant="success" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0">
+                          <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.5]" />
+                          <span>Match</span>
+                        </Badge>
+                      ) : evalRes.hasTargetPrice && (evalRes.isTaxReturnItem ? evalRes.profilePrice > 0 : evalRes.priceItem !== null) ? (
+                        evalRes.statusType === 'HIGHER' ? (
+                          <Badge variant="info" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0">
+                            <TrendingUp className="w-3 h-3 text-sky-600 dark:text-sky-400 shrink-0" />
+                            <span>Overcharge</span>
+                          </Badge>
+                        ) : evalRes.statusType === 'LOWER' ? (
+                          <Badge variant="danger" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0">
+                            <TrendingDown className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
+                            <span>Undercharge</span>
+                          </Badge>
+                        ) : (
+                          <Badge variant="warning" className="shrink-0 text-[10px]">{evalRes.targetColName}</Badge>
+                        )
+                      ) : (
+                        <span className="text-[10px] text-[var(--color-secondary)] shrink-0">—</span>
+                      )
+
+                      return (
+                        <div
+                          key={item?.fdID || idx}
+                          className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/30 transition-colors overflow-hidden"
+                        >
+                          {/* Baris 1: nama + komoditi + status */}
+                          <div className="flex items-start justify-between gap-2 px-2.5 py-1.5 border-b border-[var(--color-border)]/60">
+                            <div className="flex items-start gap-2 min-w-0 flex-1">
+                              <div className="min-w-0 flex-1">
+                                <p className="text-xs font-semibold text-[var(--color-primary)] leading-tight" title={item?.fdItemName ?? undefined}>
+                                  {item?.fdItemName}
+                                </p>
+                                {evalRes.isTaxReturnItem && (res?.profileHarga?.taxReturnMinCharge ?? 0) > 0 && (
+                                  <span className="text-[9px] font-normal text-[var(--color-secondary)]">
+                                    Min Charge: {formatDecimal(res?.profileHarga?.taxReturnMinCharge, 4)} m³
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[10px] font-bold text-[var(--color-tertiary)] whitespace-nowrap shrink-0 mt-0.5">
+                                {evalRes.comodityName}
                               </span>
                             </div>
-                            <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
-                              Selisih -{formatCurrency(diffAmt)}
-                            </span>
+                            <div className="shrink-0 mt-0.5">{statusBadge}</div>
                           </div>
-                        )
-                      })}
-                    </div>
-                  )}
 
-                  {!hasUnderchargePrice && (
-                    <div className="p-3 rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs text-emerald-800 dark:text-emerald-200 flex items-center gap-2">
-                      <CheckCircle2 size={16} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
-                      <span>Seluruh harga satuan per item tagihan telah divalidasi dan sesuai atau di atas tarif acuan master price list.</span>
-                    </div>
-                  )}
-
-                  <div className="p-2.5 rounded-lg bg-[var(--color-neutral)]/70 text-[11px] text-[var(--color-secondary)] flex items-center gap-2">
-                    <Info size={13} className="text-[var(--color-tertiary)] shrink-0" />
-                    <span>Untuk melihat tabel detail baris item tagihan atau mengubah harga satuan, user dapat melihat pada halaman validasi detail di belakang dialog ini.</span>
+                          {/* Baris 2: 3 kolom harga */}
+                          <div className="grid grid-cols-3 divide-x divide-[var(--color-border)]/60 text-[11px]">
+                            <div className="px-2.5 py-1.5">
+                              <p className="text-[9px] uppercase font-bold text-[var(--color-secondary)] mb-0.5">Harga Invoice</p>
+                              <p className="font-mono font-bold text-[var(--color-primary)]">{formatCurrency(billedPrice)}</p>
+                            </div>
+                            <div className="px-2.5 py-1.5">
+                              <p className="text-[9px] uppercase font-bold text-[var(--color-secondary)] mb-0.5">Harga Profile</p>
+                              <p className="font-mono text-[var(--color-secondary)]">
+                                {evalRes.profilePrice > 0 ? formatCurrency(evalRes.profilePrice) : '—'}
+                              </p>
+                            </div>
+                            <div className="px-2.5 py-1.5">
+                              <p className="text-[9px] uppercase font-bold text-[var(--color-secondary)] mb-0.5">Price List</p>
+                              <p className="font-mono font-semibold text-blue-700 dark:text-blue-300 break-all leading-tight">
+                                {evalRes.priceListDisplay || '—'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}

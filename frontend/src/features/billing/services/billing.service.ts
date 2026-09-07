@@ -77,5 +77,8 @@ export const billingApi = {
       `/billing/${encodeURIComponent(invNo)}/resi-marking-check`,
       { params: { resi } }
     ),
+
+  updateDetails: (id: string, items: import('../types/billing.types').BillingDetailInput[]) =>
+    apiClient.put(`/billing/${encodeURIComponent(id)}/details`, { items }),
 }
 

@@ -181,7 +181,7 @@
   "billing.detail.total": "Total",
   "billing.detail.totalAmount": "Total Tagihan",
   "billing.detail.errorLoad": "Gagal memuat detail invoice",
-  "billing.validation.title": "Validasi Billing M3",
+  "billing.validation.title": "Validasi Billing",
   "billing.validation.subtitle": "Verifikasi kesesuaian volume M3 tagihan dengan data DB (PL, Gudang, Komplain, M3 Per Marking)",
   "billing.validation.pl": "Packing List",
   "billing.validation.gudang": "Gudang",

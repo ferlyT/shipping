@@ -3,7 +3,6 @@ import { logger } from '../../config/logger'
 import { safeRunRaw } from '../../utils/db'
 import { lookupPriceList } from '../price-list/price-list-lookup.service'
 import { lookupCustomerPriceList } from '../customer-price-list/customer-price-list.service'
-import { getCustomerTariffsWithAudit } from '../price-check/price-check.service'
 import type {
   UnifiedM3CheckResult,
   ProfileHargaItem,
@@ -547,24 +546,6 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
         price: Number(it.price),
         isCustomerPrice: true,
       }))
-    }
-
-    // Jika tidak ada upload Excel customer, periksa tarif khusus customer di ERP (memadukan tbCustomersHargaAudit)
-    if (customerPriceListItems.length === 0) {
-      const vwTariffs = await getCustomerTariffsWithAudit(resolvedCustCode)
-
-      if (vwTariffs && vwTariffs.length > 0) {
-        hasCustomerPriceList = true
-        customerPriceListItems = vwTariffs.map((t, idx) => ({
-          id: 900000 + idx,
-          sheetType: 'CUSTOMER',
-          mode: t.listType === 1 ? 'BY AIR' : 'BY SEA',
-          branch: t.branchName?.trim() || expectedBranch || 'ALL',
-          category: t.comodityName?.trim() || '',
-          price: Number(t.harga),
-          isCustomerPrice: true,
-        }))
-      }
     }
   }
 

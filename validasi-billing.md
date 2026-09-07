@@ -106,19 +106,96 @@ $$\text{Hitungan Overweight (kg)} = \max(0, \lceil \text{Berat Fisik Aktual} - \
 
 ### Pilar 3: Multi-Tier Price List Engine
 
-Mengevaluasi kesesuaian tarif per unit pada setiap baris item invoice terhadap acuan harga master berdasarkan tanggal agen (`fdTglAgent`).
+Mengevaluasi kesesuaian nilai tarif per unit pada setiap baris item invoice penagihan terhadap acuan resmi master tarif. Mesin ini beroperasi secara deterministik menggunakan tanggal agen (`fdTglAgent`), kode kontainer/marking (`fdMarkingCode`), moda pengiriman (`BY SEA` vs `BY AIR`), cabang asal (`GZ`, `YW`, `SH`, `SZ`, `HK`, `SG`, `BKK`), serta profil segmentasi customer.
 
-- **Pencocokan Cerdas Komoditas (*Smart Classifier*)**:
-  - **Baterai Murni**: Mengidentifikasi `BATTERY`, `POWERBANK`, `ACCU`, `LITHIUM` murni $\rightarrow$ *Semi Garment / Khusus Baterai* (mengecualikan aksesoris charger/casing).
-  - **Elektronik Spesifik**: Mengklasifikasikan laptop *Apple* vs *Non-Apple*, serta *iPad / Tablet*.
-  - **Lartas Super (LS)**: Mengklasifikasikan *Kosmetik*, *Obat*, *Alkes*, dan *Makanan*.
-  - **Tekstil / Garment**: Mengklasifikasikan *Fabric*, *Tekstil*, *Garment*, dan *Semi Garment*.
-  - **Umum**: *General Goods / Umum*.
-- **Status Baris Item**:
-  - `MATCH`: Harga invoice sesuai dengan acuan master.
-  - `HIGHER`: Harga invoice di atas tarif acuan (Overcharge yang diizinkan/khusus).
-  - `LOWER`: **UNDERCHARGE KRITIS** — Harga invoice di bawah acuan resmi (wajib perbaikan).
-  - `NO_TARGET`: Item penyesuaian khusus / auxiliary tanpa acuan master.
+#### 1. Arsitektur Hirarki Resolusi Tarif (Waterfall 6-Tier)
+
+Sistem mencari tarif acuan menggunakan algoritma evaluasi bertingkat (*waterfall evaluation*) dari tingkat paling spesifik hingga acuan global secara deterministik:
+
+| Level | Kode Sumber (`priceSource`) | Deskripsi & Aturan Seleksi | Prioritas |
+|---|---|---|:---:|
+| **Tier 1** | `CUSTOMER_COMMODITY` | **Harga Customer Commodity**:<br/>Tarif khusus komoditas spesifik milik customer (`fdCustCode`), baik dari entri manual komoditi khusus (`upload.fileName === 'MANUAL_ENTRY'`) maupun pemetaan alias komoditas customer aktif (`tbCommodityMapping` dengan `fdCustCode = custCode`). | Tertinggi (P1) |
+| **Tier 2** | `CUSTOMER_MARKING` | **Harga Customer Marking (Marking Override)**:<br/>File price list khusus customer (`fdCustCode`) yang memiliki klausul *Marking Override* (`tbCustomerPriceListUploadMarking`). Berlaku jika kode kontainer pengiriman memenuhi syarat $\text{Marking Invoice} \ge \text{Marking Syarat}$ dan tanggal efektif $\le \text{Tanggal Agen}$. | P2 |
+| **Tier 3** | `CUSTOMER_DEFAULT` | **Harga Customer Default**:<br/>File price list khusus customer standar aktif (tanpa override atau override tidak terpenuhi) dengan $\text{effectiveDate} \le \text{Tanggal Agen}$. | P3 |
+| **Tier 4** | `GLOBAL_COMMODITY` | **Harga Commodity Global**:<br/>Acuan tarif komoditas khusus global pada Master Price List yang dipetakan melalui `tbCommodityMapping` global (`fdCustCode IS NULL`) atau kategori khusus sistem (Battery $\rightarrow$ Semi Garment laut, Tablet/iPad, Laptop Apple vs non-Apple). | P4 |
+| **Tier 5** | `GLOBAL_MARKING` | **Harga Marking Global (Master Marking Override)**:<br/>File Master Price List global yang memiliki klausul *Marking Override* aktif pada kontainer bersangkutan ($\text{Marking Invoice} \ge \text{Marking Syarat}$). Menggunakan Sheet MKT jika broker/sales MKT, Sheet CS jika direct. | P5 |
+| **Tier 6** | `MASTER_MKT`<br/>`MASTER_CS` | **Master Price List Umum Standar**:<br/>Acuan tarif master aktif per periode tanggal agen ($\text{effectiveDate} \le \text{Tanggal Agen}$):<br/>- **Sheet MKT**: Customer dengan `fdBroker == 1` ATAU dipegang oleh sales grup MKT (`ERIC`, `EDDIE HTM`, `FEBRI A`, `HERY`, `INDAH`, `SUSI`, `TSC`, `KB`) ATAU memuat kata `BROKER`.<br/>- **Sheet CS**: Customer direct / reguler tanpa relasi broker/marketing khusus. | P6 |
+| **Fallback**| `NO_RATE` | **Belum Ada Acuan Tarif Resmi**:<br/>Jika seluruh 6 tier tidak menemukan acuan, sistem menetapkan status `NO_RATE`. Seluruh fallback database lama (`vwCustomersHargaUnpivot`, `tbCustomersHargaAudit`) dan SP ERP (`dbo.get_profile_harga_dari_listcode`) **dieliminasi dari pencarian tarif komoditas**. | Akhir |
+
+#### 2. Logika Komparasi Marking Kontainer (`isMarkingGreaterOrEqual`)
+
+Untuk menentukan keabsahan *Marking Override* (misal: tarif baru berlaku mulai kontainer `26GZD07` ke atas):
+1. **Validasi Kesamaan Rute & Moda**: Memastikan kode cabang (`fdBranchCode`) dan tipe moda (`fdListType`: Udara = 1, Laut = 2) identik antara shipment dan acuan override.
+2. **Komparasi Tanggal Muat Kontainer (`fdLoadDate`)**:
+   $$\text{Shipment Valid} \iff \text{fdLoadDate}(\text{Shipment}) \ge \text{fdLoadDate}(\text{Override Target})$$
+3. **Fallback Perbandingan Alfanumerik**: Jika salah satu tanggal muat belum terbit di `tbMarking`, sistem membandingkan nilai string 4-karakter prefix (misal: `26GZD07` $\ge$ `26GZC91`). Jika prefix cabang/tahun berbeda (misal `26SG` vs `26GZ`), override otomatis DITOLAK.
+
+#### 3. Pencocokan Cerdas Komoditas (*Smart Commodity Classifier*)
+
+Menjembatani variasi penamaan komoditas pada invoice, packing list, dan master tarif:
+
+- **A. Pengelompokan Sinonim Resmi (`COMMODITY_SYNONYM_GROUPS`)**:
+  - `UMUM`: *GENERAL GOODS*, *GENERAL*, *NON-BRAND*, *NON BATTERY*.
+  - `TEKSTIL`: *FABRIC*, *TEXTILE*, *GARMENTS*.
+  - `LARTAS - N`: *LARTAS NORMAL*, *BRANDED GOODS, LARTAS NORMAL*.
+  - `LARTAS - S`: *LARTAS SUPER*, *BRANDED*, *KOSMETIK*, *OBAT*, *SUPPLEMENT*, *ALKES*.
+  - `SEMI GARMENT`: *SEMI-GARMENT*, *BATTERY*, *POWERBANK (MSDS REQUIRED)*.
+  - `GARMENT`: *GARMENT*, *FULL BOX PACKING*.
+  - `GADGET & ELEKTRONIK`: *LAPTOP*, *NOTEBOOK*, *MACBOOK*, *IPAD*, *TABLET*.
+  - `KOMODITAS KHUSUS`: *HANDPHONE*, *FCL*, *LEGAL*, *MASKER*, *SEPEDA MAHAL*, *PESTISIDA*.
+
+- **B. Aturan Transformasi Komoditas Bisnis (Strict Override Rules)**:
+  - **Baterai Murni (`isGenuineBattery`)**:
+    - *Deteksi Positif*: Regex `\b(BATTERY|BATTERIES|BATERAI|POWERBANK|ACCU|AKI)\b`.
+    - *Filter Aksesoris (Negasi)*: Jika teks memuat `CHARGER`, `CASING`, `HOLDER`, `TESTER`, `COVER`, `CABLE`, `WIRE`, `CONNECTOR` $\rightarrow$ barang diakui sebagai aksesoris umum/normal.
+    - *Aturan Laut*: Barang baterai murni otomatis dialihkan (*override*) ke tarif **`SEMI GARMENT`**.
+  - **iPad & Tablet (`isGenuineIpad`)**:
+    - Memisahkan unit fisik iPad/Tablet dari aksesoris (*casing, tempered glass, stylus pen*).
+    - Jalur Laut $\rightarrow$ dialihkan ke **`KHUSUS IPAD (PRICE PER PCS, MIN. CHARGE 3 PCS)`**.
+    - Jalur Udara $\rightarrow$ dialihkan ke **`TABLET (PRICE PER KG, MIN 3PCS)`**.
+  - **Laptop & MacBook (`isGenuineLaptop`)**:
+    - Jalur Laut $\rightarrow$ **`LAPTOP (PRICE PER PCS, MIN. CHARGE 3 PCS)`**.
+    - Jalur Udara Non-Apple $\rightarrow$ **`LAPTOP (SELAIN MEREK APPLE PRICE PER KG, MIN. 3PCS)`**.
+    - Jalur Udara Apple (`isAppleDevice`) $\rightarrow$ **`APPLE LAPTOP (PER KG)`**.
+  - **Pemetaan Dinamis Database (`tbCommodityMapping`)**:
+    - Prioritas pemetaan manual spesifik per customer (`fdCustCode`) atau global jika terdapat perjanjian nama dagang unik.
+
+- **C. Token & Substring Heuristic Scorer**:
+  Pencocokan terhadap daftar komoditas batch (`tbMarking` commodities):
+  $$\text{Score} = (3 \times \text{Exact Token}) + (2 \times \text{Full Substring}) + (1 \times \text{Partial Token})$$
+  Kandidat dengan skor tertinggi dan tingkat lartas lebih spesifik (*Lartas Super*) diprioritaskan.
+
+#### 4. Validasi Baris Item Khusus & Non-Komoditas
+
+Setiap baris invoice diperiksa tipenya untuk mencegah salah acuan:
+
+- **Item Overweight Laut (`KG`)**:
+  - Dideteksi dari satuan `KG` atau teks `PARCELS TO JAKARTA (KG)`.
+  - Target acuan: **`Tarif KG Agen`** dari profil database customer (`res.profileHarga.kg`).
+- **Item Tax Return**:
+  - Dideteksi dari teks `TAX RETURN` / `TAXRETURN`.
+  - Target acuan: `res.profileHarga.taxReturnPrice` dengan validasi batas minimum kubikasi `taxReturnMinCharge` $\text{m}^3$.
+- **Item Freight Charge (Valas FC)**:
+  - Dideteksi dari teks `FREIGHT CHARGE` atau satuan valas (`HK$`, `USD`, `RMB`, `S$`).
+  - Target kuantiti: Cross-check langsung ke nilai operasional `tbEntrylist.fdFC`. Jika `fdFC` ada di batch tetapi tidak tertagih $\rightarrow$ Peringatan Kritis.
+- **Item Air Volume Freight Charge (VFC)**:
+  - Dideteksi dari teks `VOLUME FREIGHT` / `VFC` jalur udara.
+  - Target kuantiti: Cross-check ke berat kubikasi timbangan gudang `res.vfcGudangPerMarking` / `res.fdVFCGudang`.
+- **Biaya Ekspedisi / Transport Lokal**:
+  - Teks memuat `TRANSPORT`, `DELIVERY`, `ONGKIR`, `TRUCKING` $\rightarrow$ Ditetapkan status `NO_TARGET` (dikecualikan dari master tarif barang dan dialihkan ke pengecekan ekspedisi lokal Pilar 4).
+
+#### 5. Matriks Evaluasi Status Baris Item
+
+Perbandingan harga aktual invoice ($P_{\text{inv}}$) terhadap acuan master minimum ($P_{\text{min}}$) dan maksimum ($P_{\text{max}}$) dengan toleransi selisih floating point $\pm \text{Rp } 1$:
+
+| Status Item | Indikator UI | Kondisi Matematis | Klasifikasi Resiko & Perilaku Sistem |
+|---|---|---|---|
+| **`MATCH`** | 🟢 **Cocok** | $P_{\text{min}} - 1 \le P_{\text{inv}} \le P_{\text{max}} + 1$ | **Aman**: Harga sesuai regulasi resmi. Tombol terbitkan langsung memproses penerbitan invoice. |
+| **`HIGHER`** | 🟡 **Di Atas Acuan** | $P_{\text{inv}} > P_{\text{max}} + 1$ | **Info/Warning (Overcharge)**: Tombol Terbitkan **TETAP AKTIF (ENABLED)** dengan badge info overcharge (markup disepakati). |
+| **`LOWER`** | 🔴 **Di Bawah Acuan** | $P_{\text{inv}} < P_{\text{min}} - 1$ | **UNDERCHARGE (Peringatan Kritis)**: Tombol Terbitkan **TETAP AKTIF (ENABLED)**, namun sistem memunculkan **Modal Konfirmasi Peringatan Keras** yang merinci selisih kerugian dan meminta konfirmasi eksplisit user sebelum diterbitkan. |
+| **`NOT_SET`** | ⚪ **Belum Diisi** | $P_{\text{inv}} == 0 \land P_{\text{master}} > 0$ | **Peringatan**: Item terdaftar tetapi harga penagihan masih Rp 0. |
+| **`NO_RATE`** | ⚪ **Belum Ada Tarif** | $P_{\text{master}} == 0$ | **Perhatian**: Belum ada konfigurasi tarif di 6-tier price list. |
+| **`NO_TARGET`** | ⚪ **Auxiliary / Non-Rate** | Item Transport / Penyesuaian Bebas | **Netral**: Komponen biaya operasional tanpa pembanding master barang. |
 
 ---
 
@@ -158,21 +235,25 @@ Mengevaluasi kesesuaian tarif per unit pada setiap baris item invoice terhadap a
 ### C. Hirarki Penentuan Tarif Master
 
 ```text
-1. Price List Khusus Customer (Customer Price List - Cust Code Match)
-   └── 2. Override Marking Khusus
-        └── 3. Master Price List (Sesuai fdTglAgent)
-             ├── Customer Sales / Broker  ──> Sheet MKT
-             └── Customer Direct / CS     ──> Sheet CS
-                  └── 4. Profil Database (dbo.get_profile_harga_dari_listcode)
-                       └── 5. Smart Commodity Classifier Fallback
+1. Tier 1: Harga Customer Commodity (CUSTOMER_COMMODITY - Manual Entry / Alias Mapping Customer)
+   └── 2. Tier 2: Harga Customer Marking (CUSTOMER_MARKING - Syarat: Marking >= Override)
+        └── 3. Tier 3: Harga Customer Default (CUSTOMER_DEFAULT - effectiveDate <= fdTglAgent)
+             └── 4. Tier 4: Harga Commodity Global (GLOBAL_COMMODITY - Global Mapping / Master Commodity)
+                  └── 5. Tier 5: Harga Marking Global (GLOBAL_MARKING - Syarat: Marking >= Override)
+                       ├── Broker / Sales MKT Group       ──> Sheet MKT
+                       └── Customer Direct / Non-Broker   ──> Sheet CS
+                            └── 6. Tier 6: Master MKT / CS Standar Global (effectiveDate <= fdTglAgent)
+                                 ├── Broker / Sales MKT Group       ──> Sheet MKT
+                                 └── Customer Direct / Non-Broker   ──> Sheet CS
+                                      └── 7. Fallback: NO_RATE (Belum Ada Acuan Tarif Resmi)
 ```
 
 ### D. Hirarki Vonis Akhir (Status Verdict)
 
 | Level | Status Badge | Kondisi Pemicu | Aksi Sistem |
 |---|---|---|---|
-| **LEVEL 1** | 🔴 **SELISIH (DANGER)** | - Selisih $M^3$ / Berat fisik.<br/>- Harga item di bawah acuan (*Undercharge*).<br/>- Overweight tidak ditagihkan.<br/>- Komplain ditolak tapi dipakai invoice. | Tombol Terbitkan terkunci / Peringatan keras. |
-| **LEVEL 2** | 🟡 **CATATAN (WARNING)** | - Toleransi pembulatan overweight ($\le 1\text{ kg}$).<br/>- Unneeded overweight ditagihkan.<br/>- Perbedaan jumlah koli (Qty Alert).<br/>- Potensi duplikasi tagihan transport. | Dapat diterbitkan dengan konfirmasi catatan. |
+| **LEVEL 1** | 🔴 **SELISIH (DANGER)** | - Selisih $M^3$ / Berat fisik.<br/>- Harga item di bawah acuan (*Undercharge*).<br/>- Overweight tidak ditagihkan.<br/>- Komplain ditolak tapi dipakai invoice. | Tombol Terbitkan tetap aktif, memunculkan modal dialog konfirmasi peringatan keras undercharge/selisih fisik sebelum terbit. |
+| **LEVEL 2** | 🟡 **CATATAN (WARNING)** | - Toleransi pembulatan overweight ($\le 1\text{ kg}$).<br/>- Unneeded overweight ditagihkan.<br/>- Harga di atas acuan (*Overcharge*).<br/>- Perbedaan jumlah koli (Qty Alert).<br/>- Potensi duplikasi tagihan transport. | Tombol Terbitkan tetap aktif, dapat diterbitkan dengan catatan peringatan. |
 | **LEVEL 3** | 🟢 **SEMUA VALID (SUCCESS)** | - Seluruh dimensi, berat, rasio, harga item, dan FC cocok 100%. | Siap diterbitkan langsung (*Issued Ready*). |
 
 ---

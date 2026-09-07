@@ -65,10 +65,16 @@ export interface UnifiedM3CheckResult {
     expectedMode: string | null
     expectedBranch: string | null
     items: any[]
+    customerPriceListName?: string | null
   }
   customer: CustomerInfo
   isCodOrUrgent: boolean
   recommendedM3: number
+  recommendedM3Source?: string
+  hasApprovedKomplain?: boolean
+  isFullKomplainQtyMatch?: boolean
+  isKomplainRejected?: boolean
+  komplainRejectedReason?: string | null
   m3PackingList: {
     raw: any[]
     values: number[]

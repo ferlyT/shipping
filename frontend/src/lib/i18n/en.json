@@ -181,7 +181,7 @@
   "billing.detail.total": "Total",
   "billing.detail.totalAmount": "Total Amount",
   "billing.detail.errorLoad": "Failed to load invoice details",
-  "billing.validation.title": "Billing M3 Validation",
+  "billing.validation.title": "Billing Validation",
   "billing.validation.subtitle": "Verify billed M3 volume against DB data (PL, Warehouse, Complaints, M3 Per Marking)",
   "billing.validation.pl": "Packing List",
   "billing.validation.gudang": "Gudang",

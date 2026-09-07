@@ -235,7 +235,7 @@ export async function getBillingById(id: string) {
   let data = await prisma.tbBilling.findUnique({
     where: { fdInvNo: cleanId },
     include: {
-      details: true,
+      details: { orderBy: { fdID: 'asc' } },
       customer: { select: { fdCustName: true, fdBlocked: true, fdBillTo: true, fdContact: true, fdBillAddr1: true, fdSalesNM: true, fdBroker: true } },
     }
   })
@@ -249,7 +249,7 @@ export async function getBillingById(id: string) {
       data = await prisma.tbBilling.findUnique({
         where: { fdInvNo: parentInvNo },
         include: {
-          details: true,
+          details: { orderBy: { fdID: 'asc' } },
           customer: { select: { fdCustName: true, fdBlocked: true, fdBillTo: true, fdContact: true, fdBillAddr1: true, fdSalesNM: true, fdBroker: true } },
         }
       })
@@ -781,3 +781,155 @@ export async function checkBillResiMarking(invNo: string, searchResi?: string) {
     resiList: groupedResi,
   }
 }
+
+/**
+ * Memperbarui rincian item tagihan (tbBillingDetail) secara atomik,
+ * menghitung ulang grand total (fdJumlah1) di tbBilling, dan menyinkronkan tbBillingTotal via trigger database.
+ */
+export async function updateBillingDetails(
+  invNo: string,
+  items: import('./billing.types').BillingDetailUpdateItem[],
+  userPayload?: { fdEmpCode?: string | null; username?: string; role?: string }
+) {
+  const cleanInvNo = invNo.trim()
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    throw new Error('Rincian item tagihan tidak boleh kosong (minimal 1 baris item)')
+  }
+
+  // 1. Cek keberadaan invoice
+  const billing = await prisma.tbBilling.findFirst({
+    where: { fdInvNo: cleanInvNo },
+    include: { details: true },
+  })
+
+  if (!billing) {
+    throw new Error(`Invoice ${cleanInvNo} tidak ditemukan di database tbBilling.`)
+  }
+
+  // 2. Format & validasi setiap item
+  let totalJumlah1 = 0
+
+  const preparedItems = items.map((item, idx) => {
+    const rawName = String(item.fdItemName || '').trim()
+    if (!rawName) {
+      throw new Error(`Baris item #${idx + 1}: Deskripsi / Nama item wajib diisi.`)
+    }
+    const qty = Number(item.fdQty || 0)
+    if (isNaN(qty) || qty < 0) {
+      throw new Error(`Baris item "${rawName}": Kuantitas tidak boleh negatif.`)
+    }
+    const price = Number(item.fdItemPrice || 0)
+    if (isNaN(price) || price < 0) {
+      throw new Error(`Baris item "${rawName}": Harga satuan tidak boleh negatif.`)
+    }
+    // Jika qty = 0, subtotal = price * 1, selain itu subtotal = qty * price
+    const multiplier = qty === 0 ? 1 : qty
+    const total =
+      item.fdTotal !== undefined && item.fdTotal !== null
+        ? Number(item.fdTotal)
+        : Math.round(multiplier * price)
+    totalJumlah1 += total
+
+    // Pastikan fdID 2 karakter (contoh: '01', '02', '03')
+    const assignedID =
+      item.fdID && item.fdID.trim().length <= 2
+        ? item.fdID.trim().padStart(2, '0')
+        : String(idx + 1).padStart(2, '0')
+
+    return {
+      fdInvNo: cleanInvNo,
+      fdID: assignedID,
+      fdItemName: rawName.slice(0, 100),
+      fdListCode: item.fdListCode ? String(item.fdListCode).trim().slice(0, 7) : (billing.fdListType === 1 ? 'KG' : 'M3'),
+      fdItemCode: item.fdItemCode ? String(item.fdItemCode).trim().slice(0, 7) : 'P0001',
+      fdCurr: item.fdCurr ? String(item.fdCurr).trim().slice(0, 3) : 'RP.',
+      fdQty: qty,
+      fdItemPrice: price,
+      fdTotal: total,
+      fdSatuan: item.fdSatuan ? String(item.fdSatuan).trim().slice(0, 10) : '',
+      fdComodity: item.fdComodity ? String(item.fdComodity).trim().slice(0, 100) : '',
+      fdTypeComodity: item.fdTypeComodity !== undefined && item.fdTypeComodity !== null ? Number(item.fdTypeComodity) : 0,
+    }
+  })
+
+  // Pastikan ID tidak ada duplikasi
+  const idSet = new Set<string>()
+  for (const prepItem of preparedItems) {
+    let currentId = prepItem.fdID
+    if (idSet.has(currentId)) {
+      let nextNum = 1
+      while (idSet.has(String(nextNum).padStart(2, '0'))) nextNum++
+      currentId = String(nextNum).padStart(2, '0')
+      prepItem.fdID = currentId
+    }
+    idSet.add(currentId)
+  }
+
+  // Urutkan preparedItems berdasarkan fdID ascending secara numerik
+  preparedItems.sort((a, b) => a.fdID.localeCompare(b.fdID, undefined, { numeric: true }))
+
+  // 3. Jalankan transaksi SQL atomik
+  await prisma.$transaction(async (tx) => {
+    // A. Hapus item lama yang tidak ada lagi di daftar item baru
+    const newIdList = preparedItems.map((p) => p.fdID)
+    await tx.$executeRaw`
+      DELETE FROM tbBillingDetail 
+      WHERE RTRIM(fdInvNo) = ${cleanInvNo} 
+        AND RTRIM(fdID) NOT IN (${Prisma.join(newIdList)})
+    `
+
+    // B. Upsert setiap baris item
+    for (const item of preparedItems) {
+      const existingDetail = await tx.$queryRaw<any[]>`
+        SELECT TOP 1 RTRIM(fdID) as fdID FROM tbBillingDetail WITH (NOLOCK)
+        WHERE RTRIM(fdInvNo) = ${cleanInvNo} AND RTRIM(fdID) = ${item.fdID}
+      `
+
+      if (existingDetail && existingDetail.length > 0) {
+        await tx.$executeRaw`
+          UPDATE tbBillingDetail
+          SET fdItemName = ${item.fdItemName},
+              fdListCode = ${item.fdListCode},
+              fdItemCode = ${item.fdItemCode},
+              fdCurr = ${item.fdCurr},
+              fdQty = ${item.fdQty},
+              fdItemPrice = ${item.fdItemPrice},
+              fdTotal = ${item.fdTotal},
+              fdSatuan = ${item.fdSatuan},
+              fdComodity = ${item.fdComodity},
+              fdTypeComodity = ${item.fdTypeComodity}
+          WHERE RTRIM(fdInvNo) = ${cleanInvNo} AND RTRIM(fdID) = ${item.fdID}
+        `
+      } else {
+        await tx.$executeRaw`
+          INSERT INTO tbBillingDetail (
+            fdInvNo, fdID, fdListCode, fdItemCode, fdItemName, fdCurr, fdQty, fdItemPrice, fdTotal, fdSatuan, fdComodity, fdTypeComodity
+          ) VALUES (
+            ${item.fdInvNo}, ${item.fdID}, ${item.fdListCode}, ${item.fdItemCode}, ${item.fdItemName}, ${item.fdCurr}, ${item.fdQty}, ${item.fdItemPrice}, ${item.fdTotal}, ${item.fdSatuan}, ${item.fdComodity}, ${item.fdTypeComodity}
+          )
+        `
+      }
+    }
+
+    // C. Update tbBilling.fdJumlah1
+    // Update ini memicu trigger upd_bill yang secara otomatis menyinkronkan tabel tbBillingTotal (sp_tbBillingTotal)
+    await tx.$executeRaw`
+      UPDATE tbBilling
+      SET fdJumlah1 = ${totalJumlah1},
+          fdLoad = GETDATE()
+      WHERE RTRIM(fdInvNo) = ${cleanInvNo}
+    `
+  })
+
+  logger.info({
+    event: 'billing_details_updated',
+    invNo: cleanInvNo,
+    itemCount: preparedItems.length,
+    newTotal: totalJumlah1,
+    user: userPayload?.username || userPayload?.fdEmpCode || 'system',
+  })
+
+  // 4. Return data billing terbaru lengkap
+  return getBillingById(cleanInvNo)
+}
+

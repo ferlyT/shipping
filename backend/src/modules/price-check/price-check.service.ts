@@ -13,6 +13,7 @@ import type {
   PriceCheckParams,
   UnifiedPriceCheckResult,
   PriceStatus,
+  PriceSourceType,
 } from './price-check.types'
 
 /**
@@ -501,15 +502,6 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
     }
   }
 
-  // 3. Ambil data Tarif Khusus Customer di database ERP (memadukan tbCustomersHargaAudit dan vwCustomersHargaUnpivot)
-  let customerTariffs: any[] = []
-  if (custCode) {
-    try {
-      customerTariffs = await getCustomerTariffsWithAudit(custCode)
-    } catch (err) {
-      logger.warn('[evaluatePriceCheck] Error fetching customer tariffs with audit:', err)
-    }
-  }
 
   // 4. Ambil profil tarif SP ERP (dbo.get_profile_harga_dari_listcode) jika ada listCode
   let profileTariff: any = null
@@ -619,13 +611,13 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
     return null
   }
 
-  // ─── 7. EKSEKUSI MESIN CEK HARGA (4-TIER + STRICT MARKING OVERRIDE) ───
+  // ─── 7. EKSEKUSI MESIN CEK HARGA (6-TIER WATERFALL) ───
   let dbPrice = 0
-  let priceSource = 'NONE'
+  let priceSource: PriceSourceType = 'NONE'
   let priceSourceLabel = 'Belum Ada Tarif Acuan'
   let appliedTier = 'NONE'
   let appliedTierLabel = 'Belum Ada Tarif'
-  let matchedWith: 'CUSTOMER' | 'MASTER_CS' | 'MASTER_MKT' | 'PROFILE_SP' | 'NONE' = 'NONE'
+  let matchedWith: 'CUSTOMER' | 'MASTER_CS' | 'MASTER_MKT' | 'NONE' = 'NONE'
   let isMarkingOverride = false
   let matchedMarkingCode: string | undefined = undefined
   let priceCS: number | null = null
@@ -634,10 +626,47 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
   let matchedCategory = targetCategoryToMatch
   let chosenMasterUpload: any = null
   let chosenCustUpload: any = null
-  let chosenCustomerTariff: any = null
 
-  // A. Pengecekan Level 1: Customer Marking Override
-  if (custCode && markingUpper && allCustUploads.length > 0) {
+  // ── TIER 1: Harga Customer Commodity (Manual Entry / Mapping Spesifik Customer) ──
+  if (custCode && allCustUploads.length > 0) {
+    const custUploads = allCustUploads.filter(
+      (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
+    )
+    for (const u of custUploads) {
+      const isManualEntry = (u.fileName || '').toUpperCase().includes('MANUAL_ENTRY')
+      const matchedItem = matchCategoryInItems(u.items, (it: any) => {
+        const mMatch = !it.mode || it.mode.toUpperCase().includes(modeStr.toUpperCase())
+        const bMatch = !it.branch || getNormalizedBranchCode(it.branch) === targetBranchCode
+        return mMatch && bMatch
+      })
+
+      const isCustomerMapped = activeMappings.some(
+        (m) =>
+          m.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() &&
+          categoryCandidates.some(
+            (c) =>
+              c.toUpperCase() === m.commodityName?.trim().toUpperCase() ||
+              c.toUpperCase() === m.targetCommodity?.trim().toUpperCase()
+          )
+      )
+
+      if (matchedItem && Number(matchedItem.price) > 0 && (isManualEntry || isCustomerMapped)) {
+        dbPrice = Number(matchedItem.price)
+        priceSource = 'CUSTOMER_COMMODITY'
+        priceSourceLabel = 'Tier 1: Harga Komoditi Khusus Customer'
+        appliedTier = 'TIER_1_CUSTOMER_COMMODITY'
+        appliedTierLabel = 'Tier 1: Customer Commodity'
+        matchedWith = 'CUSTOMER'
+        effectiveDate = u.effectiveDate ? new Date(u.effectiveDate).toISOString() : null
+        matchedCategory = matchedItem.category
+        chosenCustUpload = u
+        break
+      }
+    }
+  }
+
+  // ── TIER 2: Harga Customer Marking (Marking Override Customer) ──
+  if (dbPrice === 0 && custCode && markingUpper && allCustUploads.length > 0) {
     const custUploads = allCustUploads.filter(
       (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
     )
@@ -655,9 +684,9 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
               if (matchedItem && Number(matchedItem.price) > 0) {
                 dbPrice = Number(matchedItem.price)
                 priceSource = 'CUSTOMER_MARKING'
-                priceSourceLabel = `Level 1: Tarif Khusus Customer (Marking Override: ${m.markingCode})`
-                appliedTier = 'LEVEL_1_CUSTOMER_MARKING'
-                appliedTierLabel = 'Level 1: Customer Marking Override'
+                priceSourceLabel = `Tier 2: Tarif Khusus Customer (Marking Override: ${m.markingCode})`
+                appliedTier = 'TIER_2_CUSTOMER_MARKING'
+                appliedTierLabel = 'Tier 2: Customer Marking Override'
                 matchedWith = 'CUSTOMER'
                 isMarkingOverride = true
                 matchedMarkingCode = m.markingCode
@@ -674,7 +703,83 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
     }
   }
 
-  // B. Pengecekan Level 3: Master Marking Override (STRICT OVERRIDE)
+  // ── TIER 3: Harga Customer Default (Default Upload) ──
+  if (dbPrice === 0 && custCode && allCustUploads.length > 0) {
+    const custDefaultUpload = allCustUploads.find(
+      (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
+    )
+    if (custDefaultUpload && custDefaultUpload.items) {
+      const matchedItem = matchCategoryInItems(custDefaultUpload.items, (it: any) => {
+        const mMatch = !it.mode || it.mode.toUpperCase().includes(modeStr.toUpperCase())
+        const bMatch = !it.branch || getNormalizedBranchCode(it.branch) === targetBranchCode
+        return mMatch && bMatch
+      })
+      if (matchedItem && Number(matchedItem.price) > 0) {
+        dbPrice = Number(matchedItem.price)
+        priceSource = 'CUSTOMER_DEFAULT'
+        priceSourceLabel = 'Tier 3: Tarif Khusus Customer (Default Upload)'
+        appliedTier = 'TIER_3_CUSTOMER_DEFAULT'
+        appliedTierLabel = 'Tier 3: Customer Default'
+        matchedWith = 'CUSTOMER'
+        effectiveDate = custDefaultUpload.effectiveDate ? new Date(custDefaultUpload.effectiveDate).toISOString() : null
+        matchedCategory = matchedItem.category
+        chosenCustUpload = custDefaultUpload
+      }
+    }
+  }
+
+  // ── TIER 4: Harga Commodity Global (Global Mapping / Special Commodity Master) ──
+  const isGlobalCommodityCandidate =
+    isBatteryItem ||
+    isIpadItem ||
+    isLaptopItem ||
+    activeMappings.some(
+      (m) =>
+        !m.fdCustCode &&
+        categoryCandidates.some(
+          (c) =>
+            c.toUpperCase() === m.commodityName?.trim().toUpperCase() ||
+            c.toUpperCase() === m.targetCommodity?.trim().toUpperCase()
+        )
+    )
+
+  if (dbPrice === 0 && isGlobalCommodityCandidate && allMasterUploads.length > 0) {
+    const masterCandidates = allMasterUploads.filter((u) => new Date(u.effectiveDate) <= targetDate)
+    const masterUpload = masterCandidates[0] || allMasterUploads[0]
+
+    if (masterUpload?.items) {
+      const targetCategoryCandidates = isBatteryItem
+        ? ['SEMI GARMENT']
+        : gadgetCandidates.length > 0
+        ? gadgetCandidates
+        : categoryCandidates
+
+      const matchedItem = targetCategoryCandidates
+        .map((cat) =>
+          findBestCategoryMatch(masterUpload.items, cat, (it: any) => {
+            const sMatch = it.sheetType?.toUpperCase() === (isBroker ? 'MKT' : 'CS')
+            const mMatch = !it.mode || it.mode.toUpperCase().includes(modeStr.toUpperCase())
+            const bMatch = !it.branch || getNormalizedBranchCode(it.branch) === targetBranchCode || it.branch.toUpperCase().includes(targetBranchCode)
+            return sMatch && mMatch && bMatch
+          })
+        )
+        .find((res) => res && Number(res.price) > 0)
+
+      if (matchedItem) {
+        dbPrice = Number(matchedItem.price)
+        priceSource = 'GLOBAL_COMMODITY'
+        priceSourceLabel = `Tier 4: Tarif Komoditi Khusus Global (${isBroker ? 'MKT' : 'CS'})`
+        appliedTier = 'TIER_4_GLOBAL_COMMODITY'
+        appliedTierLabel = `Tier 4: Global Commodity (${isBroker ? 'MKT' : 'CS'})`
+        matchedWith = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
+        effectiveDate = masterUpload.effectiveDate ? new Date(masterUpload.effectiveDate).toISOString() : null
+        matchedCategory = matchedItem.category
+        chosenMasterUpload = masterUpload
+      }
+    }
+  }
+
+  // ── TIER 5: Harga Marking Global (Master Marking Override) ──
   let generalMarkingOverrideUpload: any = null
   let generalMatchedMarking: string | undefined = undefined
 
@@ -696,14 +801,12 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
     }
   }
 
-  // Jika General Marking Override terpenuhi:
   if (dbPrice === 0 && generalMarkingOverrideUpload) {
     chosenMasterUpload = generalMarkingOverrideUpload
     effectiveDate = generalMarkingOverrideUpload.effectiveDate
       ? new Date(generalMarkingOverrideUpload.effectiveDate).toISOString()
       : null
 
-    // Tarik harga CS dan MKT dari file override tersebut
     const csItem = matchCategoryInItems(generalMarkingOverrideUpload.items, (it: any) => {
       const sMatch = it.sheetType?.toUpperCase() === 'CS'
       const mMatch = !it.mode || it.mode.toUpperCase().includes(modeStr.toUpperCase())
@@ -720,104 +823,21 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
     priceCS = csItem ? Number(csItem.price) : null
     priceMKT = mktItem ? Number(mktItem.price) : null
 
-    // Cek apakah customer memiliki file price list khusus (Level 2 Customer Default)
-    if (custCode && allCustUploads.length > 0) {
-      const custUploadDate = generalMarkingOverrideUpload.effectiveDate ? new Date(generalMarkingOverrideUpload.effectiveDate) : targetDate
-      const custDefaultUpload = allCustUploads.find(
-        (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= custUploadDate
-      )
-      if (custDefaultUpload && custDefaultUpload.items) {
-        const matchedItem = matchCategoryInItems(custDefaultUpload.items, (it: any) => {
-          const mMatch = !it.mode || it.mode.toUpperCase().includes(modeStr.toUpperCase())
-          const bMatch = !it.branch || getNormalizedBranchCode(it.branch) === targetBranchCode
-          return mMatch && bMatch
-        })
-        if (matchedItem && Number(matchedItem.price) > 0) {
-          dbPrice = Number(matchedItem.price)
-          priceSource = 'CUSTOMER_DEFAULT'
-          priceSourceLabel = 'Level 2: Tarif Khusus Customer (Default Upload)'
-          appliedTier = 'LEVEL_2_CUSTOMER_DEFAULT'
-          appliedTierLabel = 'Level 2: Customer Default'
-          matchedWith = 'CUSTOMER'
-          isMarkingOverride = false
-          effectiveDate = custDefaultUpload.effectiveDate ? new Date(custDefaultUpload.effectiveDate).toISOString() : effectiveDate
-          matchedCategory = matchedItem.category
-          chosenCustUpload = custDefaultUpload
-        }
-      }
-    }
-
-    // Jika customer TIDAK memiliki file upload khusus, WAJIB terapkan Level 3 Master Marking Override!
-    if (dbPrice === 0) {
-      const selectedItem = isBroker ? mktItem : csItem
-      if (selectedItem && Number(selectedItem.price) > 0) {
-        dbPrice = Number(selectedItem.price)
-        priceSource = isBroker ? 'MASTER_MKT_OVERRIDE' : 'MASTER_CS_OVERRIDE'
-        priceSourceLabel = `Level 3: Tarif Price List Umum (Marking Override: ${generalMatchedMarking} - ${isBroker ? 'MKT' : 'CS'})`
-        appliedTier = 'LEVEL_3_MASTER_MARKING'
-        appliedTierLabel = `Level 3: Master Marking Override (${isBroker ? 'MKT' : 'CS'})`
-        matchedWith = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
-        isMarkingOverride = true
-        matchedMarkingCode = generalMatchedMarking
-        matchedCategory = selectedItem.category
-      }
+    const selectedItem = isBroker ? mktItem : csItem
+    if (selectedItem && Number(selectedItem.price) > 0) {
+      dbPrice = Number(selectedItem.price)
+      priceSource = isBroker ? 'MASTER_MKT_OVERRIDE' : 'MASTER_CS_OVERRIDE'
+      priceSourceLabel = `Tier 5: Tarif Price List Umum (Marking Override: ${generalMatchedMarking} - ${isBroker ? 'MKT' : 'CS'})`
+      appliedTier = 'TIER_5_GLOBAL_MARKING'
+      appliedTierLabel = `Tier 5: Master Marking Override (${isBroker ? 'MKT' : 'CS'})`
+      matchedWith = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
+      isMarkingOverride = true
+      matchedMarkingCode = generalMatchedMarking
+      matchedCategory = selectedItem.category
     }
   }
 
-  // C. Jika TIDAK ADA Marking Override: Cek Customer Default Upload
-  if (dbPrice === 0 && custCode && allCustUploads.length > 0) {
-    const custDefaultUpload = allCustUploads.find(
-      (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
-    )
-    if (custDefaultUpload && custDefaultUpload.items) {
-      const matchedItem = matchCategoryInItems(custDefaultUpload.items, (it: any) => {
-        const mMatch = !it.mode || it.mode.toUpperCase().includes(modeStr.toUpperCase())
-        const bMatch = !it.branch || getNormalizedBranchCode(it.branch) === targetBranchCode
-        return mMatch && bMatch
-      })
-      if (matchedItem && Number(matchedItem.price) > 0) {
-        dbPrice = Number(matchedItem.price)
-        priceSource = 'CUSTOMER_DEFAULT'
-        priceSourceLabel = 'Level 2: Tarif Khusus Customer (Default Upload)'
-        appliedTier = 'LEVEL_2_CUSTOMER_DEFAULT'
-        appliedTierLabel = 'Level 2: Customer Default'
-        matchedWith = 'CUSTOMER'
-        isMarkingOverride = false
-        effectiveDate = custDefaultUpload.effectiveDate ? new Date(custDefaultUpload.effectiveDate).toISOString() : null
-        matchedCategory = matchedItem.category
-        chosenCustUpload = custDefaultUpload
-      }
-    }
-  }
-
-  // C2. Jika tidak ada file customer upload dan tidak ada override: Cek kesepakatan vwCustomersHarga
-  if (dbPrice === 0 && customerTariffs.length > 0) {
-    const expectedListType = isAirMode ? 1 : 2
-    const filteredTariffs = customerTariffs.filter((t) => {
-      const listTypeMatch = !t.listType || t.listType === expectedListType
-      const bCode = getNormalizedBranchCode(t.branchName)
-      const branchMatch = !bCode || !targetBranchCode || bCode === targetBranchCode
-      return listTypeMatch && branchMatch
-    })
-    const matchedTariff = filteredTariffs.find(
-      (t) =>
-        (entryInfo?.typeComodity && t.typeComodity === entryInfo.typeComodity) ||
-        categoryCandidates.some((cat) => t.comodityName?.toUpperCase() === cat.toUpperCase())
-    ) || (filteredTariffs.length === 1 && categoryCandidates.some((c) => filteredTariffs[0].comodityName?.toUpperCase() === c.toUpperCase()) ? filteredTariffs[0] : null)
-
-    if (matchedTariff && matchedTariff.harga > 0) {
-      chosenCustomerTariff = matchedTariff
-      dbPrice = Number(matchedTariff.harga)
-      priceSource = 'CUSTOMER_TARIFF'
-      priceSourceLabel = `Tarif Khusus Customer (vwCustomersHarga - ${matchedTariff.branchName || targetBranchCode})`
-      appliedTier = 'CUSTOMER_TARIFF_VW'
-      appliedTierLabel = 'Tarif Khusus Master Customer'
-      matchedWith = 'CUSTOMER'
-      matchedCategory = matchedTariff.comodityName || targetCategoryToMatch
-    }
-  }
-
-  // D. Level 4: Master Standar CS / MKT (Jika tidak ada override dan tidak ada tarif customer)
+  // ── TIER 6: Master MKT / CS Standar Global ──
   if (dbPrice === 0 && allMasterUploads.length > 0) {
     const masterCandidates = allMasterUploads.filter((u) => new Date(u.effectiveDate) <= targetDate)
     const masterUpload = masterCandidates[0] || allMasterUploads[0]
@@ -844,9 +864,9 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
     if (selectedItem && Number(selectedItem.price) > 0) {
       dbPrice = Number(selectedItem.price)
       priceSource = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
-      priceSourceLabel = `Level 4: Tarif Price List Umum Standar (${isBroker ? 'MKT' : 'CS'})`
-      appliedTier = isBroker ? 'LEVEL_4_MASTER_MKT' : 'LEVEL_4_MASTER_CS'
-      appliedTierLabel = isBroker ? 'Level 4: Master MKT (Broker)' : 'Level 4: Master CS (Non-Broker)'
+      priceSourceLabel = `Tier 6: Tarif Price List Umum Standar (${isBroker ? 'MKT' : 'CS'})`
+      appliedTier = isBroker ? 'TIER_6_MASTER_MKT' : 'TIER_6_MASTER_CS'
+      appliedTierLabel = isBroker ? 'Tier 6: Master MKT (Broker)' : 'Tier 6: Master CS (Non-Broker)'
       matchedWith = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
       matchedCategory = selectedItem.category
     }
@@ -867,44 +887,46 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
     }
   }
 
-  // E. Fallback Profil SP ERP
-  if (dbPrice === 0 && profileTariff && profileTariff.harga > 0) {
-    dbPrice = Number(profileTariff.harga)
-    priceSource = 'PROFILE_SP'
-    priceSourceLabel = 'Profil Database ERP'
-    appliedTier = 'PROFILE_SP'
-    appliedTierLabel = 'Profil Database ERP'
-    matchedWith = 'PROFILE_SP'
-  }
-
-  // 8. Evaluasi Status Kesesuaian Harga
+  // 8. Evaluasi Status Kesesuaian Harga & Penegakan Undercharge / Overcharge
   let status: PriceStatus = 'NO_RATE'
   let statusLabel = 'Belum Ada Acuan'
   let statusDescription = 'Belum ditemukan acuan tarif yang sesuai di sistem.'
+  let isUndercharge = false
+  let isOvercharge = false
+  let validationVerdict: 'MATCH' | 'UNDERCHARGE_WARNING' | 'OVERCHARGE_WARNING' | 'NO_RATE' = 'NO_RATE'
 
   const diff = currentPrice > 0 && dbPrice > 0 ? currentPrice - dbPrice : 0
 
   if (dbPrice === 0) {
     status = 'NO_RATE'
     statusLabel = 'Belum Ada Harga'
-    statusDescription = 'Tarif belum ditentukan di database Price List maupun tarif khusus customer.'
+    statusDescription = 'Tarif belum ditentukan di Price List (6-Tier Waterfall).'
+    validationVerdict = 'NO_RATE'
   } else if (currentPrice === 0) {
     status = 'NOT_SET'
     statusLabel = 'Harga Belum Diisi'
     statusDescription = `Harga saat ini masih Rp 0. Acuan database adalah Rp ${dbPrice.toLocaleString('id-ID')} (${priceSourceLabel}).`
+    isUndercharge = true
+    validationVerdict = 'UNDERCHARGE_WARNING'
   } else if (Math.abs(diff) < 1) {
     status = 'MATCH'
     statusLabel = 'Harga Sesuai Price List'
     statusDescription = `Harga saat ini (Rp ${currentPrice.toLocaleString('id-ID')}) SESUAI dengan acuan ${priceSourceLabel}.`
+    validationVerdict = 'MATCH'
   } else if (diff > 0) {
     status = 'DIFFERENT'
-    statusLabel = 'Harga di Atas Acuan'
+    statusLabel = 'Harga di Atas Acuan (Overcharge)'
     statusDescription = `Harga saat ini (Rp ${currentPrice.toLocaleString('id-ID')}) berada DI ATAS acuan database Rp ${dbPrice.toLocaleString('id-ID')} (${priceSourceLabel}). Selisih: +Rp ${diff.toLocaleString('id-ID')}.`
+    isOvercharge = true
+    validationVerdict = 'OVERCHARGE_WARNING'
   } else {
     status = 'DIFFERENT'
-    statusLabel = 'Harga di Bawah Acuan'
+    statusLabel = 'Harga di Bawah Acuan (Undercharge)'
     statusDescription = `Harga saat ini (Rp ${currentPrice.toLocaleString('id-ID')}) berada DI BAWAH acuan database Rp ${dbPrice.toLocaleString('id-ID')} (${priceSourceLabel}). Selisih: -Rp ${Math.abs(diff).toLocaleString('id-ID')}.`
+    isUndercharge = true
+    validationVerdict = 'UNDERCHARGE_WARNING'
   }
+
   // Deteksi Override Komoditas (misal: genuine battery dialihkan ke SEMI GARMENT, iPad/Laptop, atau dynamic mapping)
   const { isCommodityOverride, commodityOverrideDetail } = determineCommodityOverride({
     comodityStr: comodity,
@@ -950,11 +972,14 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
     tglAgen: entryInfo?.tglAgent ? new Date(entryInfo.tglAgent).toISOString() : null,
     customerPriceList: chosenCustUpload ? { uploadId: chosenCustUpload.id, fileName: chosenCustUpload.fileName, effectiveDate: chosenCustUpload.effectiveDate, items: chosenCustUpload.items } : null,
     masterPriceList: chosenMasterUpload ? { uploadId: chosenMasterUpload.id, fileName: chosenMasterUpload.fileName, effectiveDate: chosenMasterUpload.effectiveDate, items: chosenMasterUpload.items } : null,
-    customerTariffs,
-    matchedTariff: chosenCustomerTariff,
+    customerTariffs: [],
+    matchedTariff: null,
     profileTariff,
     listCode: listCode || entryInfo?.listCode || undefined,
     mode: isAirMode ? 'UDARA' : 'LAUT',
+    isUndercharge,
+    isOvercharge,
+    validationVerdict,
   }
 }
 
@@ -977,7 +1002,7 @@ export async function evaluateBatchPriceCheck(
   const distinctCustNames = Array.from(new Set(items.map((it) => it.customer?.trim()).filter(Boolean) as string[]))
 
   // Single preloading query: Reference data is loaded from in-memory cache
-  const [{ mUploads, cUploads, activeMappings }, markingRows, custTariffRows, brokerRows] = await Promise.all([
+  const [{ mUploads, cUploads, activeMappings }, markingRows, brokerRows] = await Promise.all([
     getCachedReferenceData(modeStr),
     distinctMarkings.length > 0
       ? prisma.$queryRaw<any[]>`
@@ -985,9 +1010,6 @@ export async function evaluateBatchPriceCheck(
           FROM tbMarking WITH (NOLOCK)
           WHERE RTRIM(fdMarkingCode) IN (${Prisma.join(distinctMarkings)})
         `
-      : Promise.resolve([]),
-    distinctCustCodes.length > 0
-      ? getBatchCustomerTariffsWithAudit(distinctCustCodes)
       : Promise.resolve([]),
     distinctCustCodes.length > 0 || distinctCustNames.length > 0
       ? prisma.tbCustomers.findMany({
@@ -1115,18 +1137,54 @@ export async function evaluateBatchPriceCheck(
     }
 
     let dbPrice = 0
-    let priceSource = 'NONE'
+    let priceSource: PriceSourceType = 'NONE'
     let priceSourceLabel = 'Belum Ada Acuan'
     let appliedTier = 'NONE'
     let appliedTierLabel = 'Belum Ada Tarif'
-    let matchedWith: 'CUSTOMER' | 'MASTER_CS' | 'MASTER_MKT' | 'PROFILE_SP' | 'NONE' = 'NONE'
+    let matchedWith: 'CUSTOMER' | 'MASTER_CS' | 'MASTER_MKT' | 'NONE' = 'NONE'
     let isMarkingOverride = false
     let matchedMarkingCode: string | undefined = undefined
     let priceCS: number | null = null
     let priceMKT: number | null = null
 
-    // A. Level 1: Customer Marking Override
-    if (custCode && markingUpper && cUploads.length > 0) {
+    // ── TIER 1: Harga Customer Commodity (Manual Entry / Mapping Spesifik Customer) ──
+    if (custCode && cUploads.length > 0) {
+      const custUploads = cUploads.filter(
+        (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
+      )
+      for (const u of custUploads) {
+        const isManualEntry = (u.fileName || '').toUpperCase().includes('MANUAL_ENTRY')
+        const matchedItem = matchCategoryInItems(u.items, (item: any) => {
+          const mMatch = !item.mode || item.mode.toUpperCase().includes(modeStr.toUpperCase())
+          const bMatch = !item.branch || getNormalizedBranchCode(item.branch) === targetBranchCode
+          return mMatch && bMatch
+        })
+
+        const isCustomerMapped = activeMappings.some(
+          (m) =>
+            m.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() &&
+            categoryCandidates.some(
+              (c) =>
+                c.toUpperCase() === m.commodityName?.trim().toUpperCase() ||
+                c.toUpperCase() === m.targetCommodity?.trim().toUpperCase()
+            )
+        )
+
+        if (matchedItem && Number(matchedItem.price) > 0 && (isManualEntry || isCustomerMapped)) {
+          dbPrice = Number(matchedItem.price)
+          actualMatchedCategory = matchedItem.category || ''
+          priceSource = 'CUSTOMER_COMMODITY'
+          priceSourceLabel = 'Tier 1: Harga Komoditi Khusus Customer'
+          appliedTier = 'TIER_1_CUSTOMER_COMMODITY'
+          appliedTierLabel = 'Tier 1: Customer Commodity'
+          matchedWith = 'CUSTOMER'
+          break
+        }
+      }
+    }
+
+    // ── TIER 2: Harga Customer Marking (Marking Override Customer) ──
+    if (dbPrice === 0 && custCode && markingUpper && cUploads.length > 0) {
       const custUploads = cUploads.filter(
         (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
       )
@@ -1141,10 +1199,11 @@ export async function evaluateBatchPriceCheck(
               })
               if (matchedItem && Number(matchedItem.price) > 0) {
                 dbPrice = Number(matchedItem.price)
+                actualMatchedCategory = matchedItem.category || ''
                 priceSource = 'CUSTOMER_MARKING'
-                priceSourceLabel = `Level 1: Customer Marking (${m.markingCode})`
-                appliedTier = 'LEVEL_1_CUSTOMER_MARKING'
-                appliedTierLabel = 'Level 1: Customer Marking Override'
+                priceSourceLabel = `Tier 2: Tarif Khusus Customer (Marking: ${m.markingCode})`
+                appliedTier = 'TIER_2_CUSTOMER_MARKING'
+                appliedTierLabel = 'Tier 2: Customer Marking Override'
                 matchedWith = 'CUSTOMER'
                 isMarkingOverride = true
                 matchedMarkingCode = m.markingCode
@@ -1157,7 +1216,79 @@ export async function evaluateBatchPriceCheck(
       }
     }
 
-    // B. Level 3: Master Marking Override (STRICT OVERRIDE)
+    // ── TIER 3: Harga Customer Default (Default Upload) ──
+    if (dbPrice === 0 && custCode && cUploads.length > 0) {
+      const custDefaultUpload = cUploads.find(
+        (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
+      )
+      if (custDefaultUpload?.items) {
+        const matchedItem = matchCategoryInItems(custDefaultUpload.items, (item: any) => {
+          const mMatch = !item.mode || item.mode.toUpperCase().includes(modeStr.toUpperCase())
+          const bMatch = !item.branch || getNormalizedBranchCode(item.branch) === targetBranchCode
+          return mMatch && bMatch
+        })
+        if (matchedItem && Number(matchedItem.price) > 0) {
+          dbPrice = Number(matchedItem.price)
+          actualMatchedCategory = matchedItem.category || ''
+          priceSource = 'CUSTOMER_DEFAULT'
+          priceSourceLabel = 'Tier 3: Tarif Khusus Customer (Default Upload)'
+          appliedTier = 'TIER_3_CUSTOMER_DEFAULT'
+          appliedTierLabel = 'Tier 3: Customer Default'
+          matchedWith = 'CUSTOMER'
+        }
+      }
+    }
+
+    // ── TIER 4: Harga Commodity Global (Global Mapping / Special Commodity Master) ──
+    const isGlobalCommodityCandidate =
+      isBatteryItem ||
+      isIpadItem ||
+      isLaptopItem ||
+      activeMappings.some(
+        (m) =>
+          !m.fdCustCode &&
+          categoryCandidates.some(
+            (c) =>
+              c.toUpperCase() === m.commodityName?.trim().toUpperCase() ||
+              c.toUpperCase() === m.targetCommodity?.trim().toUpperCase()
+          )
+      )
+
+    if (dbPrice === 0 && isGlobalCommodityCandidate && mUploads.length > 0) {
+      const masterCandidates = mUploads.filter((u) => new Date(u.effectiveDate) <= targetDate)
+      const masterUpload = masterCandidates[0] || mUploads[0]
+
+      if (masterUpload?.items) {
+        const targetCategoryCandidates = isBatteryItem
+          ? ['SEMI GARMENT']
+          : gadgetCandidates.length > 0
+          ? gadgetCandidates
+          : categoryCandidates
+
+        const matchedItem = targetCategoryCandidates
+          .map((cat) =>
+            findBestCategoryMatch(masterUpload.items, cat, (item: any) => {
+              const sMatch = item.sheetType?.toUpperCase() === (isBroker ? 'MKT' : 'CS')
+              const mMatch = !item.mode || item.mode.toUpperCase().includes(modeStr.toUpperCase())
+              const bMatch = !item.branch || getNormalizedBranchCode(item.branch) === targetBranchCode || item.branch.toUpperCase().includes(targetBranchCode)
+              return sMatch && mMatch && bMatch
+            })
+          )
+          .find((res) => res && Number(res.price) > 0)
+
+        if (matchedItem) {
+          dbPrice = Number(matchedItem.price)
+          actualMatchedCategory = matchedItem.category || ''
+          priceSource = 'GLOBAL_COMMODITY'
+          priceSourceLabel = `Tier 4: Tarif Komoditi Khusus Global (${isBroker ? 'MKT' : 'CS'})`
+          appliedTier = 'TIER_4_GLOBAL_COMMODITY'
+          appliedTierLabel = `Tier 4: Global Commodity (${isBroker ? 'MKT' : 'CS'})`
+          matchedWith = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
+        }
+      }
+    }
+
+    // ── TIER 5: Harga Marking Global (Master Marking Override) ──
     let genOverrideUpload: any = null
     let genMatchedMarking: string | undefined = undefined
 
@@ -1193,97 +1324,21 @@ export async function evaluateBatchPriceCheck(
       priceCS = csItem ? Number(csItem.price) : null
       priceMKT = mktItem ? Number(mktItem.price) : null
 
-      // Cek jika customer memiliki upload default
-      if (custCode && cUploads.length > 0) {
-        const custDefaultUpload = cUploads.find(
-          (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= new Date(genOverrideUpload.effectiveDate)
-        )
-        if (custDefaultUpload?.items) {
-          const matchedItem = matchCategoryInItems(custDefaultUpload.items, (item: any) => {
-            const mMatch = !item.mode || item.mode.toUpperCase().includes(modeStr.toUpperCase())
-            const bMatch = !item.branch || getNormalizedBranchCode(item.branch) === targetBranchCode
-            return mMatch && bMatch
-          })
-          if (matchedItem && Number(matchedItem.price) > 0) {
-            dbPrice = Number(matchedItem.price)
-            actualMatchedCategory = matchedItem.category || ''
-            priceSource = 'CUSTOMER_DEFAULT'
-            priceSourceLabel = 'Level 2: Customer Default'
-            appliedTier = 'LEVEL_2_CUSTOMER_DEFAULT'
-            appliedTierLabel = 'Level 2: Customer Default'
-            matchedWith = 'CUSTOMER'
-          }
-        }
-      }
-
-      // Jika customer tidak punya upload khusus, terapkan Master Marking Override (CS / MKT)
-      if (dbPrice === 0) {
-        const selectedItem = isBroker ? mktItem : csItem
-        if (selectedItem && Number(selectedItem.price) > 0) {
-          dbPrice = Number(selectedItem.price)
-          actualMatchedCategory = selectedItem.category || ''
-          priceSource = isBroker ? 'MASTER_MKT_OVERRIDE' : 'MASTER_CS_OVERRIDE'
-          priceSourceLabel = `Level 3: Master Marking Override (${isBroker ? 'MKT' : 'CS'})`
-          appliedTier = 'LEVEL_3_MASTER_MARKING'
-          appliedTierLabel = `Level 3: Master Marking Override (${isBroker ? 'MKT' : 'CS'})`
-          matchedWith = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
-          isMarkingOverride = true
-          matchedMarkingCode = genMatchedMarking
-        }
+      const selectedItem = isBroker ? mktItem : csItem
+      if (selectedItem && Number(selectedItem.price) > 0) {
+        dbPrice = Number(selectedItem.price)
+        actualMatchedCategory = selectedItem.category || ''
+        priceSource = isBroker ? 'MASTER_MKT_OVERRIDE' : 'MASTER_CS_OVERRIDE'
+        priceSourceLabel = `Tier 5: Master Marking Override (${isBroker ? 'MKT' : 'CS'})`
+        appliedTier = 'TIER_5_GLOBAL_MARKING'
+        appliedTierLabel = `Tier 5: Master Marking Override (${isBroker ? 'MKT' : 'CS'})`
+        matchedWith = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
+        isMarkingOverride = true
+        matchedMarkingCode = genMatchedMarking
       }
     }
 
-    // C. Customer Default Upload (Jika tidak ada override)
-    if (dbPrice === 0 && custCode && cUploads.length > 0) {
-      const custDefaultUpload = cUploads.find(
-        (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
-      )
-      if (custDefaultUpload?.items) {
-        const matchedItem = matchCategoryInItems(custDefaultUpload.items, (item: any) => {
-          const mMatch = !item.mode || item.mode.toUpperCase().includes(modeStr.toUpperCase())
-          const bMatch = !item.branch || getNormalizedBranchCode(item.branch) === targetBranchCode
-          return mMatch && bMatch
-        })
-        if (matchedItem && Number(matchedItem.price) > 0) {
-          dbPrice = Number(matchedItem.price)
-          actualMatchedCategory = matchedItem.category || ''
-          priceSource = 'CUSTOMER_DEFAULT'
-          priceSourceLabel = 'Level 2: Customer Default'
-          appliedTier = 'LEVEL_2_CUSTOMER_DEFAULT'
-          appliedTierLabel = 'Level 2: Customer Default'
-          matchedWith = 'CUSTOMER'
-        }
-      }
-    }
-
-    // C2. vwCustomersHarga (Jika tidak ada override dan tidak ada customer upload)
-    if (dbPrice === 0 && custTariffRows.length > 0) {
-      const expectedListType = modeStr === 'Air' ? 1 : 2
-      const filteredTariffs = custTariffRows.filter((t) => {
-        const custMatch = t.custCode?.toUpperCase() === custCode.toUpperCase()
-        const listTypeMatch = !t.listType || t.listType === expectedListType
-        const bCode = getNormalizedBranchCode(t.branchName)
-        const branchMatch = !bCode || !targetBranchCode || bCode === targetBranchCode
-        return custMatch && listTypeMatch && branchMatch
-      })
-      const matchingTariff = filteredTariffs.find(
-        (t) =>
-          categoryCandidates.some((cat) => t.comodityName?.toUpperCase() === cat.toUpperCase())
-      ) || (filteredTariffs.length === 1 && categoryCandidates.some((c) => filteredTariffs[0].comodityName?.toUpperCase() === c.toUpperCase()) ? filteredTariffs[0] : null)
-
-      const tariffPrice = Number(matchingTariff?.harga ?? matchingTariff?.Harga ?? 0)
-      if (matchingTariff && tariffPrice > 0) {
-        dbPrice = tariffPrice
-        actualMatchedCategory = matchingTariff.comodityName || ''
-        priceSource = 'CUSTOMER_TARIFF'
-        priceSourceLabel = `Tarif Khusus Customer (${matchingTariff.branchName || targetBranchCode})`
-        appliedTier = 'CUSTOMER_TARIFF_VW'
-        appliedTierLabel = 'Tarif Khusus Customer'
-        matchedWith = 'CUSTOMER'
-      }
-    }
-
-    // D. Level 4: Master Standar (CS / MKT)
+    // ── TIER 6: Master MKT / CS Standar Global ──
     if (dbPrice === 0 && mUploads.length > 0) {
       const masterCandidates = mUploads.filter((u) => new Date(u.effectiveDate) <= targetDate)
       const masterUpload = masterCandidates[0] || mUploads[0]
@@ -1310,40 +1365,51 @@ export async function evaluateBatchPriceCheck(
           dbPrice = Number(selectedItem.price)
           actualMatchedCategory = selectedItem.category || ''
           priceSource = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
-          priceSourceLabel = isBroker ? 'Level 4: Master MKT (Broker)' : 'Level 4: Master CS (Non-Broker)'
-          appliedTier = isBroker ? 'LEVEL_4_MASTER_MKT' : 'LEVEL_4_MASTER_CS'
-          appliedTierLabel = isBroker ? 'Level 4: Master MKT (Broker)' : 'Level 4: Master CS (Non-Broker)'
+          priceSourceLabel = `Tier 6: Master MKT / CS Standar (${isBroker ? 'MKT' : 'CS'})`
+          appliedTier = isBroker ? 'TIER_6_MASTER_MKT' : 'TIER_6_MASTER_CS'
+          appliedTierLabel = isBroker ? 'Tier 6: Master MKT (Broker)' : 'Tier 6: Master CS (Non-Broker)'
           matchedWith = isBroker ? 'MASTER_MKT' : 'MASTER_CS'
         }
       }
     }
 
-    // Status evaluation
+    // Status evaluation & Undercharge / Overcharge flags
     let status: PriceStatus = 'NO_RATE'
     let statusLabel = 'Belum Ada Acuan'
     let statusDescription = 'Belum ditemukan acuan tarif yang sesuai di sistem.'
+    let isUndercharge = false
+    let isOvercharge = false
+    let validationVerdict: 'MATCH' | 'UNDERCHARGE_WARNING' | 'OVERCHARGE_WARNING' | 'NO_RATE' = 'NO_RATE'
     const diff = currentPrice > 0 && dbPrice > 0 ? currentPrice - dbPrice : 0
 
     if (dbPrice === 0) {
       status = 'NO_RATE'
       statusLabel = 'Belum Ada Harga'
-      statusDescription = 'Tarif belum ditentukan di database Price List.'
+      statusDescription = 'Tarif belum ditentukan di database Price List (6-Tier Waterfall).'
+      validationVerdict = 'NO_RATE'
     } else if (currentPrice === 0) {
       status = 'NOT_SET'
       statusLabel = 'Harga Belum Diisi'
       statusDescription = `Harga saat ini masih Rp 0. Acuan database adalah Rp ${dbPrice.toLocaleString('id-ID')}.`
+      isUndercharge = true
+      validationVerdict = 'UNDERCHARGE_WARNING'
     } else if (Math.abs(diff) < 1) {
       status = 'MATCH'
       statusLabel = 'Harga Sesuai'
       statusDescription = `Harga saat ini (Rp ${currentPrice.toLocaleString('id-ID')}) SESUAI dengan database.`
+      validationVerdict = 'MATCH'
     } else if (diff > 0) {
       status = 'DIFFERENT'
-      statusLabel = 'Harga di Atas Acuan'
+      statusLabel = 'Harga di Atas Acuan (Overcharge)'
       statusDescription = `Harga saat ini (Rp ${currentPrice.toLocaleString('id-ID')}) di ATAS database Rp ${dbPrice.toLocaleString('id-ID')} (+Rp ${diff.toLocaleString('id-ID')}).`
+      isOvercharge = true
+      validationVerdict = 'OVERCHARGE_WARNING'
     } else {
       status = 'DIFFERENT'
-      statusLabel = 'Harga di Bawah Acuan'
+      statusLabel = 'Harga di Bawah Acuan (Undercharge)'
       statusDescription = `Harga saat ini (Rp ${currentPrice.toLocaleString('id-ID')}) di BAWAH database Rp ${dbPrice.toLocaleString('id-ID')} (-Rp ${Math.abs(diff).toLocaleString('id-ID')}).`
+      isUndercharge = true
+      validationVerdict = 'UNDERCHARGE_WARNING'
     }
 
     // Deteksi Override Komoditas (misal: genuine battery dialihkan ke SEMI GARMENT, iPad/Laptop, atau dynamic mapping)
@@ -1381,6 +1447,9 @@ export async function evaluateBatchPriceCheck(
       effectiveDate: null,
       matchedCategory: actualMatchedCategory || targetCategory,
       resolvedCommodity: actualMatchedCategory || targetCategory,
+      isUndercharge,
+      isOvercharge,
+      validationVerdict,
     }
 
     resultMap.set(key, resultItem)

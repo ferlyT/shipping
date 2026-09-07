@@ -6,8 +6,17 @@ import { useAuthStore } from '@/stores/authStore'
 import { toast } from '@/stores/toastStore'
 import { billingApi } from '../services/billing.service'
 import { formatCurrency, formatDate } from '@/lib/utils'
-import { Send, AlertCircle, ShieldCheck, Check, X, Loader2 } from 'lucide-react'
+import { Send, AlertCircle, ShieldCheck, Check, X, Loader2, AlertTriangle } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
+
+export interface UnderchargedItemInfo {
+  itemName: string
+  billedPrice: number
+  targetPrice: number
+  difference: number
+  priceSource?: string
+  priceListDisplay?: string
+}
 
 interface IssueInvoiceModalProps {
   isOpen: boolean
@@ -18,6 +27,7 @@ interface IssueInvoiceModalProps {
   invDate?: string | Date
   totalAmount?: number
   onSuccess?: () => void
+  underchargedItems?: UnderchargedItemInfo[]
 }
 
 interface EmployeeItem {
@@ -34,6 +44,7 @@ export function IssueInvoiceModal({
   invDate,
   totalAmount,
   onSuccess,
+  underchargedItems,
 }: IssueInvoiceModalProps) {
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
@@ -43,10 +54,12 @@ export function IssueInvoiceModal({
   const [selectedEmpId, setSelectedEmpId] = useState<string>('')
   const [isOverrideEmp, setIsOverrideEmp] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [hasConfirmedUndercharge, setHasConfirmedUndercharge] = useState(false)
 
-  // Default ke fdEmpCode dari user yang sedang login
+  // Default ke fdEmpCode dari user yang sedang login & reset warning state
   useEffect(() => {
     if (isOpen) {
+      setHasConfirmedUndercharge(false)
       if (user?.fdEmpCode) {
         setSelectedEmpId(user.fdEmpCode.trim())
         setIsOverrideEmp(false)
@@ -98,6 +111,11 @@ export function IssueInvoiceModal({
 
     if (!finalEmpId) {
       toast.error('Silakan pilih karyawan penyerah invoice')
+      return
+    }
+
+    if (underchargedItems && underchargedItems.length > 0 && !hasConfirmedUndercharge) {
+      toast.warning('Peringatan: Harap centang persetujuan peringatan undercharge terlebih dahulu sebelum menerbitkan!')
       return
     }
 
@@ -257,6 +275,49 @@ export function IssueInvoiceModal({
               </div>
             )}
           </div>
+
+          {/* Warning Banner Undercharge jika ada */}
+          {underchargedItems && underchargedItems.length > 0 && (
+            <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-500/10 text-xs space-y-2">
+              <div className="flex items-center gap-2 font-bold text-rose-700 dark:text-rose-300">
+                <AlertTriangle size={16} className="shrink-0 text-rose-600 dark:text-rose-400" />
+                <span>Peringatan: {underchargedItems.length} Item di Bawah Tarif Acuan (Undercharge)</span>
+              </div>
+              <p className="text-[11px] text-[var(--color-secondary)] leading-relaxed">
+                Item invoice berikut ditagih dengan tarif lebih rendah dari acuan resmi (Multi-Tier Waterfall Engine):
+              </p>
+              <div className="max-h-32 overflow-y-auto space-y-1.5 pr-1">
+                {underchargedItems.map((u, idx) => (
+                  <div
+                    key={idx}
+                    className="p-2 rounded-lg bg-[var(--color-surface)] border border-rose-500/20 text-[11px] flex items-center justify-between gap-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <span className="font-semibold text-[var(--color-primary)] truncate block">{u.itemName}</span>
+                      <span className="text-[10px] text-[var(--color-secondary)]">
+                        Ditagih: <strong className="font-mono text-[var(--color-primary)]">{formatCurrency(u.billedPrice)}</strong> vs Acuan: <strong className="font-mono text-blue-600 dark:text-blue-400">{u.priceListDisplay || formatCurrency(u.targetPrice)}</strong>
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-mono font-bold text-rose-600 dark:text-rose-400 shrink-0">
+                      Selisih -{formatCurrency(Math.abs(u.difference))}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <label className="flex items-start gap-2 pt-2 border-t border-rose-500/20 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={hasConfirmedUndercharge}
+                  onChange={(e) => setHasConfirmedUndercharge(e.target.checked)}
+                  className="mt-0.5 rounded border-rose-400 text-rose-600 focus:ring-rose-500 cursor-pointer"
+                />
+                <span className="text-[11px] font-semibold text-rose-800 dark:text-rose-200 leading-snug">
+                  Saya memahami adanya selisih tarif di bawah acuan (undercharge) dan mengonfirmasi untuk tetap menerbitkan invoice ini.
+                </span>
+              </label>
+            </div>
+          )}
 
           {/* Info Box SOP */}
           <div className="p-2.5 rounded-lg bg-[var(--color-neutral)]/40 border border-[var(--color-border)] text-[10px] text-[var(--color-secondary)] leading-relaxed space-y-1">

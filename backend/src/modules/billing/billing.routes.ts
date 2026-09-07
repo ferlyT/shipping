@@ -17,6 +17,7 @@ import {
   getBillingEmployees,
   issueInvoice,
   checkBillResiMarking,
+  updateBillingDetails,
 } from './billing.service'
 import { successResponse, errorResponse } from '../../utils/response'
 
@@ -194,4 +195,17 @@ billingRoutes.get('/:id/details', async (c) => {
   return successResponse(c, billing.details)
 })
 
+billingRoutes.put('/:id/details', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const body = await c.req.json().catch(() => ({}))
+    const user = c.get('user')
+    const result = await updateBillingDetails(id, body?.items, user)
+    return successResponse(c, result)
+  } catch (err) {
+    return errorResponse(c, (err as Error).message, 400)
+  }
+})
+
 export { billingRoutes }
+

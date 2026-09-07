@@ -7,7 +7,6 @@ import {
   Info,
   ShieldCheck,
   RefreshCw,
-  Calendar,
   Tag,
   ExternalLink,
   TrendingUp,
@@ -609,92 +608,90 @@ export function BillingValidationCard({
               </Badge>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-              {/* Kelompok Tarif Utama */}
-              <div className="md:col-span-3 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-2.5 space-y-2">
-                <p className="text-[10px] uppercase font-sans text-[var(--color-secondary)] font-bold tracking-wider">
-                  {t('billing.validation.mainTariff')}
-                </p>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.m3Price')}</p>
-                    <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
-                      {res.profileHarga.harga > 0 ? formatCurrency(res.profileHarga.harga) : '—'}
-                    </p>
-                  </div>
+            {/* Kelompok Tarif Utama — full width */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-2.5 space-y-2">
+              <p className="text-[10px] uppercase font-sans text-[var(--color-secondary)] font-bold tracking-wider">
+                {t('billing.validation.mainTariff')}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                  <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.m3Price')}</p>
+                  <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
+                    {res.profileHarga.harga > 0 ? formatCurrency(res.profileHarga.harga) : '—'}
+                  </p>
+                </div>
 
-                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.kgPrice')}</p>
-                    <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
-                      {res.profileHarga.kg > 0 ? `${formatDecimal(res.profileHarga.kg, 0)} kg` : '—'}
-                    </p>
-                  </div>
+                <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                  <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.kgPrice')}</p>
+                  <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
+                    {res.profileHarga.kg > 0 ? `${formatDecimal(res.profileHarga.kg, 0)} kg` : '—'}
+                  </p>
+                </div>
 
-                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.ratio')}</p>
-                    <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
-                      {res.profileHarga.rasio > 0 ? formatDecimal(res.profileHarga.rasio, 2) : '—'}
-                    </p>
-                  </div>
+                <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                  <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.ratio')}</p>
+                  <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
+                    {res.profileHarga.rasio > 0 ? formatDecimal(res.profileHarga.rasio, 2) : '—'}
+                  </p>
+                </div>
 
-                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">
-                      {res.fdListType === 1 ? t('billing.validation.minChargeKg') : t('billing.validation.minChargeM3')}
-                    </p>
-                    <div className="mt-0.5">
-                      {res.fdListType === 1 ? (
-                        (res.profileHarga.minChargeKg ?? 0) > 0 ? (
-                          <p className="font-bold text-[var(--color-primary)] text-xs sm:text-sm">
-                            {`${formatDecimal(res.profileHarga.minChargeKg, 2)} kg`}
-                          </p>
-                        ) : (
-                          <div className="flex items-center gap-1 flex-wrap">
-                            <span className="font-bold text-[var(--color-primary)] text-xs sm:text-sm">
-                              3.00 kg
-                            </span>
-                            <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
-                              {t('billing.validation.noDataYet')}
-                            </Badge>
-                          </div>
-                        )
-                      ) : (res.profileHarga.minChargeM3 ?? 0) > 0 ? (
+                <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                  <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">
+                    {res.fdListType === 1 ? t('billing.validation.minChargeKg') : t('billing.validation.minChargeM3')}
+                  </p>
+                  <div className="mt-0.5">
+                    {res.fdListType === 1 ? (
+                      (res.profileHarga.minChargeKg ?? 0) > 0 ? (
                         <p className="font-bold text-[var(--color-primary)] text-xs sm:text-sm">
-                          {`${formatDecimal(res.profileHarga.minChargeM3, 4)} m³`}
+                          {`${formatDecimal(res.profileHarga.minChargeKg, 2)} kg`}
                         </p>
                       ) : (
                         <div className="flex items-center gap-1 flex-wrap">
                           <span className="font-bold text-[var(--color-primary)] text-xs sm:text-sm">
-                            0.1000 m³
+                            3.00 kg
                           </span>
                           <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
                             {t('billing.validation.noDataYet')}
                           </Badge>
                         </div>
-                      )}
-                    </div>
+                      )
+                    ) : (res.profileHarga.minChargeM3 ?? 0) > 0 ? (
+                      <p className="font-bold text-[var(--color-primary)] text-xs sm:text-sm">
+                        {`${formatDecimal(res.profileHarga.minChargeM3, 4)} m³`}
+                      </p>
+                    ) : (
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <span className="font-bold text-[var(--color-primary)] text-xs sm:text-sm">
+                          0.1000 m³
+                        </span>
+                        <Badge variant="warning" className="text-[8px] px-1 py-0 font-bold">
+                          {t('billing.validation.noDataYet')}
+                        </Badge>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Kelompok Tax Return */}
-              <div className="md:col-span-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-2.5 space-y-2">
-                <p className="text-[10px] uppercase font-sans text-[var(--color-secondary)] font-bold tracking-wider">
-                  {t('billing.validation.taxReturnTitle')}
-                </p>
-                <div className="grid grid-cols-2 gap-2 text-xs font-mono">
-                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.taxReturnTariff')}</p>
-                    <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
-                      {res.profileHarga.taxReturnPrice > 0 ? formatCurrency(res.profileHarga.taxReturnPrice) : '—'}
-                    </p>
-                  </div>
+            {/* Kelompok Tax Return — baris terpisah di bawah */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-2.5 space-y-2">
+              <p className="text-[10px] uppercase font-sans text-[var(--color-secondary)] font-bold tracking-wider">
+                {t('billing.validation.taxReturnTitle')}
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                  <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.taxReturnTariff')}</p>
+                  <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
+                    {res.profileHarga.taxReturnPrice > 0 ? formatCurrency(res.profileHarga.taxReturnPrice) : '—'}
+                  </p>
+                </div>
 
-                  <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
-                    <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.taxReturnMinCharge')}</p>
-                    <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
-                      {res.profileHarga.taxReturnMinCharge > 0 ? `${formatDecimal(res.profileHarga.taxReturnMinCharge, 4)} m³` : '—'}
-                    </p>
-                  </div>
+                <div className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md p-2">
+                  <p className="text-[9px] uppercase font-sans text-[var(--color-secondary)] font-bold">{t('billing.validation.taxReturnMinCharge')}</p>
+                  <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
+                    {res.profileHarga.taxReturnMinCharge > 0 ? `${formatDecimal(res.profileHarga.taxReturnMinCharge, 4)} m³` : '—'}
+                  </p>
                 </div>
               </div>
             </div>
@@ -719,93 +716,142 @@ export function BillingValidationCard({
               </span>
             </div>
 
-            <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
-              <table className="w-full text-left text-xs font-sans">
-                <thead className="bg-[var(--color-neutral)] text-[10px] uppercase font-bold text-[var(--color-secondary)] border-b border-[var(--color-border)]">
-                  <tr>
-                    <th className="px-2.5 py-2">{t('billing.detail.colDescription')}</th>
-                    <th className="px-2.5 py-2">{t('billing.validation.commodityTypeCol') || 'TIPE KOMODITI'}</th>
-                    <th className="px-2.5 py-2 text-right">{t('billing.validation.invoicePriceCol')}</th>
-                    <th className="px-2.5 py-2 text-right">{t('billing.validation.priceProfileCol')}</th>
-                    <th className="px-2.5 py-2 text-right">{t('billing.validation.priceListCol')}</th>
-                    <th className="px-2.5 py-2 text-center">{t('common.status')}</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-[var(--color-border)] bg-[var(--color-surface)]">
-                  {invoiceDetails.map((item, idx) => {
-                    const evalObj = evaluatedItems.find((e) => e.item.fdID === item.fdID)
-                    const evaluation = evalObj?.evaluation || evaluateItemPrice(item, {
-                      res,
-                      isAir,
-                      defaultTypeId,
-                      defaultComodityName,
-                    })
-                    const {
-                      comodityName,
-                      profilePrice,
-                      minTargetPrice,
-                      maxTargetPrice,
-                      priceListDisplay,
-                      isMatched,
-                      hasTargetPrice,
-                      isTaxReturnItem,
-                      targetColName,
-                    } = evaluation
+            <div className="space-y-1.5">
+              {invoiceDetails.map((item, idx) => {
+                const evalObj = evaluatedItems.find((e) => e.item.fdID === item.fdID)
+                const evaluation = evalObj?.evaluation || evaluateItemPrice(item, {
+                  res,
+                  isAir,
+                  defaultTypeId,
+                  defaultComodityName,
+                })
+                const {
+                  comodityName,
+                  profilePrice,
+                  minTargetPrice,
+                  maxTargetPrice,
+                  priceListDisplay,
+                  isMatched,
+                  hasTargetPrice,
+                  isTaxReturnItem,
+                  targetColName,
+                } = evaluation
 
-                    const billedPrice = Number(item.fdItemPrice || 0)
+                const billedPrice = Number(item.fdItemPrice || 0)
 
-                    return (
-                      <tr key={item.fdID || idx} className="hover:bg-[var(--color-neutral)]/40 transition-colors">
-                        <td className="px-2.5 py-2 font-medium text-[var(--color-primary)] max-w-[180px] truncate" title={item.fdItemName}>
-                          {item.fdItemName}
+                const statusBadge = isMatched ? (
+                  <Badge variant="success" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0">
+                    <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.5]" />
+                    <span>{t('billing.validation.matchBadge')}</span>
+                  </Badge>
+                ) : hasTargetPrice && (isTaxReturnItem ? profilePrice > 0 : evaluation.priceItem !== null) ? (
+                  billedPrice > (isTaxReturnItem ? profilePrice : maxTargetPrice) ? (
+                    <Badge variant="info" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0" title={`Harga invoice (${formatCurrency(billedPrice)}) lebih tinggi dari acuan (${priceListDisplay}) - Diizinkan`}>
+                      <TrendingUp className="w-3 h-3 text-sky-600 dark:text-sky-400 shrink-0" />
+                      <span>Overcharge</span>
+                    </Badge>
+                  ) : billedPrice < (isTaxReturnItem ? profilePrice : minTargetPrice) ? (
+                    <Badge variant="danger" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0" title={`Peringatan: Harga invoice (${formatCurrency(billedPrice)}) lebih rendah dari acuan (${priceListDisplay})`}>
+                      <TrendingDown className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
+                      <span>Undercharge</span>
+                    </Badge>
+                  ) : (
+                    <Badge variant="warning" className="shrink-0 text-[10px]">{targetColName}</Badge>
+                  )
+                ) : (
+                  <span className="text-[10px] text-[var(--color-secondary)]">—</span>
+                )
+
+                return (
+                  <div
+                    key={item.fdID || idx}
+                    className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/30 transition-colors overflow-hidden"
+                  >
+                    {/* Row 1: Deskripsi + Komoditi + Status */}
+                    <div className="flex items-start justify-between gap-2 px-2.5 py-1.5 border-b border-[var(--color-border)]/60">
+                      <div className="flex items-start gap-2 min-w-0 flex-1">
+                        <div className="min-w-0 flex-1">
+                          <p className="text-xs font-semibold text-[var(--color-primary)] leading-tight" title={item.fdItemName}>
+                            {item.fdItemName}
+                          </p>
                           {isTaxReturnItem && (res.profileHarga?.taxReturnMinCharge ?? 0) > 0 && (
-                            <span className="block text-[9px] font-normal text-[var(--color-secondary)]">
-                              (Min Charge: {formatDecimal(res.profileHarga?.taxReturnMinCharge, 4)} m³)
+                            <span className="text-[9px] font-normal text-[var(--color-secondary)]">
+                              Min Charge: {formatDecimal(res.profileHarga?.taxReturnMinCharge, 4)} m³
                             </span>
                           )}
-                        </td>
-                        <td className="px-2.5 py-2 font-semibold text-[var(--color-tertiary)] whitespace-nowrap">
+                        </div>
+                        <span className="text-[10px] font-bold text-[var(--color-tertiary)] whitespace-nowrap shrink-0 mt-0.5">
                           {comodityName}
-                        </td>
-                        <td className="px-2.5 py-2 text-right font-mono font-semibold text-[var(--color-primary)]">
+                        </span>
+                      </div>
+                      <div className="shrink-0 mt-0.5">
+                        {statusBadge}
+                      </div>
+                    </div>
+
+                    {/* Row 2: Tiga kolom harga */}
+                    <div className="grid grid-cols-3 divide-x divide-[var(--color-border)]/60 text-[11px]">
+                      <div className="px-2.5 py-1.5">
+                        <p className="text-[9px] uppercase font-bold text-[var(--color-secondary)] mb-0.5">
+                          {t('billing.validation.invoicePriceCol')}
+                        </p>
+                        <p className="font-mono font-bold text-[var(--color-primary)]">
                           {formatCurrency(billedPrice)}
-                        </td>
-                        <td className="px-2.5 py-2 text-right font-mono text-[var(--color-secondary)]">
+                        </p>
+                      </div>
+                      <div className="px-2.5 py-1.5">
+                        <p className="text-[9px] uppercase font-bold text-[var(--color-secondary)] mb-0.5">
+                          {t('billing.validation.priceProfileCol')}
+                        </p>
+                        <p className="font-mono text-[var(--color-secondary)]">
                           {profilePrice > 0 ? formatCurrency(profilePrice) : '—'}
-                        </td>
-                        <td className="px-2.5 py-2 text-right font-mono font-semibold text-blue-700 dark:text-blue-300">
+                        </p>
+                      </div>
+                      <div className="px-2.5 py-1.5">
+                        <p className="text-[9px] uppercase font-bold text-[var(--color-secondary)] mb-0.5">
+                          {t('billing.validation.priceListCol')}
+                        </p>
+                        <p className="font-mono font-semibold text-blue-700 dark:text-blue-300 break-all leading-tight">
                           {priceListDisplay}
-                        </td>
-                        <td className="px-2.5 py-2 text-center">
-                          {isMatched ? (
-                            <Badge variant="success" className="inline-flex items-center gap-1 font-semibold text-[10px]">
-                              <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.5]" />
-                              <span>{t('billing.validation.matchBadge')}</span>
-                            </Badge>
-                          ) : hasTargetPrice && (isTaxReturnItem ? profilePrice > 0 : evaluation.priceItem !== null) ? (
-                            billedPrice > (isTaxReturnItem ? profilePrice : maxTargetPrice) ? (
-                              <Badge variant="danger" className="inline-flex items-center gap-1 font-semibold text-[10px]" title={`Harga invoice (${formatCurrency(billedPrice)}) lebih tinggi dari ${targetColName} (${priceListDisplay})`}>
-                                <TrendingUp className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
-                                <span>{targetColName}</span>
-                              </Badge>
-                            ) : billedPrice < (isTaxReturnItem ? profilePrice : minTargetPrice) ? (
-                              <Badge variant="warning" className="inline-flex items-center gap-1 font-semibold text-[10px]" title={`Harga invoice (${formatCurrency(billedPrice)}) lebih rendah dari ${targetColName} (${priceListDisplay})`}>
-                                <TrendingDown className="w-3 h-3 text-amber-600 dark:text-amber-400 shrink-0" />
-                                <span>{targetColName}</span>
-                              </Badge>
-                            ) : (
-                              <Badge variant="warning">{targetColName}</Badge>
-                            )
-                          ) : (
-                            <span className="text-[10px] text-[var(--color-secondary)]">—</span>
-                          )}
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
+          </div>
+        )}
+
+        {/* Price List Info & Action Link Acuan Tarif */}
+        {(res.priceValidation?.effectiveDate || (res.priceValidation?.items && res.priceValidation.items.length > 0)) && (
+          <div className="pt-3 border-t border-[var(--color-border)] flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-secondary)]">
+            <div className="flex items-center gap-2 flex-wrap">
+              {res.priceValidation.hasCustomerPriceList && (
+                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-500 bg-transparent px-2 py-0.5 rounded border border-purple-500/40">
+                  <Tag className="w-3 h-3 text-purple-500" />
+                  <span>{t('billing.validation.customerPriceActive') || 'Price List Khusus Customer'}</span>
+                </span>
+              )}
+              {res.priceValidation.effectiveDate && (
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-secondary)]">
+                  <Tag className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+                  <span>{t('billing.validation.effectivePriceDate')}:</span>
+                  <span className="font-semibold text-blue-500">{formatDate(res.priceValidation.effectiveDate)}</span>
+                </div>
+              )}
+            </div>
+
+            {res.priceValidation.items && res.priceValidation.items.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(true)}
+                className="inline-flex items-center gap-1 text-xs font-bold text-blue-500 hover:text-blue-400 hover:underline transition-colors cursor-pointer ml-auto"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+                <span>{t('billing.validation.viewPriceList')}</span>
+              </button>
+            )}
           </div>
         )}
           </div>
@@ -813,11 +859,11 @@ export function BillingValidationCard({
 
         {/* TAB 2: VALIDASI M3 / TIMBANGAN BERAT */}
         {activeTab === 'm3_weight' && (
-          <div className="space-y-4">
-            {/* Metric Cards Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2.5 sm:gap-3">
-          {/* Card 1: Billed Metric */}
-          <div className="rounded-[var(--radius-lg)] border-2 border-[var(--color-primary)] bg-[var(--color-neutral)] p-2.5 sm:p-3">
+          <div className="space-y-3">
+            {/* Baris 1: Card Billed + Box Data Utama */}
+            <div className="flex gap-2.5 items-stretch">
+          {/* Card 1: Billed Metric — lebar tetap */}
+          <div className="rounded-[var(--radius-lg)] border-2 border-[var(--color-primary)] bg-[var(--color-neutral)] p-2.5 sm:p-3 shrink-0 w-28 sm:w-32 flex flex-col justify-center">
             <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
               {isAir ? 'Tagihan Berat (Billed KG)' : t('billing.validation.billedM3')}
             </p>
@@ -835,9 +881,8 @@ export function BillingValidationCard({
               </p>
             )}
           </div>
-              {isAir ? (
-                <>
-              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-4 lg:col-span-4">
+              {isAir && (
+              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-1 mb-2">
                   <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
                     Data Berat Timbangan & Tarif (Udara)
@@ -952,10 +997,12 @@ export function BillingValidationCard({
                   </div>
                 </div>
               </div>
-              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-3 lg:col-span-7">
+              )}
+              {!isAir && (
+              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 flex-1 min-w-0">
                 <div className="flex items-center justify-between gap-1 mb-2">
                   <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
-                    Per Marking & SJ
+                    {t('billing.validation.referenceGroup') || 'Per ListCode'}
                   </p>
                   {res.customer?.fdCustCode && (
                     <button
@@ -969,7 +1016,7 @@ export function BillingValidationCard({
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                   {/* VFC Per Marking */}
                   <div className="rounded-md border p-2 border-[var(--color-border)] bg-[var(--color-neutral)]">
                     <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
@@ -1009,13 +1056,14 @@ export function BillingValidationCard({
                   </div>
                 </div>
               </div>
-                </>
-              ) : (
-                <>
-              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-4 lg:col-span-4">
+              )}
+            </div>
+            {/* Baris 2: Per Marking */}
+            <div>
+              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 w-full">
                 <div className="flex items-center justify-between gap-1 mb-2">
                   <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
-                    {t('billing.validation.referenceGroup') || 'Per ListCode'}
+                    {isAir ? 'Per Marking & SJ' : (t('billing.validation.perMarkingGroup') || 'Per Marking')}
                   </p>
                   {hasQtyMismatch ? (
                     <Badge variant="warning" className="text-[10px] px-2 py-0.5 font-semibold flex items-center gap-1">
@@ -1156,116 +1204,8 @@ export function BillingValidationCard({
                   </div>
                 </div>
               </div>
-              <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 col-span-2 sm:col-span-3 lg:col-span-7">
-                <div className="flex items-center justify-between gap-1 mb-2">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
-                      {t('billing.validation.perMarkingGroup') || 'Per Marking'}
-                    </p>
-                    {res.isPartialKomplain && (
-                      <Badge variant="warning" className="text-[8px] px-1.5 py-0 font-bold">
-                        Komplain Parsial ({totalEntryKomplain}/{totalEntryList} LC)
-                      </Badge>
-                    )}
-                  </div>
-                  {res.customer?.fdCustCode && (
-                    <button
-                      type="button"
-                      onClick={() => setIsCustMarkingModalOpen(true)}
-                      className="text-blue-600 hover:text-blue-800 transition-colors p-0.5 cursor-pointer"
-                      title={t('billing.validation.viewCustMarkingDetail')}
-                    >
-                      <ExternalLink className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {/* M3 PL per Marking */}
-                  <div
-                    className={`rounded-md border p-2 transition-colors ${seaPrimaryMatch?.sourceKey === 'PLPerMarking'
-                      ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
-                      : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
-                      }`}
-                  >
-                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                      {t('billing.validation.pl')}
-                    </p>
-                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
-                      {plPerMarkingValues.length > 0 ? `${formatDecimal(plPerMarkingValues[0], 4)} m³` : '—'}
-                    </p>
-                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
-                      <span className="text-[9px] truncate mr-1">Total LC</span>
-                      <span className="font-semibold text-[var(--color-primary)]">
-                        {totalEntryList !== null ? `${formatNumber(totalEntryList)}` : '—'}
-                      </span>
-                    </p>
-                  </div>
-
-                  {/* M3 Customer per Marking */}
-                  <div
-                    className={`rounded-md border p-2 transition-colors ${matchStatus === 'MATCH_MARKING'
-                      ? 'border-sky-500 dark:border-sky-400 bg-transparent ring-1 ring-sky-500/30'
-                      : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
-                      }`}
-                  >
-                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                      {t('billing.validation.gudang')}
-                    </p>
-                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
-                      {custMarkingValues.length > 0 ? `${formatDecimal(custMarkingValues[0], 4)} m³` : '—'}
-                    </p>
-                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
-                      <span className="text-[9px] truncate mr-1">Total LC</span>
-                      <span className="font-semibold text-[var(--color-primary)]">
-                        {totalEntryList !== null ? `${formatNumber(totalEntryList)}` : '—'}
-                      </span>
-                    </p>
-                  </div>
-
-                  {/* M3 Komplain per Marking */}
-                  <div
-                    className={`rounded-md border p-2 transition-colors ${seaPrimaryMatch?.sourceKey === 'KomplainPerMarking'
-                      ? 'border-emerald-500 dark:border-emerald-400 bg-transparent ring-1 ring-emerald-500/30'
-                      : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
-                      }`}
-                  >
-                    <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                      {t('billing.validation.komplain')}
-                    </p>
-                    <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
-                      {komplainPerMarkingValues.length > 0 ? `${formatDecimal(komplainPerMarkingValues[0], 4)} m³` : '—'}
-                    </p>
-                    <p className="mt-1 text-[10px] text-[var(--color-secondary)] font-medium tabular-nums flex items-center justify-between border-t border-[var(--color-border)]/60 pt-1">
-                      <span className="text-[9px] truncate mr-1">Total LC</span>
-                      <span className="font-semibold text-[var(--color-primary)]">
-                        {totalEntryKomplain !== null ? `${formatNumber(totalEntryKomplain)}` : '—'}
-                      </span>
-                    </p>
-                  </div>
-                </div>
-
-                {/* Hybrid Validation Bar if Partial Komplain */}
-                {res.isPartialKomplain && res.m3KomplainPlusGudang !== null && res.m3KomplainPlusGudang !== undefined && res.m3KomplainPlusGudang > 0 && (
-                  <div
-                    className={`mt-2 p-1.5 rounded-md border text-[10px] font-mono flex items-center justify-between transition-colors ${
-                      seaPrimaryMatch?.sourceKey === 'KomplainHybrid'
-                        ? 'border-emerald-500 dark:border-emerald-400 bg-emerald-50/80 dark:bg-transparent text-emerald-950 dark:text-emerald-200'
-                        : 'border-sky-300 dark:border-sky-700 bg-sky-50/50 dark:bg-transparent text-sky-950 dark:text-sky-200'
-                    }`}
-                  >
-                    <span className="font-sans font-semibold text-[9px] flex items-center gap-1">
-                      <span>Validasi Komplain + Gudang:</span>
-                    </span>
-                    <span className="font-bold tabular-nums">
-                      {formatDecimal(res.m3KomplainPlusGudang, 4)} m³
-                    </span>
-                  </div>
-                )}
-              </div>
-                </>
-              )}
             </div>
+
         {/* Status Explanation Message */}
         <div className="space-y-2">
           {isAir ? (
@@ -1348,45 +1288,6 @@ export function BillingValidationCard({
             </div>
           )}
         </div>
-
-        {/* Tanggal Agen & Price List Info */}
-        {res.priceValidation?.fdTglAgent && (
-          <div className="pt-3 border-t border-[var(--color-border)] flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-secondary)]">
-            <div className="flex items-center gap-1.5 font-medium">
-              <Calendar className="w-3.5 h-3.5 text-[var(--color-primary)] shrink-0" />
-              <span>{t('billing.validation.tglAgent')}:</span>
-              <span className="font-bold text-[var(--color-primary)]">{formatDate(res.priceValidation.fdTglAgent)}</span>
-            </div>
-
-            <div className="flex items-center gap-3">
-              {res.priceValidation.hasCustomerPriceList && (
-                <span className="inline-flex items-center gap-1 text-[11px] font-bold text-purple-500 bg-transparent px-2 py-0.5 rounded border border-purple-500/40">
-                  <Tag className="w-3 h-3 text-purple-500" />
-                  <span>{t('billing.validation.customerPriceActive') || 'Price List Khusus Customer'}</span>
-                </span>
-              )}
-
-              {res.priceValidation.effectiveDate && (
-                <div className="flex items-center gap-1 text-[11px] font-medium text-[var(--color-secondary)]">
-                  <Tag className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                  <span>{t('billing.validation.effectivePriceDate')}:</span>
-                  <span className="font-semibold text-blue-500">{formatDate(res.priceValidation.effectiveDate)}</span>
-                </div>
-              )}
-
-              {res.priceValidation.items && res.priceValidation.items.length > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(true)}
-                  className="inline-flex items-center gap-1 text-xs font-bold text-blue-500 hover:text-blue-400 hover:underline transition-colors cursor-pointer"
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                  <span>{t('billing.validation.viewPriceList')}</span>
-                </button>
-              )}
-            </div>
-          </div>
-        )}
           </div>
         )}
 

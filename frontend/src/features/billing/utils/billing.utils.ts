@@ -80,6 +80,9 @@ export interface ItemPriceEvaluation {
   priceListDisplay: string
   statusType: 'MATCH' | 'LOWER' | 'HIGHER' | 'NO_TARGET'
   difference: number
+  isUndercharge?: boolean
+  isOvercharge?: boolean
+  tierSource?: string
 }
 
 /**
@@ -385,6 +388,8 @@ export function evaluateItemPrice(
       priceListDisplay: vfcRef > 0 ? `${vfcRef} kg (Gudang)` : '—',
       statusType: isMatched ? 'MATCH' : (diff < 0 ? 'LOWER' : 'HIGHER'),
       difference: diff,
+      isUndercharge: !isMatched && diff < 0,
+      isOvercharge: !isMatched && diff > 0,
     }
   }
 
@@ -419,6 +424,8 @@ export function evaluateItemPrice(
         priceListDisplay: `${totalFc} ${currency} (tbEntrylist)`,
         statusType: isMatched ? 'MATCH' : (diff < 0 ? 'LOWER' : 'HIGHER'),
         difference: diff,
+        isUndercharge: !isMatched && diff < 0,
+        isOvercharge: !isMatched && diff > 0,
       }
     } else {
       return {
@@ -437,6 +444,8 @@ export function evaluateItemPrice(
         priceListDisplay: '0 di tbEntrylist',
         statusType: 'LOWER',
         difference: billedQty,
+        isUndercharge: true,
+        isOvercharge: false,
       }
     }
   }
@@ -693,7 +702,7 @@ export function evaluateItemPrice(
     maxTargetPrice = Number(priceItem.price || 0)
   }
 
-  // 4. Harga profil customer di DB
+  // 4. Harga profil customer di DB (Overweight KG & Tax Return sebagai acuan, Komoditi biasa sebagai pembanding saja)
   let profilePrice = 0
   if (isKgOverweightItem) {
     profilePrice = Number(res?.profileHarga?.kg || 0)
@@ -702,6 +711,7 @@ export function evaluateItemPrice(
   } else if (isTaxReturnItem) {
     profilePrice = Number(res?.profileHarga?.taxReturnPrice || 0)
   } else {
+    // Tampilkan profil customer dari DB sebagai data pembanding (TIDAK menjadi acuan validasi tarif)
     profilePrice = Number(res?.profileHarga?.harga || 0)
   }
 
@@ -715,7 +725,13 @@ export function evaluateItemPrice(
     : (priceItem ? (billedPrice >= minTargetPrice - 0.01 && billedPrice <= maxTargetPrice + 0.01) : false)
 
   const hasTargetPrice = isKgOverweightItem ? profilePrice > 0 : isTaxReturnItem ? profilePrice > 0 : priceItem !== null
-  const targetColName = isKgOverweightItem ? 'Tarif KG Agen' : isTaxReturnItem || !priceItem ? 'Tarif Profil' : 'Price List'
+  const targetColName = isKgOverweightItem
+    ? 'Tarif KG Agen'
+    : isTaxReturnItem
+    ? 'Tarif Tax Return'
+    : priceItem
+    ? (priceItem.sheetType === 'CUSTOMER' ? 'Price List Cust' : 'Price List Master')
+    : 'Tidak Ada Acuan'
 
   let priceListDisplay = '—'
   if (isKgOverweightItem) {
@@ -737,6 +753,8 @@ export function evaluateItemPrice(
 
   let statusType: 'MATCH' | 'LOWER' | 'HIGHER' | 'NO_TARGET' = 'NO_TARGET'
   let difference = 0
+  let isUndercharge = false
+  let isOvercharge = false
 
   if (isMatched) {
     statusType = 'MATCH'
@@ -745,10 +763,12 @@ export function evaluateItemPrice(
     if (billedPrice > targetRef) {
       statusType = 'HIGHER'
       difference = billedPrice - targetRef
+      isOvercharge = true
     } else {
       const minRef = isTaxReturnItem ? profilePrice : minTargetPrice
       statusType = 'LOWER'
       difference = billedPrice - minRef
+      isUndercharge = true
     }
   }
 
@@ -767,6 +787,8 @@ export function evaluateItemPrice(
     priceListDisplay,
     statusType,
     difference,
+    isUndercharge,
+    isOvercharge,
   }
 }
 
@@ -809,3 +831,40 @@ export function resolveInvoiceRelation(invNo?: string | null) {
   }
 }
 
+// ─── Item Classifiers ────────────────────────────────────────────────────────
+
+/** Returns true for auxiliary items like Tax Return, Admin, Surcharge, etc. */
+export function isAuxiliaryItem(name?: string | null): boolean {
+  const n = (name || '').toUpperCase()
+  return (
+    n.includes('TAX RETURN') ||
+    n.includes('ADMIN') ||
+    n.includes('SURCHARGE') ||
+    n.includes('DISCOUNT') ||
+    n.includes('BIAYA') ||
+    n.includes('PENYESUAIAN')
+  )
+}
+
+/** Returns true for Volume Freight Charge (VFC) items billed in KG. */
+export function isVfcItem(name?: string | null, unitCode?: string | null): boolean {
+  const n = (name || '').toUpperCase()
+  const u = (unitCode || '').toUpperCase().trim()
+  return (
+    (n.includes('VOLUME FREIGHT') || n.includes('VFC')) &&
+    (u === 'KG' || !u || u === 'VFC') &&
+    !n.includes('FREIGHT CHARGE')
+  )
+}
+
+/** Returns true for Freight Charge items (foreign-currency or explicit FC name). */
+export function isFreightChargeItem(name?: string | null, unitCode?: string | null): boolean {
+  if (isVfcItem(name, unitCode)) return false
+  const n = (name || '').toUpperCase()
+  const u = (unitCode || '').toUpperCase().trim()
+  return (
+    n.includes('FREIGHT CHARGE') ||
+    n.includes('FREIGHT CHARGES') ||
+    ['HK$', 'Y$', 'RMB', 'USD', 'S$', '$'].includes(u)
+  )
+}
