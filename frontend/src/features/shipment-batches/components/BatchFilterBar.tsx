@@ -63,13 +63,13 @@ export function BatchFilterBar({
   ]
 
   return (
-    <div className="bg-[var(--color-surface)] px-4 sm:px-5 py-3 sm:py-3.5 border-b border-[var(--color-border)]">
+    <div className="bg-[var(--color-surface)] px-3.5 sm:px-5 py-2.5 sm:py-3.5 border-b border-[var(--color-border)]">
       {/* ── Top Row: Transport Modes, Quick Action Chips & Controls ── */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-3">
         {/* Left: Mode Segmented Switch + Group Quick Chips */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
           {/* Segmented Mode buttons */}
-          <div className="inline-flex items-center bg-[var(--color-neutral)] p-1 rounded-xl border border-[var(--color-border)] gap-1 shrink-0">
+          <div className="grid grid-cols-3 sm:inline-flex items-center bg-[var(--color-neutral)] p-1 rounded-xl border border-[var(--color-border)] gap-1 w-full sm:w-auto shrink-0">
             {typeButtons.map(({ value, icon: Icon, label }) => {
               const isActive = listTypeFilter === value
               return (
@@ -78,9 +78,9 @@ export function BatchFilterBar({
                   type="button"
                   onClick={() => onListTypeChange(value)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer select-none',
+                    'inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer select-none',
                     isActive
-                      ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-xs'
+                      ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xs font-bold'
                       : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface)]'
                   )}
                 >
@@ -104,9 +104,9 @@ export function BatchFilterBar({
 
           {/* Quick Active Chips */}
           {hasActiveFilters && (
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
               {listTypeFilter !== 'ALL' && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 shrink-0">
                   {listTypeFilter === '1' ? <Plane size={11} /> : <Ship size={11} />}
                   Moda: {listTypeFilter === '1' ? 'Udara' : 'Laut'}
                   <button
@@ -120,7 +120,7 @@ export function BatchFilterBar({
               )}
 
               {groupMode !== 'year' && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20 shrink-0">
                   <ListFilter size={11} />
                   Group: {GROUP_OPTIONS.find((g) => g.key === groupMode)?.defaultLabel || groupMode}
                   <button
@@ -137,12 +137,12 @@ export function BatchFilterBar({
         </div>
 
         {/* Right: Search Manifest Button + Toggle Filter Detail + Reset */}
-        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
           {/* Quick Search Manifest Button */}
           <button
             type="button"
             onClick={onOpenManifestSearch}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[var(--color-neutral)] hover:bg-[var(--color-border)]/50 border border-[var(--color-border)] text-[var(--color-primary)] text-xs font-semibold rounded-lg transition-colors cursor-pointer shrink-0"
+            className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-[var(--color-neutral)] hover:bg-[var(--color-border)]/50 border border-[var(--color-border)] text-[var(--color-primary)] text-xs font-semibold rounded-lg transition-colors cursor-pointer shrink-0"
           >
             <Sparkles size={13} className="text-amber-500" />
             <span>{t('marking.list.searchManifest') || 'Cari Manifest'}</span>
@@ -152,7 +152,7 @@ export function BatchFilterBar({
             <button
               type="button"
               onClick={onClearAll}
-              className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer transition-colors px-2 py-1 rounded-md hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20"
+              className="text-xs font-semibold text-rose-600 hover:text-rose-700 flex items-center gap-1 cursor-pointer transition-colors px-2 py-1 rounded-md hover:bg-rose-500/10 border border-transparent hover:border-rose-500/20 shrink-0"
             >
               <X size={12} /> Reset
             </button>
@@ -162,14 +162,14 @@ export function BatchFilterBar({
             type="button"
             onClick={() => setExpanded((o) => !o)}
             className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all select-none',
+              'inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all select-none shrink-0 ml-auto sm:ml-0',
               expanded
                 ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-[var(--color-on-primary)] shadow-xs'
                 : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
             )}
           >
             <SlidersHorizontal size={13} className={expanded ? 'text-current' : 'text-[var(--color-secondary)]'} />
-            <span>Opsi Grouping</span>
+            <span>Grouping</span>
             {activeCount > 0 && (
               <span
                 className={cn(

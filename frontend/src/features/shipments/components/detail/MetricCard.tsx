@@ -40,7 +40,7 @@ export function MetricCard({
     <div className={cn('relative flex flex-col justify-between p-3.5 sm:p-4 rounded-2xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-sm overflow-hidden')}>
       <div className="flex items-center justify-between mb-2">
       <span className="text-[11px] font-semibold uppercase tracking-wider text-[var(--color-secondary)]">{label}</span>
-        <div className={cn('w-6 h-6 rounded-lg flex items-center justify-center text-xs shadow-sm', toneStyles.iconBg)}>
+        <div className={cn('hidden sm:flex w-6 h-6 rounded-lg items-center justify-center text-xs shadow-sm', toneStyles.iconBg)}>
           <Icon size={12} />
         </div>
       </div>

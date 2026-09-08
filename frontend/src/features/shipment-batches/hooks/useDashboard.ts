@@ -10,6 +10,14 @@ export interface KpiData {
   totalBatchesAir: number
   totalBatchesSea: number
 
+  currentYear?: number
+  thisYearBatches?: number
+  thisYearBatchesAir?: number
+  thisYearBatchesSea?: number
+  lastYearBatchesYtd?: number
+  lastYearBatchesTotal?: number
+  yoyGrowthPercent?: number
+
   activeBatches: number
   activeBatchesAir: number
   activeBatchesSea: number

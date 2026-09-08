@@ -1,5 +1,8 @@
 import { prisma } from '../../config/database'
 import { logger } from '../../config/logger'
+import type { DashboardStats, DashboardTrend } from './dashboard.types'
+
+export * from './dashboard.types'
 
 /**
  * Helper to safely execute a Prisma query with automatic 1x retry on connection hiccup
@@ -30,7 +33,7 @@ async function safeQuery<T>(fn: () => Promise<T>, fallback: T, description: stri
   }
 }
 
-export async function getDashboardStats() {
+export async function getDashboardStats(): Promise<DashboardStats> {
   try {
     const now = new Date()
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -38,11 +41,12 @@ export async function getDashboardStats() {
     const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999)
 
     // Generate 12 months ranges for chart
-    const months = []
+    const months: Array<{ start: Date; end: Date; name: string }> = []
     for (let i = 11; i >= 0; i--) {
       const start = new Date(now.getFullYear(), now.getMonth() - i, 1)
       const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999)
-      months.push({ start, end })
+      const name = start.toLocaleString('id-ID', { month: 'short' })
+      months.push({ start, end, name })
     }
 
     const [
@@ -128,18 +132,15 @@ export async function getDashboardStats() {
       safeQuery(() => prisma.tbBilling.aggregate({ _sum: { fdJumlah1: true } }), { _sum: { fdJumlah1: null } }, 'invoiceAggregate')
     ])
 
-    const chartPromises = months.map(async ({ start, end }) => {
+    const chartPromises = months.map(async ({ start, end, name }) => {
       const [invoices, deliveryOrders, shipments] = await Promise.all([
         safeQuery(() => prisma.tbBilling.count({ where: { fdInvDate: { gte: start, lte: end } } }), 0, 'chart invoices'),
         safeQuery(() => prisma.tbDelivery.count({ where: { fdSJDate: { gte: start, lte: end } } }), 0, 'chart deliveryOrders'),
         safeQuery(() => prisma.vwShipment.count({ where: { fdTglAgent: { gte: start, lte: end } } }), 0, 'chart shipments')
       ])
 
-      // Format month name (e.g. "Jan", "Feb")
-      const monthName = start.toLocaleString('id-ID', { month: 'short' })
-
       return {
-        name: monthName,
+        name,
         invoices,
         deliveryOrders,
         shipments
@@ -149,7 +150,7 @@ export async function getDashboardStats() {
     const chartData = await Promise.all(chartPromises)
 
     // Helper to calculate Month-over-Month growth
-    const calculateTrend = (thisMonth: number, lastMonth: number) => {
+    const calculateTrend = (thisMonth: number, lastMonth: number): DashboardTrend | null => {
       if (lastMonth === 0) {
         return thisMonth > 0
           ? { type: 'up', value: '100%', label: 'vs bulan lalu' }
@@ -163,6 +164,32 @@ export async function getDashboardStats() {
         label: 'vs bulan lalu'
       }
     }
+
+    const mappedRecentInvoices = (recentInvoices as any[]).map((r) => ({
+      fdInvNo: r.fdInvNo?.trim() || '',
+      fdInvDate: r.fdInvDate,
+      fdJumlah1: Number(r.fdJumlah1 || 0),
+      fdCustCode: r.fdCustCode?.trim() || '',
+      customer: r.customer ? { fdCustName: r.customer.fdCustName?.trim() || null } : null,
+    }))
+
+    const mappedRecentDOs = (recentDeliveryOrders as any[]).map((r) => ({
+      fdSJNo: r.fdSJNo?.trim() || '',
+      fdSJDate: r.fdSJDate,
+      fdCarID: r.fdCarID?.trim() || null,
+      fdCustNameSJ: r.fdCustNameSJ?.trim() || null,
+      fdCustCode: r.fdCustCode?.trim() || null,
+      fdListCode: r.fdListCode?.trim() || null,
+      fdJmlPackSJ: r.fdJmlPackSJ !== null && r.fdJmlPackSJ !== undefined ? Number(r.fdJmlPackSJ) : null,
+      fdJmlBeratSJ: r.fdJmlBeratSJ !== null && r.fdJmlBeratSJ !== undefined ? Number(r.fdJmlBeratSJ) : null,
+      entryList: r.entryList
+        ? {
+            fdMarkingCode: r.entryList.fdMarkingCode?.trim() || null,
+            fdMarkingNo: r.entryList.fdMarkingNo?.trim() || null,
+            fdSatuan: r.entryList.fdSatuan?.trim() || null,
+          }
+        : null,
+    }))
 
     return {
       metrics: {
@@ -179,8 +206,8 @@ export async function getDashboardStats() {
         shipments: calculateTrend(shipmentsThisMonth, shipmentsLastMonth)
       },
       recentActivity: {
-        invoices: recentInvoices,
-        deliveryOrders: recentDeliveryOrders
+        invoices: mappedRecentInvoices,
+        deliveryOrders: mappedRecentDOs
       },
       chartData
     }
@@ -194,4 +221,3 @@ export async function getDashboardStats() {
     }
   }
 }
-

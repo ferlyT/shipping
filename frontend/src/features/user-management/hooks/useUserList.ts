@@ -8,6 +8,7 @@ export function useUserList() {
   const { t } = useTranslation()
   const [users, setUsers] = useState<User[]>([])
   const [roles, setRoles] = useState<string[]>([])
+  const [employees, setEmployees] = useState<import('../types').EmployeeOption[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -34,14 +35,16 @@ export function useUserList() {
     setIsLoading(true)
     setError(null)
     try {
-      const [usersRes, rolesRes] = await Promise.all([
+      const [usersRes, rolesRes, empRes] = await Promise.all([
         viewMode === 'trash'
           ? userManagementApi.getTrashUsers()
           : userManagementApi.getUsers(),
         userManagementApi.getRoles(),
+        userManagementApi.getEmployees(),
       ])
       setUsers(usersRes.data.data ?? [])
       setRoles(rolesRes.data.data ?? [])
+      setEmployees(empRes.data.data ?? [])
     } catch (err: any) {
       const msg = err.response?.data?.message ?? t('common.noData')
       setError(msg)
@@ -77,6 +80,23 @@ export function useUserList() {
       toast.success(t('users.roleSuccess'))
     } catch (err: any) {
       toast.error(err.response?.data?.error ?? err.response?.data?.message ?? 'Gagal mengubah peran pengguna.')
+    }
+  }
+
+  const handleEmployeeChange = async (userId: string, fdEmpCode: string | null) => {
+    try {
+      const res = await userManagementApi.updateUserEmployee(userId, fdEmpCode)
+      const updated = res.data.data
+      setUsers((prev) =>
+        prev.map((u) =>
+          u.id === userId
+            ? { ...u, fdEmpCode: updated.fdEmpCode, fdEmpName: updated.fdEmpName }
+            : u
+        )
+      )
+      toast.success('Mapping karyawan berhasil diperbarui.')
+    } catch (err: any) {
+      toast.error(err.response?.data?.error ?? err.response?.data?.message ?? 'Gagal memperbarui mapping karyawan.')
     }
   }
 
@@ -132,6 +152,7 @@ export function useUserList() {
     t,
     users,
     roles,
+    employees,
     filteredUsers,
     isLoading,
     error,
@@ -150,6 +171,7 @@ export function useUserList() {
     fetchData,
     handleStatusChange,
     handleRoleChange,
+    handleEmployeeChange,
     executeDeleteUser,
     executeRestoreUser,
   }

@@ -23,8 +23,10 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
     <header className="sticky top-0 z-30 flex h-[var(--topbar-height)] items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 lg:px-8 shadow-xs">
       <div className="flex items-center gap-4">
         <button
+          type="button"
           onClick={onMenuClick}
-          className="lg:hidden p-2 -ml-2 text-[var(--color-secondary)] hover:text-[var(--color-primary)] rounded-lg hover:bg-[var(--color-neutral)] transition-colors"
+          className="p-2 -ml-2 text-[var(--color-secondary)] hover:text-[var(--color-primary)] rounded-lg hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
+          title="Buka / Tutup Sidebar"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -40,7 +42,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         {/* Notification Placeholder */}
         <button
           className="p-2 rounded-lg text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors relative"
-          title="Notifikasi"
+          title={t('topbar.notifications')}
         >
           <Bell className="w-4 h-4" />
           <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[var(--color-tertiary)]" />

@@ -16,6 +16,7 @@
     "typescript": "^5"
   },
   "dependencies": {
+    "@hono/swagger-ui": "^0.6.1",
     "@hono/zod-validator": "^0.8.0",
     "@prisma/adapter-mssql": "^7.8.0",
     "@prisma/client": "^6.0.0",

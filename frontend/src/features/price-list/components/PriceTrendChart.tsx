@@ -244,10 +244,13 @@ export function PriceTrendChart({
 
       <div className="p-4 sm:p-6">
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-4">
-            <div className="h-2 w-48 bg-[var(--color-border)] rounded-full animate-pulse" />
-            <div className="h-2 w-32 bg-[var(--color-border)] rounded-full animate-pulse" />
-            <p className="text-sm text-[var(--color-secondary)] mt-2">Memuat data tren harga...</p>
+          <div className="space-y-4 py-2">
+            <div className="h-[280px] sm:h-[340px] w-full rounded-xl skeleton-shimmer" />
+            <div className="flex gap-2 pt-2">
+              <div className="h-4 w-24 rounded skeleton-shimmer" />
+              <div className="h-4 w-32 rounded skeleton-shimmer" />
+              <div className="h-4 w-28 rounded skeleton-shimmer" />
+            </div>
           </div>
         ) : sheetTypes.length === 0 && !mode && categories.length === 0 ? (
           <div className="flex flex-col items-center justify-center py-20">
@@ -465,7 +468,7 @@ export function PriceTrendChart({
                         padding: "10px 14px",
                       }}
                       formatter={(v: any, name: any) => [formatRupiah(v as number), name]}
-                      labelFormatter={(v) =>
+                      labelFormatter={(v: any) =>
                         new Date(v).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
                       }
                       labelStyle={{ fontWeight: 600, marginBottom: "4px", color: "var(--color-primary)" }}

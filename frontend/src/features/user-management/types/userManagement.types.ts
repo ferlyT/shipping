@@ -5,9 +5,16 @@ export interface User {
   username: string
   fullName: string
   role: string
+  fdEmpCode?: string | null
+  fdEmpName?: string | null
   isActive: boolean
   lastLoginAt: string | null
   createdAt: string
+}
+
+export interface EmployeeOption {
+  fdEmpCode: string
+  fdEmpName: string
 }
 
 export interface RolePermission {
@@ -33,12 +40,15 @@ export const AVAILABLE_PATHS: AvailablePath[] = [
   { path: ROUTES.SHIPMENTS_LIST, label: 'Daftar Shipment', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
   { path: ROUTES.SHIPMENT_BATCHES, label: 'Batch Marking Dashboard', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
   { path: ROUTES.SHIPMENT_BATCHES_LIST, label: 'Daftar Batch Marking', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
-  { path: ROUTES.DELIVERY_ORDERS, label: 'Delivery Orders', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
+  { path: ROUTES.DELIVERY_ORDERS, label: 'Delivery Orders Dashboard', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
+  { path: ROUTES.DELIVERY_ORDERS_LIST, label: 'Daftar Surat Jalan', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
 
   // Keuangan
   { path: ROUTES.BILLING, label: 'Billing Dashboard', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.BILLING_TARGET, label: 'Target Bill Hari Ini', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.BILLING_LIST, label: 'Daftar Billing', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
+  { path: ROUTES.BILLING_VALIDATION_SUMMARY, label: 'Summary Validasi (Modal)', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
+  { path: ROUTES.BILLING_VALIDATION_DETAIL_PATH, label: 'Validasi Detail (Halaman)', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.PRICE_LIST, label: 'Price List Dashboard', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.PRICE_LIST_LOOKUP, label: 'Pencarian Master Price List', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.PRICE_LIST_UPLOAD, label: 'Upload Price List', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
@@ -49,6 +59,7 @@ export const AVAILABLE_PATHS: AvailablePath[] = [
 
   // Master Data
   { path: ROUTES.CUSTOMERS, label: 'Customer Master Data', module: 'masterdata', moduleLabel: 'Master Data', accentColor: '#8B5CF6' },
+  { path: ROUTES.CUSTOMERS_TIER, label: 'Tampilkan Customer Tier & Omzet Tahunan', module: 'masterdata', moduleLabel: 'Master Data', accentColor: '#8B5CF6' },
 
   // Administrasi
   { path: ROUTES.USERS, label: 'User Management', module: 'administrasi', moduleLabel: 'Administrasi', accentColor: '#EC4899' },

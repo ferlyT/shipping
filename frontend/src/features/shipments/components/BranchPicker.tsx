@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
-import { Search, Check, ChevronDown, Loader2, MapPin } from 'lucide-react'
+import { Search, Check, ChevronDown, MapPin } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Pill } from './Pill'
 
@@ -70,7 +70,12 @@ export function BranchPicker({
           Semua Cabang
         </Pill>
 
-        {isLoading && <Loader2 className="w-4 h-4 animate-spin text-[var(--color-secondary)]" />}
+        {isLoading && (
+          <div className="flex items-center gap-1.5">
+            <div className="h-6 w-16 rounded-full skeleton-shimmer" />
+            <div className="h-6 w-16 rounded-full skeleton-shimmer" />
+          </div>
+        )}
 
         {!isLoading &&
           PINNED_BRANCHES.map((b) => {

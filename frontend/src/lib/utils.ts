@@ -91,6 +91,23 @@ export function formatDateShort(value: string | Date | null | undefined): string
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
+// Format tanggal & jam singkat ke "12 Jan 2024, 13:12" (en-GB) — dipakai di komponen marking & batch
+export function formatDateTimeShort(value: string | Date | null | undefined, includeSeconds = false): string {
+  if (!value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return String(value)
+  return new Intl.DateTimeFormat('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(includeSeconds ? { second: '2-digit' } : {}),
+    hour12: false,
+    timeZone: 'UTC',
+  }).format(d)
+}
+
 // Format key grup marking "YYYY-MM" menjadi label bulan, misal: "July 2024"
 export function formatYearMonthKey(key: string): string {
   if (key === 'Tidak diketahui' || key === 'Unknown') return key
@@ -147,22 +164,87 @@ export function getInitials(name?: string | null): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-// Helper untuk resolve URL media / avatar yang diunggah ke backend
+// Helper untuk resolve URL media / avatar yang diunggah ke backend (mendukung dev local & production)
 export function resolveMediaUrl(url?: string | null): string | undefined {
-  if (!url) return undefined
-  if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('blob:') || url.startsWith('data:')) {
-    return url
+  if (!url || typeof url !== 'string') return undefined
+  const trimmed = url.trim()
+  if (!trimmed) return undefined
+
+  if (
+    trimmed.startsWith('http://') ||
+    trimmed.startsWith('https://') ||
+    trimmed.startsWith('blob:') ||
+    trimmed.startsWith('data:')
+  ) {
+    return trimmed
   }
-  const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-  try {
-    if (apiBase.startsWith('http')) {
-      const urlObj = new URL(apiBase)
-      const origin = urlObj.origin
-      const cleanPath = url.startsWith('/') ? url : `/${url}`
-      return `${origin}${cleanPath}`
+
+  // Normalisasi path jika hanya berupa nama berkas
+  let normalizedPath = trimmed
+  if (!normalizedPath.startsWith('/')) {
+    if (normalizedPath.startsWith('uploads/')) {
+      normalizedPath = `/${normalizedPath}`
+    } else if (normalizedPath.startsWith('avatars/')) {
+      normalizedPath = `/uploads/${normalizedPath}`
+    } else {
+      normalizedPath = `/uploads/avatars/${normalizedPath}`
     }
-  } catch {}
-  return url
+  }
+
+  const apiBase = import.meta.env.VITE_API_BASE_URL || ''
+  const isDev = import.meta.env.DEV
+
+  // Di Production: Jika VITE_API_BASE_URL mengarah ke host tertentu (misal http://36.93.22.142:3010)
+  if (!isDev && apiBase.startsWith('http')) {
+    try {
+      const urlObj = new URL(apiBase)
+      return `${urlObj.origin}${normalizedPath}`
+    } catch {}
+  }
+
+  // Di Development Local: Gunakan relative path yang di-proxy oleh dev server Vite
+  return normalizedPath
 }
 
+// Salin teks ke clipboard (mendukung HTTPS dan HTTP via execCommand fallback)
+export async function copyToClipboard(text: string): Promise<boolean> {
+  if (!text) return false
 
+  // 1. Coba Modern Clipboard API (HTTPS / secure context)
+  if (navigator.clipboard && window.isSecureContext) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {
+      // Lanjut ke fallback textarea
+    }
+  }
+
+  // 2. Fallback menggunakan temporary textarea (berfungsi di HTTP / non-secure context)
+  try {
+    const textArea = document.createElement('textarea')
+    textArea.value = text
+    textArea.style.position = 'fixed'
+    textArea.style.top = '0'
+    textArea.style.left = '0'
+    textArea.style.width = '2em'
+    textArea.style.height = '2em'
+    textArea.style.padding = '0'
+    textArea.style.border = 'none'
+    textArea.style.outline = 'none'
+    textArea.style.boxShadow = 'none'
+    textArea.style.background = 'transparent'
+    textArea.style.opacity = '0'
+
+    document.body.appendChild(textArea)
+    textArea.focus()
+    textArea.select()
+
+    const successful = document.execCommand('copy')
+    document.body.removeChild(textArea)
+    return successful
+  } catch (err) {
+    console.error('Fallback clipboard copy failed:', err)
+    return false
+  }
+}

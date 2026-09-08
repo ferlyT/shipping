@@ -1,37 +1,109 @@
-export type BillingStatus = 'draft' | 'issued' | 'collected'
+import { CheckCircle2, Clock, AlertTriangle } from 'lucide-react'
+import { Badge } from '@/components/ui/Badge'
+import type { Billing } from '../types/billing.types'
+import type { StatusRow } from '../utils/billing.utils'
 
-export const BILLING_STATUS_CONFIG: Record<BillingStatus, { label: string; className: string }> = {
-  draft: { label: 'DRAFT', className: 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border-[var(--color-border)]' },
-  issued: { label: 'ISSUED', className: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20' },
-  collected: { label: 'COLLECTED', className: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20' },
-}
+export type BillingPaymentStatus = 'LUNAS' | 'SEBAGIAN' | 'BELUM LUNAS' | 'PARTIAL' | 'OVERDUE' | 'UNPAID' | 'ISSUED' | 'DRAFT'
 
-type StatusRow = { fdGive?: number | null; fdGive2?: number | null; fdCekDate?: string | null }
+export function computeBillingPaymentStatus(row?: (Billing & StatusRow) | null): BillingPaymentStatus {
+  if (!row) return 'DRAFT'
+  if (row.paymentStatus) return row.paymentStatus
 
-export function getBillingStatus(row?: StatusRow | null): BillingStatus {
-  if (!row) return 'draft'
-  if (row.fdGive2 === 1) return 'collected'
-  if (row.fdGive === 1) return 'issued'
-  if (!row.fdCekDate) return 'draft'
-  return 'draft'
+  const isIssued = Number(row.fdGive) === 1
+  const isCollected = Number(row.fdGive2) === 1
+
+  if (!isIssued) return 'DRAFT'
+
+  const totals = (row as Billing).totals
+  const sumJumlahTotals = totals && totals.length > 0
+    ? totals.reduce((sum, t) => sum + Number(t.fdJumlah || 0), 0)
+    : Number(row.fdJumlah1 || 0)
+
+  const sumBayarTotals = totals && totals.length > 0
+    ? totals.reduce((sum, t) => sum + Number(t.fdBayar || 0), 0)
+    : 0
+
+  const hasSLunas = totals?.some((t) => t.fdSLunas === 1)
+
+  if (isCollected || hasSLunas || (sumJumlahTotals > 0 && Math.abs(sumJumlahTotals - sumBayarTotals) <= 0.01)) {
+    return 'LUNAS'
+  }
+
+  if (sumBayarTotals > 0) {
+    return 'PARTIAL'
+  }
+
+  const now = new Date()
+  const invoiceDate = row.fdInvDate ? new Date(row.fdInvDate) : null
+  const ageDays = invoiceDate
+    ? Math.floor((now.getTime() - invoiceDate.getTime()) / (1000 * 60 * 60 * 24))
+    : 0
+
+  if (sumBayarTotals === 0 && ageDays > 30) {
+    return 'OVERDUE'
+  }
+
+  if (sumBayarTotals === 0 && ageDays < 7) {
+    return 'ISSUED'
+  }
+
+  return 'UNPAID'
 }
 
 export function BillingStatusTag({
   row,
+  status,
   give,
   give2,
   cekDate,
 }: {
-  row?: StatusRow | null
+  row?: (Billing & StatusRow) | null
+  status?: BillingPaymentStatus | null
   give?: number | null
   give2?: number | null
   cekDate?: string | null
 }) {
-  const statusRow = row || { fdGive: give, fdGive2: give2, fdCekDate: cekDate }
-  const { label, className } = BILLING_STATUS_CONFIG[getBillingStatus(statusRow)]
+  const paymentStatus = status || computeBillingPaymentStatus(row || ({ fdGive: give, fdGive2: give2, fdCekDate: cekDate } as any))
+
+  const variant =
+    paymentStatus === 'LUNAS'
+      ? 'success'
+      : paymentStatus === 'PARTIAL'
+      ? 'warning'
+      : paymentStatus === 'OVERDUE'
+      ? 'danger'
+      : paymentStatus === 'DRAFT'
+      ? 'default'
+      : 'info'
+
+  const label =
+    paymentStatus === 'LUNAS'
+      ? 'Lunas'
+      : paymentStatus === 'PARTIAL'
+      ? 'Sebagian'
+      : paymentStatus === 'ISSUED'
+      ? 'Baru Terbit'
+      : paymentStatus === 'OVERDUE'
+      ? 'Jatuh Tempo'
+      : paymentStatus === 'DRAFT'
+      ? 'Draft'
+      : 'Belum Lunas'
+
   return (
-    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold tracking-wider whitespace-nowrap uppercase border ${className}`}>
-      {label}
-    </span>
+    <Badge
+      variant={variant}
+      className="text-[10px] px-1.5 py-0.5 font-bold inline-flex items-center gap-1 whitespace-nowrap"
+    >
+      {paymentStatus === 'LUNAS' && <CheckCircle2 size={10} />}
+      {(paymentStatus === 'PARTIAL' || paymentStatus === 'ISSUED' || paymentStatus === 'UNPAID' || paymentStatus === 'DRAFT') && <Clock size={10} />}
+      {paymentStatus === 'OVERDUE' && <AlertTriangle size={10} />}
+      <span>{label}</span>
+    </Badge>
   )
 }
+
+export const BILLING_STATUS_CONFIG = {
+  draft: { label: 'DRAFT', className: 'bg-transparent text-[var(--color-secondary)] border-[var(--color-border)]' },
+  issued: { label: 'ISSUED', className: 'bg-transparent text-amber-600 dark:text-amber-400 border-amber-500/40' },
+  collected: { label: 'COLLECTED', className: 'bg-transparent text-emerald-600 dark:text-emerald-400 border-emerald-500/40' },
+} as const

@@ -26,7 +26,7 @@ export function SjVsBillChart({ data, isLoading, isMobile, activeSjPic, setActiv
   ]
 
   if (isLoading) {
-    return <div className="h-[280px] sm:h-[340px] w-full bg-[var(--color-border)] animate-pulse rounded-xl" />
+    return <div className="h-[280px] sm:h-[340px] w-full skeleton-shimmer rounded-xl" />
   }
 
   if (data.length === 0) {
@@ -90,14 +90,14 @@ export function SjVsBillChart({ data, isLoading, isMobile, activeSjPic, setActiv
 
           <div className="flex items-center gap-3 text-xs font-[var(--font-label)] flex-wrap">
             <div className="text-xs text-[var(--color-secondary)]">
-              <span className="font-semibold">{t('billing.sjReceived')}: <span className="font-bold text-[#1a365d]">{totalSj.toLocaleString('id-ID')}</span></span>
+              <span className="font-semibold">{t('billing.sjReceived')}: <span className="font-bold text-[#1a365d]">{totalSj.toLocaleString('en-US')}</span></span>
               <span className="text-[var(--color-border)] mx-2">|</span>
-              <span className="font-semibold">{t('billing.billCreated')}: <span className="font-bold text-[#9b2c2c]">{totalBill.toLocaleString('id-ID')}</span></span>
+              <span className="font-semibold">{t('billing.billCreated')}: <span className="font-bold text-[#9b2c2c]">{totalBill.toLocaleString('en-US')}</span></span>
             </div>
 
             <button
               onClick={handleNavigateTarget}
-              title="Lihat Target Bill selengkapnya"
+              title={t('billing.viewTargetBillFull')}
               className={`px-3 py-1 text-xs font-bold rounded-md whitespace-nowrap cursor-pointer hover:opacity-85 transition-opacity ${
                 gap > 0
                   ? 'bg-amber-50 text-amber-700 border border-amber-200/80 hover:bg-amber-100'
@@ -106,7 +106,7 @@ export function SjVsBillChart({ data, isLoading, isMobile, activeSjPic, setActiv
                   : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
               }`}
             >
-              {gap > 0 ? `+${gap} Belum Bill` : gap < 0 ? `${gap} Surplus Bill` : 'Target Bill'}
+              {gap > 0 ? `+${gap} ${t('billing.unbilled')}` : gap < 0 ? `${gap} ${t('billing.surplusBill')}` : t('nav.targetBill')}
             </button>
           </div>
         </div>
@@ -123,7 +123,7 @@ export function SjVsBillChart({ data, isLoading, isMobile, activeSjPic, setActiv
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="w-4 h-0.5 bg-[#1F6E5C] rounded-full inline-block" />
-            <span className="font-bold text-amber-700">+{totalUnbilled.toLocaleString('id-ID')} {t('billing.unbilled')}</span>
+            <span className="font-bold text-amber-700">+{totalUnbilled.toLocaleString('en-US')} {t('billing.unbilled')}</span>
           </span>
         </div>
 

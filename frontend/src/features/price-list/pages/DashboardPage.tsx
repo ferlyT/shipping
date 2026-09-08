@@ -39,6 +39,7 @@ function PriceChangeCard({
   emptyText,
   items,
   variant,
+  moreRowsText,
 }: {
   title: string
   icon: React.ReactNode
@@ -46,6 +47,7 @@ function PriceChangeCard({
   emptyText: string
   items: PriceChangeItem[]
   variant: 'naik' | 'turun'
+  moreRowsText?: string
 }) {
   const isNaik = variant === 'naik'
   const chipBg = isNaik ? 'bg-transparent border border-rose-500/40 text-rose-500' : 'bg-transparent border border-emerald-500/40 text-emerald-500'
@@ -97,8 +99,8 @@ function PriceChangeCard({
               </span>
             </li>
           ))}
-          {items.length > 5 && (
-            <li className="text-[0.75rem] text-[var(--color-secondary)] pt-1">+{items.length - 5} baris lainnya {variant}</li>
+          {items.length > 5 && moreRowsText && (
+            <li className="text-[0.75rem] text-[var(--color-secondary)] pt-1">{moreRowsText}</li>
           )}
         </ul>
       )}
@@ -178,7 +180,7 @@ export function DashboardPage() {
       {/* Page Header (3-Level ERP Breadcrumbs) */}
       <PageHeader
         title={t('nav.priceListDashboard')}
-        subtitle="Analisis tren tarif pengiriman dan riwayat perubahan harga"
+        subtitle={t('priceList.dashboardSubtitle')}
         breadcrumbs={[
           { label: t('module.finance'), path: ROUTES.BILLING },
           { label: t('nav.priceList'), path: ROUTES.PRICE_LIST },
@@ -206,7 +208,7 @@ export function DashboardPage() {
         <div className="flex items-start gap-3 rounded-lg border border-rose-500/25 bg-rose-500/5 px-4 py-3.5 text-sm text-rose-600">
           <AlertCircle size={18} className="shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold mb-0.5">Gagal memuat data</p>
+            <p className="font-semibold mb-0.5">{t('common.errorLoading')}</p>
             <p className="text-rose-500/80">{combinedError || diffError}</p>
           </div>
         </div>
@@ -241,7 +243,7 @@ export function DashboardPage() {
               }`}
             >
               <BarChart3 size={14} />
-              Tren Harga
+              {t('priceList.trendTab')}
             </button>
             <button
               type="button"
@@ -253,7 +255,7 @@ export function DashboardPage() {
               }`}
             >
               <ArrowUpRight size={14} />
-              Perubahan Harga{naik.length + turun.length > 0 ? ` (${naik.length + turun.length})` : ''}
+              {t('priceList.changesTab')}{naik.length + turun.length > 0 ? ` (${naik.length + turun.length})` : ''}
             </button>
           </div>
         </div>
@@ -285,51 +287,55 @@ export function DashboardPage() {
             <div className="card p-4 sm:p-5 border border-[var(--color-border)] rounded-xl bg-[var(--color-surface)] shadow-xs">
               <div className="flex items-center justify-between mb-2">
                 <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-secondary)]">
-                  Ringkasan Perubahan Tarif
+                  {t('priceList.summaryTariffChanges')}
                 </p>
                 <Sparkles size={14} className="text-amber-500" />
               </div>
               <p className="text-xs text-[var(--color-secondary)]">
-                Perbandingan {currentEffectiveDate ? formatDate(currentEffectiveDate) : '—'} vs{' '}
-                {previousEffectiveDate ? formatDate(previousEffectiveDate) : '—'}
+                {t('priceList.comparisonDate', {
+                  current: currentEffectiveDate ? formatDate(currentEffectiveDate) : '—',
+                  previous: previousEffectiveDate ? formatDate(previousEffectiveDate) : '—',
+                })}
               </p>
 
               <div className="grid grid-cols-4 gap-2 mt-4 pt-4 border-t border-[var(--color-border)] text-center">
                 <div className="p-2 rounded-xl bg-transparent border border-rose-500/40 text-rose-500">
                   <p className="text-lg font-bold tabular-nums">{naik.length}</p>
-                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">Naik</p>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">{t('priceList.up')}</p>
                 </div>
                 <div className="p-2 rounded-xl bg-transparent border border-emerald-500/40 text-emerald-500">
                   <p className="text-lg font-bold tabular-nums">{turun.length}</p>
-                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">Turun</p>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">{t('priceList.down')}</p>
                 </div>
                 <div className="p-2 rounded-xl bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)]">
                   <p className="text-lg font-bold tabular-nums text-[var(--color-primary)]">{tetapCount}</p>
-                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">Tetap</p>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">{t('priceList.unchanged')}</p>
                 </div>
                 <div className="p-2 rounded-xl bg-transparent border border-blue-500/40 text-blue-500">
                   <p className="text-lg font-bold tabular-nums">{baruCount}</p>
-                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">Baru</p>
+                  <p className="text-[0.68rem] font-bold uppercase tracking-wider">{t('priceList.new')}</p>
                 </div>
               </div>
             </div>
 
             <PriceChangeCard
-              title="Kenaikan Tarif Tertinggi"
+              title={t('priceList.highestIncrease')}
               icon={<TrendingUp size={16} className="text-rose-500" />}
               iconBg="bg-transparent border border-rose-500/30"
-              emptyText="Tidak ada kenaikan tarif."
+              emptyText={t('priceList.noIncrease')}
               items={naik}
               variant="naik"
+              moreRowsText={t('priceList.moreRows', { count: naik.length - 5, variant: t('priceList.up') })}
             />
 
             <PriceChangeCard
-              title="Penurunan Tarif Terbesar"
+              title={t('priceList.largestDecrease')}
               icon={<TrendingDown size={16} className="text-emerald-500" />}
               iconBg="bg-transparent border border-emerald-500/30"
-              emptyText="Tidak ada penurunan tarif."
+              emptyText={t('priceList.noDecrease')}
               items={turun}
               variant="turun"
+              moreRowsText={t('priceList.moreRows', { count: turun.length - 5, variant: t('priceList.down') })}
             />
           </div>
         )}

@@ -184,11 +184,14 @@ export function useEntryLookup(isActive: boolean) {
     if (!entryResult?.priceValidation?.items || !Array.isArray(entryResult.priceValidation.items)) return []
 
     const comName = selectedComodityName || ''
+    const rawCom = entryResult?.fdComodity || ''
     const search = entryTableSearch.toLowerCase().trim()
     const isAirMode = entryResult?.expectedMode === 'BY AIR' || entryResult?.fdListType === 1
 
     let items = entryResult.priceValidation.items.map((item) => {
-      const isMatch = isCommodityMatch(comName, item.category, item.mode, isAirMode)
+      const isMatch =
+        (rawCom ? isCommodityMatch(rawCom, item.category, item.mode, isAirMode) : false) ||
+        (comName ? isCommodityMatch(comName, item.category, item.mode, isAirMode) : false)
       return { ...item, isMatch }
     })
 
@@ -341,6 +344,7 @@ export function useEntryLookup(isActive: boolean) {
     handleSelectEntry,
     handleClearEntrySearch,
     selectedComodityName,
+    rawComodityText: entryResult?.fdComodity || null,
     availableComodities,
     entryTableItems,
     matchedPriceItem,

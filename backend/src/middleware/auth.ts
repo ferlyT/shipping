@@ -2,11 +2,14 @@ import { createMiddleware } from 'hono/factory'
 import jwt from 'jsonwebtoken'
 import { ENV } from '../config/env'
 import { errorResponse } from '../utils/response'
+import { prisma } from '../config/database'
 
 export interface JwtPayload {
   userId: string
   username: string
   role: string
+  fdEmpCode?: string | null
+  fdEmpName?: string | null
   permissions?: string[]
 }
 
@@ -54,10 +57,40 @@ export const requirePermission = (requiredPath: string) => createMiddleware(asyn
     return
   }
 
+  const normalize = (pathStr: string) =>
+    pathStr
+      .replace(/^\/mshipping\/(finance|master|logistics|admin|overview)\//, '/mshipping/')
+      .replace(/\/+$/, '')
+
+  const reqNorm = normalize(requiredPath)
+
+  let activePerms = user.permissions || []
+  if (user.role) {
+    try {
+      const dbPerms = await prisma.tbRolePermissions.findMany({
+        where: { role: user.role, canView: true },
+        select: { path: true },
+      })
+      if (dbPerms.length > 0) {
+        activePerms = Array.from(new Set([...activePerms, ...dbPerms.map(p => p.path)]))
+      }
+    } catch {
+      // fallback to token permissions
+    }
+  }
+
   // Check permissions
-  const hasAccess = user.permissions?.some(p => {
+  const hasAccess = activePerms.some(p => {
     if (p === '/*') return true
-    return requiredPath === p || requiredPath.startsWith(p + '/')
+    const pNorm = normalize(p)
+    return (
+      requiredPath === p ||
+      requiredPath.startsWith(p + '/') ||
+      p.startsWith(requiredPath + '/') ||
+      reqNorm === pNorm ||
+      reqNorm.startsWith(pNorm + '/') ||
+      pNorm.startsWith(reqNorm + '/')
+    )
   })
 
   if (!hasAccess) {

@@ -1,437 +1,751 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
-import { AxiosError } from 'axios'
-import { ArrowLeft, ListFilter } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  ArrowLeft,
+  ListFilter,
+  ShieldCheck,
+  Copy,
+  Check,
+  FileText,
+  Send,
+  ScanBarcode,
+  Receipt,
+  User,
+  Edit3,
+  History,
+} from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { Button } from '@/components/ui/Button'
-import { PageHeader } from '@/components/ui/PageHeader'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { CurrencyValue, formatWithCurrency } from '@/components/ui/CurrencyValue'
-import { formatDate, formatDateTime, formatDecimal } from '@/lib/utils'
-import { useToastStore } from '@/stores/toastStore'
-import { Badge } from '@/components/ui/Badge'
-import { statusConfig } from '@/features/customers/components/CustomerBadges'
+import { formatDate, copyToClipboard, cn } from '@/lib/utils'
 import { BillingValidationCard } from '../components/BillingValidationCard'
 import { ValidationListDrawer } from '../components/ValidationListDrawer'
+import { BillingValidationSummaryModal, type M3CheckResponse } from '../components/BillingValidationSummaryModal'
+import { CustomerBillingHistoryModal } from '../components/CustomerBillingHistoryModal'
+import { IssueInvoiceModal } from '../components/IssueInvoiceModal'
+import { BillResiMarkingModal } from '../components/BillResiMarkingModal'
+import { EditBillingDetailsModal } from '../components/EditBillingDetailsModal'
+import { CustomerTariffAuditModal } from '../components/CustomerTariffAuditModal'
+import { BILL_TYPE_CONFIGS, getBillType, isUnitCode } from '../constants/billing.constants'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
+import { useToastStore } from '@/stores/toastStore'
+import type { Billing, BillingDetail } from '../types/billing.types'
+import { formatQtyDecimal, isMktCustomer, evaluateItemPrice } from '../utils/billing.utils'
+import { useInvoiceMetrics } from '../hooks/useInvoiceMetrics'
 
-interface BillingDetail {
-  fdInvNo: string
-  fdID: string
-  fdItemName: string
-  fdQty: number
-  fdListCode: string | null
-  fdItemPrice: number
-  fdTotal: number
-  fdCurr: string | null
-  fdTypeComodity?: number | null
-  fdComodity?: string | null
+// ─── Skeleton ────────────────────────────────────────────────────────────────
+
+function ValidationDetailPageSkeleton() {
+  return (
+    <div className="flex flex-col min-h-screen lg:h-[calc(100vh-4.25rem)] lg:overflow-hidden p-2 sm:p-3 gap-2.5 animate-fadeIn font-[var(--font-body)]">
+      <div className="flex items-center justify-between gap-2 p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xs flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="h-7 w-20 rounded-lg skeleton-shimmer" />
+          <div className="h-7 w-48 rounded-lg skeleton-shimmer" />
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="h-7 w-28 rounded-lg skeleton-shimmer" />
+          <div className="h-7 w-20 rounded-lg skeleton-shimmer" />
+        </div>
+      </div>
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2.5 flex-1 min-h-0">
+        <div className="lg:col-span-5 h-[350px] lg:h-full rounded-xl skeleton-shimmer border border-[var(--color-border)]" />
+        <div className="lg:col-span-7 min-h-[500px] lg:h-full rounded-xl skeleton-shimmer border border-[var(--color-border)]" />
+      </div>
+    </div>
+  )
 }
 
-interface Billing {
-  fdInvNo: string
-  fdInvDate: string
-  fdCustCode: string
-  fdDescr: string
-  fdJumlah1: number
-  fdJumlah2?: number | null
-  fdCurr1: string | null
-  fdMarkingCode: string | null
-  fdMarkingNo: string | null
-  fdGiveDate: string
-  employee?: {
-    fdEmpName: string | null
-  } | null
-  customer?: {
-    fdCustName: string | null
-    fdBlocked?: number | null
-    fdContact: string | null
-    fdBillTo: string | null
-    fdBillAddr1: string | null
-    fdSalesNM?: string | null
-    fdBroker?: number | null
-  } | null
-  details?: BillingDetail[]
-  fdListCode?: string | null
-  fdTypeComodity?: number | null
+// ─── StatusBadge helpers ──────────────────────────────────────────────────────
+
+function IssuedBadge({ isIssued }: { isIssued: boolean }) {
+  return isIssued ? (
+    <span className="inline-flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+      <Check size={10} className="stroke-[3]" /> ISSUED
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-0.5 text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+      DRAFT
+    </span>
+  )
 }
 
-function formatQtyDecimal(qty: number, unitStr?: string | null, itemName?: string | null): string {
-  const num = Number(qty || 0)
-  const unit = (unitStr || '').trim().toUpperCase()
-  const name = (itemName || '').trim().toUpperCase()
-
-  const isM2 = unit === 'M2' || name.includes('M2')
-  const isM3 = unit === 'M3' || name.includes('M3')
-
-  if (isM2 || isM3) {
-    return formatDecimal(num, 4)
-  }
-  return formatDecimal(num, Number.isInteger(num) ? 0 : 2)
+function PaymentBadge({ status }: { status?: string | null }) {
+  if (status === 'LUNAS')
+    return (
+      <span className="inline-flex items-center text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+        LUNAS
+      </span>
+    )
+  if (status === 'SEBAGIAN')
+    return (
+      <span className="inline-flex items-center text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+        SEBAGIAN
+      </span>
+    )
+  return (
+    <span className="inline-flex items-center text-[9px] sm:text-[10px] font-bold px-1.5 sm:px-2 py-0.5 rounded-md bg-slate-500/15 text-slate-700 dark:text-slate-300 border border-slate-500/30">
+      BELUM LUNAS
+    </span>
+  )
 }
+
+// ─── Item price inline badge ──────────────────────────────────────────────────
+
+function ItemPriceBadge({ row, validationData }: {
+  row: BillingDetail
+  validationData?: M3CheckResponse | null
+}) {
+  if (!validationData) return null
+  const evalRes = evaluateItemPrice(row, {
+    res: validationData,
+    isAir: validationData.fdListType === 1 || validationData.expectedMode === 'BY AIR',
+    defaultTypeId: validationData.defaultFdTypeComodity ?? validationData.markingComodityType ?? null,
+    defaultComodityName: validationData.markingComodities?.[0]?.fdComodityName || '—',
+  })
+  if (!evalRes.hasTargetPrice && !evalRes.isTaxReturnItem && !evalRes.isKgOverweightItem) return null
+
+  if (evalRes.statusType === 'LOWER')
+    return (
+      <span className="text-[9px] px-1 py-0 rounded font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 whitespace-nowrap" title="Harga di bawah tarif acuan master">
+        Undercharge
+      </span>
+    )
+  if (evalRes.statusType === 'HIGHER')
+    return (
+      <span className="text-[9px] px-1 py-0 rounded font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap" title="Harga di atas tarif acuan master">
+        Overcharge
+      </span>
+    )
+  return (
+    <span className="text-[9px] px-1 py-0 rounded font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap" title="Harga sesuai acuan master">
+      Match
+    </span>
+  )
+}
+
+// ─── Main Component ───────────────────────────────────────────────────────────
 
 export function ValidationDetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const { addToast } = useToastStore()
 
-  const [data, setData] = useState<Billing | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
+  // ── Modal / Drawer states ──
   const [isListDrawerOpen, setIsListDrawerOpen] = useState(false)
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(true)
+  const [isCopied, setIsCopied] = useState(false)
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
+  const [isIssueModalOpen, setIsIssueModalOpen] = useState(false)
+  const [isResiModalOpen, setIsResiModalOpen] = useState(false)
+  const [isEditItemsModalOpen, setIsEditItemsModalOpen] = useState(false)
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
+  const [mobileTab, setMobileTab] = useState<'validation' | 'items'>('validation')
 
-  useEffect(() => {
-    if (id) fetchData()
-  }, [id])
+  // Re-open summary modal on invoice change
+  useEffect(() => { if (id) setIsSummaryModalOpen(true) }, [id])
 
+  // Ctrl+F → open list drawer
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
+    const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         setIsListDrawerOpen(true)
       }
     }
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
+    window.addEventListener('keydown', handler)
+    return () => window.removeEventListener('keydown', handler)
   }, [])
 
-  const fetchData = async () => {
-    try {
-      setIsLoading(true)
-      const res = await billingApi.detail(id!)
-      setData(res.data.data)
-    } catch (err) {
-      const message = err instanceof AxiosError ? err.response?.data?.error : undefined
-      addToast({
-        type: 'error',
-        message: message || t('billing.detail.errorLoad'),
-      })
-      navigate(ROUTES.BILLING_VALIDATION_LIST)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  // ── Data fetching ──
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ['billingDetail', id],
+    queryFn: async () => {
+      if (!id) return null
+      const res = await billingApi.detail(id)
+      return res.data?.data as Billing
+    },
+    enabled: !!id,
+    staleTime: 60_000,
+  })
 
-  if (isLoading) return <LoadingSpinner message={t('common.loadingBilling')} />
+  const billType = getBillType(data)
+  const billTypeConfig = BILL_TYPE_CONFIGS[billType]
 
-  if (!data) return null
+  const primaryListCode =
+    (!isUnitCode(data?.fdListCode) ? data?.fdListCode?.trim() : null) ||
+    data?.details?.find((d) => !isUnitCode(d.fdListCode))?.fdListCode?.trim() ||
+    data?.fdListCode?.trim() ||
+    ''
 
-  const details = [...(data.details || [])].sort((a, b) => a.fdID.localeCompare(b.fdID))
+  const { data: validationData, isLoading: isLoadingValidation } = useQuery({
+    queryKey: ['m3-check', primaryListCode],
+    queryFn: async () => {
+      if (!primaryListCode) return null
+      const response = await billingApi.m3Check(primaryListCode)
+      return response.data?.data as M3CheckResponse
+    },
+    enabled: Boolean(data && primaryListCode && !billTypeConfig.skipValidation),
+    staleTime: 60_000,
+  })
 
-  const isAuxiliaryItem = (name?: string | null) => {
-    const n = (name || '').toUpperCase()
+  // ── Derived data (Hooks must execute unconditionally before early returns) ──
+  const details = useMemo(
+    () =>
+      [...(data?.details || [])].sort((a, b) =>
+        String(a?.fdID ?? '').trim().localeCompare(String(b?.fdID ?? '').trim(), undefined, { numeric: true })
+      ),
+    [data?.details]
+  )
+
+  const { unitTotals, billedM3, billedKg, billedVfc, underchargedItems } = useInvoiceMetrics({
+    details,
+    validationData,
+  })
+
+  // ── Early returns ──
+  if (isLoading) return <ValidationDetailPageSkeleton />
+  if (isError || !data) {
     return (
-      n.includes('TAX RETURN') ||
-      n.includes('ADMIN') ||
-      n.includes('SURCHARGE') ||
-      n.includes('DISCOUNT') ||
-      n.includes('BIAYA') ||
-      n.includes('PENYESUAIAN')
+      <div className="p-6 text-center text-red-500">
+        <p>{t('billing.detail.errorLoad')}</p>
+        <Button className="mt-4" onClick={() => navigate(ROUTES.BILLING_VALIDATION_LIST)}>
+          <ArrowLeft className="w-4 h-4 mr-2" /> {t('billing.detail.backToList')}
+        </Button>
+      </div>
     )
   }
 
-  const unitTotals = details.reduce<Record<string, number>>((acc, row) => {
-    let unit = row.fdListCode?.trim()?.toUpperCase()
-    const nameUpper = (row.fdItemName || '').toUpperCase()
+  // ── Handlers ──
+  const handleCopyMarkingInfo = async () => {
+    const custName = data.customer?.fdCustName || data.fdCustCode || '—'
+    const markingCode = data.fdMarkingCode || '—'
+    const markingNo = data.fdMarkingNo || '—'
+    const consignee = data.fdConsignee || ''
+    const comodity = data.fdComodity || ''
+    const comodityType = data.fdTypeComodityName || ''
+    const tglAgent = data.fdTglAgent ? formatDate(data.fdTglAgent) : '—'
 
-    // If unit is blank, infer from (M3) or (KG) in item name
-    if (!unit) {
-      if (nameUpper.includes('(M3)')) unit = 'M3'
-      else if (nameUpper.includes('(KG)')) unit = 'KG'
-      else if (nameUpper.includes('(PCS)')) unit = 'PCS'
+    let text = `Customer: ${custName}\nMarking Code: ${markingCode}\nMarking No: ${markingNo}`
+    if (consignee) {
+      text += `\nConsignee: ${consignee}`
     }
+    if (comodity || comodityType) {
+      text += `\nKomoditi: ${[comodity, comodityType ? `(${comodityType})` : ''].filter(Boolean).join(' ')}`
+    }
+    text += `\nTgl Agent: ${tglAgent}`
 
-    if (isAuxiliaryItem(row.fdItemName)) return acc
-    if (!unit) return acc
-
-    acc[unit] = (acc[unit] || 0) + Number(row.fdQty || 0)
-    return acc
-  }, {})
-
-  // Rule M3 Tagihan Minimal: Jika total M3 > 0 dan < 0.1, diset ke 0.1 m³
-  if (unitTotals['M3'] !== undefined && unitTotals['M3'] > 0 && unitTotals['M3'] < 0.1) {
-    unitTotals['M3'] = 0.1
+    const success = await copyToClipboard(text)
+    if (success) {
+      setIsCopied(true)
+      addToast({ type: 'success', message: 'Data customer, marking, consignee, komoditi & tgl agent berhasil disalin!' })
+      setTimeout(() => setIsCopied(false), 2000)
+    } else {
+      addToast({ type: 'error', message: 'Gagal menyalin data ke clipboard' })
+    }
   }
 
-  const isUnitCode = (code?: string | null) => {
-    if (!code?.trim()) return true
-    const u = code.trim().toUpperCase()
-    return ['M3', 'M2', 'KG', 'PCS', 'COLY', 'CTN', 'BOX', 'PKGS'].includes(u)
-  }
-
-  const primaryListCode =
-    (!isUnitCode(data.fdListCode) ? data.fdListCode?.trim() : null) ||
-    details.find((d) => !isUnitCode(d.fdListCode))?.fdListCode?.trim() ||
-    data.fdMarkingCode?.trim() ||
-    data.fdInvNo?.trim() ||
-    ''
-
-  const rawM3FromItems = details.reduce((sum, d) => {
-    if (isAuxiliaryItem(d.fdItemName)) return sum
-    let unit = d.fdListCode?.trim()?.toUpperCase()
-    const nameUpper = (d.fdItemName || '').toUpperCase()
-    if (!unit && nameUpper.includes('(M3)')) unit = 'M3'
-
-    const isM3Item = unit === 'M3' || (nameUpper.includes('PARCEL') && !nameUpper.includes('(KG)') && !nameUpper.includes('KG'))
-    return isM3Item ? sum + Number(d.fdQty || 0) : sum
-  }, 0)
-
-  const calcM3 = unitTotals['M3'] ?? rawM3FromItems
-  const billedM3 = calcM3 > 0 && calcM3 < 0.1 ? 0.1 : calcM3
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-3 sm:p-6 lg:p-8 w-full space-y-6 animate-fadeIn pb-24 font-[var(--font-body)]">
-      <PageHeader
-        title={`${t('billing.validation.detailTitle')}: ${data.fdInvNo}`}
-        subtitle={`${t('billing.detail.subtitle')} (${data.customer?.fdCustName || data.fdCustCode})`}
-        breadcrumbs={[
-          { label: t('module.finance'), path: ROUTES.BILLING },
-          { label: t('nav.validationList'), path: ROUTES.BILLING_VALIDATION_LIST },
-          { label: `${t('billing.validation.detailTitle')} ${data.fdInvNo}` },
-        ]}
-        actions={
-          <div className="flex items-center gap-2">
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={() => setIsListDrawerOpen(true)}
-              className="bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-primary)] shadow-2xs hover:bg-[var(--color-neutral)] transition-all"
+    <div className="flex flex-col min-h-screen lg:h-[calc(100vh-4.25rem)] lg:overflow-hidden p-2 sm:p-3 gap-2 sm:gap-2.5 bg-[var(--color-neutral)] text-[var(--color-primary)] font-[var(--font-body)] animate-fadeIn overflow-y-auto lg:overflow-y-hidden">
+
+      {/* ─── 1. COMPACT TOP HEADER BAR ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-2.5 sm:px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs shrink-0">
+        {/* Row 1 / Left: Back + Inv No + Status Badges */}
+        <div className="flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate(ROUTES.BILLING_VALIDATION_LIST)}
+              className="p-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer shrink-0"
+              title={t('billing.validation.backToList')}
             >
-              <ListFilter className="w-4 h-4 mr-2 text-[var(--color-primary)]" />
-              <span>{t('billing.validation.invoiceList')}</span>
-            </Button>
+              <ArrowLeft className="w-4 h-4" />
+            </button>
 
-            <Button variant="ghost" size="sm" onClick={() => navigate(ROUTES.BILLING_VALIDATION_LIST)}>
-              <ArrowLeft className="w-4 h-4 mr-2" /> {t('billing.validation.backToList')}
-            </Button>
+            <div className="flex items-center gap-1 min-w-0">
+              <span className="text-[10px] sm:text-xs uppercase font-bold tracking-wider text-[var(--color-secondary)] shrink-0">Inv:</span>
+              <span className="font-mono font-bold text-xs sm:text-sm text-[var(--color-primary)] truncate">{data.fdInvNo}</span>
+              <span className={cn('text-[9px] sm:text-[10px] px-1.5 py-0.2 font-bold rounded border uppercase shrink-0', billTypeConfig.badgeClasses)}>
+                {billTypeConfig.label}
+              </span>
+            </div>
           </div>
-        }
-      />
 
-      <div className="space-y-4 sm:space-y-6">
-        {/* Info Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3">
-          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4 shadow-xs">
-              <p className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">{t('billing.detail.customer')}</p>
-              <div className="mt-1 sm:mt-1.5 flex items-center gap-1.5 flex-wrap">
-                <span className="text-sm font-semibold text-[var(--color-primary)]">{data.customer?.fdCustName || data.fdCustCode || '—'}</span>
-                {data.customer && (
-                  <Badge
-                    variant={(statusConfig[(data.customer.fdBlocked ?? 0) as keyof typeof statusConfig] || statusConfig[0]).badgeVariant}
-                    className="text-[10px] px-1.5 py-0"
-                  >
-                    {(statusConfig[(data.customer.fdBlocked ?? 0) as keyof typeof statusConfig] || statusConfig[0]).label}
-                  </Badge>
-                )}
-                {data.customer?.fdBroker === 1 && (
-                  <Badge variant="warning" className="text-[10px] px-1.5 py-0 font-bold">
-                    BROKER
-                  </Badge>
+          <div className="flex items-center gap-1 shrink-0">
+            <IssuedBadge isIssued={Number(data.fdGive) === 1} />
+            <PaymentBadge status={data.paymentStatus} />
+          </div>
+        </div>
+
+        {/* Row 2 / Right: Customer info + Quick Action Buttons Ribbon */}
+        <div className="flex items-center justify-between sm:justify-end gap-1.5 sm:gap-2 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-[var(--color-border)]/60 min-w-0">
+          <div className="flex items-center gap-1 text-[11px] sm:text-xs px-2 py-0.5 rounded-md bg-[var(--color-neutral)] border border-[var(--color-border)] max-w-[140px] sm:max-w-[200px] truncate">
+            <User size={11} className="text-[var(--color-secondary)] shrink-0" />
+            <span className="font-semibold truncate text-[var(--color-primary)]" title={data.customer?.fdCustName || data.fdCustCode || '—'}>
+              {data.customer?.fdCustName || data.fdCustCode || '—'}
+            </span>
+          </div>
+
+          {/* Quick Action Buttons Ribbon */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-x-auto no-scrollbar py-0.5">
+            {Number(data.fdGive) !== 1 && (
+              <button
+                type="button"
+                onClick={() => setIsIssueModalOpen(true)}
+                className="px-2 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-2xs transition-colors cursor-pointer shrink-0"
+                title="Terbitkan invoice menjadi status Issued"
+              >
+                <Send className="w-3 h-3" />
+                <span className="hidden sm:inline">Terbitkan</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => setIsSummaryModalOpen(true)}
+              className="px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              title="Buka dialog kesimpulan validasi operasional & tarif"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Inspeksi</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsResiModalOpen(true)}
+              className="px-1.5 sm:px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              title="Pengecekan Resi & Persebaran Marking"
+            >
+              <ScanBarcode className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Resi</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsHistoryModalOpen(true)}
+              className="px-1.5 sm:px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              title="Riwayat Tagihan / Billing Customer"
+            >
+              <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <span>History</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsAuditModalOpen(true)}
+              className="px-1.5 sm:px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              title={t('billing.validation.priceAuditTooltip')}
+            >
+              <History className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>Audit</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setIsListDrawerOpen(true)}
+              className="p-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] shadow-2xs transition-all cursor-pointer shrink-0"
+              title="Cari Invoice Lain (Ctrl+F)"
+            >
+              <ListFilter className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── 2. MOBILE SEGMENTED CONTROL TAB SWITCHER (lg:hidden) ─── */}
+      <div className="lg:hidden flex items-center p-1 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-2xs shrink-0">
+        <button
+          type="button"
+          onClick={() => setMobileTab('validation')}
+          className={cn(
+            'flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+            mobileTab === 'validation'
+              ? 'bg-[var(--color-neutral)] text-[var(--color-tertiary)] shadow-2xs border border-[var(--color-border)]'
+              : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+          )}
+        >
+          <ShieldCheck size={14} className={mobileTab === 'validation' ? 'text-[var(--color-tertiary)]' : ''} />
+          <span>Validasi Sistem</span>
+          {underchargedItems.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-rose-500/15 text-rose-600 dark:text-rose-400 font-mono font-bold border border-rose-500/30">
+              {underchargedItems.length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('items')}
+          className={cn(
+            'flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+            mobileTab === 'items'
+              ? 'bg-[var(--color-neutral)] text-[var(--color-tertiary)] shadow-2xs border border-[var(--color-border)]'
+              : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+          )}
+        >
+          <Receipt size={14} className={mobileTab === 'items' ? 'text-[var(--color-tertiary)]' : ''} />
+          <span>Info & Item Tagihan</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-[var(--color-surface)] text-[var(--color-secondary)] font-mono border border-[var(--color-border)]">
+            {details.length}
+          </span>
+        </button>
+      </div>
+
+      {/* ─── 3. MAIN 2-COLUMN / ADAPTIVE LAYOUT ─── */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 xl:grid-cols-12 2xl:grid-cols-12 gap-3 sm:gap-3.5 lg:min-h-0 lg:overflow-hidden">
+
+        {/* ── Kolom Kiri: Identitas Tagihan & Rincian Item ── */}
+        <div className={cn(
+          "lg:col-span-5 xl:col-span-5 2xl:col-span-5 flex flex-col gap-3 lg:gap-3.5 lg:min-h-0 lg:overflow-hidden",
+          mobileTab !== 'items' && "hidden lg:flex"
+        )}>
+
+          {/* Card: Identitas Tagihan & Customer */}
+          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5 sm:p-4 shadow-2xs shrink-0 space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 text-xs">
+
+              {/* Customer */}
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] font-[var(--font-label)] tracking-wider block">Customer</span>
+                <p className="font-bold text-sm text-[var(--color-primary)] truncate" title={data.customer?.fdCustName || data.fdCustCode || '—'}>
+                  {data.customer?.fdCustName || data.fdCustCode || '—'}
+                </p>
+                {data.customer?.fdSalesNM && (
+                  <p className="text-[11px] text-[var(--color-secondary)] truncate">
+                    Sales: <span className="font-semibold text-[var(--color-primary)]">{data.customer.fdSalesNM.trim()}</span>
+                    {isMktCustomer(data.customer, data.customer?.fdSalesNM) && (
+                      <span className="ml-1 text-[9px] font-bold text-amber-600 dark:text-amber-400 font-mono">(MKT)</span>
+                    )}
+                  </p>
                 )}
               </div>
-              {data.customer?.fdSalesNM && (
-                <p className="mt-1 text-xs text-[var(--color-secondary)] leading-snug font-medium">
-                  {t('billing.validation.salesLabel')} <span className="font-semibold text-[var(--color-primary)]">{data.customer.fdSalesNM.trim()}</span>
+
+              {/* Tanggal */}
+              <div className="space-y-1">
+                <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] font-[var(--font-label)] tracking-wider block">Tgl Tagihan</span>
+                <p className="font-bold text-sm text-[var(--color-primary)]">{formatDate(data.fdInvDate)}</p>
+                {data.fdTglAgent && (
+                  <p className="text-[11px] text-[var(--color-secondary)]">
+                    Agent: <span className="font-medium text-[var(--color-primary)]">{formatDate(data.fdTglAgent)}</span>
+                  </p>
+                )}
+              </div>
+
+              {/* Marking + Copy */}
+              <div className="col-span-2 sm:col-span-1 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] font-[var(--font-label)] tracking-wider">Marking</span>
+                  <button
+                    type="button"
+                    onClick={handleCopyMarkingInfo}
+                    className="p-1 rounded hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+                    title="Salin Data Customer, Marking & Tgl Agent"
+                  >
+                    {isCopied
+                      ? <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
+                      : <Copy className="w-3.5 h-3.5" />
+                    }
+                  </button>
+                </div>
+                <p className="font-bold text-sm text-[var(--color-primary)] truncate font-mono" title={data.fdMarkingCode || '—'}>
+                  {data.fdMarkingCode || '—'}
                 </p>
+                {data.fdMarkingNo && (
+                  <p className="text-[11px] text-[var(--color-secondary)] font-mono truncate" title={data.fdMarkingNo.trim()}>
+                    ({data.fdMarkingNo.trim()})
+                  </p>
+                )}
+                {data.fdConsignee && (
+                  <p className="text-[11px] text-[var(--color-secondary)] truncate" title={data.fdConsignee}>
+                    Consignee: <span className="font-semibold text-[var(--color-primary)]">{data.fdConsignee}</span>
+                  </p>
+                )}
+                {data.resiSummary?.resiList && data.resiSummary.resiList.length > 0 && (
+                  <p className="text-[10px] text-blue-600 dark:text-blue-400 font-mono truncate" title={data.resiSummary.resiList.join(', ')}>
+                    Resi: {data.resiSummary.resiList[0]}{data.resiSummary.resiList.length > 1 ? ` (+${data.resiSummary.resiList.length - 1})` : ''}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Sub-row: Pembuat & Kasir */}
+            <div className="pt-2.5 mt-1 border-t border-[var(--color-border)]/70 flex items-center justify-between text-xs text-[var(--color-secondary)]">
+              <span>Pembuat: <strong className="text-[var(--color-primary)] font-semibold">{data.employee?.fdEmpName || '—'}</strong></span>
+              {data.isPaid ? (
+                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                  Kasir #{data.cashierID} • {data.cashierDate ? formatDate(data.cashierDate) : 'Lunas'}
+                </span>
+              ) : (
+                <span className="text-amber-600 dark:text-amber-400 font-medium">Belum Dibayar</span>
               )}
-              {data.customer?.fdBillAddr1 && data.customer.fdBillAddr1.trim() !== '0' && (
-                <p className="mt-1 text-xs text-[var(--color-secondary)] leading-snug">{data.customer.fdBillAddr1}</p>
-              )}
-            </div>
-            <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4 shadow-sm">
-              <p className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">{t('billing.detail.invoiceDate')}</p>
-              <p className="mt-1 sm:mt-1.5 text-sm font-semibold text-[var(--color-primary)]">{formatDate(data.fdInvDate)}</p>
-            </div>
-            <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4 shadow-sm">
-              <p className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">{t('billing.detail.issuedDate')}</p>
-              <p className="mt-1 sm:mt-1.5 text-sm font-semibold text-[var(--color-primary)]">{formatDateTime(data.fdGiveDate)}</p>
-            </div>
-            <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4 shadow-sm">
-              <p className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">{t('billing.detail.author')}</p>
-              <p className="mt-1 sm:mt-1.5 text-sm font-semibold text-[var(--color-primary)]">{data.employee?.fdEmpName || '—'}</p>
-            </div>
-            <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4 shadow-sm">
-              <p className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">{t('billing.detail.marking')}</p>
-              <p className="mt-1 sm:mt-1.5 text-sm font-medium text-[var(--color-primary)]">{data.fdMarkingCode || '—'}</p>
-              <p className="mt-1 sm:mt-1.5 text-sm font-medium text-[var(--color-primary)]">{data.fdMarkingNo || '—'}</p>
             </div>
           </div>
 
-          {/* Kartu Validasi Billing M3 */}
-          {primaryListCode && (
-            <BillingValidationCard
-              listCode={primaryListCode}
-              billedM3={billedM3}
-              invoiceDetails={details}
-              billFdTypeComodity={data.fdTypeComodity}
-            />
-          )}
-
-          {/* Rincian Item */}
-          <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm overflow-hidden">
-            <div className="px-4 py-3 sm:px-5 sm:py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex items-center justify-between">
-              <h3 className="text-xs sm:text-sm font-bold font-[var(--font-label)] text-[var(--color-primary)] uppercase tracking-wider">{t('billing.detail.itemDetails')}</h3>
-              <span className="text-[11px] sm:text-xs text-[var(--color-secondary)] font-[var(--font-body)]">{details.length} {t('billing.detail.items')}</span>
+          {/* Card: Tabel Rincian Item (scrollable body, sticky footer) */}
+          <div className="flex flex-col rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs overflow-hidden h-fit max-h-[calc(100vh-13rem)]">
+            {/* Header */}
+            <div className="px-3.5 py-2.5 sm:px-4 sm:py-3 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/60 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-6 h-6 rounded-md bg-[var(--color-tertiary)]/15 text-[var(--color-tertiary)] flex items-center justify-center shrink-0">
+                  <Receipt size={13} />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-primary)] font-[var(--font-label)] truncate">
+                  Rincian Item Tagihan
+                </span>
+                <span className="text-[11px] font-semibold text-[var(--color-secondary)] px-1.5 py-0.2 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)] shrink-0">
+                  {details.length}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditItemsModalOpen(true)}
+                className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-primary)] hover:border-[var(--color-tertiary)] flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
+                title="Edit Kuantitas, Harga, Satuan, atau Tambah/Hapus Baris Item"
+              >
+                <Edit3 size={13} className="text-[var(--color-tertiary)]" />
+                <span>Edit Item</span>
+              </button>
             </div>
 
-            {/* Desktop / tablet: hand-rolled table */}
-            <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full table-fixed border-collapse text-sm">
-                <colgroup>
-                  <col style={{ width: '55%' }} />
-                  <col style={{ width: '15%' }} />
-                  <col style={{ width: '15%' }} />
-                  <col style={{ width: '15%' }} />
-                </colgroup>
-                <thead>
-                  <tr className="bg-[var(--color-neutral)] border-b border-[var(--color-border)]">
-                    <th className="px-4 py-2.5 sm:px-5 sm:py-3 text-left text-[10px] sm:text-[11px] font-bold font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">{t('billing.detail.colDescription')}</th>
-                    <th className="px-4 py-2.5 sm:px-5 sm:py-3 text-right text-[10px] sm:text-[11px] font-bold font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">{t('billing.detail.colQty')}</th>
-                    <th className="px-4 py-2.5 sm:px-5 sm:py-3 text-right text-[10px] sm:text-[11px] font-bold font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">{t('billing.detail.colPrice')}</th>
-                    <th className="px-4 py-2.5 sm:px-5 sm:py-3 text-right text-[10px] sm:text-[11px] font-bold font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">{t('billing.detail.colTotal')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {details.length > 0 ? (
-                    details.map((row) => (
-                      <tr key={row.fdID} className="border-b border-[var(--color-border)] last:border-b-0">
-                        <td className="px-4 py-3 sm:px-5 sm:py-3.5 leading-snug break-words">
-                          <div className="font-medium text-[var(--color-primary)]">
-                            {row.fdItemName}
-                          </div>
-                          {row.fdComodity && (
-                            <div className="mt-1.5">
-                              <Badge variant="default" className="text-[10px] px-1.5 py-0 font-medium">
-                                {row.fdComodity}
-                              </Badge>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 sm:px-5 sm:py-3.5 text-right text-[var(--color-primary)] tabular-nums">
-                          {(Number(row.fdQty || 0) !== 0 || row.fdListCode) && (
-                            <span>
-                              {formatQtyDecimal(row.fdQty, row.fdListCode, row.fdItemName)}
-                              {row.fdListCode ? ` ${row.fdListCode.trim()}` : ''}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 sm:px-5 sm:py-3.5 text-[var(--color-primary)]">
-                          <CurrencyValue value={row.fdItemPrice} currency={row.fdCurr} />
-                        </td>
-                        <td className="px-4 py-3 sm:px-5 sm:py-3.5 text-[var(--color-primary)] font-semibold">
-                          <CurrencyValue value={row.fdTotal} currency={row.fdCurr} />
-                        </td>
-                      </tr>
-                    ))
-                  ) : (
-                    <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-sm text-[var(--color-secondary)]">
-                        {t('billing.detail.noItems')}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Mobile: stacked cards */}
-            <div className="sm:hidden">
+            {/* Body */}
+            <div className="overflow-y-auto min-h-0 max-h-[calc(100vh-20rem)] divide-y divide-[var(--color-border)]/60">
               {details.length > 0 ? (
-                <ul className="divide-y divide-[var(--color-border)]">
-                  {details.map((row) => (
-                    <li key={row.fdID} className="px-4 py-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex flex-col items-start gap-1">
-                          <p className="text-sm font-semibold text-[var(--color-primary)] leading-snug break-words">
+                <>
+                  {/* MOBILE CARDS VIEW (< sm) */}
+                  <div className="sm:hidden divide-y divide-[var(--color-border)]/60">
+                    {details.map((row) => (
+                      <div key={row.fdID} className="p-3 space-y-2 hover:bg-[var(--color-neutral)]/30 transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-[var(--color-primary)] text-xs leading-snug flex-1" title={row.fdItemName}>
                             {row.fdItemName}
                           </p>
-                          {row.fdComodity && (
-                            <Badge variant="default" className="text-[10px] px-1.5 py-0 font-medium">
-                              {row.fdComodity}
-                            </Badge>
-                          )}
+                          <div className="text-right font-mono font-bold text-xs text-[var(--color-primary)] shrink-0">
+                            <CurrencyValue value={row.fdTotal} currency={row.fdCurr} />
+                          </div>
                         </div>
-                        <p className="shrink-0 min-w-[9rem] text-right text-sm font-bold text-[var(--color-tertiary)]">
-                          <CurrencyValue value={row.fdTotal} currency={row.fdCurr} />
-                        </p>
+
+                        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--color-secondary)]">
+                          <span className="flex items-center gap-1 font-sans">
+                            <span className="font-semibold text-[var(--color-primary)] font-mono">
+                              {formatQtyDecimal(row.fdQty, row.fdListCode, row.fdItemName)}
+                            </span>
+                            {row.fdListCode && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-[var(--color-neutral)] border border-[var(--color-border)]">
+                                {row.fdListCode.trim()}
+                              </span>
+                            )}
+                          </span>
+                          <span>@ {formatWithCurrency(row.fdItemPrice, row.fdCurr)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1 pt-1 border-t border-[var(--color-border)]/40 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {row.fdComodity && (
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] font-medium truncate max-w-[150px]">
+                                {row.fdComodity}
+                              </span>
+                            )}
+                          </div>
+                          <ItemPriceBadge row={row} validationData={validationData} />
+                        </div>
                       </div>
-                      <div className="mt-1.5 flex items-center gap-1 text-xs text-[var(--color-secondary)] tabular-nums">
-                        {(Number(row.fdQty || 0) !== 0 || row.fdListCode) && (
-                          <>
-                            <span>{formatQtyDecimal(row.fdQty, row.fdListCode, row.fdItemName)} ×</span>
-                          </>
-                        )}
-                        <span>{formatWithCurrency(row.fdItemPrice, row.fdCurr)}</span>
-                        {row.fdListCode && (
-                          <>
-                            <span className="text-[var(--color-border)]">•</span>
-                            <span>{row.fdListCode}</span>
-                          </>
-                        )}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                    ))}
+                  </div>
+
+                  {/* DESKTOP / TABLET SPREADSHEET TABLE (>= sm) */}
+                  <table className="hidden sm:table w-full table-fixed text-left text-xs">
+                    <colgroup>
+                      <col style={{ width: '52%' }} />
+                      <col style={{ width: '18%' }} />
+                      <col style={{ width: '30%' }} />
+                    </colgroup>
+                    <thead className="bg-[var(--color-neutral)]/80 sticky top-0 z-10 text-[10px] uppercase font-bold text-[var(--color-secondary)] border-b border-[var(--color-border)]">
+                      <tr>
+                        <th className="px-3.5 py-2">Deskripsi / Komoditas</th>
+                        <th className="px-3 py-2 text-right">Qty</th>
+                        <th className="px-3.5 py-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--color-border)]/60">
+                      {details.map((row) => (
+                        <tr key={row.fdID} className="hover:bg-[var(--color-neutral)]/30 transition-colors">
+                          <td className="px-3.5 py-2.5 leading-snug">
+                            <p className="font-semibold text-[var(--color-primary)] text-xs line-clamp-2" title={row.fdItemName}>
+                              {row.fdItemName}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              {row.fdComodity && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] font-medium truncate max-w-[130px]">
+                                  {row.fdComodity}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-[var(--color-secondary)] font-mono">
+                                @ {formatWithCurrency(row.fdItemPrice, row.fdCurr)}
+                              </span>
+                              <ItemPriceBadge row={row} validationData={validationData} />
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono font-medium text-[var(--color-primary)]">
+                            {formatQtyDecimal(row.fdQty, row.fdListCode, row.fdItemName)}
+                            {row.fdListCode && (
+                              <span className="text-[9px] text-[var(--color-secondary)] block font-sans">
+                                {row.fdListCode.trim()}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3.5 py-2.5 text-right font-mono font-bold text-[var(--color-primary)]">
+                            <CurrencyValue value={row.fdTotal} currency={row.fdCurr} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               ) : (
-                <div className="px-4 py-8 text-center text-sm text-[var(--color-secondary)]">
+                <div className="py-10 text-center text-xs text-[var(--color-secondary)]">
                   {t('billing.detail.noItems')}
                 </div>
               )}
             </div>
 
-            {/* Footer ringkasan */}
-            <div className="border-t border-[var(--color-border)] bg-[var(--color-neutral)] px-4 py-4 sm:px-6 sm:py-5">
-              <div className="ml-auto flex w-full flex-col gap-2.5 sm:w-[28rem]">
+            {/* Sticky Footer: Totals */}
+            <div className="p-3 sm:p-3.5 bg-[var(--color-neutral)]/70 border-t border-[var(--color-border)] flex items-center justify-between gap-3 shrink-0 flex-wrap">
+              <div className="flex items-center gap-2 text-xs flex-wrap">
                 {Object.entries(unitTotals).map(([unit, qty]) => (
-                  <div key={unit} className="flex items-center justify-between gap-3">
-                    <span className="text-[11px] sm:text-xs font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">
-                      {t('billing.detail.total')} {unit}
-                    </span>
-                    <span className="text-sm sm:text-base font-semibold text-[var(--color-primary)] tabular-nums">
-                      {formatQtyDecimal(qty, unit)} {unit}
-                    </span>
-                  </div>
+                  <span key={unit} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--color-surface)] border border-[var(--color-border)] font-semibold text-xs text-[var(--color-primary)] shadow-2xs">
+                    <span className="text-[var(--color-secondary)] font-normal">{unit}:</span>
+                    <span>{formatQtyDecimal(qty, unit)}</span>
+                  </span>
                 ))}
-                <div
-                  className={`flex items-baseline justify-between gap-4 ${Object.keys(unitTotals).length > 0 ? 'mt-1 pt-3 border-t border-[var(--color-border)]' : ''
-                    }`}
-                >
-                  <span className="shrink-0 text-xs sm:text-sm font-bold font-[var(--font-label)] uppercase tracking-widest text-[var(--color-secondary)]">
-                    {t('billing.detail.totalAmount')}
-                  </span>
-                  <span className="text-right text-lg sm:text-xl md:text-2xl font-bold font-[var(--font-display)] text-[var(--color-tertiary)] tracking-tight whitespace-nowrap">
-                    {Number(data.fdJumlah2 || 0) > 0 ? (
-                      formatWithCurrency(data.fdJumlah2, data.fdCurr1)
-                    ) : (
-                      formatWithCurrency(data.fdJumlah1, 'Rp.')
-                    )}
-                  </span>
-                </div>
+              </div>
+              <div className="flex items-baseline gap-2 ml-auto">
+                <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] tracking-wider">Total:</span>
+                <span className="font-mono font-bold text-base sm:text-lg text-[var(--color-tertiary)]">
+                  {Number(data.fdJumlah2 || 0) > 0
+                    ? formatWithCurrency(data.fdJumlah2, data.fdCurr1)
+                    : formatWithCurrency(data.fdJumlah1, 'Rp.')}
+                </span>
               </div>
             </div>
           </div>
         </div>
 
-      {/* Floating Action Button (hanya icon, sticky di tengah kanan layar) */}
+        {/* ── Kolom Kanan: Mesin Validasi ── */}
+        <div className={cn(
+          "lg:col-span-7 xl:col-span-7 2xl:col-span-7 flex flex-col min-h-0 h-auto lg:h-full lg:overflow-hidden",
+          mobileTab !== 'validation' && "hidden lg:flex"
+        )}>
+          {primaryListCode && (
+            <BillingValidationCard
+              listCode={primaryListCode}
+              billedM3={billedM3}
+              billedKg={billedKg}
+              billedVfc={billedVfc}
+              invoiceDetails={details}
+              billFdTypeComodity={data.fdTypeComodity}
+              billType={billType}
+              markingCode={data.fdMarkingCode}
+              markingNo={data.fdMarkingNo}
+              invoiceNo={data.fdInvNo}
+              customerName={data.customer?.fdCustName}
+              custCode={data.fdCustCode}
+              onOpenSummaryModal={() => setIsSummaryModalOpen(true)}
+              onOpenAuditModal={() => setIsAuditModalOpen(true)}
+            />
+          )}
+        </div>
+      </div>
+
+      {/* ─── FAB: Drawer Pencarian Invoice ─── */}
       {createPortal(
         <button
           onClick={() => setIsListDrawerOpen(true)}
-          className="fixed right-4 top-1/2 -translate-y-1/2 z-50 p-3.5 rounded-full bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xl hover:opacity-90 hover:scale-110 active:scale-95 transition-all cursor-pointer flex items-center justify-center border-2 border-[var(--color-surface)]"
+          className="fixed right-3 bottom-6 z-40 p-3 rounded-full bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xl hover:opacity-90 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center border-2 border-[var(--color-surface)]"
           title={`${t('billing.validation.selectInvoiceTitle')} (Ctrl + F)`}
         >
-          <ListFilter className="w-5 h-5 text-[var(--color-on-primary)] transition-transform" />
+          <ListFilter className="w-4 h-4 text-[var(--color-on-primary)]" />
         </button>,
         document.body
       )}
 
+      {/* ─── MODALS ─── */}
       <ValidationListDrawer
         isOpen={isListDrawerOpen}
         onClose={() => setIsListDrawerOpen(false)}
         currentInvNo={data.fdInvNo}
         onSelectInvoice={(invNo) => navigate(ROUTES.BILLING_VALIDATION_DETAIL(invNo))}
       />
+
+      <BillingValidationSummaryModal
+        isOpen={isSummaryModalOpen}
+        onClose={() => setIsSummaryModalOpen(false)}
+        billingData={data}
+        validationData={validationData}
+        isLoadingValidation={isLoadingValidation}
+        billedM3={billedM3}
+        billedKg={billedKg}
+        billedVfc={billedVfc}
+        onOpenIssueModal={() => setIsIssueModalOpen(true)}
+      />
+
+      <CustomerBillingHistoryModal
+        isOpen={isHistoryModalOpen}
+        custCode={data.fdCustCode}
+        custName={data.customer?.fdCustName}
+        onClose={() => setIsHistoryModalOpen(false)}
+      />
+
+      <IssueInvoiceModal
+        isOpen={isIssueModalOpen}
+        onClose={() => setIsIssueModalOpen(false)}
+        invNo={data.fdInvNo}
+        custName={data.customer?.fdCustName || data.fdCustCode || undefined}
+        custCode={data.fdCustCode || undefined}
+        invDate={data.fdInvDate}
+        totalAmount={Number(data.fdJumlah2 || data.fdJumlah1 || 0)}
+        underchargedItems={underchargedItems}
+      />
+
+      <BillResiMarkingModal
+        isOpen={isResiModalOpen}
+        onClose={() => setIsResiModalOpen(false)}
+        invNo={data.fdInvNo}
+        custName={data.customer?.fdCustName || data.fdCustCode || undefined}
+        custCode={data.fdCustCode || undefined}
+        markingCode={data.fdMarkingCode || undefined}
+        markingNo={data.fdMarkingNo || undefined}
+      />
+
+      <CustomerTariffAuditModal
+        isOpen={isAuditModalOpen}
+        custCode={data.fdCustCode || null}
+        custName={data.customer?.fdCustName || data.fdCustCode || undefined}
+        onClose={() => setIsAuditModalOpen(false)}
+      />
+
+      <EditBillingDetailsModal
+        isOpen={isEditItemsModalOpen}
+        onClose={() => setIsEditItemsModalOpen(false)}
+        invNo={data.fdInvNo}
+        custName={data.customer?.fdCustName || data.fdCustCode || undefined}
+        custCode={data.fdCustCode || undefined}
+        markingCode={data.fdMarkingCode || undefined}
+        initialDetails={details}
+        isPaid={data.isPaid}
+        paymentStatus={data.paymentStatus}
+        onSuccess={() => {
+          queryClient.invalidateQueries({ queryKey: ['billingDetail', id] })
+          queryClient.invalidateQueries({ queryKey: ['m3-check'] })
+        }}
+      />
     </div>
   )
 }
+
+export default ValidationDetailPage

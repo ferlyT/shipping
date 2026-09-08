@@ -2,6 +2,9 @@ import { prisma } from '../../config/database'
 import { Prisma } from '@prisma/client'
 import { buildPagination, parsePagination } from '../../utils/pagination'
 
+// Re-export types
+export * from './deliveryOrders.types'
+
 const MIN_LOAD_DATE = new Date('2019-01-01T00:00:00.000Z')
 
 export async function getDeliveryOrders(query: Record<string, string | undefined>) {
@@ -28,6 +31,8 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
           { fdDescr: { contains: search } },
           { fdCustCode: { contains: search } },
           { fdCustNameSJ: { contains: search } },
+          { fdSupir: { contains: search } },
+          { fdCarID: { contains: search } },
         ],
       },
     ]
@@ -48,6 +53,7 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
         fdSupir: true,
         fdCarID: true,
         fdJmlPackSJ: true,
+        fdJmlBeratSJ: true,
       },
     }),
     prisma.tbDelivery.count({ where }),
@@ -64,8 +70,14 @@ export async function getDeliveryOrderById(id: string) {
 
 export async function getDeliveryOrdersKPIs(query: Record<string, string | undefined>) {
   const search = query.search?.trim()
+  
+  const now = new Date()
+  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
+  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+
   const baseWhere: Prisma.TbDeliveryWhereInput = {
-    fdSJDate: { gte: MIN_LOAD_DATE },
+    fdSJDate: { gte: startOfLastMonth },
   }
 
   const where: Prisma.TbDeliveryWhereInput = search
@@ -76,13 +88,11 @@ export async function getDeliveryOrdersKPIs(query: Record<string, string | undef
           { fdDescr: { contains: search } },
           { fdCustCode: { contains: search } },
           { fdCustNameSJ: { contains: search } },
+          { fdSupir: { contains: search } },
+          { fdCarID: { contains: search } },
         ],
       }
     : baseWhere
-
-  const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
 
   const [totalSJ, totalAgg, sjBulanIni] = await Promise.all([
     prisma.tbDelivery.count({ where }),
@@ -115,7 +125,7 @@ export async function getDeliveryGroupedByListCode(query: Record<string, string 
   const branch = query.branch?.trim()
   const listType = query.listType === '2' ? 2 : 1
 
-  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) > '2018-12-31 23:59:59')`
+  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) >= ${MIN_LOAD_DATE})`
   if (markingCode) {
     searchCondition = Prisma.sql`${searchCondition} AND el.fdMarkingCode = ${markingCode}`
   }
@@ -149,28 +159,28 @@ export async function getDeliveryGroupedByListCode(query: Record<string, string 
       FROM (
         SELECT el.fdListCode, el.fdMarkingCode, el.fdJmlPAck, c.fdCustName, el.fdTrackingNo, el.fdComodity,
                tm.fdBranchCode AS fdBranchCode, cb.fdBranchName AS fdBranchName
-        FROM tbEntryList el
-        LEFT JOIN tbCustomers c ON c.fdCustCode = el.fdCustCode
-        LEFT JOIN tbDelivery d ON d.fdListCode = el.fdListCode
-        LEFT JOIN tbMarking tm ON tm.fdMarkingCode = el.fdMarkingCode
-        LEFT JOIN tbCabang cb ON cb.fdBranchCode = tm.fdBranchCode
+        FROM tbEntryList el WITH (NOLOCK)
+        LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+        LEFT JOIN tbDelivery d WITH (NOLOCK) ON d.fdListCode = el.fdListCode
+        LEFT JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
+        LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = tm.fdBranchCode
         ${searchCondition}
         GROUP BY el.fdListCode, el.fdMarkingCode, el.fdJmlPAck, c.fdCustName, el.fdTrackingNo, el.fdComodity, tm.fdBranchCode, cb.fdBranchName
         ${havingClause}
         ORDER BY el.fdListCode DESC
         OFFSET ${skip} ROWS FETCH NEXT ${take} ROWS ONLY
       ) el
-      LEFT JOIN tbDelivery d ON d.fdListCode = el.fdListCode
+      LEFT JOIN tbDelivery d WITH (NOLOCK) ON d.fdListCode = el.fdListCode
       GROUP BY el.fdListCode, el.fdMarkingCode, el.fdJmlPAck, el.fdCustName, el.fdTrackingNo, el.fdComodity, el.fdBranchCode, el.fdBranchName
       ORDER BY el.fdListCode DESC
     `,
     prisma.$queryRaw`
       SELECT COUNT(*) as count FROM (
         SELECT el.fdListCode
-        FROM tbEntryList el
-        LEFT JOIN tbCustomers c ON c.fdCustCode = el.fdCustCode
-        LEFT JOIN tbDelivery d ON d.fdListCode = el.fdListCode
-        LEFT JOIN tbMarking tm ON tm.fdMarkingCode = el.fdMarkingCode
+        FROM tbEntryList el WITH (NOLOCK)
+        LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+        LEFT JOIN tbDelivery d WITH (NOLOCK) ON d.fdListCode = el.fdListCode
+        LEFT JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
         ${searchCondition}
         GROUP BY el.fdListCode
         ${havingClause}
@@ -198,7 +208,7 @@ export async function getDeliveryMarkingCodeGroups(query: Record<string, string 
   const search = query.search?.trim()
   const listType = query.listType === '2' ? 2 : 1
 
-  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) > '2018-12-31 23:59:59')`
+  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) >= ${MIN_LOAD_DATE})`
   if (search) {
     searchCondition = Prisma.sql`${searchCondition} AND (el.fdListCode LIKE ${'%' + search + '%'} OR el.fdMarkingCode LIKE ${'%' + search + '%'} OR c.fdCustName LIKE ${'%' + search + '%'})`
   }
@@ -213,10 +223,10 @@ export async function getDeliveryMarkingCodeGroups(query: Record<string, string 
     SELECT t.markingCode AS markingCode, COUNT(*) AS total
     FROM (
       SELECT el.fdMarkingCode AS markingCode, el.fdListCode
-      FROM tbEntryList el
-      LEFT JOIN tbCustomers c ON c.fdCustCode = el.fdCustCode
-      LEFT JOIN tbDelivery d ON d.fdListCode = el.fdListCode
-      LEFT JOIN tbMarking tm ON tm.fdMarkingCode = el.fdMarkingCode
+      FROM tbEntryList el WITH (NOLOCK)
+      LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+      LEFT JOIN tbDelivery d WITH (NOLOCK) ON d.fdListCode = el.fdListCode
+      LEFT JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
       ${searchCondition}
       GROUP BY el.fdMarkingCode, el.fdListCode
       ${havingClause}
@@ -237,7 +247,7 @@ export async function getDeliveryBranchGroups(query: Record<string, string | und
   const search = query.search?.trim()
   const listType = query.listType === '2' ? 2 : 1
 
-  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) > '2018-12-31 23:59:59')`
+  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) >= ${MIN_LOAD_DATE})`
   if (search) {
     searchCondition = Prisma.sql`${searchCondition} AND (el.fdListCode LIKE ${'%' + search + '%'} OR el.fdMarkingCode LIKE ${'%' + search + '%'} OR c.fdCustName LIKE ${'%' + search + '%'})`
   }
@@ -252,11 +262,11 @@ export async function getDeliveryBranchGroups(query: Record<string, string | und
     SELECT t.branchCode AS branchCode, MAX(t.branchName) AS branchName, COUNT(*) AS total
     FROM (
       SELECT el.fdListCode, tm.fdBranchCode AS branchCode, cb.fdBranchName AS branchName
-      FROM tbEntryList el
-      LEFT JOIN tbCustomers c ON c.fdCustCode = el.fdCustCode
-      LEFT JOIN tbDelivery d ON d.fdListCode = el.fdListCode
-      LEFT JOIN tbMarking tm ON tm.fdMarkingCode = el.fdMarkingCode
-      LEFT JOIN tbCabang cb ON cb.fdBranchCode = tm.fdBranchCode
+      FROM tbEntryList el WITH (NOLOCK)
+      LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+      LEFT JOIN tbDelivery d WITH (NOLOCK) ON d.fdListCode = el.fdListCode
+      LEFT JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
+      LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = tm.fdBranchCode
       ${searchCondition}
       GROUP BY el.fdListCode, tm.fdBranchCode, cb.fdBranchName
       ${havingClause}

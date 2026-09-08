@@ -62,17 +62,17 @@ export function BatchRow({
         <td className="py-4 px-4">
           <div className="flex flex-col gap-0.5">
             <p className="text-sm font-medium tabular-nums text-[var(--color-primary)] leading-tight">
-              {Number(row.totalQty || 0).toLocaleString('id-ID')} pkgs
+              {Number(row.totalQty || 0).toLocaleString('en-US')} pkgs
             </p>
             <p className="text-xs tabular-nums text-[var(--color-secondary)]">
-              {Number(row.totalTerkirim || 0).toLocaleString('id-ID')} delivered
+              {Number(row.totalTerkirim || 0).toLocaleString('en-US')} delivered
             </p>
           </div>
         </td>
         <td className="py-4 px-4 tabular-nums">
           {Number(row.sisa || 0) > 0 ? (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-transparent text-rose-500 border border-rose-500/40">
-              {Number(row.sisa || 0).toLocaleString('id-ID')} left
+              {Number(row.sisa || 0).toLocaleString('en-US')} left
             </span>
           ) : (
             <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-transparent text-emerald-500 border border-emerald-500/40">

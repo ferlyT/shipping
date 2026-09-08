@@ -8,7 +8,6 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { Table } from '@/components/ui/Table'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { formatWithCurrency } from '@/components/ui/CurrencyValue'
 import { AgingBadge } from '../components/AgingBadge'
 import { BillingStatusTag } from '../components/BillingStatusTag'
@@ -18,43 +17,16 @@ import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { useToastStore } from '@/stores/toastStore'
+import type { Billing } from '../types/billing.types'
+import { getAgingDays } from '../utils/billing.utils'
 
-interface Billing {
-  fdInvNo: string
-  fdInvDate: string
-  fdListType: number | null
-  fdCustCode: string | null
-  fdMarkingCode: string | null
-  fdMarkingNo: string | null
-  fdDescr: string
-  fdJumlah1: number | null
-  fdJumlah2?: number | null
-  fdCurr1: string | null
-  fdTypeBilling: number | null
-  fdGive: number | null
-  fdGive2: number | null
-  fdCekDate: string | null
-  customer?: { fdCustName: string | null; fdBlocked?: number | null } | null
-  employee?: { fdEmpName: string | null } | null
-}
+import { BILL_TYPE_CONFIGS, getBillType } from '../constants/billing.constants'
 
 const LIST_TYPE_FILTERS: { value: 'all' | 1 | 2; label: string; icon: typeof LayoutGrid; accent: string }[] = [
   { value: 'all', label: 'Semua', icon: LayoutGrid, accent: '' },
   { value: 1, label: 'Udara', icon: Plane, accent: 'text-amber-600' },
   { value: 2, label: 'Laut', icon: Ship, accent: 'text-blue-600' },
 ]
-
-function getAgingDays(invDateStr?: string | null): number {
-  if (!invDateStr) return 0
-  const invDate = new Date(invDateStr)
-  if (isNaN(invDate.getTime())) return 0
-  const today = new Date()
-  invDate.setHours(0, 0, 0, 0)
-  today.setHours(0, 0, 0, 0)
-  const diffTime = today.getTime() - invDate.getTime()
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
-  return diffDays > 0 ? diffDays : 0
-}
 
 export function ValidationListPage() {
   const { t } = useTranslation()
@@ -123,9 +95,9 @@ export function ValidationListPage() {
     return Array.from(map.entries()).map(([author, count]) => ({ author, count }))
   }, [activeDraftBillings])
 
-  // 3. Final Filtered Billings (applied listType + author filter, sorted by oldest invoice date first)
+  // 3. Final Filtered Billings (applied listType + author filter + instant search, sorted by oldest invoice date first)
   const filteredBillings = useMemo(() => {
-    const list = activeDraftBillings.filter((b: Billing) => {
+    let list = activeDraftBillings.filter((b: Billing) => {
       if (listTypeFilter !== 'all' && Number(b.fdListType) !== Number(listTypeFilter)) {
         return false
       }
@@ -136,33 +108,65 @@ export function ValidationListPage() {
       return true
     })
 
+    const q = search.trim().toLowerCase()
+    if (q) {
+      list = list.filter((b: Billing) => {
+        const invNo = (b.fdInvNo || '').toLowerCase()
+        const custCode = (b.fdCustCode || '').toLowerCase()
+        const custName = (b.customer?.fdCustName || '').toLowerCase()
+        const markingCode = (b.fdMarkingCode || '').toLowerCase()
+        const markingNo = (b.fdMarkingNo || '').toLowerCase()
+        const author = (b.employee?.fdEmpName || '').toLowerCase()
+        const descr = (b.fdDescr || '').toLowerCase()
+        const consignee = (b.fdConsignee || '').toLowerCase()
+
+        return (
+          invNo.includes(q) ||
+          custCode.includes(q) ||
+          custName.includes(q) ||
+          markingCode.includes(q) ||
+          markingNo.includes(q) ||
+          author.includes(q) ||
+          descr.includes(q) ||
+          consignee.includes(q)
+        )
+      })
+    }
+
     return list.sort((a: Billing, b: Billing) => {
       const timeA = a.fdInvDate ? new Date(a.fdInvDate).getTime() : 0
       const timeB = b.fdInvDate ? new Date(b.fdInvDate).getTime() : 0
       return timeA - timeB
     })
-  }, [activeDraftBillings, listTypeFilter, authorFilter])
+  }, [activeDraftBillings, listTypeFilter, authorFilter, search])
 
   const isInitialLoading = isListLoading && billingsData.length === 0
   const isRefreshing = (isListLoading || isFetching) && billingsData.length > 0
-
-  if (isInitialLoading) return <LoadingSpinner message={t('common.loadingBilling')} />
 
   const columns = [
     {
       key: 'fdInvNo',
       header: t('billing.invNo'),
       className: 'w-[14%]',
-      render: (row: Billing) => (
-        <div className="py-0.5">
-          <div className="font-semibold text-[var(--color-primary)] font-[var(--font-body)] leading-snug">
-            {row.fdInvNo}
+      render: (row: Billing) => {
+        const bType = getBillType(row)
+        const bCfg = BILL_TYPE_CONFIGS[bType]
+        return (
+          <div className="py-0.5 space-y-1">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="font-semibold text-[var(--color-primary)] font-[var(--font-body)] leading-snug">
+                {row.fdInvNo}
+              </span>
+              <span className={`text-[9px] px-1.5 py-0 font-bold rounded border ${bCfg.badgeClasses}`}>
+                {bCfg.shortLabel}
+              </span>
+            </div>
+            <div className="text-[11px] text-[var(--color-secondary)] font-normal">
+              {formatDate(row.fdInvDate)}
+            </div>
           </div>
-          <div className="text-[11px] text-[var(--color-secondary)] font-normal">
-            {formatDate(row.fdInvDate)}
-          </div>
-        </div>
-      ),
+        )
+      },
     },
     {
       key: 'aging',
@@ -208,9 +212,16 @@ export function ValidationListPage() {
       header: t('billing.marking'),
       className: 'w-[15%]',
       render: (row: Billing) => (
-        <div className="py-0.5 text-xs text-[var(--color-primary)] font-medium">
-          {row.fdMarkingCode || '—'}
-          {row.fdMarkingNo && <span className="text-[var(--color-secondary)] font-normal"> ({row.fdMarkingNo})</span>}
+        <div className="py-0.5 space-y-0.5">
+          <div className="text-xs text-[var(--color-primary)] font-medium">
+            {row.fdMarkingCode || '—'}
+            {row.fdMarkingNo && <span className="text-[var(--color-secondary)] font-normal"> ({row.fdMarkingNo})</span>}
+          </div>
+          {row.fdConsignee && (
+            <div className="text-[11px] text-[var(--color-secondary)] font-normal truncate max-w-[190px]" title={row.fdConsignee}>
+              <span className="font-semibold text-[10px] uppercase text-[var(--color-secondary)]/80">{t('billing.consignee')}:</span> {row.fdConsignee}
+            </div>
+          )}
         </div>
       ),
     },
@@ -325,18 +336,18 @@ export function ValidationListPage() {
 
         {/* Group Pills by Created By (Author Filter) */}
         {availableAuthors.length > 0 && (
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 scrollbar-thin">
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
             <span className="text-xs font-bold font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)] shrink-0 mr-1 flex items-center gap-1">
-              <User className="w-3.5 h-3.5" /> Created By:
+              <User className="w-3.5 h-3.5" /> PIC:
             </span>
 
             <button
               onClick={() => {
                 setAuthorFilter('all')
               }}
-              className={`px-3 py-1 rounded-full text-xs font-semibold font-[var(--font-label)] transition-all whitespace-nowrap border cursor-pointer ${
+              className={`px-3 py-1 rounded-full text-xs font-semibold font-[var(--font-label)] transition-all whitespace-nowrap border shrink-0 cursor-pointer ${
                 authorFilter === 'all'
-                  ? 'bg-transparent border-[var(--color-primary)] text-[var(--color-primary)] shadow-xs'
+                  ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs font-bold'
                   : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
               }`}
             >
@@ -351,14 +362,14 @@ export function ValidationListPage() {
                   onClick={() => {
                     setAuthorFilter(author)
                   }}
-                  className={`px-3 py-1 rounded-full text-xs font-semibold font-[var(--font-label)] transition-all whitespace-nowrap flex items-center gap-1 border cursor-pointer ${
+                  className={`px-3 py-1 rounded-full text-xs font-semibold font-[var(--font-label)] transition-all whitespace-nowrap flex items-center gap-1 border shrink-0 cursor-pointer ${
                     isActive
-                      ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                      ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs font-bold'
                       : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]'
                   }`}
                 >
                   <span>{author}</span>
-                  <span className={`text-[10px] ${isActive ? 'text-[var(--color-tertiary)]' : 'text-[var(--color-secondary)]'}`}>
+                  <span className={`text-[10px] ${isActive ? 'text-[var(--color-tertiary)] font-bold' : 'text-[var(--color-secondary)]'}`}>
                     ({count})
                   </span>
                 </button>
@@ -381,7 +392,7 @@ export function ValidationListPage() {
           <button
             type="button"
             onClick={() => setShowMobilePanel(true)}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold font-[var(--font-label)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm active:scale-95 transition-all shrink-0"
+            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold font-[var(--font-label)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] shadow-sm active:scale-95 transition-all shrink-0 cursor-pointer"
           >
             <SlidersHorizontal className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
             <span>{t('common.filter')}</span>
@@ -398,22 +409,23 @@ export function ValidationListPage() {
 
       {/* Mobile Drawer */}
       {showMobilePanel && (
-        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/50 sm:hidden">
-          <div className="bg-[var(--color-surface)] rounded-t-2xl p-4 space-y-4 animate-slideUp">
+        <div className="fixed inset-0 z-50 flex flex-col justify-end bg-black/60 backdrop-blur-xs sm:hidden animate-in fade-in duration-200">
+          <div className="bg-[var(--color-surface)] rounded-t-2xl p-4 space-y-4 max-h-[85vh] overflow-y-auto animate-in slide-in-from-bottom duration-200 border-t border-[var(--color-border)]">
             <div className="flex items-center justify-between border-b border-[var(--color-border)] pb-3">
               <h3 className="text-sm font-bold font-[var(--font-label)] uppercase text-[var(--color-primary)]">
                 {t('common.filter')}
               </h3>
               <button
                 onClick={() => setShowMobilePanel(false)}
-                className="text-xs font-semibold text-[var(--color-secondary)]"
+                className="text-xs font-semibold text-[var(--color-secondary)] hover:text-[var(--color-primary)] p-1 rounded-md"
               >
                 {t('common.close')}
               </button>
             </div>
 
+            {/* Moda Filter in Drawer */}
             <div className="space-y-2">
-              <label className="text-xs font-semibold text-[var(--color-secondary)] uppercase">
+              <label className="text-xs font-semibold text-[var(--color-secondary)] uppercase tracking-wide">
                 {t('billing.filterMode')}
               </label>
               <div className="grid grid-cols-3 gap-2">
@@ -422,11 +434,10 @@ export function ValidationListPage() {
                     key={String(tf.value)}
                     onClick={() => {
                       setListTypeFilter(tf.value)
-                      setShowMobilePanel(false)
                     }}
-                    className={`py-2 px-3 rounded-[var(--radius-md)] text-xs font-semibold border ${
+                    className={`py-2 px-3 rounded-[var(--radius-md)] text-xs font-semibold border transition-all cursor-pointer ${
                       listTypeFilter === tf.value
-                        ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] border-[var(--color-primary)]'
+                        ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-2xs font-bold'
                         : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)]'
                     }`}
                   >
@@ -434,6 +445,62 @@ export function ValidationListPage() {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Author / PIC in Drawer */}
+            {availableAuthors.length > 0 && (
+              <div className="space-y-2">
+                <label className="text-xs font-semibold text-[var(--color-secondary)] uppercase tracking-wide">
+                  PIC / Dibuat Oleh
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    onClick={() => setAuthorFilter('all')}
+                    className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                      authorFilter === 'all'
+                        ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] font-bold'
+                        : 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border-[var(--color-border)]'
+                    }`}
+                  >
+                    Semua ({activeDraftBillings.length})
+                  </button>
+                  {availableAuthors.map(({ author, count }) => (
+                    <button
+                      key={author}
+                      onClick={() => setAuthorFilter(author)}
+                      className={`py-1.5 px-3 rounded-lg text-xs font-semibold border transition-all cursor-pointer ${
+                        authorFilter === author
+                          ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] font-bold'
+                          : 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border-[var(--color-border)]'
+                      }`}
+                    >
+                      {author} ({count})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-[var(--color-border)] flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setListTypeFilter('all')
+                  setAuthorFilter('all')
+                  setSearch('')
+                  setShowMobilePanel(false)
+                }}
+                className="w-1/2 py-2 text-xs font-semibold text-[var(--color-secondary)] bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-xl"
+              >
+                Reset
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowMobilePanel(false)}
+                className="w-1/2 py-2 text-xs font-bold text-[var(--color-on-primary)] bg-[var(--color-primary)] rounded-xl"
+              >
+                Terapkan
+              </button>
             </div>
           </div>
         </div>
@@ -444,6 +511,7 @@ export function ValidationListPage() {
         <Table<Billing>
           columns={columns}
           data={filteredBillings}
+          isLoading={isInitialLoading}
           keyExtractor={(row) => row.fdInvNo}
           onRowClick={(row) => navigate(ROUTES.BILLING_VALIDATION_DETAIL(row.fdInvNo))}
           emptyMessage={t('billing.noBillingData')}
@@ -452,11 +520,39 @@ export function ValidationListPage() {
 
       {/* Mobile Card List */}
       <div className="sm:hidden space-y-2.5">
-        {filteredBillings.length > 0 ? (
+        {isInitialLoading ? (
+          Array.from({ length: 5 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-3.5 shadow-sm space-y-2.5"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="space-y-1.5 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-4 w-28 rounded skeleton-shimmer" />
+                    <div className="h-4 w-12 rounded skeleton-shimmer" />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="h-3 w-20 rounded skeleton-shimmer" />
+                    <div className="h-3.5 w-12 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+                <div className="h-5 w-20 rounded-full skeleton-shimmer" />
+              </div>
+
+              <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-2">
+                <div className="h-4 w-36 rounded skeleton-shimmer" />
+                <div className="h-4 w-24 rounded skeleton-shimmer" />
+              </div>
+            </div>
+          ))
+        ) : filteredBillings.length > 0 ? (
           filteredBillings.map((b: Billing) => {
             const custName = b.customer?.fdCustName || b.fdCustCode || '—'
             const custStatus = b.customer?.fdBlocked ?? 0
             const badgeCfg = statusConfig[custStatus as keyof typeof statusConfig] || statusConfig[0]
+            const bType = getBillType(b)
+            const bCfg = BILL_TYPE_CONFIGS[bType]
 
             return (
               <div
@@ -466,9 +562,14 @@ export function ValidationListPage() {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <span className="text-xs font-bold font-[var(--font-label)] text-[var(--color-primary)]">
-                      {b.fdInvNo}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold font-[var(--font-label)] text-[var(--color-primary)]">
+                        {b.fdInvNo}
+                      </span>
+                      <span className={`text-[9px] px-1.5 py-0 font-bold rounded border ${bCfg.badgeClasses}`}>
+                        {bCfg.shortLabel}
+                      </span>
+                    </div>
                     <div className="flex items-center gap-1.5 mt-0.5">
                       <span className="text-[11px] text-[var(--color-secondary)]">{formatDate(b.fdInvDate)}</span>
                       <AgingBadge hari={getAgingDays(b.fdInvDate)} />
@@ -493,6 +594,17 @@ export function ValidationListPage() {
                       formatWithCurrency(b.fdJumlah1, 'Rp.')
                     )}
                   </span>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-[var(--color-secondary)] pt-1 border-t border-[var(--color-border)]/50">
+                  <span className="font-medium text-[var(--color-primary)]">
+                    {b.fdMarkingCode || '—'}{b.fdMarkingNo ? ` (${b.fdMarkingNo})` : ''}
+                  </span>
+                  {b.fdConsignee && (
+                    <span className="text-[var(--color-secondary)] truncate max-w-[180px]" title={b.fdConsignee}>
+                      {t('billing.consignee')}: <span className="font-semibold text-[var(--color-primary)]">{b.fdConsignee}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             )

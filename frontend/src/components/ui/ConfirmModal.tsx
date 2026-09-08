@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useEffect } from 'react'
 import { Button } from './Button'
 import { AlertTriangle, X } from 'lucide-react'
@@ -14,6 +15,7 @@ interface ConfirmModalProps {
 }
 
 export function ConfirmModal({
+
   isOpen,
   title,
   message,
@@ -23,6 +25,7 @@ export function ConfirmModal({
   onCancel,
   isLoading = false
 }: ConfirmModalProps) {
+  useModalEscape(isOpen, onCancel)
   // Prevent body scroll when modal is open
   useEffect(() => {
     if (isOpen) {

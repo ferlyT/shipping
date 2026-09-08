@@ -25,10 +25,10 @@ import type {
 } from '../types/delivery-orders.types'
 
 const kpiTokens = [
-  { key: 'totalSJ' as const, label: 'Total SJ', icon: FileText, accent: 'text-blue-500', chip: 'bg-transparent border border-blue-500/30 text-blue-500' },
-  { key: 'totalPackages' as const, label: 'Total Packages', icon: Package, accent: 'text-emerald-500', chip: 'bg-transparent border border-emerald-500/30 text-emerald-500' },
-  { key: 'totalWeight' as const, label: 'Total Weight', icon: Weight, accent: 'text-purple-500', chip: 'bg-transparent border border-purple-500/30 text-purple-500' },
-  { key: 'sjBulanIni' as const, label: 'Bulan Ini', icon: CalendarClock, accent: 'text-rose-500', chip: 'bg-transparent border border-rose-500/30 text-rose-500' },
+  { key: 'totalSJ' as const, labelKey: 'do.totalSjSinceLastMonth', icon: FileText, accent: 'text-blue-500', chip: 'bg-transparent border border-blue-500/30 text-blue-500' },
+  { key: 'totalPackages' as const, labelKey: 'do.totalPackages', icon: Package, accent: 'text-emerald-500', chip: 'bg-transparent border border-emerald-500/30 text-emerald-500' },
+  { key: 'totalWeight' as const, labelKey: 'do.totalWeight', icon: Weight, accent: 'text-purple-500', chip: 'bg-transparent border border-purple-500/30 text-purple-500' },
+  { key: 'sjBulanIni' as const, labelKey: 'do.thisMonth', icon: CalendarClock, accent: 'text-rose-500', chip: 'bg-transparent border border-rose-500/30 text-rose-500' },
 ]
 
 export default function DeliveryOrdersListPage() {
@@ -204,28 +204,28 @@ export default function DeliveryOrdersListPage() {
       />
 
       {/* KPI strip */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-        {kpiTokens.map(({ key, label, icon: Icon, accent, chip }) => (
-          <div key={key} className="flex flex-col bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 sm:p-6 shadow-xs">
-            <div className={`mb-3 sm:mb-4 flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl ${chip}`}>
-              <Icon className={`h-5 w-5 sm:h-6 sm:w-6 ${accent}`} />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+        {kpiTokens.map(({ key, labelKey, icon: Icon, accent, chip }) => (
+          <div key={key} className="flex flex-col bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-3.5 sm:p-6 shadow-xs">
+            <div className={`mb-2 sm:mb-4 flex h-8 w-8 sm:h-12 sm:w-12 items-center justify-center rounded-xl ${chip}`}>
+              <Icon className={`h-4 w-4 sm:h-6 sm:w-6 ${accent}`} />
             </div>
-            <p className="text-xs sm:text-sm font-semibold text-[var(--color-secondary)]">{label}</p>
+            <p className="text-[11px] sm:text-sm font-semibold text-[var(--color-secondary)]">{t(labelKey)}</p>
             {isLoadingKpi ? (
-              <div className="mt-1 h-7 sm:h-8 w-24 animate-pulse rounded bg-[var(--color-neutral)]" />
+              <div className="mt-1 h-6 sm:h-8 w-20 sm:w-24 rounded-md skeleton-shimmer" />
             ) : (
-              <h3 className="mt-1 text-2xl sm:text-3xl font-bold tabular-nums text-[var(--color-primary)] leading-none font-mono">
-                {Number(kpis?.[key] || 0).toLocaleString('id-ID')}
+              <h3 className="mt-1 text-xl sm:text-3xl font-bold tabular-nums text-[var(--color-primary)] leading-none font-mono">
+                {Number(kpis?.[key] || 0).toLocaleString('en-US')}
               </h3>
             )}
           </div>
         ))}
       </div>
 
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-4 sm:gap-6">
         {/* Toolbar */}
-        <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-4 sm:gap-6 bg-[var(--color-surface)] p-5 sm:p-6 rounded-xl border border-[var(--color-border)] shadow-xs">
-          <div className="flex items-center gap-1.5 p-1 rounded-full bg-[var(--color-surface)] border border-[var(--color-border)]">
+        <div className="flex flex-col xl:flex-row items-start xl:items-center justify-between gap-3 sm:gap-6 bg-[var(--color-surface)] p-3.5 sm:p-5 rounded-xl border border-[var(--color-border)] shadow-xs">
+          <div className="grid grid-cols-2 w-full sm:w-auto sm:flex items-center gap-1 p-1 rounded-xl bg-[var(--color-neutral)] border border-[var(--color-border)]">
             {(['sea', 'air'] as ListType[]).map((tab) => {
               const active = activeTab === tab
               return (
@@ -234,9 +234,9 @@ export default function DeliveryOrdersListPage() {
                   type="button"
                   onClick={() => setActiveTab(tab)}
                   className={cn(
-                    "px-5 py-1.5 text-xs font-bold rounded-full transition-all duration-200 cursor-pointer border",
+                    "px-3 sm:px-5 py-1.5 text-xs font-bold rounded-lg sm:rounded-full transition-all duration-200 cursor-pointer border text-center",
                     active
-                      ? "bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs"
+                      ? "bg-[var(--color-surface)] sm:bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-2xs font-bold"
                       : "border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
                   )}
                 >
@@ -246,7 +246,7 @@ export default function DeliveryOrdersListPage() {
             })}
           </div>
 
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 w-full xl:w-auto">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-4 w-full xl:w-auto">
             <div className="relative w-full sm:w-80">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search className="h-4 w-4 text-[var(--color-secondary)]" />
@@ -256,15 +256,15 @@ export default function DeliveryOrdersListPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('do.searchPlaceholder')}
-                className="block w-full h-10 pl-9 pr-3 py-2 border border-[var(--color-border)] rounded-xl leading-5 bg-[var(--color-surface)] placeholder-[var(--color-secondary)] text-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] text-xs font-medium transition-all duration-200"
+                className="block w-full h-9 sm:h-10 pl-9 pr-3 py-2 border border-[var(--color-border)] rounded-xl leading-5 bg-[var(--color-surface)] placeholder-[var(--color-secondary)] text-[var(--color-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 focus:border-[var(--color-primary)] text-xs font-medium transition-all duration-200"
               />
             </div>
             
-            <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <span className="hidden lg:flex items-center gap-1.5 text-xs font-semibold text-[var(--color-secondary)]">
                 <ListFilter className="h-3.5 w-3.5" /> {t('do.groupBy')}
               </span>
-              <div className="flex flex-1 sm:flex-initial rounded-xl bg-[var(--color-neutral)] p-1 border border-[var(--color-border)] gap-1">
+              <div className="grid grid-cols-3 sm:flex flex-1 sm:flex-initial rounded-xl bg-[var(--color-neutral)] p-1 border border-[var(--color-border)] gap-1 w-full sm:w-auto">
                 {([
                   { key: 'none', label: t('do.groupNone') },
                   { key: 'marking', label: t('do.groupMarking') },
@@ -277,9 +277,9 @@ export default function DeliveryOrdersListPage() {
                       type="button"
                       onClick={() => setGroupMode(opt.key)}
                       className={cn(
-                        "flex-1 sm:flex-initial px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 whitespace-nowrap cursor-pointer border",
+                        "px-2 sm:px-3.5 py-1.5 text-xs font-semibold rounded-lg transition-all duration-200 whitespace-nowrap cursor-pointer border text-center",
                         active
-                          ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                          ? 'bg-[var(--color-surface)] sm:bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-2xs font-bold'
                           : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                       )}
                     >

@@ -7,7 +7,12 @@ import type { LoginInput } from './auth.schema'
 
 export async function loginUser(input: LoginInput) {
   const user = await prisma.tbUsers.findUnique({
-    where: { username: input.username }
+    where: { username: input.username },
+    include: {
+      employee: {
+        select: { fdEmpName: true }
+      }
+    }
   })
 
   if (!user) {
@@ -34,13 +39,16 @@ export async function loginUser(input: LoginInput) {
   const permissionsList = await rolesService.getRolePermissions(user.role)
   const permissions = permissionsList.filter(p => p.canView).map(p => p.path)
 
+  const fdEmpCode = user.fdEmpCode ? user.fdEmpCode.trim() : null
+  const fdEmpName = user.employee?.fdEmpName ? user.employee.fdEmpName.trim() : null
+
   const token = jwt.sign(
-    { userId: user.id, username: user.username, role: user.role, permissions },
+    { userId: user.id, username: user.username, role: user.role, fdEmpCode, fdEmpName, permissions },
     ENV.JWT_SECRET,
     { expiresIn: ENV.JWT_EXPIRES_IN as any }
   )
 
-  logger.info('User login berhasil', { username: input.username })
+  logger.info('User login berhasil', { username: input.username, fdEmpCode })
   
   // Determine default route
   const defaultPermission = permissionsList.find(p => p.isDefault)
@@ -55,6 +63,8 @@ export async function loginUser(input: LoginInput) {
       username: user.username,
       fullName: user.fullName,
       role: user.role,
+      fdEmpCode,
+      fdEmpName,
       avatarUrl: user.avatarUrl,
       permissions,
       defaultRoute,

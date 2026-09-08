@@ -15,6 +15,7 @@ export const ROUTES = {
   SHIPMENT_BATCHES: '/mshipping/logistics/shipment-batches',
   SHIPMENT_BATCHES_LIST: '/mshipping/logistics/shipment-batches/list',
   DELIVERY_ORDERS: '/mshipping/logistics/delivery-orders',
+  DELIVERY_ORDERS_LIST: '/mshipping/logistics/delivery-orders/list',
   DELIVERY_DETAIL: (id: string) => `/mshipping/logistics/delivery-orders/${id}`,
 
   // Finance
@@ -22,6 +23,8 @@ export const ROUTES = {
   BILLING_TARGET: '/mshipping/finance/billing/target',
   BILLING_LIST: '/mshipping/finance/billing/list',
   BILLING_DETAIL: (id: string) => `/mshipping/finance/billing/${id}`,
+  BILLING_VALIDATION_SUMMARY: '/mshipping/finance/billing/validation/summary',
+  BILLING_VALIDATION_DETAIL_PATH: '/mshipping/finance/billing/validation',
   BILLING_VALIDATION_LIST: '/mshipping/finance/billing/validation/list',
   BILLING_VALIDATION_DETAIL: (id: string) => `/mshipping/finance/billing/validation/${id}`,
 
@@ -38,10 +41,14 @@ export const ROUTES = {
   CUSTOMER_PRICE_LIST_UPLOAD: '/mshipping/finance/customer-price-list/upload',
   CUSTOMER_PRICE_LIST_LOOKUP: '/mshipping/finance/customer-price-list/lookup',
 
+  // Commodity Mapping
+  COMMODITY_MAPPING: '/mshipping/finance/commodity-mapping',
+
 
 
   // Master Data
   CUSTOMERS: '/mshipping/master/customers',
+  CUSTOMERS_TIER: '/mshipping/master/customers/tier',
 
   // User & Profile
   PROFILE: '/mshipping/profile',

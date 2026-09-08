@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Upload,
@@ -9,24 +10,35 @@ import {
   ChevronLeft,
   ChevronRight,
   ArrowLeft,
+  Calendar,
+  Tag,
+  Sparkles,
+  Trash2,
 } from 'lucide-react'
+
 import type { CustomerUploadHistory } from '../types'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useCustomerPriceHistory } from '../hooks/useCustomerPriceHistory'
+import { customerPriceListApi } from '../services/customerPriceList.service'
+import { EditEffectiveDateModal } from '@/features/price-list/components/EditEffectiveDateModal'
+import { MarkingManagerModal } from '@/features/price-list/components/MarkingManagerModal'
+import { CustomerCommodityPriceModal } from '../components/CustomerCommodityPriceModal'
+import { toast } from '@/stores/toastStore'
 
-const STATUS_CLASS: Record<CustomerUploadHistory['status'], string> = {
+const STATUS_CLASS: Record<string, string> = {
   PARSED: 'badge bg-emerald-500/10 text-emerald-600 border-emerald-500/25',
   PARTIAL: 'badge bg-amber-500/10 text-amber-600 border-amber-500/25',
   FAILED: 'badge bg-rose-500/10 text-rose-600 border-rose-500/25',
+  DELETED: 'badge bg-gray-500/10 text-gray-500 border-gray-500/25 line-through',
 }
 
-const STATUS_LABEL: Record<CustomerUploadHistory['status'], string> = {
+const STATUS_LABEL: Record<string, string> = {
   PARSED: 'Berhasil',
   PARTIAL: 'Sebagian',
   FAILED: 'Gagal',
+  DELETED: 'Dihapus',
 }
 
 export function HistoryPage() {
@@ -42,9 +54,38 @@ export function HistoryPage() {
     loading,
     error,
     groups,
+    reload,
   } = useCustomerPriceHistory()
 
+  const [editingUpload, setEditingUpload] = useState<CustomerUploadHistory | null>(null)
+  const [selectedUploadForMarking, setSelectedUploadForMarking] = useState<CustomerUploadHistory | null>(null)
+  const [isPriceModalOpen, setIsPriceModalOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+
   const pageSize = 20
+
+  const handleDeleteUpload = async (upload: CustomerUploadHistory) => {
+    const formattedDate = new Date(upload.effectiveDate).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })
+    const isConfirmed = window.confirm(
+      `Yakin ingin menghapus / menonaktifkan riwayat upload:\n"${upload.fileName}" (Mulai berlaku: ${formattedDate})?\n\nRiwayat dan seluruh tarif di dalam upload ini akan dinonaktifkan (Soft Delete).`
+    )
+    if (!isConfirmed) return
+
+    try {
+      setDeletingId(upload.id)
+      await customerPriceListApi.deleteUpload(upload.id)
+      toast.success('Riwayat upload berhasil dinonaktifkan (Soft Delete)')
+      reload()
+    } catch (err: any) {
+      toast.error(err?.response?.data?.message || err?.message || 'Gagal menghapus riwayat upload')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 w-full min-w-0 space-y-6 sm:space-y-8 bg-[var(--color-surface)] font-[var(--font-body)] animate-fadeIn pb-24">
@@ -62,7 +103,22 @@ export function HistoryPage() {
           { label: custCode || 'History' },
         ]}
         actions={
-          <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 shrink-0 flex-wrap">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setIsPriceModalOpen(true)}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white border-transparent"
+            >
+              <Sparkles className="w-4 h-4 mr-1.5" />
+              + Input Harga Khusus
+            </Button>
+            <Link to={`${ROUTES.COMMODITY_MAPPING}?scope=customer&search=${custCode || ''}`}>
+              <Button variant="secondary" size="sm">
+                <Tag className="w-4 h-4 mr-1.5 text-blue-600 dark:text-blue-400" />
+                Pemetaan Komoditas
+              </Button>
+            </Link>
             <Link to={ROUTES.CUSTOMER_PRICE_LIST}>
               <Button variant="secondary" size="sm">
                 <ArrowLeft className="w-4 h-4 mr-1.5" />
@@ -70,9 +126,9 @@ export function HistoryPage() {
               </Button>
             </Link>
             <Link to={ROUTES.CUSTOMER_PRICE_LIST_UPLOAD}>
-              <Button variant="primary" size="sm">
+              <Button variant="secondary" size="sm">
                 <Upload className="w-4 h-4 mr-1.5" />
-                Upload Price List
+                Upload File
               </Button>
             </Link>
           </div>
@@ -91,8 +147,20 @@ export function HistoryPage() {
         {/* Mobile list view */}
         <div className="sm:hidden">
           {loading ? (
-            <div className="p-6 flex justify-center">
-              <LoadingSpinner message={t('common.loading')} />
+            <div className="p-3 space-y-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="p-3.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] space-y-2.5">
+                  <div className="flex justify-between items-center">
+                    <div className="h-4 w-28 rounded skeleton-shimmer" />
+                    <div className="h-5 w-16 rounded-full skeleton-shimmer" />
+                  </div>
+                  <div className="h-3.5 w-40 rounded skeleton-shimmer" />
+                  <div className="flex justify-between items-center pt-1">
+                    <div className="h-3 w-24 rounded skeleton-shimmer" />
+                    <div className="h-3 w-16 rounded skeleton-shimmer" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : rows.length === 0 ? (
             <div className="px-6 py-16 text-center">
@@ -154,9 +222,26 @@ export function HistoryPage() {
                               {row.fileName}
                             </span>
                           </div>
-                          <span className={`${STATUS_CLASS[row.status]} shrink-0 text-xs`}>
-                            {STATUS_LABEL[row.status]}
-                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={`${STATUS_CLASS[row.status]} text-xs`}>
+                              {STATUS_LABEL[row.status]}
+                            </span>
+                            {row.status !== 'DELETED' && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.preventDefault()
+                                  e.stopPropagation()
+                                  handleDeleteUpload(row)
+                                }}
+                                disabled={deletingId === row.id}
+                                className="p-1 text-rose-600 hover:bg-rose-500/10 rounded-md transition-colors inline-flex items-center"
+                                title="Hapus (Soft Delete)"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                          </div>
                         </div>
                         <div className="flex items-center justify-between gap-2 text-[0.78rem] text-[var(--color-secondary)]">
                           <span className="truncate">
@@ -169,7 +254,7 @@ export function HistoryPage() {
                             })}
                           </span>
                           <span className="shrink-0 font-mono flex items-center gap-1 text-[var(--color-tertiary)] font-semibold">
-                            {(row._count?.items ?? 0).toLocaleString('id-ID')} baris
+                            {(row._count?.items ?? 0).toLocaleString('en-US')} baris
                             <ArrowRight size={12} />
                           </span>
                         </div>
@@ -195,6 +280,7 @@ export function HistoryPage() {
                 {[
                   { label: 'Berlaku Mulai', note: 'Tanggal harga berlaku' },
                   { label: 'File' },
+                  { label: 'Agen / Marking' },
                   { label: 'Diupload Oleh' },
                   { label: 'Waktu Upload' },
                   { label: 'Baris Harga' },
@@ -221,16 +307,23 @@ export function HistoryPage() {
 
             {loading ? (
               <tbody className="divide-y divide-[var(--color-border)]">
-                <tr>
-                  <td colSpan={7} className="px-6 py-12 text-center">
-                    <LoadingSpinner message={t('common.loading')} />
-                  </td>
-                </tr>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <tr key={i} className="border-b border-[var(--color-border)]">
+                    <td className="px-6 py-4"><div className="h-4 w-24 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-36 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-12 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-5 w-16 rounded-full skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-24 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                    <td className="px-6 py-4 text-center"><div className="h-7 w-16 rounded-lg skeleton-shimmer mx-auto" /></td>
+                  </tr>
+                ))}
               </tbody>
             ) : rows.length === 0 ? (
               <tbody>
                 <tr>
-                  <td colSpan={7} className="px-6 py-16 text-center">
+                  <td colSpan={8} className="px-6 py-16 text-center">
                     <div className="flex flex-col items-center justify-center max-w-md mx-auto">
                       <div className="w-16 h-16 bg-[var(--color-neutral)] rounded-full flex items-center justify-center mb-4 border border-[var(--color-border)]">
                         <FileSpreadsheet className="w-8 h-8 text-[var(--color-secondary)]" />
@@ -260,6 +353,7 @@ export function HistoryPage() {
                 >
                   {group.items.map((row, ri) => {
                     const isHead = ri === 0
+                    const markingsCount = row.markings?.length || 0
                     return (
                       <tr
                         key={row.id}
@@ -318,6 +412,39 @@ export function HistoryPage() {
                           </div>
                         </td>
 
+                        {/* Agen / Marking Column */}
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            {markingsCount === 0 ? (
+                              <span className="text-xs text-[var(--color-secondary)] italic">Semua Agen</span>
+                            ) : (
+                              <div className="flex items-center gap-1 flex-wrap max-w-[140px]">
+                                {row.markings!.slice(0, 2).map((m) => (
+                                  <span
+                                    key={m.markingCode}
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/20"
+                                    title={m.agentName ? `${m.markingCode} (${m.agentName})` : m.markingCode}
+                                  >
+                                    {m.markingCode}
+                                  </span>
+                                ))}
+                                {markingsCount > 2 && (
+                                  <span className="px-1 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                                    +{markingsCount - 2}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => setSelectedUploadForMarking(row)}
+                              className="px-1.5 py-1 text-[10px] font-semibold text-amber-600 dark:text-amber-400 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 rounded-md transition-colors cursor-pointer shrink-0"
+                            >
+                              {markingsCount > 0 ? 'Edit' : '+ Agen'}
+                            </button>
+                          </div>
+                        </td>
+
                         <td className="px-6 py-4 whitespace-nowrap text-[0.9rem] text-[var(--color-secondary)]">
                           {row.uploadedBy ?? <span className="text-[var(--color-secondary)]/40">—</span>}
                         </td>
@@ -331,7 +458,7 @@ export function HistoryPage() {
                           })}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-[0.9rem] font-mono text-[var(--color-secondary)]">
-                          {(row._count?.items ?? 0).toLocaleString('id-ID')}
+                          {(row._count?.items ?? 0).toLocaleString('en-US')}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <span className={STATUS_CLASS[row.status]}>
@@ -339,14 +466,36 @@ export function HistoryPage() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <Link
-                            to={`/mshipping/finance/customer-price-list/uploads/${row.id}`}
-                            className="p-1.5 text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] rounded-md transition-all duration-150 inline-flex items-center gap-1 text-[0.85rem]"
-                          >
-                            <Eye size={16} />
-                            <span className="hidden sm:inline">Detail</span>
-                            <ArrowRight size={14} />
-                          </Link>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => setEditingUpload(row)}
+                              className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 rounded-md transition-colors inline-flex items-center gap-1 text-[0.82rem] cursor-pointer"
+                              title="Edit Tanggal Efektif"
+                            >
+                              <Calendar size={14} />
+                              <span className="hidden sm:inline">Edit Tgl</span>
+                            </button>
+                            <Link
+                              to={`/mshipping/finance/customer-price-list/uploads/${row.id}`}
+                              className="p-1.5 text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] rounded-md transition-all duration-150 inline-flex items-center gap-1 text-[0.85rem]"
+                            >
+                              <Eye size={16} />
+                              <span className="hidden sm:inline">Detail</span>
+                              <ArrowRight size={14} />
+                            </Link>
+                            {row.status !== 'DELETED' && (
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteUpload(row)}
+                                disabled={deletingId === row.id}
+                                className="p-1.5 text-rose-600 hover:bg-rose-500/10 rounded-md transition-colors inline-flex items-center gap-1 text-[0.82rem] cursor-pointer disabled:opacity-50"
+                                title="Hapus / Nonaktifkan (Soft Delete)"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            )}
+                          </div>
                         </td>
                       </tr>
                     )
@@ -390,6 +539,54 @@ export function HistoryPage() {
           </div>
         )}
       </div>
+
+      {/* Edit Effective Date Modal */}
+      {editingUpload && (
+        <EditEffectiveDateModal
+          isOpen={Boolean(editingUpload)}
+          onClose={() => setEditingUpload(null)}
+          uploadId={editingUpload.id}
+          fileName={editingUpload.fileName}
+          currentEffectiveDate={editingUpload.effectiveDate}
+          onSave={async (newDate) => {
+            await customerPriceListApi.updateEffectiveDate(editingUpload.id, newDate)
+            reload()
+          }}
+        />
+      )}
+
+      {/* Marking Manager Modal */}
+      {selectedUploadForMarking && (
+        <MarkingManagerModal
+          isOpen={Boolean(selectedUploadForMarking)}
+          onClose={() => setSelectedUploadForMarking(null)}
+          uploadId={selectedUploadForMarking.id}
+          uploadDescription={{
+            fileName: selectedUploadForMarking.fileName,
+            effectiveDate: selectedUploadForMarking.effectiveDate,
+            custCode: selectedUploadForMarking.fdCustCode,
+            custName,
+          }}
+          initialMarkings={selectedUploadForMarking.markings || []}
+          onSave={async (markings) => {
+            await customerPriceListApi.setUploadMarkings(selectedUploadForMarking.id, markings)
+            reload()
+          }}
+        />
+      )}
+
+      {/* Customer Commodity Price Modal */}
+      <CustomerCommodityPriceModal
+        isOpen={isPriceModalOpen}
+        onClose={() => setIsPriceModalOpen(false)}
+        onSuccess={() => {
+          setIsPriceModalOpen(false)
+          reload()
+        }}
+        defaultCustCode={custCode}
+      />
     </div>
   )
 }
+
+

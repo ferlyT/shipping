@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { createPortal } from 'react-dom'
 import { X, ClipboardList } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -13,6 +14,7 @@ export function BatchManifestModal({
   manifestBatchDetail: Marking | null
   onClose: () => void
 }) {
+  useModalEscape(Boolean(selectedManifestRow), onClose)
   const { t } = useTranslation()
 
   if (!selectedManifestRow || typeof document === 'undefined') return null
@@ -29,7 +31,7 @@ export function BatchManifestModal({
         {/* Header Panel */}
         <div className="flex items-center justify-between px-4 py-3 sm:px-6 sm:py-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-0 z-10">
           <div className="flex items-center gap-[14px]">
-            <div className="w-[38px] h-[38px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-center text-[1.1rem] sm:text-[1.15rem] md:text-[1.2rem] text-[var(--color-tertiary)]">
+            <div className="hidden sm:flex w-[38px] h-[38px] rounded-[var(--radius-md)] border border-[var(--color-border)] bg-[var(--color-neutral)] items-center justify-center text-[1.1rem] sm:text-[1.15rem] md:text-[1.2rem] text-[var(--color-tertiary)]">
               <ClipboardList className="h-5 w-5" />
             </div>
             <div>

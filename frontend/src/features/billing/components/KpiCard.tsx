@@ -62,7 +62,7 @@ export function KpiCard({
 
         <div className="space-y-1 my-auto">
           <h3 className={`${size} font-bold text-[var(--color-primary)] font-[var(--font-display)] tabular-nums tracking-tight`}>
-            {typeof value === 'number' ? value.toLocaleString('id-ID') : value}
+            {typeof value === 'number' ? value.toLocaleString('en-US') : value}
           </h3>
 
           {subValue && (

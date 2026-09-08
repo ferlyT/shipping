@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Upload as UploadIcon, FileSpreadsheet, X, CheckCircle2, AlertCircle, ArrowLeft, Loader2, Info } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -7,6 +7,7 @@ import { ROUTES } from '@/lib/constants'
 import { priceListApi } from '../services/priceList.service'
 import type { UploadResult } from '../types'
 import { Button } from '@/components/ui/Button'
+import { PriceListUploadContinuityModal } from '@/features/commodity-mapping'
 
 const STATUS_CLASS: Record<UploadResult['status'], string> = {
   PARSED: 'bg-emerald-500/10 text-emerald-600 border-emerald-500/25',
@@ -28,6 +29,7 @@ function defaultEffectiveDate() {
 
 export function UploadPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
 
   const [dragging, setDragging] = useState(false)
   const [file, setFile] = useState<File | null>(null)
@@ -36,6 +38,7 @@ export function UploadPage() {
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<UploadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showContinuityModal, setShowContinuityModal] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const resultRef = useRef<HTMLDivElement | null>(null)
@@ -78,6 +81,9 @@ export function UploadPage() {
       setProgress(100)
       const data = (res.data as any)?.data ?? res.data
       setResult(data)
+      if (data?.status !== 'FAILED') {
+        setShowContinuityModal(true)
+      }
       setTimeout(() => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 100)
     } catch (err: any) {
       clearInterval(progressInterval)
@@ -259,7 +265,7 @@ export function UploadPage() {
           <dl className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-sm">
             {[
               { label: 'Upload ID', value: `#${result.uploadId}` },
-              { label: 'Jumlah Item', value: result.itemCount.toLocaleString('id-ID') },
+              { label: 'Jumlah Item', value: result.itemCount.toLocaleString('en-US') },
               {
                 label: 'Tanggal Berlaku',
                 value: result.effectiveDate
@@ -312,6 +318,18 @@ export function UploadPage() {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Continuity / Inheritance Modal */}
+      {result && (
+        <PriceListUploadContinuityModal
+          isOpen={showContinuityModal}
+          onClose={() => setShowContinuityModal(false)}
+          uploadId={result.uploadId}
+          effectiveDate={effectiveDate}
+          isCustomerUpload={false}
+          onNavigateToMapping={() => navigate(ROUTES.COMMODITY_MAPPING)}
+        />
       )}
     </div>
   )

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { X, ChevronDown, ChevronUp, LayoutGrid, Plane, Ship, Loader2, SlidersHorizontal, MapPin, CheckCircle2, User, Tag } from 'lucide-react'
+import { X, ChevronDown, ChevronUp, LayoutGrid, Plane, Ship, SlidersHorizontal, MapPin, CheckCircle2, User, Tag } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { STATUS_STYLES, STATUS_ORDER } from '../utils/status'
 import { BranchPicker } from './BranchPicker'
@@ -101,10 +101,10 @@ export function ShipmentFilterBar({
   return (
     <div className="shrink-0 bg-[var(--color-surface)] border-b border-[var(--color-border)]">
       {/* Primary filter row */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5 px-4 sm:px-5 py-2.5">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 px-3.5 sm:px-5 py-2.5">
         {/* Left: Mode Segmented Buttons + Active Filter Chips */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="inline-flex items-center p-0.5 rounded-lg bg-[var(--color-neutral)] border border-[var(--color-border)]">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+          <div className="grid grid-cols-3 sm:inline-flex items-center p-1 rounded-xl bg-[var(--color-neutral)] border border-[var(--color-border)] gap-1 w-full sm:w-auto">
             {typeButtons.map(({ value, icon: Icon, label }) => {
               const isActive = listTypeFilter === value
               return (
@@ -113,13 +113,13 @@ export function ShipmentFilterBar({
                   type="button"
                   onClick={() => onListTypeChange(value)}
                   className={cn(
-                    'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold cursor-pointer transition-all duration-150 select-none',
+                    'inline-flex items-center justify-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer transition-all duration-150 select-none',
                     isActive
-                      ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-xs'
+                      ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-2xs font-bold'
                       : 'text-[var(--color-secondary)] hover:text-[var(--color-text)]'
                   )}
                 >
-                  {isActive && isFetching ? <Loader2 size={12} className="animate-spin text-[var(--color-primary)]" /> : <Icon size={13} className={isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-secondary)]'} />}
+                  <Icon size={13} className={isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-secondary)]'} />
                   <span>{label}</span>
                 </button>
               )
@@ -128,9 +128,9 @@ export function ShipmentFilterBar({
 
           {/* Quick Active Chips */}
           {hasActiveFilters && (
-            <div className="flex items-center gap-1.5 flex-wrap">
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 -mx-3.5 px-3.5 sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden" style={{ scrollbarWidth: 'none' }}>
               {hasCustomer && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-violet-500/10 text-violet-500 border border-violet-500/20">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-violet-500/10 text-violet-500 border border-violet-500/20 shrink-0">
                   <User size={11} />
                   Cust: {customerFilter}
                   {onCustomerChange && (
@@ -146,7 +146,7 @@ export function ShipmentFilterBar({
               )}
 
               {hasMarking && (
-                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-amber-500/10 text-amber-500 border border-amber-500/20 shrink-0">
                   <Tag size={11} />
                   Mrk: {markingFilter}
                   {onMarkingChange && (
@@ -164,7 +164,7 @@ export function ShipmentFilterBar({
               {activeStatusArray.map((step) => (
                 <span
                   key={step}
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 shrink-0"
                 >
                   <span className="w-1.5 h-1.5 rounded-full bg-[var(--color-primary)]" />
                   {STATUS_STYLES[step]?.label}
@@ -181,7 +181,7 @@ export function ShipmentFilterBar({
               {activeBranchArray.map((b) => (
                 <span
                   key={b}
-                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+                  className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 shrink-0"
                 >
                   <MapPin size={11} />
                   {b.replace('Cabang ', '')}
@@ -199,7 +199,7 @@ export function ShipmentFilterBar({
         </div>
 
         {/* Right: Toggle Advanced Filters + Reset */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto">
           {hasActiveFilters && (
             <button
               type="button"
@@ -214,7 +214,7 @@ export function ShipmentFilterBar({
             type="button"
             onClick={() => setExpanded((o) => !o)}
             className={cn(
-              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all select-none',
+              'inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-all select-none ml-auto sm:ml-0',
               expanded
                 ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-[var(--color-on-primary)] shadow-xs'
                 : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text)] hover:bg-[var(--color-neutral)]'

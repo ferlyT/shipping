@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { X, Clock, Search, ChevronDown, ChevronUp } from 'lucide-react';
@@ -16,6 +17,7 @@ interface EtaSummaryModalProps {
 }
 
 export function EtaSummaryModal({ isOpen, onClose, data }: EtaSummaryModalProps) {
+  useModalEscape(isOpen, onClose)
   const [search, setSearch] = useState('');
   const [sortBy, setSortBy] = useState<'usia' | 'jumlah'>('jumlah');
   const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
@@ -89,7 +91,7 @@ export function EtaSummaryModal({ isOpen, onClose, data }: EtaSummaryModalProps)
         <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-surface)]">
           <div className="min-w-0 pr-3">
             <h2 className="text-lg sm:text-2xl font-bold text-[var(--color-primary)] font-[var(--font-display)] flex items-center gap-2 sm:gap-2.5 tracking-tight truncate">
-              <div className="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20">
+              <div className="hidden sm:flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/10 border border-amber-500/20">
                 <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-amber-500" />
               </div>
               Detil Consignee

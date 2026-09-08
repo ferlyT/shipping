@@ -94,16 +94,49 @@ export function Table<T>({
   )
 }
 
-function TableSkeleton({ columns }: { columns: number }) {
+export function TableSkeleton<T>({ columns }: { columns: Column<T>[] | number }) {
+  const colList: Column<T>[] = Array.isArray(columns)
+    ? columns
+    : Array.from({ length: columns }).map((_, i) => ({
+        key: `col_${i}`,
+        header: '',
+      }))
+
   return (
-    <div className="space-y-2 p-4">
-      {Array.from({ length: 5 }).map((_, i) => (
-        <div key={i} className="grid gap-4" style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}>
-          {Array.from({ length: columns }).map((_, j) => (
-            <div key={j} className="skeleton h-8" />
+    <div className="w-full relative">
+      <table className="w-full text-xs sm:text-sm table-fixed">
+        <thead className="sticky top-0 z-20 shadow-[0_1px_0_0_var(--color-border)]">
+          <tr className="bg-[var(--color-neutral)] border-b border-[var(--color-border)]">
+            {colList.map((col, idx) => (
+              <th
+                key={col.key || idx}
+                className={cn(
+                  'px-5 py-[14px] text-left font-medium text-[var(--color-secondary)] font-[var(--font-label)] text-[11px] tracking-[0.08em] uppercase whitespace-nowrap',
+                  col.className
+                )}
+              >
+                {col.header || <div className="h-3 w-16 rounded-md skeleton-shimmer" />}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-[var(--color-border)] bg-[var(--color-surface)]">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <tr key={i} className="bg-[var(--color-surface)]">
+              {colList.map((col, j) => (
+                <td key={col.key || j} className={cn('px-5 py-4 align-middle', col.className)}>
+                  <div
+                    className={cn(
+                      'h-3.5 rounded-md skeleton-shimmer',
+                      j === 0 ? 'w-6' : j === 1 ? 'w-3/4' : j % 2 === 0 ? 'w-1/2' : 'w-2/3'
+                    )}
+                  />
+                </td>
+              ))}
+            </tr>
           ))}
-        </div>
-      ))}
+        </tbody>
+      </table>
     </div>
   )
 }

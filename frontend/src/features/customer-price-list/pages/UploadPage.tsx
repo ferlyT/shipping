@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/Button'
 import { useDebounce } from '@/hooks/useDebounce'
 import { customerPriceListApi } from '../services/customerPriceList.service'
 import { customersApi } from '@/features/customers/services/customers.service'
+import { PriceListUploadContinuityModal } from '@/features/commodity-mapping'
 import type { CustomerPriceListUploadResult } from '../types'
 
 interface CustomerResult {
@@ -65,6 +66,7 @@ export function UploadPage() {
   const [progress, setProgress] = useState(0)
   const [result, setResult] = useState<CustomerPriceListUploadResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [showContinuityModal, setShowContinuityModal] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
   const resultRef = useRef<HTMLDivElement | null>(null)
@@ -130,6 +132,9 @@ export function UploadPage() {
       setProgress(100)
       const data = (res.data as any)?.data ?? res.data
       setResult(data)
+      if (data?.status !== 'FAILED') {
+        setShowContinuityModal(true)
+      }
       setTimeout(
         () => resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }),
         100
@@ -395,7 +400,7 @@ export function UploadPage() {
             {[
               { label: 'Upload ID', value: `#${result.uploadId}` },
               { label: 'Customer', value: result.fdCustCode },
-              { label: 'Jumlah Item', value: result.itemCount.toLocaleString('id-ID') },
+              { label: 'Jumlah Item', value: result.itemCount.toLocaleString('en-US') },
               {
                 label: 'Tanggal Berlaku',
                 value: result.effectiveDate
@@ -460,6 +465,19 @@ export function UploadPage() {
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Continuity / Inheritance Modal */}
+      {result && (
+        <PriceListUploadContinuityModal
+          isOpen={showContinuityModal}
+          onClose={() => setShowContinuityModal(false)}
+          uploadId={result.uploadId}
+          effectiveDate={effectiveDate}
+          isCustomerUpload={true}
+          fdCustCode={custCode}
+          onNavigateToMapping={() => navigate(ROUTES.COMMODITY_MAPPING)}
+        />
       )}
     </div>
   )

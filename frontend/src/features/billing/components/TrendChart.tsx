@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
 } from 'recharts'
 import { formatCurrency, formatCompactRupiah, formatNumber } from '@/lib/utils'
+import { useTranslation } from '@/hooks/useTranslation'
 import type { BillingTrendPoint } from '../types/billing.types'
 import { CustomXAxisTick } from './ChartTick'
 
@@ -25,8 +26,9 @@ interface TrendChartProps {
 }
 
 export function TrendChart({ data, isLoading, emptyMessage, isMobile, metric }: TrendChartProps) {
+  const { t } = useTranslation()
   if (isLoading) {
-    return <div className="h-[260px] sm:h-[320px] w-full bg-[var(--color-border)] animate-pulse rounded-lg" />
+    return <div className="h-[260px] sm:h-[320px] w-full skeleton-shimmer rounded-xl" />
   }
 
   if (data.length === 0) {
@@ -87,19 +89,19 @@ export function TrendChart({ data, isLoading, emptyMessage, isMobile, metric }: 
             wrapperStyle={{ fontSize: '12px', paddingTop: '10px', fontFamily: 'var(--font-label)', letterSpacing: '0.02em' }}
           />
           {isCount ? (
-            <Bar name="Jumlah Bill" dataKey="totalBill" fill="url(#trendBarFill)" radius={[6, 6, 0, 0]} barSize={isMobile ? 14 : 20} />
+            <Bar name={t('billing.metric.count')} dataKey="totalBill" fill="url(#trendBarFill)" radius={[6, 6, 0, 0]} barSize={isMobile ? 14 : 20} />
           ) : (
             <>
-              <Area name="Total Tagihan" type="monotone" dataKey="totalTagihan" stroke="none" fill="url(#trendAreaFill)" legendType="none" />
+              <Area name={t('billing.metric.value')} type="monotone" dataKey="totalTagihan" stroke="none" fill="url(#trendAreaFill)" legendType="none" />
               <Line
-                name="Total Tagihan"
+                name={t('billing.metric.value')}
                 type="monotone"
                 dataKey="totalTagihan"
                 stroke="var(--color-primary)"
                 strokeWidth={isMobile ? 2 : 2.5}
                 dot={false}
                 connectNulls
-                activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)', fill: 'var(--color-primary)' }}
+                activeDot={{ r: 5, fill: 'var(--color-tertiary)' }}
               />
             </>
           )}

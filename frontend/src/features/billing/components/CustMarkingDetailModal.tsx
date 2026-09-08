@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState, useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -13,19 +14,18 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  LayoutGrid,
+  Rows3,
+  ChevronDown,
+  ChevronUp,
+  Calendar,
 } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { formatDecimal, formatDate, formatNumber, calculateOverweight, calculateOverweightRaw } from '@/lib/utils'
 import { Button } from '@/components/ui/Button'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { useTranslation } from '@/hooks/useTranslation'
 import { Badge } from '@/components/ui/Badge'
-
-/**
- * CustMarkingDetailModal Component
- * Refactored with a clean, sortable Short List design for streamlined ERP inspection
- */
 
 interface CustMarkingDetailModalProps {
   isOpen: boolean
@@ -58,15 +58,23 @@ export function CustMarkingDetailModal({
   custCode,
   markingCode,
 }: CustMarkingDetailModalProps) {
+  useModalEscape(isOpen, onClose)
   const { t } = useTranslation()
   const [search, setSearch] = useState('')
   const [sortField, setSortField] = useState<SortField>('date')
   const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+  const [showKPIs, setShowKPIs] = useState(true)
+  const [viewMode, setViewMode] = useState<'card' | 'table'>(() =>
+    typeof window !== 'undefined' && window.innerWidth >= 768 ? 'table' : 'card'
+  )
 
   useEffect(() => {
     if (isOpen) {
       document.body.style.overflow = 'hidden'
       setSearch('')
+      if (typeof window !== 'undefined') {
+        setViewMode(window.innerWidth >= 768 ? 'table' : 'card')
+      }
     } else {
       document.body.style.overflow = 'unset'
     }
@@ -127,7 +135,9 @@ export function CustMarkingDetailModal({
       const weightSJ = parseNum(['fdTotalBeratSJ', 'Berat SJ', 'Berat_SJ', 'fdBeratSJ', 'fdBeratList', 'fdTotalBeratList'])
       const weightGdg = parseNum(['fdJmlBerat', 'Berat', 'fdBerat', 'fdJmlBeratGudang', 'fdBeratGudang', 'Berat Gdg', 'Berat_Gdg'])
       const weightK = parseNum(['fdJmlBeratKomplain', 'Berat K', 'Berat_K', 'fdBeratK', 'fdBeratKomplain'])
-      const weight = weightGdg || weightSJ
+      // Aturan Validitas Berat: Berat Komplain -> Berat SJ -> Berat List
+      const weight = weightK > 0 ? weightK : (weightSJ > 0 ? weightSJ : weightGdg)
+      const weightGudangActual = weightSJ > 0 ? weightSJ : weightGdg
 
       // M3 versions: PL, Gudang, Komplain, Bill
       const m3PL = parseNum(['fdM3PackingList', 'M3 PL', 'M3_PL', 'fdM3PL'])
@@ -139,18 +149,18 @@ export function CustMarkingDetailModal({
       const rasio = typeof rasioVal === 'number' ? rasioVal : parseFloat(String(rasioVal || 0)) || 0
 
       // Overweight versions:
-      // 1. Overweight PL: fdJmlBerat - (m3PL * rasio)
-      const rawOwPL = rasio > 0 ? calculateOverweightRaw(weight, m3PL, rasio) : null
-      const owPL = rasio > 0 ? calculateOverweight(weight, m3PL, rasio) : 0
+      // 1. Overweight PL: (weightGdg || weightSJ) - (m3PL * rasio)
+      const rawOwPL = rasio > 0 ? calculateOverweightRaw(weightGdg > 0 ? weightGdg : weightSJ, m3PL, rasio) : null
+      const owPL = rasio > 0 ? calculateOverweight(weightGdg > 0 ? weightGdg : weightSJ, m3PL, rasio) : 0
 
-      // 2. Overweight Gudang: berat - (m3Gudang * rasio)
-      const rawOwGdg = rasio > 0 ? calculateOverweightRaw(weight, m3Gdg, rasio) : null
-      const owGdg = rasio > 0 ? calculateOverweight(weight, m3Gdg, rasio) : 0
+      // 2. Overweight Gudang: (weightSJ || weightGdg) - (m3Gudang * rasio)
+      const rawOwGdg = rasio > 0 ? calculateOverweightRaw(weightGudangActual, m3Gdg, rasio) : null
+      const owGdg = rasio > 0 ? calculateOverweight(weightGudangActual, m3Gdg, rasio) : 0
 
-      // 3. Overweight Komplain: (weightK || weight) - ((m3K || m3Gdg) * rasio)
+      // 3. Overweight Komplain: (weightK || weightSJ || weightGdg) - ((m3K || m3Gdg) * rasio)
       const hasKomplain = m3K > 0 || weightK > 0
-      const rawOwK = (rasio > 0 && hasKomplain) ? calculateOverweightRaw(weightK > 0 ? weightK : weight, m3K > 0 ? m3K : m3Gdg, rasio) : null
-      const owK = (rasio > 0 && hasKomplain) ? calculateOverweight(weightK > 0 ? weightK : weight, m3K > 0 ? m3K : m3Gdg, rasio) : 0
+      const rawOwK = (rasio > 0 && hasKomplain) ? calculateOverweightRaw(weight, m3K > 0 ? m3K : m3Gdg, rasio) : null
+      const owK = (rasio > 0 && hasKomplain) ? calculateOverweight(weight, m3K > 0 ? m3K : m3Gdg, rasio) : 0
       const ow = hasKomplain ? (owK > 0 ? owK : null) : (owGdg > 0 ? owGdg : null)
       const rawOw = hasKomplain ? rawOwK : rawOwGdg
 
@@ -535,76 +545,72 @@ export function CustMarkingDetailModal({
   if (!isOpen) return null
 
   return createPortal(
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-950/70 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-[var(--color-surface)] w-full max-w-[96vw] xl:max-w-[90vw] rounded-[var(--radius-xl)] shadow-2xl border border-[var(--color-border)] flex flex-col max-h-[92vh] overflow-hidden">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-1 sm:p-3 md:p-4 bg-slate-950/75 backdrop-blur-xs animate-fadeIn font-[var(--font-body)]">
+      <div className="bg-[var(--color-surface)] w-full max-w-[98vw] xl:max-w-[92vw] rounded-2xl sm:rounded-3xl shadow-2xl border border-[var(--color-border)] flex flex-col h-[96vh] sm:h-auto sm:max-h-[92vh] overflow-hidden">
         {/* Modal Header */}
-        <div className="px-4 py-3 sm:px-5 sm:py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-xs shrink-0">
-              <Database className="w-4 h-4" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h2 className="text-sm sm:text-base font-bold text-[var(--color-primary)] font-[var(--font-display)]">
-                  Detail M3 per Marking
-                </h2>
-                <Badge variant="info" className="text-[10px] px-1.5 py-0">
-                  Sort List
-                </Badge>
+        <div className="px-3.5 py-2.5 sm:px-5 sm:py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] shrink-0">
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-start gap-2.5 min-w-0">
+              <div className="p-2 rounded-xl bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-xs shrink-0 mt-0.5">
+                <Database className="w-4 h-4" />
               </div>
-              <div className="mt-0.5 flex items-center gap-2 flex-wrap text-xs text-[var(--color-secondary)]">
-                <span>
-                  Customer: <strong className="text-[var(--color-primary)] font-semibold">{custName || custCode || '—'}</strong>
-                </span>
-                <span>•</span>
-                <span>
-                  Marking: <strong className="text-[var(--color-primary)] font-mono">{markingCode || '—'}</strong>
-                </span>
-                {typeDisplay && (
-                  <>
-                    <span>•</span>
-                    <span>
-                      Tipe: <strong className="text-[var(--color-primary)] font-semibold">{typeDisplay}</strong>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <h2 className="text-sm sm:text-base font-bold text-[var(--color-primary)] font-[var(--font-display)] tracking-tight">
+                    Detail M3 per Marking
+                  </h2>
+                  <Badge variant="info" className="text-[9px] sm:text-[10px] px-1.5 py-0 font-bold">
+                    Multi-Batch
+                  </Badge>
+                  {summary.hasTaxRows && (
+                    <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                      Tax Return: {formatDecimal(summary.totalM3TaxGdg, 4)} m³
                     </span>
-                  </>
-                )}
-                {comodityDisplay && (
-                  <>
-                    <span>•</span>
-                    <span>
-                      Komoditas: <strong className="text-[var(--color-primary)] font-semibold">{comodityDisplay}</strong>
-                    </span>
-                  </>
-                )}
-                <span>•</span>
-                <span className="inline-flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded border border-[var(--color-border)] font-mono text-[10px]">
-                  <Layers className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
-                  Total SJ: <strong>{summary.totalRows}</strong>
-                </span>
-                {summary.hasTaxRows && (
-                  <>
-                    <span>•</span>
-                    <span className="inline-flex items-center gap-1 font-semibold text-emerald-800 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/70 px-1.5 py-0.2 rounded border border-emerald-300 dark:border-emerald-800 font-mono text-[10px]">
-                      Tax Return (1): <strong>{formatDecimal(summary.totalM3TaxGdg, 4)} m³</strong> ({summary.countTaxRows} SJ)
-                    </span>
-                  </>
-                )}
-                {rasioValue !== null && (
-                  <>
-                    <span>•</span>
-                    <span className="inline-flex items-center gap-1 font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800 font-mono text-[10px]">
-                      Rasio: {formatDecimal(rasioValue, 2)}
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
+                  )}
+                </div>
 
-          <div className="flex items-center gap-2">
+                {/* Subtitle Chips Metadata */}
+                <div className="mt-1 flex items-center gap-1.5 flex-wrap text-[11px] text-[var(--color-secondary)]">
+                  <span className="font-semibold text-[var(--color-primary)] bg-[var(--color-surface)] px-1.5 py-0.2 rounded border border-[var(--color-border)] truncate max-w-[140px] sm:max-w-none">
+                    {custName || custCode || '—'}
+                  </span>
+                  <span>•</span>
+                  <span className="font-mono font-bold text-[var(--color-primary)] bg-[var(--color-surface)] px-1.5 py-0.2 rounded border border-[var(--color-border)]">
+                    {markingCode || '—'}
+                  </span>
+                  {typeDisplay && (
+                    <>
+                      <span className="hidden sm:inline">•</span>
+                      <span className="hidden sm:inline text-[var(--color-secondary)]">
+                        Tipe: <strong className="text-[var(--color-primary)] font-semibold">{typeDisplay}</strong>
+                      </span>
+                    </>
+                  )}
+                  {comodityDisplay && (
+                    <>
+                      <span className="hidden md:inline">•</span>
+                      <span className="hidden md:inline text-[var(--color-secondary)] truncate max-w-[160px]">
+                        Komoditas: <strong className="text-[var(--color-primary)] font-semibold">{comodityDisplay}</strong>
+                      </span>
+                    </>
+                  )}
+                  <span>•</span>
+                  <span className="inline-flex items-center gap-1 font-semibold text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.2 rounded border border-[var(--color-border)] font-mono text-[10px]">
+                    <Layers className="w-3 h-3 text-indigo-600 dark:text-indigo-400" />
+                    <strong>{summary.totalRows}</strong> Batch SJ
+                  </span>
+                  {rasioValue !== null && (
+                    <span className="inline-flex items-center gap-1 font-semibold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/60 px-1.5 py-0.2 rounded border border-purple-200 dark:border-purple-800 font-mono text-[10px]">
+                      Rasio: {formatDecimal(rasioValue, 0)} kg/m³
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
             <button
               onClick={onClose}
-              className="p-1.5 rounded-lg text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-border)]/50 transition-colors"
+              className="p-1.5 rounded-xl text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer shrink-0"
               title={t('common.close') || 'Tutup'}
             >
               <X className="w-4 h-4" />
@@ -612,291 +618,341 @@ export function CustMarkingDetailModal({
           </div>
         </div>
 
-        {/* Compact KPI Summary Cards (6 Columns) */}
-        <div className="p-2.5 sm:p-3 bg-[var(--color-neutral)]/40 border-b border-[var(--color-border)] shrink-0">
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
-
-            {/* Total Berat */}
-            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md p-2 shadow-xs flex flex-col justify-between">
-              <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-secondary)] flex items-center gap-1">
-                  <Scale className="w-3 h-3 text-slate-600" />
-                  TOTAL BERAT
-                </p>
-                <p className="mt-0.5 text-sm font-bold text-[var(--color-primary)] font-mono">
-                  {formatDecimal(summary.totalBerat, 2)} kg
-                </p>
-              </div>
-              <div className="mt-1.5 pt-1.5 border-t border-[var(--color-border)]/60 space-y-0.5">
-                <div className="flex items-center justify-between text-[10px] text-slate-600 dark:text-slate-400 font-mono">
-                  <span className="text-[9px] font-sans font-medium text-[var(--color-secondary)]">
-                    Gudang (SJ)
-                  </span>
-                  <span className="font-semibold tabular-nums ml-1">
-                    {summary.totalBeratSJ > 0 ? `${formatDecimal(summary.totalBeratSJ, 2)} kg` : '—'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-[var(--color-primary)] font-mono">
-                  <span className="text-[9px] font-sans font-medium text-[var(--color-secondary)]">
-                    Entrylist
-                  </span>
-                  <span className="font-semibold tabular-nums ml-1">
-                    {summary.totalBeratGdg > 0 ? `${formatDecimal(summary.totalBeratGdg, 2)} kg` : '—'}
-                  </span>
-                </div>
-                <div className="flex items-center justify-between text-[10px] text-amber-700 dark:text-amber-400 font-mono">
-                  <span className="text-[9px] font-sans font-medium text-amber-800 dark:text-amber-300">
-                    Komplain
-                  </span>
-                  <span className="font-semibold tabular-nums ml-1">
-                    {summary.totalBeratK > 0 ? `${formatDecimal(summary.totalBeratK, 2)} kg` : '—'}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Overweight */}
-            <div className={`border rounded-md p-2 shadow-xs flex flex-col justify-between transition-colors ${
-              (summary.rawTotalOverWeightHybrid ?? 0) > 0
-                ? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-300 dark:border-rose-900/60'
-                : 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-900/50'
-            }`}>
-              <div>
-                <p className={`text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 ${
-                  (summary.rawTotalOverWeightHybrid ?? 0) > 0
-                    ? 'text-rose-800 dark:text-rose-300'
-                    : 'text-emerald-800 dark:text-emerald-300'
-                }`}>
-                  <AlertTriangle className={`w-3 h-3 ${
-                    (summary.rawTotalOverWeightHybrid ?? 0) > 0 ? 'text-rose-600' : 'text-emerald-600'
-                  }`} />
-                  OVERWEIGHT
-                </p>
-                {(summary.rawTotalOverWeightHybrid ?? 0) > 0 ? (
-                  <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
-                    <span className="text-sm font-bold text-rose-950 dark:text-rose-100 font-mono">
-                      +{formatNumber(summary.rawTotalOverWeightHybrid!)} kg
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-wider bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-100 px-1 py-0.2 rounded border border-rose-300 dark:border-rose-700 font-sans">
-                      Overweight
-                    </span>
-                  </div>
-                ) : (
-                  <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
-                    <span className="text-sm font-bold text-emerald-950 dark:text-emerald-100 font-mono">
-                      {summary.rawTotalOverWeightHybrid !== null ? formatNumber(summary.rawTotalOverWeightHybrid) : '0'} kg
-                    </span>
-                    <span className="text-[9px] font-bold uppercase tracking-wider bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100 px-1 py-0.2 rounded border border-emerald-300 dark:border-emerald-700 font-sans">
-                      No Overweight
-                    </span>
-                  </div>
-                )}
-              </div>
-              <div className="mt-1.5 pt-1.5 border-t border-[var(--color-border)]/60 space-y-0.5">
-                <div className="flex items-center justify-between text-[10px] font-mono">
-                  <span className="text-[9px] font-sans font-medium text-[var(--color-secondary)]">
-                    PL (Entry)
-                  </span>
-                  {renderDeltaOverweight(summary.rawTotalOverWeightPL, 'PL (Entry)')}
-                </div>
-                <div className="flex items-center justify-between text-[10px] font-mono">
-                  <span className="text-[9px] font-sans font-medium text-[var(--color-secondary)]">
-                    Gudang
-                  </span>
-                  {renderDeltaOverweight(summary.rawTotalOverWeightGdg, 'Gudang')}
-                </div>
-                <div className="flex items-center justify-between text-[10px] font-mono">
-                  <span className="text-[9px] font-sans font-medium text-amber-800 dark:text-amber-300">
-                    Komplain
-                  </span>
-                  {summary.countKomplainRows > 0
-                    ? renderDeltaOverweight(summary.rawTotalOverWeightK, 'Komplain')
-                    : <span className="text-slate-400 font-normal">—</span>}
-                </div>
-              </div>
-            </div>
-
-            {/* M3 PL */}
-            <div className="bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-md p-2 shadow-xs flex flex-col justify-between">
-              <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 flex items-center gap-1">
-                  <Package className="w-3 h-3 text-rose-600" />
-                  M3 PL
-                </p>
-                <p className="mt-0.5 text-sm font-bold text-rose-900 dark:text-rose-100 font-mono">
-                  {formatDecimal(summary.totalM3PL, 4)} m³
-                </p>
-              </div>
-              <div className="mt-1.5 pt-1.5 border-t border-rose-200/60 dark:border-rose-900/40 space-y-0.5">
-                {summary.hasTaxRows && (
-                  <div className="flex items-center justify-between text-[10px] font-mono bg-rose-100/70 dark:bg-rose-900/40 px-1 py-0.5 rounded text-rose-950 dark:text-rose-100 mb-1">
-                    <span className="text-[9px] font-sans font-bold text-rose-900 dark:text-rose-200">
-                      Tax Return (1)
-                    </span>
-                    <span className="font-bold tabular-nums ml-1">
-                      {formatDecimal(summary.totalM3TaxPL, 4)}
-                    </span>
-                  </div>
-                )}
-                {summary.m3ByType.map((t) => (
-                  <div key={t.typeName} className="flex items-center justify-between text-[10px] text-rose-950/80 dark:text-rose-200/80 font-mono">
-                    <span className="truncate max-w-[85px] text-[9px] font-sans font-medium text-rose-800/90 dark:text-rose-300" title={t.typeName}>
-                      {t.typeName}
-                    </span>
-                    <span className="font-semibold tabular-nums ml-1">
-                      {formatDecimal(t.totalM3PL, 4)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* M3 Gudang */}
-            <div className="bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 rounded-md p-2 shadow-xs flex flex-col justify-between">
-              <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1">
-                  <Box className="w-3 h-3 text-blue-600" />
-                  M3 GUDANG
-                </p>
-                <p className="mt-0.5 text-sm font-bold text-blue-900 dark:text-blue-100 font-mono">
-                  {formatDecimal(summary.totalM3Gdg, 4)} m³
-                </p>
-              </div>
-              <div className="mt-1.5 pt-1.5 border-t border-blue-200/60 dark:border-blue-900/40 space-y-0.5">
-                {summary.hasTaxRows && (
-                  <div className="flex items-center justify-between text-[10px] font-mono bg-blue-100/70 dark:bg-blue-900/40 px-1 py-0.5 rounded text-blue-950 dark:text-blue-100 mb-1">
-                    <span className="text-[9px] font-sans font-bold text-blue-900 dark:text-blue-200">
-                      Tax Return (1)
-                    </span>
-                    <span className="font-bold tabular-nums ml-1">
-                      {formatDecimal(summary.totalM3TaxGdg, 4)}
-                    </span>
-                  </div>
-                )}
-                {summary.m3ByType.map((t) => (
-                  <div key={t.typeName} className="flex items-center justify-between text-[10px] text-blue-950/80 dark:text-blue-200/80 font-mono">
-                    <span className="truncate max-w-[85px] text-[9px] font-sans font-medium text-blue-800/90 dark:text-blue-300" title={t.typeName}>
-                      {t.typeName}
-                    </span>
-                    <span className="font-semibold tabular-nums ml-1">
-                      {formatDecimal(t.totalM3Gdg, 4)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* M3 Komplain */}
-            <div className="bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-md p-2 shadow-xs flex flex-col justify-between">
-              <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 flex items-center gap-1">
-                  <Layers className="w-3 h-3 text-amber-600" />
-                  M3 KOMPLAIN
-                </p>
-                <p className="mt-0.5 text-sm font-bold text-amber-900 dark:text-amber-100 font-mono">
-                  {formatDecimal(summary.totalM3K, 4)} m³
-                </p>
-              </div>
-              <div className="mt-1.5 pt-1.5 border-t border-amber-200/60 dark:border-amber-900/40 space-y-0.5">
-                {summary.hasTaxRows && (
-                  <div className="flex items-center justify-between text-[10px] font-mono bg-amber-100/70 dark:bg-amber-900/40 px-1 py-0.5 rounded text-amber-950 dark:text-amber-100 mb-1">
-                    <span className="text-[9px] font-sans font-bold text-amber-900 dark:text-amber-200">
-                      Tax Return (1)
-                    </span>
-                    <span className="font-bold tabular-nums ml-1">
-                      {formatDecimal(summary.totalM3TaxK, 4)}
-                    </span>
-                  </div>
-                )}
-                {summary.m3ByType.map((t) => (
-                  <div key={t.typeName} className="flex items-center justify-between text-[10px] text-amber-950/80 dark:text-amber-200/80 font-mono">
-                    <span className="truncate max-w-[85px] text-[9px] font-sans font-medium text-amber-800/90 dark:text-amber-300" title={t.typeName}>
-                      {t.typeName}
-                    </span>
-                    <span className="font-semibold tabular-nums ml-1">
-                      {formatDecimal(t.totalM3K, 4)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* M3 Bill */}
-            <div className="bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-md p-2 shadow-xs flex flex-col justify-between">
-              <div>
-                <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:emerald-300 flex items-center gap-1">
-                  <Database className="w-3 h-3 text-emerald-600" />
-                  M3 BILL
-                </p>
-                <p className="mt-0.5 text-sm font-bold text-emerald-900 dark:text-emerald-100 font-mono">
-                  {formatDecimal(summary.totalM3Bill, 4)} m³
-                </p>
-              </div>
-              <div className="mt-1.5 pt-1.5 border-t border-emerald-200/60 dark:border-emerald-900/40 space-y-0.5">
-                {summary.hasTaxRows && (
-                  <div className="flex items-center justify-between text-[10px] font-mono bg-emerald-100/70 dark:bg-emerald-900/40 px-1 py-0.5 rounded text-emerald-950 dark:text-emerald-100 mb-1">
-                    <span className="text-[9px] font-sans font-bold text-emerald-900 dark:text-emerald-200">
-                      Tax Return (1)
-                    </span>
-                    <span className="font-bold tabular-nums ml-1">
-                      {formatDecimal(summary.totalM3TaxBill, 4)}
-                    </span>
-                  </div>
-                )}
-                {summary.m3ByType.map((t) => (
-                  <div key={t.typeName} className="flex items-center justify-between text-[10px] text-emerald-950/80 dark:text-emerald-200/80 font-mono">
-                    <span className="truncate max-w-[85px] text-[9px] font-sans font-medium text-emerald-800/90 dark:text-emerald-300" title={t.typeName}>
-                      {t.typeName}
-                    </span>
-                    <span className="font-semibold tabular-nums ml-1">
-                      {formatDecimal(t.totalM3Bill, 4)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
+        {/* Compact & Collapsible KPI Summary Cards (Mobile Horizontal Snap / Desktop Grid) */}
+        <div className="bg-[var(--color-neutral)]/50 border-b border-[var(--color-border)] shrink-0">
+          {/* Mobile KPI Toggle Bar */}
+          <div className="px-3 py-1.5 flex sm:hidden items-center justify-between text-xs text-[var(--color-secondary)] border-b border-[var(--color-border)]/40 bg-[var(--color-surface)]/50">
+            <span className="font-semibold text-[11px] flex items-center gap-1 text-[var(--color-primary)]">
+              <Scale size={13} className="text-[var(--color-tertiary)]" />
+              Ringkasan Metrik (Total {formatDecimal(summary.totalBerat, 0)} kg · {formatDecimal(summary.totalM3Gdg, 3)} m³)
+            </span>
+            <button
+              type="button"
+              onClick={() => setShowKPIs((prev) => !prev)}
+              className="text-[10px] font-bold text-[var(--color-tertiary)] flex items-center gap-0.5 px-2 py-0.5 rounded-md hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
+            >
+              {showKPIs ? 'Sembunyikan' : 'Tampilkan'}
+              {showKPIs ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            </button>
           </div>
+
+          {showKPIs && (
+            <div className="p-2 sm:p-3 overflow-x-auto">
+              <div className="flex sm:grid sm:grid-cols-3 md:grid-cols-6 gap-2 min-w-max sm:min-w-0 snap-x">
+
+                {/* Card 1: Total Berat */}
+                <div className="w-[170px] sm:w-auto snap-start bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-2.5 shadow-2xs flex flex-col justify-between shrink-0">
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-secondary)] flex items-center gap-1">
+                      <Scale className="w-3 h-3 text-slate-600 dark:text-slate-400" />
+                      TOTAL BERAT
+                    </p>
+                    <p className="mt-0.5 text-sm font-bold text-[var(--color-primary)] font-mono">
+                      {formatDecimal(summary.totalBerat, 2)} kg
+                    </p>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-[var(--color-border)]/60 space-y-0.5">
+                    <div className="flex items-center justify-between text-[10px] text-slate-600 dark:text-slate-400 font-mono">
+                      <span className="text-[9px] font-sans font-medium text-[var(--color-secondary)]">Gudang (SJ)</span>
+                      <span className="font-semibold tabular-nums ml-1">
+                        {summary.totalBeratSJ > 0 ? `${formatDecimal(summary.totalBeratSJ, 1)} kg` : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-[var(--color-primary)] font-mono">
+                      <span className="text-[9px] font-sans font-medium text-[var(--color-secondary)]">Entrylist</span>
+                      <span className="font-semibold tabular-nums ml-1">
+                        {summary.totalBeratGdg > 0 ? `${formatDecimal(summary.totalBeratGdg, 1)} kg` : '—'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-amber-700 dark:text-amber-400 font-mono">
+                      <span className="text-[9px] font-sans font-medium text-amber-800 dark:text-amber-300">Komplain</span>
+                      <span className="font-semibold tabular-nums ml-1">
+                        {summary.totalBeratK > 0 ? `${formatDecimal(summary.totalBeratK, 1)} kg` : '—'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 2: Overweight */}
+                <div className={`w-[185px] sm:w-auto snap-start border rounded-xl p-2.5 shadow-2xs flex flex-col justify-between transition-colors shrink-0 ${
+                  (summary.rawTotalOverWeightHybrid ?? 0) > 0
+                    ? 'bg-rose-50/80 dark:bg-rose-950/40 border-rose-300 dark:border-rose-900/60'
+                    : 'bg-emerald-50/70 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-900/50'
+                }`}>
+                  <div>
+                    <p className={`text-[9px] font-bold uppercase tracking-wider flex items-center gap-1 ${
+                      (summary.rawTotalOverWeightHybrid ?? 0) > 0
+                        ? 'text-rose-800 dark:text-rose-300'
+                        : 'text-emerald-800 dark:text-emerald-300'
+                    }`}>
+                      <AlertTriangle className={`w-3 h-3 ${
+                        (summary.rawTotalOverWeightHybrid ?? 0) > 0 ? 'text-rose-600' : 'text-emerald-600'
+                      }`} />
+                      OVERWEIGHT
+                    </p>
+                    {(summary.rawTotalOverWeightHybrid ?? 0) > 0 ? (
+                      <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span className="text-sm font-bold text-rose-950 dark:text-rose-100 font-mono">
+                          +{formatNumber(summary.rawTotalOverWeightHybrid!)} kg
+                        </span>
+                        <span className="text-[8px] font-bold uppercase tracking-wider bg-rose-200 dark:bg-rose-900 text-rose-900 dark:text-rose-100 px-1 py-0.2 rounded font-sans">
+                          Over
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+                        <span className="text-sm font-bold text-emerald-950 dark:text-emerald-100 font-mono">
+                          {summary.rawTotalOverWeightHybrid !== null ? formatNumber(summary.rawTotalOverWeightHybrid) : '0'} kg
+                        </span>
+                        <span className="text-[8px] font-bold uppercase tracking-wider bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-100 px-1 py-0.2 rounded font-sans">
+                          Aman
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-[var(--color-border)]/60 space-y-0.5">
+                    <div className="flex items-center justify-between text-[10px] font-mono">
+                      <span className="text-[9px] font-sans font-medium text-[var(--color-secondary)]">PL</span>
+                      {renderDeltaOverweight(summary.rawTotalOverWeightPL, 'PL')}
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] font-mono">
+                      <span className="text-[9px] font-sans font-medium text-[var(--color-secondary)]">Gudang</span>
+                      {renderDeltaOverweight(summary.rawTotalOverWeightGdg, 'Gudang')}
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] font-mono">
+                      <span className="text-[9px] font-sans font-medium text-amber-800 dark:text-amber-300">Komplain</span>
+                      {summary.countKomplainRows > 0
+                        ? renderDeltaOverweight(summary.rawTotalOverWeightK, 'Komplain')
+                        : <span className="text-slate-400 font-normal">—</span>}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Card 3: M3 PL */}
+                <div className="w-[165px] sm:w-auto snap-start bg-rose-50/70 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/50 rounded-xl p-2.5 shadow-2xs flex flex-col justify-between shrink-0">
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-rose-700 dark:text-rose-300 flex items-center gap-1">
+                      <Package className="w-3 h-3 text-rose-600" />
+                      M3 PL
+                    </p>
+                    <p className="mt-0.5 text-sm font-bold text-rose-900 dark:text-rose-100 font-mono">
+                      {formatDecimal(summary.totalM3PL, 4)} m³
+                    </p>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-rose-200/60 dark:border-rose-900/40 space-y-0.5">
+                    {summary.hasTaxRows && (
+                      <div className="flex items-center justify-between text-[10px] font-mono bg-rose-100/70 dark:bg-rose-900/40 px-1 py-0.5 rounded text-rose-950 dark:text-rose-100 mb-0.5">
+                        <span className="text-[8px] font-sans font-bold text-rose-900 dark:text-rose-200">Tax Return</span>
+                        <span className="font-bold tabular-nums ml-1">{formatDecimal(summary.totalM3TaxPL, 4)}</span>
+                      </div>
+                    )}
+                    {summary.m3ByType.slice(0, 2).map((t) => (
+                      <div key={t.typeName} className="flex items-center justify-between text-[10px] text-rose-950/80 dark:text-rose-200/80 font-mono">
+                        <span className="truncate max-w-[80px] text-[9px] font-sans font-medium text-rose-800/90 dark:text-rose-300" title={t.typeName}>
+                          {t.typeName}
+                        </span>
+                        <span className="font-semibold tabular-nums ml-1">{formatDecimal(t.totalM3PL, 4)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Card 4: M3 Gudang */}
+                <div className="w-[165px] sm:w-auto snap-start bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/50 rounded-xl p-2.5 shadow-2xs flex flex-col justify-between shrink-0">
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-blue-700 dark:text-blue-300 flex items-center gap-1">
+                      <Box className="w-3 h-3 text-blue-600" />
+                      M3 GUDANG
+                    </p>
+                    <p className="mt-0.5 text-sm font-bold text-blue-900 dark:text-blue-100 font-mono">
+                      {formatDecimal(summary.totalM3Gdg, 4)} m³
+                    </p>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-blue-200/60 dark:border-blue-900/40 space-y-0.5">
+                    {summary.hasTaxRows && (
+                      <div className="flex items-center justify-between text-[10px] font-mono bg-blue-100/70 dark:bg-blue-900/40 px-1 py-0.5 rounded text-blue-950 dark:text-blue-100 mb-0.5">
+                        <span className="text-[8px] font-sans font-bold text-blue-900 dark:text-blue-200">Tax Return</span>
+                        <span className="font-bold tabular-nums ml-1">{formatDecimal(summary.totalM3TaxGdg, 4)}</span>
+                      </div>
+                    )}
+                    {summary.m3ByType.slice(0, 2).map((t) => (
+                      <div key={t.typeName} className="flex items-center justify-between text-[10px] text-blue-950/80 dark:text-blue-200/80 font-mono">
+                        <span className="truncate max-w-[80px] text-[9px] font-sans font-medium text-blue-800/90 dark:text-blue-300" title={t.typeName}>
+                          {t.typeName}
+                        </span>
+                        <span className="font-semibold tabular-nums ml-1">{formatDecimal(t.totalM3Gdg, 4)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Card 5: M3 Komplain */}
+                <div className="w-[165px] sm:w-auto snap-start bg-amber-50/70 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/50 rounded-xl p-2.5 shadow-2xs flex flex-col justify-between shrink-0">
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-amber-700 dark:text-amber-300 flex items-center gap-1">
+                      <Layers className="w-3 h-3 text-amber-600" />
+                      M3 KOMPLAIN
+                    </p>
+                    <p className="mt-0.5 text-sm font-bold text-amber-900 dark:text-amber-100 font-mono">
+                      {formatDecimal(summary.totalM3K, 4)} m³
+                    </p>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-amber-200/60 dark:border-amber-900/40 space-y-0.5">
+                    {summary.hasTaxRows && (
+                      <div className="flex items-center justify-between text-[10px] font-mono bg-amber-100/70 dark:bg-amber-900/40 px-1 py-0.5 rounded text-amber-950 dark:text-amber-100 mb-0.5">
+                        <span className="text-[8px] font-sans font-bold text-amber-900 dark:text-amber-200">Tax Return</span>
+                        <span className="font-bold tabular-nums ml-1">{formatDecimal(summary.totalM3TaxK, 4)}</span>
+                      </div>
+                    )}
+                    {summary.m3ByType.slice(0, 2).map((t) => (
+                      <div key={t.typeName} className="flex items-center justify-between text-[10px] text-amber-950/80 dark:text-amber-200/80 font-mono">
+                        <span className="truncate max-w-[80px] text-[9px] font-sans font-medium text-amber-800/90 dark:text-amber-300" title={t.typeName}>
+                          {t.typeName}
+                        </span>
+                        <span className="font-semibold tabular-nums ml-1">{formatDecimal(t.totalM3K, 4)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Card 6: M3 Bill */}
+                <div className="w-[165px] sm:w-auto snap-start bg-emerald-50/70 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-900/50 rounded-xl p-2.5 shadow-2xs flex flex-col justify-between shrink-0">
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-700 dark:emerald-300 flex items-center gap-1">
+                      <Database className="w-3 h-3 text-emerald-600" />
+                      M3 BILL
+                    </p>
+                    <p className="mt-0.5 text-sm font-bold text-emerald-900 dark:text-emerald-100 font-mono">
+                      {formatDecimal(summary.totalM3Bill, 4)} m³
+                    </p>
+                  </div>
+                  <div className="mt-1.5 pt-1.5 border-t border-emerald-200/60 dark:border-emerald-900/40 space-y-0.5">
+                    {summary.hasTaxRows && (
+                      <div className="flex items-center justify-between text-[10px] font-mono bg-emerald-100/70 dark:bg-emerald-900/40 px-1 py-0.5 rounded text-emerald-950 dark:text-emerald-100 mb-0.5">
+                        <span className="text-[8px] font-sans font-bold text-emerald-900 dark:text-emerald-200">Tax Return</span>
+                        <span className="font-bold tabular-nums ml-1">{formatDecimal(summary.totalM3TaxBill, 4)}</span>
+                      </div>
+                    )}
+                    {summary.m3ByType.slice(0, 2).map((t) => (
+                      <div key={t.typeName} className="flex items-center justify-between text-[10px] text-emerald-950/80 dark:text-emerald-200/80 font-mono">
+                        <span className="truncate max-w-[80px] text-[9px] font-sans font-medium text-emerald-800/90 dark:text-emerald-300" title={t.typeName}>
+                          {t.typeName}
+                        </span>
+                        <span className="font-semibold tabular-nums ml-1">{formatDecimal(t.totalM3Bill, 4)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Toolbar: Search, Sort Active Indicator & Item Count */}
-        <div className="p-2.5 sm:p-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex flex-wrap items-center justify-between gap-2.5 shrink-0">
-          <div className="flex items-center gap-2 flex-wrap text-xs text-[var(--color-secondary)]">
-            <span>
-              Menampilkan <strong className="text-[var(--color-primary)] font-mono">{sortedAndFilteredRows.length}</strong> dari {rows.length} baris
-            </span>
-            <span className="text-slate-300 dark:text-slate-700">•</span>
-            <span className="text-[11px]">
-              Sortir: <strong className="text-[var(--color-primary)] font-semibold uppercase">{sortField}</strong> ({sortOrder === 'asc' ? 'A-Z / Min-Max' : 'Z-A / Max-Min'})
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <div className="relative min-w-[220px] sm:min-w-[260px] flex-1 sm:flex-initial">
+        {/* Toolbar: Search, Sort Dropdown & View Mode Switcher */}
+        <div className="p-2 sm:p-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] flex flex-wrap items-center justify-between gap-2 shrink-0">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-1 min-w-[200px]">
+            <div className="relative flex-1 max-w-md">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Cari invoice, marking, comodity..."
-                className="w-full pl-8 pr-7 py-1 text-xs rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
+                className="w-full pl-8 pr-7 py-1.5 text-xs rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
               />
               {search && (
                 <button
                   onClick={() => setSearch('')}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-3.5 h-3.5" />
                 </button>
               )}
             </div>
           </div>
+
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Mobile Sort Dropdown */}
+            <div className="flex items-center gap-1 text-xs">
+              <select
+                value={sortField}
+                onChange={(e) => setSortField(e.target.value as SortField)}
+                className="text-[11px] sm:text-xs py-1.5 px-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                title="Pilih kolom pengurutan"
+              >
+                <option value="date">Urut: Tanggal Inv</option>
+                <option value="invoice">Urut: No. Invoice</option>
+                <option value="marking">Urut: Marking No</option>
+                <option value="comodity">Urut: Komoditas</option>
+                <option value="qtyGdg">Urut: Qty Entry</option>
+                <option value="weightGdg">Urut: Berat Entry</option>
+                <option value="m3Gdg">Urut: M3 Gudang</option>
+                <option value="m3Bill">Urut: M3 Bill</option>
+                <option value="m3PL">Urut: M3 PL</option>
+                <option value="m3K">Urut: M3 Komplain</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={() => setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))}
+                className="p-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-primary)] text-xs font-mono font-bold transition-colors cursor-pointer"
+                title={sortOrder === 'asc' ? 'Urutan Naik (Ascending)' : 'Urutan Turun (Descending)'}
+              >
+                {sortOrder === 'asc' ? 'ASC ↑' : 'DESC ↓'}
+              </button>
+            </div>
+
+            {/* View Mode Toggle: Shortlist vs Table */}
+            <div className="flex items-center p-0.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)] text-xs">
+              <button
+                type="button"
+                onClick={() => setViewMode('card')}
+                className={`p-1.5 rounded-lg flex items-center gap-1 text-[11px] font-semibold transition-all cursor-pointer ${
+                  viewMode === 'card'
+                    ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-2xs'
+                    : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                }`}
+                title="Tampilan Shortlist (Responsif Mobile)"
+              >
+                <LayoutGrid size={13} />
+                <span className="hidden sm:inline">Shortlist</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('table')}
+                className={`p-1.5 rounded-lg flex items-center gap-1 text-[11px] font-semibold transition-all cursor-pointer ${
+                  viewMode === 'table'
+                    ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-2xs'
+                    : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                }`}
+                title="Tampilan Tabel Lengkap (PC)"
+              >
+                <Rows3 size={13} />
+                <span className="hidden sm:inline">Tabel</span>
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Short List Table Body */}
-        <div className="p-2.5 sm:p-3 overflow-auto flex-1 min-h-[260px] bg-slate-50/50 dark:bg-slate-900/20">
+        {/* Modal Main Body (Scrollable) */}
+        <div className="p-2 sm:p-3 overflow-y-auto overflow-x-auto flex-1 min-h-[260px] bg-slate-50/50 dark:bg-slate-900/20">
           {loading ? (
-            <div className="py-20 flex items-center justify-center">
-              <LoadingSpinner message="Memuat detail data M3..." />
+            <div className="p-2 space-y-2.5 animate-fadeIn">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] space-y-2.5 shadow-2xs">
+                  <div className="flex justify-between items-center">
+                    <div className="h-4 w-36 rounded skeleton-shimmer" />
+                    <div className="h-4 w-16 rounded-full skeleton-shimmer" />
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="h-12 rounded-lg skeleton-shimmer" />
+                    <div className="h-12 rounded-lg skeleton-shimmer" />
+                    <div className="h-12 rounded-lg skeleton-shimmer" />
+                    <div className="h-12 rounded-lg skeleton-shimmer" />
+                  </div>
+                </div>
+              ))}
             </div>
           ) : isError ? (
             <div className="p-6 text-center text-xs text-red-600 bg-red-50 rounded-xl border border-red-200">
@@ -908,19 +964,142 @@ export function CustMarkingDetailModal({
               title="Data M3 Tidak Ditemukan"
               description={`Tidak ada data yang cocok dengan pencarian pada CustCode: ${custCode} & Marking: ${markingCode}`}
             />
+          ) : viewMode === 'card' ? (
+            /* ============================================================ */
+            /* 1. RESPONSIVE MOBILE CARD VIEW (Optimized for Phones/Tablets) */
+            /* ============================================================ */
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5 sm:gap-3">
+              {sortedAndFilteredRows.map((r, idx) => (
+                <div
+                  key={r.invoice + idx}
+                  className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-3 sm:p-3.5 shadow-xs hover:border-[var(--color-primary)]/40 transition-all flex flex-col justify-between gap-2.5 font-sans"
+                >
+                  {/* Card Header: Invoice, Date, Badges */}
+                  <div>
+                    <div className="flex items-center justify-between gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono text-[var(--color-secondary)]">#{idx + 1}</span>
+                        <span className="font-mono font-bold text-xs sm:text-sm text-[var(--color-primary)]">
+                          {r.invoice}
+                        </span>
+                        {r.bc && (
+                          <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300">
+                            {r.bc}
+                          </span>
+                        )}
+                        {r.isTax && (
+                          <span className="text-[8px] font-bold px-1 rounded bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950 dark:text-emerald-300">
+                            TAX
+                          </span>
+                        )}
+                      </div>
+
+                      <span className="text-[10px] text-[var(--color-secondary)] flex items-center gap-1">
+                        <Calendar size={11} />
+                        {r.dateStr ? formatDate(r.dateStr) : '—'}
+                      </span>
+                    </div>
+
+                    {/* Marking & Commodity row */}
+                    <div className="mt-1.5 flex items-center justify-between text-xs gap-2 flex-wrap">
+                      <span className="font-mono text-[11px] font-semibold text-[var(--color-primary)] bg-[var(--color-neutral)] px-1.5 py-0.5 rounded border border-[var(--color-border)]/70 truncate max-w-[180px]">
+                        {r.marking || '—'}
+                      </span>
+                      <span className="text-[11px] text-[var(--color-secondary)] truncate max-w-[160px]">
+                        {r.fdComodity || r.comodity}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* 3-Section Metrics Grid (Qty, Berat, M3) */}
+                  <div className="grid grid-cols-3 gap-1.5 text-xs pt-1 border-t border-[var(--color-border)]/60">
+                    {/* Col 1: QTY (Coly) */}
+                    <div className="p-2 rounded-xl bg-[var(--color-neutral)]/40 border border-[var(--color-border)]/60 space-y-0.5">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-secondary)] block">
+                        QTY (Coly)
+                      </span>
+                      <div className="text-[11px] font-mono font-bold text-[var(--color-primary)]">
+                        {r.qtyGdg > 0 ? `${formatNumber(r.qtyGdg)}` : '—'}
+                      </div>
+                      <div className="text-[9px] text-[var(--color-secondary)] flex items-center justify-between">
+                        <span>SJ:</span>
+                        <span className="font-mono">{r.qtySJ > 0 ? formatNumber(r.qtySJ) : '—'}</span>
+                      </div>
+                      {r.qtyK > 0 && (
+                        <div className="text-[9px] text-amber-700 dark:text-amber-300 flex items-center justify-between">
+                          <span>K:</span>
+                          <span className="font-mono font-bold">{formatNumber(r.qtyK)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Col 2: BERAT (KG) */}
+                    <div className="p-2 rounded-xl bg-[var(--color-neutral)]/40 border border-[var(--color-border)]/60 space-y-0.5">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-[var(--color-secondary)] block">
+                        BERAT (KG)
+                      </span>
+                      <div className="text-[11px] font-mono font-bold text-[var(--color-primary)]">
+                        {r.weightGdg > 0 ? `${formatDecimal(r.weightGdg, 1)}` : '—'}
+                      </div>
+                      <div className="text-[9px] text-[var(--color-secondary)] flex items-center justify-between">
+                        <span>SJ:</span>
+                        <span className="font-mono">{r.weightSJ > 0 ? formatDecimal(r.weightSJ, 1) : '—'}</span>
+                      </div>
+                      {r.weightK > 0 && (
+                        <div className="text-[9px] text-amber-700 dark:text-amber-300 flex items-center justify-between">
+                          <span>K:</span>
+                          <span className="font-mono font-bold">{formatDecimal(r.weightK, 1)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Col 3: VOLUME M3 */}
+                    <div className="p-2 rounded-xl bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/80 dark:border-blue-900/40 space-y-0.5">
+                      <span className="text-[9px] font-bold uppercase tracking-wider text-blue-800 dark:text-blue-300 block">
+                        M³ GUDANG
+                      </span>
+                      <div className="text-[11px] font-mono font-extrabold text-blue-950 dark:text-blue-200">
+                        {r.m3Gdg > 0 ? `${formatDecimal(r.m3Gdg, 4)}` : '—'}
+                      </div>
+                      <div className="text-[9px] text-rose-800 dark:text-rose-300 flex items-center justify-between">
+                        <span>PL:</span>
+                        <span className="font-mono">{r.m3PL > 0 ? formatDecimal(r.m3PL, 4) : '—'}</span>
+                      </div>
+                      <div className="text-[9px] text-emerald-800 dark:text-emerald-300 flex items-center justify-between font-bold">
+                        <span>Bill:</span>
+                        <span className="font-mono">{r.m3Bill > 0 ? formatDecimal(r.m3Bill, 4) : '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Card Footer: Overweight Delta Tag (if any) */}
+                  {r.rawOw !== null && (
+                    <div className="pt-1.5 border-t border-[var(--color-border)]/60 flex items-center justify-between text-[10px]">
+                      <span className="text-[var(--color-secondary)]">Status Overweight:</span>
+                      <span className="font-mono font-bold">
+                        {renderDeltaOverweight(r.rawOw, 'Overweight')}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           ) : (
-            <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg shadow-xs bg-[var(--color-surface)]">
+            /* ============================================================ */
+            /* 2. FULL 12-COLUMN TABLE VIEW (Sortable Header for Tablet/Desktop) */
+            /* ============================================================ */
+            <div className="overflow-x-auto border border-[var(--color-border)] rounded-2xl shadow-xs bg-[var(--color-surface)]">
               <table className="w-full text-xs text-left border-collapse">
                 <thead>
                   {/* Tier 1 Header Groups */}
                   <tr className="bg-slate-100 dark:bg-slate-800/90 border-b border-[var(--color-border)] uppercase tracking-wider text-[10px] text-slate-700 dark:text-slate-200 font-bold sticky top-0 z-10 select-none">
-                    <th rowSpan={2} className="p-2 border-r border-[var(--color-border)] w-10 text-center bg-slate-100 dark:bg-slate-800">#</th>
+                    <th rowSpan={2} className="p-2.5 border-r border-[var(--color-border)] w-10 text-center bg-slate-100 dark:bg-slate-800">#</th>
 
                     {/* No. Invoice */}
                     <th
                       rowSpan={2}
                       onClick={() => handleSort('invoice')}
-                      className="p-2 border-r border-[var(--color-border)] cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-700/60 transition-colors group whitespace-nowrap align-middle"
+                      className="p-2.5 border-r border-[var(--color-border)] cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-700/60 transition-colors group whitespace-nowrap align-middle"
                     >
                       <div className="flex items-center justify-between gap-1.5">
                         <span>No. Invoice</span>
@@ -932,7 +1111,7 @@ export function CustMarkingDetailModal({
                     <th
                       rowSpan={2}
                       onClick={() => handleSort('date')}
-                      className="p-2 border-r border-[var(--color-border)] cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-700/60 transition-colors group text-center whitespace-nowrap align-middle"
+                      className="p-2.5 border-r border-[var(--color-border)] cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-700/60 transition-colors group text-center whitespace-nowrap align-middle"
                     >
                       <div className="flex items-center justify-center gap-1.5">
                         <span>Tgl Inv</span>
@@ -944,7 +1123,7 @@ export function CustMarkingDetailModal({
                     <th
                       rowSpan={2}
                       onClick={() => handleSort('marking')}
-                      className="p-2 border-r border-[var(--color-border)] cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-700/60 transition-colors group whitespace-nowrap align-middle"
+                      className="p-2.5 border-r border-[var(--color-border)] cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-700/60 transition-colors group whitespace-nowrap align-middle"
                     >
                       <div className="flex items-center justify-between gap-1.5">
                         <span>Marking No</span>
@@ -956,7 +1135,7 @@ export function CustMarkingDetailModal({
                     <th
                       rowSpan={2}
                       onClick={() => handleSort('comodity')}
-                      className="p-2 border-r border-[var(--color-border)] cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-700/60 transition-colors group whitespace-nowrap align-middle"
+                      className="p-2.5 border-r border-[var(--color-border)] cursor-pointer hover:bg-slate-200/70 dark:hover:bg-slate-700/60 transition-colors group whitespace-nowrap align-middle"
                     >
                       <div className="flex items-center justify-between gap-1.5">
                         <span>Komoditas / Tipe</span>
@@ -1082,7 +1261,7 @@ export function CustMarkingDetailModal({
                 <tbody className="divide-y divide-[var(--color-border)] font-mono text-[11px]">
                   {sortedAndFilteredRows.map((r, idx) => (
                     <tr
-                      key={idx}
+                      key={r.invoice + idx}
                       className="hover:bg-slate-100/70 dark:hover:bg-slate-800/50 transition-colors"
                     >
                       <td className="p-2 text-center border-r border-[var(--color-border)] text-slate-400 font-sans text-[10px]">
@@ -1199,22 +1378,22 @@ export function CustMarkingDetailModal({
           )}
         </div>
 
-        {/* Footer Summary / Breakdown per Komoditas */}
+        {/* Footer Summary / Breakdown */}
         {normalizedRows.length > 0 && (
-          <div className="px-4 py-2.5 bg-slate-50/90 dark:bg-slate-900/80 border-t border-[var(--color-border)] shrink-0 flex flex-col gap-2">
+          <div className="px-3.5 py-2.5 sm:px-5 sm:py-3 bg-[var(--color-neutral)]/70 border-t border-[var(--color-border)] shrink-0 flex flex-col gap-2 font-sans">
             {/* Quick Summary Chips */}
             <div className="flex items-center flex-wrap justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                 {summary.isBillMatchingGdg ? (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 font-mono">
-                    <span>✓</span> M3 Bill = SUM M3 Gudang ({formatDecimal(summary.totalM3Gdg, 4)} m³)
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 font-mono">
+                    <span>✓</span> M3 Bill = SUM Gudang ({formatDecimal(summary.totalM3Gdg, 4)} m³)
                   </span>
                 ) : summary.isBillMatchingHybrid ? (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 font-mono">
-                    <span>✓</span> M3 Bill = SUM Komplain Parsial + Gudang ({formatDecimal(summary.totalM3Hybrid, 4)} m³)
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 font-mono">
+                    <span>✓</span> M3 Bill = SUM Komplain Parsial ({formatDecimal(summary.totalM3Hybrid, 4)} m³)
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 font-mono">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 font-mono">
                     <span>⚠</span> M3 Bill {formatDecimal(summary.totalM3Bill, 4)} ≠ SUM Gudang {formatDecimal(summary.totalM3Gdg, 4)} m³
                   </span>
                 )}
@@ -1222,49 +1401,49 @@ export function CustMarkingDetailModal({
                 {/* Validasi M3 Tax Return */}
                 {summary.hasTaxRows && (
                   summary.isTaxBillMatching ? (
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 font-mono">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300 dark:bg-emerald-950/80 dark:text-emerald-300 font-mono">
                       <span>✓</span> M3 Tax Return Sesuai ({formatDecimal(summary.totalM3TaxGdg, 4)} m³)
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 font-mono">
-                      <span>⚠</span> M3 Tax Return Selisih: Bill {formatDecimal(summary.totalM3TaxBill, 4)} ≠ Gdg {formatDecimal(summary.totalM3TaxGdg, 4)} m³ (Δ {formatDecimal(Math.abs(summary.totalM3TaxBill - summary.totalM3TaxGdg), 4)} m³)
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-semibold bg-rose-100 text-rose-800 border border-rose-300 dark:bg-rose-950/80 dark:text-rose-300 font-mono">
+                      <span>⚠</span> M3 Tax Selisih (Δ {formatDecimal(Math.abs(summary.totalM3TaxBill - summary.totalM3TaxGdg), 4)} m³)
                     </span>
                   )
                 )}
 
                 {summary.isPartialKomplain && (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200 dark:bg-blue-950/70 dark:text-blue-300 font-mono">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-medium bg-blue-50 text-blue-800 border border-blue-200 dark:bg-blue-950/70 dark:text-blue-300 font-mono">
                     Komplain Parsial ({summary.countKomplainRows} Komplain + {summary.countGudangRows} Gudang): {formatDecimal(summary.totalM3Hybrid, 4)} m³
                   </span>
                 )}
 
                 {Math.abs(summary.m3PlGdgDiff) > 0.001 && (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/70 dark:text-rose-300 font-mono">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-medium bg-rose-50 text-rose-800 border border-rose-200 dark:bg-rose-950/70 dark:text-rose-300 font-mono">
                     Δ PL vs Gudang: {formatDecimal(Math.abs(summary.m3PlGdgDiff), 4)} m³
                   </span>
                 )}
 
                 {summary.hasQtyDiff && (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 font-mono">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/80 dark:text-amber-300 font-mono">
                     ⚠ Qty Selisih (Gdg: {formatNumber(summary.totalQtyGdg)}, PL: {formatNumber(summary.totalQtyPL)})
                   </span>
                 )}
               </div>
 
-              <div className="text-[11px] text-[var(--color-secondary)]">
-                Total <strong>{summary.totalRows}</strong> record • Qty (SJ: <strong>{formatNumber(summary.totalQtySJ)}</strong>, Entrylist: <strong>{formatNumber(summary.totalQtyGdg)}</strong>{summary.totalQtyK > 0 ? `, K: ${formatNumber(summary.totalQtyK)}` : ''}) • Berat (Entrylist: <strong>{formatDecimal(summary.totalBeratGdg, 2)} kg</strong>)
+              <div className="text-[10px] sm:text-[11px] text-[var(--color-secondary)]">
+                Total <strong>{summary.totalRows}</strong> record • Qty (SJ: <strong>{formatNumber(summary.totalQtySJ)}</strong>, Entrylist: <strong>{formatNumber(summary.totalQtyGdg)}</strong>{summary.totalQtyK > 0 ? `, K: ${formatNumber(summary.totalQtyK)}` : ''}) • Berat: <strong>{formatDecimal(summary.totalBeratGdg, 1)} kg</strong>
               </div>
             </div>
           </div>
         )}
 
         {/* Modal Bottom Action */}
-        <div className="px-4 py-2.5 sm:px-5 border-t border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between gap-3 shrink-0">
-          <span className="text-[11px] text-[var(--color-secondary)]">
-            Data dimuat dari <strong className="font-mono text-[var(--color-primary)]">get_qr_tbm3_perMarking_plus_rasio</strong>
+        <div className="px-3.5 py-2.5 sm:px-5 border-t border-[var(--color-border)] bg-[var(--color-surface)] flex items-center justify-between gap-3 shrink-0">
+          <span className="text-[10px] sm:text-[11px] text-[var(--color-secondary)] truncate">
+            Marking: <strong className="font-mono text-[var(--color-primary)]">{markingCode}</strong> ({summary.totalRows} SJ)
           </span>
 
-          <Button variant="secondary" size="sm" onClick={onClose} className="px-4 text-xs">
+          <Button variant="secondary" size="sm" onClick={onClose} className="px-4 text-xs font-semibold rounded-xl cursor-pointer">
             {t('common.close') || 'Tutup'}
           </Button>
         </div>

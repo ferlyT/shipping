@@ -5,6 +5,12 @@ import './styles/globals.css'
 import './styles/animations.css'
 import { AppRouter } from './app/router'
 
+// Auto reload when chunk hash fails due to newly deployed build
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault()
+  window.location.reload()
+})
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {

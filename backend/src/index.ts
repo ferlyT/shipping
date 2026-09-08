@@ -18,9 +18,15 @@ import { shipmentsRoutes } from './modules/shipments/shipments.routes'
 import { dashboardRoutes } from './modules/dashboard/dashboard.routes'
 import { priceListRoutes } from './modules/price-list/price-list.routes'
 import { customerPriceListRoutes } from './modules/customer-price-list/customer-price-list.routes'
+import { commodityMappingRoutes } from './modules/commodity-mapping/commodity-mapping.routes'
+import { priceCheckRoutes } from './modules/price-check/price-check.routes'
+import { m3CheckRoutes } from './modules/m3-check/m3-check.routes'
 
 
 import path from 'path'
+import fs from 'fs/promises'
+import { swaggerUI } from '@hono/swagger-ui'
+import { openApiSpec } from './docs/swagger'
 import { profileRoutes } from './modules/profile/profile.routes'
 
 const rootApp = new Hono()
@@ -33,26 +39,63 @@ rootApp.use('*', cors({
 }))
 rootApp.use('*', honoLogger())
 
-// Static file serving handler for uploads
+// Static file serving handler for uploads with dev/prod distinction
 const serveUploadHandler = async (c: any) => {
   const urlPath = c.req.path
-  const match = urlPath.match(/\/uploads\/(.+)$/)
-  if (!match) return c.text('Not found', 404)
-  const relativePath = match[1]
+  let relativePath = ''
+
+  const uploadsMatch = urlPath.match(/\/(?:mshipping\/)?(?:api\/)?uploads\/(.+)$/)
+  const avatarsMatch = urlPath.match(/\/(?:mshipping\/)?(?:api\/)?avatars\/(.+)$/)
+
+  if (uploadsMatch) {
+    relativePath = uploadsMatch[1]
+  } else if (avatarsMatch) {
+    relativePath = `avatars/${avatarsMatch[1]}`
+  } else {
+    return c.text('Not found', 404)
+  }
+
   const fullPath = path.join(process.cwd(), 'public', 'uploads', relativePath)
   const file = Bun.file(fullPath)
   if (await file.exists()) {
     return new Response(file)
   }
+
+  // Development mode: Fallback ke server production jika file belum ada di lokal
+  if (!ENV.IS_PRODUCTION) {
+    try {
+      const prodUrl = `http://36.93.22.142:3010/uploads/${relativePath}`
+      const remoteRes = await fetch(prodUrl, { signal: AbortSignal.timeout(3000) })
+      if (remoteRes.ok) {
+        const buffer = await remoteRes.arrayBuffer()
+        // Simpan ke local cache agar request berikutnya langsung tersedia
+        await fs.mkdir(path.dirname(fullPath), { recursive: true })
+        await fs.writeFile(fullPath, Buffer.from(buffer))
+        return new Response(Buffer.from(buffer), {
+          headers: {
+            'Content-Type': remoteRes.headers.get('Content-Type') || 'image/png',
+          },
+        })
+      }
+    } catch (e) {
+      // Remote fetch gagal atau timeout, fallback 404
+      logger.warn(`Gagal fetch fallback upload dari production untuk: ${relativePath}`)
+    }
+  }
+
   return c.text('Not found', 404)
 }
 
-// Support uploads at root, APP_BASE_PATH, /mshipping, and /api/uploads
+// Support uploads at root, APP_BASE_PATH, /mshipping, /avatars, and /api/uploads
 rootApp.get('/uploads/*', serveUploadHandler)
+rootApp.get('/avatars/*', serveUploadHandler)
 rootApp.get(`${ENV.APP_BASE_PATH}/uploads/*`, serveUploadHandler)
+rootApp.get(`${ENV.APP_BASE_PATH}/avatars/*`, serveUploadHandler)
 rootApp.get('/mshipping/uploads/*', serveUploadHandler)
+rootApp.get('/mshipping/avatars/*', serveUploadHandler)
 rootApp.get('/api/uploads/*', serveUploadHandler)
 rootApp.get('/mshipping/api/uploads/*', serveUploadHandler)
+
 
 // API rate limiter
 rootApp.use('/api/*', rateLimiter({
@@ -81,6 +124,13 @@ apiApp.route('/shipments', shipmentsRoutes)
 apiApp.route('/dashboard', dashboardRoutes)
 apiApp.route('/price-list', priceListRoutes)
 apiApp.route('/customer-price-list', customerPriceListRoutes)
+apiApp.route('/commodity-mapping', commodityMappingRoutes)
+apiApp.route('/price-check', priceCheckRoutes)
+apiApp.route('/m3-check', m3CheckRoutes)
+
+// OpenAPI JSON & Swagger UI
+apiApp.get('/openapi.json', (c) => c.json(openApiSpec))
+apiApp.get('/docs', swaggerUI({ url: 'openapi.json' }))
 
 // Health check
 apiApp.get('/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
@@ -91,6 +141,16 @@ if (ENV.APP_BASE_PATH && ENV.APP_BASE_PATH !== '/') {
   rootApp.route(`${ENV.APP_BASE_PATH}/api`, apiApp)
 }
 rootApp.route('/mshipping/api', apiApp)
+
+// Root & Sub-path Swagger UI redirects / routes
+rootApp.get('/docs', swaggerUI({ url: '/api/openapi.json' }))
+rootApp.get('/swagger', (c) => c.redirect('/docs'))
+if (ENV.APP_BASE_PATH && ENV.APP_BASE_PATH !== '/') {
+  rootApp.get(`${ENV.APP_BASE_PATH}/docs`, swaggerUI({ url: `${ENV.APP_BASE_PATH}/api/openapi.json` }))
+  rootApp.get(`${ENV.APP_BASE_PATH}/swagger`, (c) => c.redirect(`${ENV.APP_BASE_PATH}/docs`))
+}
+rootApp.get('/mshipping/docs', swaggerUI({ url: '/mshipping/api/openapi.json' }))
+rootApp.get('/mshipping/swagger', (c) => c.redirect('/mshipping/docs'))
 
 // Error handler
 rootApp.onError(createErrorHandler())

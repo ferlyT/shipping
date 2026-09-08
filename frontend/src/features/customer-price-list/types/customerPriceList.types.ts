@@ -2,6 +2,7 @@ export interface CustomerItemMarking {
   id?: number
   markingCode: string
   agentName?: string | null
+  mode?: string | null
 }
 
 export interface CustomerPriceListItem {
@@ -37,6 +38,7 @@ export interface CustomerPriceListUploadRow {
   _count: { items: number }
   custName: string
   itemCount: number
+  markings?: CustomerItemMarking[]
 }
 
 export interface CustomerUploadHistory {
@@ -47,12 +49,14 @@ export interface CustomerUploadHistory {
   uploadedAt: string
   priceDate: string | null
   effectiveDate: string
-  status: 'PARSED' | 'PARTIAL' | 'FAILED'
+  status: 'PARSED' | 'PARTIAL' | 'FAILED' | 'DELETED'
   isSuperseded: boolean
   _count: { items: number }
+  markings?: CustomerItemMarking[]
 }
 
 export interface CustomerPriceListDiffRow {
+  id?: number
   mode: string
   branch: string
   category: string
@@ -60,7 +64,10 @@ export interface CustomerPriceListDiffRow {
   previousPrice: number | null
   delta: number | null
   deltaPct: number | null
+  markings?: CustomerItemMarking[]
+  aliases?: string[]
 }
+
 
 export interface CustomerPriceListDiff {
   fdCustCode: string
@@ -68,8 +75,10 @@ export interface CustomerPriceListDiff {
   currentEffectiveDate: string
   previousUploadId: number | null
   previousEffectiveDate: string | null
+  markings?: CustomerItemMarking[]
   diff: CustomerPriceListDiffRow[]
 }
+
 
 export interface CustomerPriceListFilters {
   modes: string[]
@@ -107,5 +116,45 @@ export interface CustomerPriceLookupResult {
     uploadedAt: string
   } | null
   items: CustomerPriceListItem[]
+}
+
+export interface CustomerSpecialPriceItem {
+  id: number
+  uploadId: number
+  fdCustCode: string
+  custName?: string
+  category: string
+  mode: string
+  branch: string
+  price: number
+  effectiveDate: string
+  endDate?: string | null
+  notes?: string | null
+  isExpired?: boolean
+  aliases?: string[]
+  fileName?: string
+}
+
+export interface CreateCustomerSpecialPriceInput {
+  fdCustCode: string
+  category: string
+  mode: string
+  branch: string
+  price: number
+  effectiveDate: string
+  endDate?: string | null
+  notes?: string | null
+  aliases?: string[]
+}
+
+export interface UpdateCustomerSpecialPriceInput {
+  category?: string
+  mode?: string
+  branch?: string
+  price?: number
+  effectiveDate?: string
+  endDate?: string | null
+  notes?: string | null
+  aliases?: string[]
 }
 

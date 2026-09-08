@@ -14,7 +14,7 @@ type PaginatedResponse<T> = {
   }
 }
 
-export type SearchFieldType = 'ALL' | 'customer' | 'resi' | 'marking' | 'tracking' | 'listCode' | 'customer_marking'
+export type SearchFieldType = 'ALL' | 'customer' | 'resi' | 'marking' | 'markingNo' | 'markingCode' | 'tracking' | 'listCode' | 'customer_marking'
 
 export type ShipmentQuery = {
   page?: number
@@ -66,8 +66,8 @@ function serializeQueryParams(params: ShipmentQuery) {
 }
 
 export const shipmentsApi = {
-  async getList(params: ShipmentQuery = {}): Promise<PaginatedResponse<Shipment>> {
-    const res = await apiClient.get('/shipments', { params: serializeQueryParams(params) })
+  async getList(params: ShipmentQuery = {}, signal?: AbortSignal): Promise<PaginatedResponse<Shipment>> {
+    const res = await apiClient.get('/shipments', { params: serializeQueryParams(params), signal })
     return res.data
   },
 

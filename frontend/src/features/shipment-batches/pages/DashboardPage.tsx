@@ -1,7 +1,6 @@
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 
 import { useDashboard } from '../hooks/useDashboard'
 
@@ -23,10 +22,6 @@ export default function ShipmentBatchesDashboardPage() {
   const dashboard = useDashboard()
   
   const { state, actions, data, flags } = dashboard
-
-  if (flags.isLoadingKpi && !data.kpis) {
-    return <LoadingSpinner message={t('common.loadingBatch')} />
-  }
 
   return (
     <div className="flex flex-col gap-4 lg:gap-8 bg-[var(--color-neutral)] p-3 sm:p-4 lg:p-8 min-h-full">

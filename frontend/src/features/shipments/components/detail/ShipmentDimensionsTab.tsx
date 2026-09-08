@@ -114,7 +114,7 @@ export function ShipmentDimensionsTab({
         </div>
         <div className="flex items-baseline gap-1">
           <span className="text-sm sm:text-base font-bold text-[var(--color-primary)] tabular-nums">
-            {currentTotal.toLocaleString('id-ID', { maximumFractionDigits: 4 })}
+            {currentTotal.toLocaleString('en-US', { maximumFractionDigits: 4 })}
           </span>
           <span className="text-[11px] font-medium text-[var(--color-primary)]/60">m³</span>
         </div>

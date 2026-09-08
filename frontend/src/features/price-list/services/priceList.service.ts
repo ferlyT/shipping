@@ -39,6 +39,10 @@ export const priceListApi = {
   getUploadDiff: (id: number) =>
     apiClient.get<DiffResponse>(`/price-list/uploads/${id}/diff`),
 
+  // PATCH /api/price-list/uploads/:id/effective-date
+  updateEffectiveDate: (id: number, effectiveDate: string) =>
+    apiClient.patch<{ data: UploadRow }>(`/price-list/uploads/${id}/effective-date`, { effectiveDate }),
+
   // POST /api/price-list/upload
   upload: (formData: FormData) =>
     apiClient.post<{ data: UploadResult }>('/price-list/upload', formData, {
@@ -55,22 +59,26 @@ export const priceListApi = {
     markingCode?: string
   }) => apiClient.get<PriceListLookupResult>('/price-list/lookup', { params }),
 
-  // GET /api/price-list/items/:id/markings
-  getItemMarkings: (itemId: number) =>
-    apiClient.get<{ data: { id: number; itemId: number; markingCode: string; agentName: string | null }[] }>(
-      `/price-list/items/${itemId}/markings`
+  // GET /api/price-list/uploads/:id/markings
+  getUploadMarkings: (uploadId: number) =>
+    apiClient.get<{ data: { id: number; uploadId: number; markingCode: string; agentName: string | null }[] }>(
+      `/price-list/uploads/${uploadId}/markings`
     ),
 
-  // PUT /api/price-list/items/:id/markings
-  setItemMarkings: (itemId: number, markings: { markingCode: string; agentName?: string }[]) =>
-    apiClient.put<{ data: { id: number; itemId: number; markingCode: string; agentName: string | null }[] }>(
-      `/price-list/items/${itemId}/markings`,
+  // PUT /api/price-list/uploads/:id/markings
+  setUploadMarkings: (uploadId: number, markings: { markingCode: string; agentName?: string }[]) =>
+    apiClient.put<{ data: { id: number; uploadId: number; markingCode: string; agentName: string | null }[] }>(
+      `/price-list/uploads/${uploadId}/markings`,
       { markings }
     ),
 
-  // DELETE /api/price-list/items/:id/markings/:markingCode
-  deleteItemMarking: (itemId: number, markingCode: string) =>
-    apiClient.delete(`/price-list/items/${itemId}/markings/${markingCode}`),
+  // DELETE /api/price-list/uploads/:id/markings/:markingCode
+  deleteUploadMarking: (uploadId: number, markingCode: string) =>
+    apiClient.delete(`/price-list/uploads/${uploadId}/markings/${markingCode}`),
+
+  // GET /api/price-list/branches
+  getBranches: () =>
+    apiClient.get<{ data: string[] }>('/price-list/branches'),
 
   // GET /api/price-list/entry-search
   searchEntries: (q: string, limit = 20) =>
@@ -80,5 +88,7 @@ export const priceListApi = {
   lookupByEntry: (listCode: string) =>
     apiClient.get<PriceByEntryResult>('/price-list/lookup-by-entry', { params: { listCode } }),
 }
+
+
 
 

@@ -2,41 +2,65 @@ import { prisma } from '../config/database'
 
 async function main() {
   try {
-    console.log('Creating tbPriceListItemMarking...')
-    await prisma.$executeRawUnsafe(`
-      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'tbPriceListItemMarking')
-      BEGIN
-        CREATE TABLE tbPriceListItemMarking (
-          id            INT              NOT NULL IDENTITY(1,1) PRIMARY KEY,
-          itemId        INT              NOT NULL,
-          markingCode   NVARCHAR(50)     NOT NULL,
-          agentName     NVARCHAR(100)    NULL,
-          CONSTRAINT FK_PriceListItemMarking_Item FOREIGN KEY (itemId) REFERENCES tbPriceListItem(id) ON DELETE CASCADE,
-          CONSTRAINT UQ_PriceListItemMarking UNIQUE (itemId, markingCode)
-        );
-        CREATE INDEX IX_PriceListItemMarking_Code ON tbPriceListItemMarking(markingCode);
-        CREATE INDEX IX_PriceListItemMarking_Item ON tbPriceListItemMarking(itemId);
-      END
-    `)
-    console.log('tbPriceListItemMarking created or already exists.')
+    console.log('Migrating marking tables to upload-level...')
 
-    console.log('Creating tbCustomerPriceListItemMarking...')
+    // Create tbPriceListUploadMarking
     await prisma.$executeRawUnsafe(`
-      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'tbCustomerPriceListItemMarking')
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'tbPriceListUploadMarking')
       BEGIN
-        CREATE TABLE tbCustomerPriceListItemMarking (
+        CREATE TABLE tbPriceListUploadMarking (
           id            INT              NOT NULL IDENTITY(1,1) PRIMARY KEY,
-          itemId        INT              NOT NULL,
+          uploadId      INT              NOT NULL,
           markingCode   NVARCHAR(50)     NOT NULL,
           agentName     NVARCHAR(100)    NULL,
-          CONSTRAINT FK_CustomerPriceListItemMarking_Item FOREIGN KEY (itemId) REFERENCES tbCustomerPriceListItem(id) ON DELETE CASCADE,
-          CONSTRAINT UQ_CustomerPriceListItemMarking UNIQUE (itemId, markingCode)
+          CONSTRAINT FK_PriceListUploadMarking_Upload FOREIGN KEY (uploadId) REFERENCES tbPriceListUpload(id) ON DELETE CASCADE,
+          CONSTRAINT UQ_PriceListUploadMarking UNIQUE (uploadId, markingCode)
         );
-        CREATE INDEX IX_CustomerPriceListItemMarking_Code ON tbCustomerPriceListItemMarking(markingCode);
-        CREATE INDEX IX_CustomerPriceListItemMarking_Item ON tbCustomerPriceListItemMarking(itemId);
+        CREATE INDEX IX_PriceListUploadMarking_Code ON tbPriceListUploadMarking(markingCode);
+        CREATE INDEX IX_PriceListUploadMarking_Upload ON tbPriceListUploadMarking(uploadId);
       END
     `)
-    console.log('tbCustomerPriceListItemMarking created or already exists.')
+    console.log('tbPriceListUploadMarking ready.')
+
+    // Create tbCustomerPriceListUploadMarking
+    await prisma.$executeRawUnsafe(`
+      IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'tbCustomerPriceListUploadMarking')
+      BEGIN
+        CREATE TABLE tbCustomerPriceListUploadMarking (
+          id            INT              NOT NULL IDENTITY(1,1) PRIMARY KEY,
+          uploadId      INT              NOT NULL,
+          markingCode   NVARCHAR(50)     NOT NULL,
+          agentName     NVARCHAR(100)    NULL,
+          CONSTRAINT FK_CustomerPriceListUploadMarking_Upload FOREIGN KEY (uploadId) REFERENCES tbCustomerPriceListUpload(id) ON DELETE CASCADE,
+          CONSTRAINT UQ_CustomerPriceListUploadMarking UNIQUE (uploadId, markingCode)
+        );
+        CREATE INDEX IX_CustomerPriceListUploadMarking_Code ON tbCustomerPriceListUploadMarking(markingCode);
+        CREATE INDEX IX_CustomerPriceListUploadMarking_Upload ON tbCustomerPriceListUploadMarking(uploadId);
+      END
+    `)
+    // Add mode column to tbPriceListUploadMarking if not exists
+    await prisma.$executeRawUnsafe(`
+      IF NOT EXISTS (
+        SELECT * FROM sys.columns 
+        WHERE object_id = OBJECT_ID('tbPriceListUploadMarking') AND name = 'mode'
+      )
+      BEGIN
+        ALTER TABLE tbPriceListUploadMarking ADD mode NVARCHAR(50) NULL;
+      END
+    `)
+    console.log('tbPriceListUploadMarking.mode ready.')
+
+    // Add mode column to tbCustomerPriceListUploadMarking if not exists
+    await prisma.$executeRawUnsafe(`
+      IF NOT EXISTS (
+        SELECT * FROM sys.columns 
+        WHERE object_id = OBJECT_ID('tbCustomerPriceListUploadMarking') AND name = 'mode'
+      )
+      BEGIN
+        ALTER TABLE tbCustomerPriceListUploadMarking ADD mode NVARCHAR(50) NULL;
+      END
+    `)
+    console.log('tbCustomerPriceListUploadMarking.mode ready.')
 
     console.log('Migration completed successfully!')
   } catch (error) {
@@ -46,4 +70,6 @@ async function main() {
   }
 }
 
+
 main()
+

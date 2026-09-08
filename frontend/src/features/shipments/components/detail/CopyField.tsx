@@ -26,7 +26,7 @@ export function CopyField({
     <div className="flex items-center justify-between gap-3 py-3 px-4 rounded-xl hover:bg-[var(--color-neutral)] transition-colors group">
       <div className="flex items-center gap-2.5 min-w-0">
         {Icon && (
-          <div className="w-7 h-7 rounded-lg bg-[var(--color-neutral)] flex items-center justify-center shrink-0 text-[var(--color-secondary)] group-hover:text-[var(--color-text)] transition-colors">
+          <div className="hidden sm:flex w-7 h-7 rounded-lg bg-[var(--color-neutral)] items-center justify-center shrink-0 text-[var(--color-secondary)] group-hover:text-[var(--color-text)] transition-colors">
             <Icon size={14} />
           </div>
         )}

@@ -14,19 +14,60 @@ function GridSkeleton() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
       {Array.from({ length: 6 }).map((_, i) => (
-        <div key={i} className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl p-5 shadow-xs animate-pulse space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="h-5 bg-[var(--color-border)] rounded w-1/3" />
-            <div className="h-5 bg-[var(--color-border)] rounded-full w-1/4" />
+        <div
+          key={i}
+          className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl overflow-hidden shadow-xs flex flex-col"
+        >
+          {/* Header */}
+          <div className="px-4 py-3 bg-[var(--color-neutral)] border-b border-[var(--color-border)] flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <div className="h-5 w-20 rounded-md skeleton-shimmer" />
+              <div className="h-4 w-12 rounded skeleton-shimmer" />
+            </div>
+            <div className="h-5 w-20 rounded-full skeleton-shimmer" />
           </div>
-          <div className="space-y-2">
-            <div className="h-4 bg-[var(--color-border)] rounded w-3/4" />
-            <div className="h-3 bg-[var(--color-neutral)] rounded w-1/2" />
+
+          {/* Body */}
+          <div className="p-4 flex-1 flex flex-col justify-between gap-3">
+            <div>
+              <div className="h-4 w-3/4 rounded skeleton-shimmer mb-2" />
+              <div className="h-3 w-1/2 rounded skeleton-shimmer" />
+            </div>
+
+            <div className="space-y-2 pt-2 border-t border-[var(--color-border)]">
+              <div className="flex justify-between items-center">
+                <div className="h-3 w-16 rounded skeleton-shimmer" />
+                <div className="h-3 w-24 rounded skeleton-shimmer" />
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="h-3 w-16 rounded skeleton-shimmer" />
+                <div className="h-3 w-20 rounded skeleton-shimmer" />
+              </div>
+              <div className="flex justify-between items-center">
+                <div className="h-3 w-16 rounded skeleton-shimmer" />
+                <div className="h-3 w-28 rounded skeleton-shimmer" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 p-2.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)] text-center">
+              <div className="space-y-1 flex flex-col items-center">
+                <div className="h-2.5 w-8 rounded skeleton-shimmer" />
+                <div className="h-3.5 w-10 rounded skeleton-shimmer" />
+              </div>
+              <div className="space-y-1 flex flex-col items-center border-x border-[var(--color-border)]">
+                <div className="h-2.5 w-8 rounded skeleton-shimmer" />
+                <div className="h-3.5 w-12 rounded skeleton-shimmer" />
+              </div>
+              <div className="space-y-1 flex flex-col items-center">
+                <div className="h-2.5 w-8 rounded skeleton-shimmer" />
+                <div className="h-3.5 w-12 rounded skeleton-shimmer" />
+              </div>
+            </div>
           </div>
-          <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[var(--color-border)]">
-            <div className="h-8 bg-[var(--color-neutral)] rounded" />
-            <div className="h-8 bg-[var(--color-neutral)] rounded" />
-            <div className="h-8 bg-[var(--color-neutral)] rounded" />
+
+          {/* Footer */}
+          <div className="px-4 pb-3.5 pt-1">
+            <div className="w-full h-8 rounded-xl skeleton-shimmer" />
           </div>
         </div>
       ))}
@@ -131,19 +172,19 @@ export function ShipmentGridView({ data, isLoading, selectedCode, onRowClick }: 
                 <div>
                   <span className="block text-[10px] font-bold text-[var(--color-secondary)] uppercase">Koli</span>
                   <span className="text-xs font-bold text-[var(--color-text)] tabular-nums">
-                    {Number(row.fdJmlPack || 0).toLocaleString('id-ID')}
+                    {Number(row.fdJmlPack || 0).toLocaleString('en-US')}
                   </span>
                 </div>
                 <div className="border-x border-[var(--color-border)]">
                   <span className="block text-[10px] font-bold text-[var(--color-secondary)] uppercase">Berat</span>
                   <span className="text-xs font-bold text-[var(--color-text)] tabular-nums">
-                    {Number(row.fdJmlBerat || 0).toLocaleString('id-ID')} <span className="text-[10px] font-normal text-[var(--color-secondary)]">kg</span>
+                    {Number(row.fdJmlBerat || 0).toLocaleString('en-US')} <span className="text-[10px] font-normal text-[var(--color-secondary)]">kg</span>
                   </span>
                 </div>
                 <div>
                   <span className="block text-[10px] font-bold text-[var(--color-secondary)] uppercase">Volume</span>
                   <span className="text-xs font-bold text-[var(--color-primary)] tabular-nums">
-                    {Number(row.fdM3 || 0).toLocaleString('id-ID', { maximumFractionDigits: 2 })} <span className="text-[10px] font-normal text-[var(--color-primary)]/60">m³</span>
+                    {Number(row.fdM3 || 0).toLocaleString('en-US', { maximumFractionDigits: 2 })} <span className="text-[10px] font-normal text-[var(--color-primary)]/60">m³</span>
                   </span>
                 </div>
               </div>

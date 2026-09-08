@@ -16,10 +16,29 @@ export default defineConfig({
         target: 'http://localhost:3010',
         changeOrigin: true,
       },
+      '/api': {
+        target: 'http://localhost:3010',
+        changeOrigin: true,
+      },
       '/uploads': {
         target: 'http://localhost:3010',
         changeOrigin: true,
       },
+      '/mshipping/uploads': {
+        target: 'http://localhost:3010',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mshipping/, ''),
+      },
+      '/avatars': {
+        target: 'http://localhost:3010',
+        changeOrigin: true,
+      },
+      '/mshipping/avatars': {
+        target: 'http://localhost:3010',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mshipping/, ''),
+      },
     },
   },
 })
+

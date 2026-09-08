@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronDown, ChevronRight, Loader2 } from 'lucide-react'
+import { ChevronDown, ChevronRight } from 'lucide-react'
 import { deliveryOrdersApi } from '../services/delivery-orders.service'
 import { usePagination } from '@/hooks/usePagination'
-import { BatchTable } from './BatchTable'
+import { BatchTable, BatchTableSkeleton } from './BatchTable'
 import { TableFooter } from './TableFooter'
 import { cn } from '@/lib/utils'
 import type { GroupedDataRow, SentValue } from '../types/delivery-orders.types'
@@ -78,10 +78,7 @@ export function DataGroupSection({
       </button>
       {open && (
         isLoading ? (
-          <div className="flex flex-col justify-center items-center py-10 bg-transparent gap-3">
-            <Loader2 className="w-7 h-7 text-[var(--color-tertiary)] animate-spin" />
-            <p className="text-[var(--color-secondary)] text-xs animate-pulse">Memuat group data...</p>
-          </div>
+          <BatchTableSkeleton />
         ) : rows.length === 0 ? (
           <p className="px-6 py-10 text-center text-sm text-[var(--color-secondary)] bg-transparent">
             Tidak ada data dalam grup ini.

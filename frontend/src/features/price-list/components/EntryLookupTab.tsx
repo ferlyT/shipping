@@ -18,7 +18,6 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { CategoryGroupedPriceTable } from './CategoryGroupedPriceTable'
@@ -202,6 +201,9 @@ export function EntryLookupTab({
                           )}
                         </div>
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px] text-[var(--color-secondary)]">
+                          {item.fdComodity && (
+                            <span>Komoditas: <strong className="text-[var(--color-primary)]">{item.fdComodity}</strong></span>
+                          )}
                           {item.fdMarkingCode && (
                             <span>Marking: <strong className="text-[var(--color-primary)] font-mono">{item.fdMarkingCode}</strong></span>
                           )}
@@ -255,8 +257,22 @@ export function EntryLookupTab({
 
       {/* Loading State */}
       {isLoadingEntry && (
-        <div className="p-8 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] flex items-center justify-center gap-3">
-          <LoadingSpinner message="Memuat konteks pengiriman & harga yang berlaku..." />
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xs p-4 sm:p-5 space-y-4">
+            <div className="flex justify-between items-center pb-3 border-b border-[var(--color-border)]">
+              <div className="h-5 w-32 rounded skeleton-shimmer" />
+              <div className="h-5 w-24 rounded-full skeleton-shimmer" />
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="p-3 rounded-xl bg-[var(--color-neutral)] space-y-1.5">
+                  <div className="h-3 w-16 rounded skeleton-shimmer" />
+                  <div className="h-4 w-28 rounded skeleton-shimmer" />
+                </div>
+              ))}
+            </div>
+          </div>
+          <CategoryGroupedPriceTable items={[]} isLoading={true} />
         </div>
       )}
 
@@ -296,7 +312,7 @@ export function EntryLookupTab({
             </div>
 
             {/* Entry Meta Fields Grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
               <div className="bg-[var(--color-neutral)]/60 p-2.5 rounded-lg">
                 <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] flex items-center gap-1">
                   <User size={11} /> Customer
@@ -332,27 +348,27 @@ export function EntryLookupTab({
 
               <div className="bg-[var(--color-neutral)]/60 p-2.5 rounded-lg">
                 <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] flex items-center gap-1">
-                  <MapPin size={11} /> Mode Expected
+                  <MapPin size={11} /> Mode & Cabang
                 </span>
                 <p className="font-semibold text-[var(--color-primary)] mt-0.5">
-                  {entryResult.expectedMode || 'Semua'}
+                  {entryResult.expectedMode || 'Semua'} · {entryResult.expectedBranch || 'Semua'}
                 </p>
               </div>
 
-              <div className="bg-[var(--color-neutral)]/60 p-2.5 rounded-lg">
+              {/* Nama Komoditas Fisik — dari tbEntryList.fdComodity */}
+              <div className="bg-[var(--color-neutral)]/60 p-2.5 rounded-lg sm:col-span-2">
                 <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] flex items-center gap-1">
-                  <MapPin size={11} /> Cabang Expected
+                  <Package size={11} /> Nama Komoditas (Fisik)
                 </span>
-                <p className="font-semibold text-[var(--color-primary)] mt-0.5">
-                  {entryResult.expectedBranch || 'Semua'}
+                <p className="font-bold text-[var(--color-primary)] mt-0.5 truncate" title={entryResult.fdComodity || '—'}>
+                  {entryResult.fdComodity || '—'}
                 </p>
               </div>
 
-              {/* Jenis Komoditas — read-only, diambil dari data pengiriman itu sendiri.
-                  Tidak ada pemilihan manual: halaman ini hanya mencari berdasarkan data. */}
-              <div className="bg-[var(--color-neutral)]/60 p-2.5 rounded-lg">
+              {/* Jenis/Kategori Komoditas — dari tbTypeComodity.fdComodityName */}
+              <div className="bg-[var(--color-neutral)]/60 p-2.5 rounded-lg sm:col-span-2">
                 <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] flex items-center gap-1">
-                  <Tag size={11} /> Jenis Komoditas
+                  <Tag size={11} /> Kategori Komoditi
                 </span>
                 <p className="font-semibold text-[var(--color-primary)] mt-0.5 truncate">
                   {selectedComodityName || '—'}
@@ -403,8 +419,13 @@ export function EntryLookupTab({
                       <div>
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-xs font-bold text-[var(--color-primary)]">
-                            {selectedComodityName}
+                            {entryResult.fdComodity || selectedComodityName}
                           </span>
+                          {entryResult.fdComodity && selectedComodityName && (
+                            <span className="text-[10px] text-[var(--color-secondary)] bg-[var(--color-neutral)] px-2 py-0.5 rounded font-medium border border-[var(--color-border)]">
+                              Tipe: {selectedComodityName}
+                            </span>
+                          )}
                           <span className="text-[10px] text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950 px-2 py-0.5 rounded font-semibold border border-emerald-200 dark:border-emerald-800">
                             Terhubung ke: {matchedCategoriesList && matchedCategoriesList.length > 0 ? matchedCategoriesList.join(' & ') : matchedPriceItem.category}
                           </span>

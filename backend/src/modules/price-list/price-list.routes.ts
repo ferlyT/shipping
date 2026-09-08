@@ -6,22 +6,33 @@ import {
   listUploads,
   getUploadDiff,
   getLatestUploadDiff,
+  updateUploadEffectiveDate,
   getPriceTrend,
   getFilterOptions,
   lookupPriceList,
   searchEntryList,
   lookupPriceByEntry,
-  getItemMarkings,
-  setItemMarkings,
-  deleteItemMarking,
+  getUploadMarkings,
+  setUploadMarkings,
+  deleteUploadMarking,
+  getDistinctBranches,
 } from './price-list.service'
+
 
 const priceListRoutes = new Hono()
 
 // Semua route memerlukan auth
 priceListRoutes.use('/*', authMiddleware, requirePermission('/mshipping/finance/price-list'))
 
+// GET /api/price-list/branches
+priceListRoutes.get('/branches', async (c) => {
+  const branches = await getDistinctBranches()
+  return successResponse(c, branches)
+})
+
+
 // GET /api/price-list/uploads?page=1&pageSize=20
+
 priceListRoutes.get('/uploads', async (c) => {
   const page = Number(c.req.query('page') ?? 1)
   const pageSize = Number(c.req.query('pageSize') ?? 20)
@@ -49,6 +60,27 @@ priceListRoutes.get('/uploads/:id/diff', async (c) => {
   const diff = await getUploadDiff(id)
   if (!diff) return errorResponse(c, 'Upload tidak ditemukan', 404)
   return successResponse(c, diff)
+})
+
+// PATCH /api/price-list/uploads/:id/effective-date
+priceListRoutes.patch('/uploads/:id/effective-date', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID tidak valid', 400)
+
+  const body = await c.req.json<{ effectiveDate: string }>()
+  if (!body?.effectiveDate) {
+    return errorResponse(c, 'Field effectiveDate wajib diisi', 400)
+  }
+
+  const effectiveDate = new Date(body.effectiveDate)
+  if (isNaN(effectiveDate.getTime())) {
+    return errorResponse(c, 'Format tanggal tidak valid', 400)
+  }
+
+  const updated = await updateUploadEffectiveDate(id, effectiveDate)
+  if (!updated) return errorResponse(c, 'Upload tidak ditemukan', 404)
+
+  return successResponse(c, updated)
 })
 
 // GET /api/price-list/filters?sheetType=CS&mode=BY SEA
@@ -89,34 +121,35 @@ priceListRoutes.get('/lookup', async (c) => {
   return successResponse(c, result)
 })
 
-// GET /api/price-list/items/:id/markings
-priceListRoutes.get('/items/:id/markings', async (c) => {
+// GET /api/price-list/uploads/:id/markings
+priceListRoutes.get('/uploads/:id/markings', async (c) => {
   const id = Number(c.req.param('id'))
-  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
-  const markings = await getItemMarkings(id)
+  if (isNaN(id)) return errorResponse(c, 'ID upload tidak valid', 400)
+  const markings = await getUploadMarkings(id)
   return successResponse(c, markings)
 })
 
-// PUT /api/price-list/items/:id/markings (body: { markings: [{ markingCode: string, agentName?: string }] })
-priceListRoutes.put('/items/:id/markings', async (c) => {
+// PUT /api/price-list/uploads/:id/markings (body: { markings: [{ markingCode: string, agentName?: string }] })
+priceListRoutes.put('/uploads/:id/markings', async (c) => {
   const id = Number(c.req.param('id'))
-  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
+  if (isNaN(id)) return errorResponse(c, 'ID upload tidak valid', 400)
   const body = await c.req.json<{ markings: { markingCode: string; agentName?: string }[] }>()
   if (!Array.isArray(body?.markings)) {
     return errorResponse(c, 'Field markings harus berupa array', 400)
   }
-  const result = await setItemMarkings(id, body.markings)
+  const result = await setUploadMarkings(id, body.markings)
   return successResponse(c, result)
 })
 
-// DELETE /api/price-list/items/:id/markings/:markingCode
-priceListRoutes.delete('/items/:id/markings/:markingCode', async (c) => {
+// DELETE /api/price-list/uploads/:id/markings/:markingCode
+priceListRoutes.delete('/uploads/:id/markings/:markingCode', async (c) => {
   const id = Number(c.req.param('id'))
   const markingCode = c.req.param('markingCode')
   if (isNaN(id) || !markingCode) return errorResponse(c, 'Parameter tidak valid', 400)
-  await deleteItemMarking(id, markingCode)
+  await deleteUploadMarking(id, markingCode)
   return successResponse(c, { message: 'Marking berhasil dihapus' })
 })
+
 
 // GET /api/price-list/entry-search?q=XXX&limit=20
 priceListRoutes.get('/entry-search', async (c) => {

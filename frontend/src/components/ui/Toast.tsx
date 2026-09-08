@@ -26,16 +26,16 @@ export function Toast({ toast }: ToastProps) {
   }
 
   const styles = {
-    success: 'bg-green-50 border-green-200 text-green-800',
-    error: 'bg-red-50 border-red-200 text-red-800',
-    info: 'bg-blue-50 border-blue-200 text-blue-800',
-    warning: 'bg-yellow-50 border-yellow-200 text-yellow-800'
+    success: 'bg-emerald-50/95 dark:bg-emerald-950/95 border-emerald-300 dark:border-emerald-700 text-emerald-900 dark:text-emerald-100 shadow-xl shadow-emerald-900/10',
+    error: 'bg-rose-50/95 dark:bg-rose-950/95 border-rose-300 dark:border-rose-700 text-rose-900 dark:text-rose-100 shadow-xl shadow-rose-900/10',
+    info: 'bg-blue-50/95 dark:bg-blue-950/95 border-blue-300 dark:border-blue-700 text-blue-900 dark:text-blue-100 shadow-xl shadow-blue-900/10',
+    warning: 'bg-amber-50/95 dark:bg-amber-950/95 border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-100 shadow-xl shadow-amber-900/10'
   }
 
   return (
     <div
       className={cn(
-        "flex items-start p-4 mb-3 border rounded-lg shadow-sm transition-all duration-300 transform",
+        "flex items-start p-3.5 mb-2.5 border rounded-xl shadow-xl backdrop-blur-md transition-all duration-300 transform",
         styles[toast.type],
         isLeaving ? "opacity-0 translate-x-full" : "animate-slide-in"
       )}

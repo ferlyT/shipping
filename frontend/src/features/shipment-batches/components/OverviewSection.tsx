@@ -14,6 +14,8 @@ export function OverviewSection({
   onToggle: () => void
 }) {
   const { t } = useTranslation()
+  const currentYear = kpis?.currentYear || new Date().getFullYear()
+  const lastYear = currentYear - 1
 
   return (
     <StatCardGroup
@@ -27,10 +29,18 @@ export function OverviewSection({
       itemsBreakpoint="xl"
       items={[
         {
-          label: t('marking.kpi.totalBatch'),
-          value: kpis?.totalBatches || 0,
-          airValue: kpis?.totalBatchesAir || 0,
-          seaValue: kpis?.totalBatchesSea || 0,
+          label: `${t('marking.kpi.totalBatch') || 'Total Batch'} (${currentYear})`,
+          value: kpis?.thisYearBatches !== undefined ? kpis.thisYearBatches : (kpis?.totalBatches || 0),
+          subValue: kpis?.lastYearBatchesYtd !== undefined
+            ? `${lastYear} YTD: ${Number(kpis.lastYearBatchesYtd).toLocaleString('en-US')} · All: ${Number(kpis.totalBatches || 0).toLocaleString('en-US')}`
+            : undefined,
+          yoy: kpis?.yoyGrowthPercent !== undefined ? {
+            percent: kpis.yoyGrowthPercent,
+            lastYearValue: kpis.lastYearBatchesYtd,
+            label: `YoY vs ${lastYear} YTD (${Number(kpis.lastYearBatchesYtd || 0).toLocaleString('en-US')})`
+          } : undefined,
+          airValue: kpis?.thisYearBatchesAir !== undefined ? kpis.thisYearBatchesAir : (kpis?.totalBatchesAir || 0),
+          seaValue: kpis?.thisYearBatchesSea !== undefined ? kpis.thisYearBatchesSea : (kpis?.totalBatchesSea || 0),
           isLoading: isLoadingKpi,
         },
         {

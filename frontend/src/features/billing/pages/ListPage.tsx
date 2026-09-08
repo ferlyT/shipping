@@ -9,7 +9,6 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { Table } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { CurrencyValue } from '@/components/ui/CurrencyValue'
 import { BillingStatusTag } from '../components/BillingStatusTag'
 import { BillingFilterBar, type BillingModeFilter, type BillingStatusFilter } from '../components/BillingFilterBar'
@@ -20,31 +19,14 @@ import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { useToastStore } from '@/stores/toastStore'
-
-interface Billing {
-  fdInvNo: string
-  fdInvDate: string
-  fdListType: number | null
-  fdCustCode: string | null
-  fdMarkingCode: string | null
-  fdMarkingNo: string | null
-  fdDescr: string
-  fdJumlah1: number | null
-  fdCurr1: string | null
-  fdTypeBilling: number | null
-  fdGive: number | null
-  fdGive2: number | null
-  fdCekDate: string | null
-  customer?: { fdCustName: string | null; fdBlocked?: number | null } | null
-  employee?: { fdEmpName: string | null } | null
-}
+import type { Billing } from '../types/billing.types'
 
 const LIST_TYPE_CONFIG: Record<number, { label: string; icon: typeof Plane; accent: string }> = {
   1: { label: 'UDARA', icon: Plane, accent: 'text-sky-600' },
   2: { label: 'LAUT', icon: Ship, accent: 'text-blue-700' },
 }
 
-export default function BillingPage() {
+export default function ListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addToast } = useToastStore()
@@ -85,7 +67,7 @@ export default function BillingPage() {
         page,
         limit,
         ...(effectiveSearch && { search: effectiveSearch }),
-        ...(statusFilter === 'draft' && { draftOnly: 'true' }),
+        ...(statusFilter !== 'all' && { status: statusFilter }),
       }
       const res = await billingApi.list(params)
       return res.data
@@ -116,9 +98,22 @@ export default function BillingPage() {
       if (modeFilter !== 'all' && row.fdListType !== modeFilter) return false
 
       // Filter Status
-      if (statusFilter === 'collected' && row.fdGive2 !== 1) return false
-      if (statusFilter === 'issued' && (row.fdGive !== 1 || row.fdGive2 === 1)) return false
-      if (statusFilter === 'draft' && row.fdCekDate !== null) return false
+      if (statusFilter !== 'all') {
+        const ps = (row.paymentStatus || '').toLowerCase()
+        if (statusFilter === 'lunas' || statusFilter === 'collected') {
+          if (ps !== 'lunas') return false
+        } else if (statusFilter === 'partial') {
+          if (ps !== 'partial') return false
+        } else if (statusFilter === 'issued') {
+          if (ps !== 'issued') return false
+        } else if (statusFilter === 'unpaid') {
+          if (ps !== 'unpaid') return false
+        } else if (statusFilter === 'overdue') {
+          if (ps !== 'overdue') return false
+        } else if (statusFilter === 'draft') {
+          if (ps !== 'draft') return false
+        }
+      }
 
       return true
     })
@@ -137,12 +132,15 @@ export default function BillingPage() {
       .filter((type) => groups.has(type))
       .map((type) => {
         const config = LIST_TYPE_CONFIG[type]
+        const rows = groups.get(type)!
+        const totalAmount = rows.reduce((acc, r) => acc + (Number(r.fdJumlah1) || 0), 0)
         return {
           type,
           label: config?.label || 'Lainnya',
           icon: config?.icon || Package,
           accent: config?.accent || 'text-[var(--color-secondary)]',
-          rows: groups.get(type)!,
+          rows,
+          totalAmount,
         }
       })
   }, [filteredData])
@@ -233,8 +231,6 @@ export default function BillingPage() {
     },
   ]
 
-  if (isInitialLoading) return <LoadingSpinner message={t('common.loadingBilling') || 'Memuat data billing...'} />
-
   return (
     <div className="flex flex-col min-h-full bg-[var(--color-neutral)]">
       {/* Page Header */}
@@ -284,24 +280,16 @@ export default function BillingPage() {
             />
           </div>
 
-          {/* Progress bar */}
-          <div className="relative h-px bg-[var(--color-border)] shrink-0">
-            {isFetching && !isListLoading && (
-              <div className="absolute inset-x-0 top-0 h-[2px] bg-[var(--color-primary)]/10 overflow-hidden z-10">
-                <div className="h-full w-1/3 bg-[var(--color-tertiary)] rounded-full animate-[loaderSlide_1.1s_ease-in-out_infinite]" />
-              </div>
-            )}
-          </div>
-          <style>{`
-            @keyframes loaderSlide {
-              0% { transform: translateX(-100%); }
-              100% { transform: translateX(400%); }
-            }
-          `}</style>
-
           {/* Data Area - Desktop Table */}
-          <div className={cn("hidden sm:flex flex-1 min-h-0 flex-col overflow-auto bg-[var(--color-surface)] transition-opacity duration-200", isRefreshing && "opacity-60")}>
-            {filteredData.length === 0 ? (
+          <div className="hidden sm:flex flex-1 min-h-0 flex-col overflow-auto bg-[var(--color-surface)]">
+            {isInitialLoading || isRefreshing ? (
+              <Table
+                columns={columns}
+                data={[]}
+                keyExtractor={(row) => row.fdInvNo}
+                isLoading={true}
+              />
+            ) : filteredData.length === 0 ? (
               <Table
                 columns={columns}
                 data={[]}
@@ -331,57 +319,81 @@ export default function BillingPage() {
                 {t('common.noData')}
               </div>
             ) : (
-              groupedData.map(({ type, rows }) => (
-                <div key={type} className="flex flex-col divide-y divide-[var(--color-border)]">
-                  {rows.map((row) => (
-                    <button
-                      key={row.fdInvNo}
-                      onClick={() => navigate(ROUTES.BILLING_DETAIL(row.fdInvNo))}
-                      className="w-full text-left px-4 py-3.5 flex flex-col gap-1.5 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/30 active:bg-[var(--color-neutral)]/40 transition-colors"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex flex-col gap-1 items-start min-w-0">
-                          <span className="font-semibold text-[var(--color-primary)] text-[15px] truncate">
-                            {row.fdInvNo}
+              groupedData.map(({ type, label, icon: Icon, accent, rows, totalAmount }) => (
+                <div key={type} className="flex flex-col">
+                  {/* Group Header Banner */}
+                  <div className="sticky top-0 z-10 flex items-center justify-between px-3.5 py-2 bg-[var(--color-neutral)]/95 backdrop-blur-sm border-y border-[var(--color-border)] shadow-2xs">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className={cn("p-1 rounded-md bg-[var(--color-surface)] border border-[var(--color-border)] shrink-0", accent)}>
+                        <Icon size={13} />
+                      </div>
+                      <span className="text-xs font-bold font-[var(--font-display)] text-[var(--color-primary)] tracking-wide uppercase truncate">
+                        {label}
+                      </span>
+                      <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] shrink-0">
+                        {rows.length}
+                      </span>
+                    </div>
+                    <span className="text-xs font-bold text-[var(--color-primary)] tabular-nums shrink-0 ml-2">
+                      <CurrencyValue value={totalAmount} currency={rows[0]?.fdCurr1 || 'Rp.'} />
+                    </span>
+                  </div>
+
+                  {/* Group Items */}
+                  <div className="divide-y divide-[var(--color-border)]/70">
+                    {rows.map((row) => (
+                      <button
+                        key={row.fdInvNo}
+                        onClick={() => navigate(ROUTES.BILLING_DETAIL(row.fdInvNo))}
+                        className="w-full text-left px-3.5 py-3 flex flex-col gap-1.5 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/40 active:bg-[var(--color-neutral)]/60 transition-colors cursor-pointer"
+                      >
+                        {/* Line 1: Invoice No + Date + Status */}
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="font-bold text-[var(--color-primary)] text-sm font-mono tracking-tight truncate">
+                              {row.fdInvNo}
+                            </span>
+                            <BillingStatusTag row={row} />
+                          </div>
+                          <span className="text-[11px] text-[var(--color-secondary)] flex-shrink-0 tabular-nums">
+                            {formatDate(row.fdInvDate)}
                           </span>
-                          <BillingStatusTag row={row} />
                         </div>
-                        <span className="text-[11px] text-[var(--color-secondary)] flex-shrink-0 tabular-nums">
-                          {formatDate(row.fdInvDate)}
-                        </span>
-                      </div>
 
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="text-[13px] text-[var(--color-secondary)] truncate">
-                          {row.customer?.fdCustName || row.fdCustCode || '—'}
-                        </span>
-                        {row.customer && (
-                          <Badge
-                            variant={(statusConfig[(row.customer.fdBlocked ?? 0) as keyof typeof statusConfig] || statusConfig[0]).badgeVariant}
-                            className="text-[9px] px-1.5 py-0 shrink-0"
-                          >
-                            {(statusConfig[(row.customer.fdBlocked ?? 0) as keyof typeof statusConfig] || statusConfig[0]).label}
-                          </Badge>
-                        )}
-                      </div>
+                        {/* Line 2: Customer name + Badge */}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="text-xs font-medium text-[var(--color-primary)] truncate">
+                            {row.customer?.fdCustName || row.fdCustCode || '—'}
+                          </span>
+                          {row.customer && (
+                            <Badge
+                              variant={(statusConfig[(row.customer.fdBlocked ?? 0) as keyof typeof statusConfig] || statusConfig[0]).badgeVariant}
+                              className="text-[9px] px-1.5 py-0 shrink-0"
+                            >
+                              {(statusConfig[(row.customer.fdBlocked ?? 0) as keyof typeof statusConfig] || statusConfig[0]).label}
+                            </Badge>
+                          )}
+                        </div>
 
-                      <div className="flex items-center justify-between gap-2 pt-1">
-                        {row.fdMarkingCode ? (
-                          <span className="inline-flex items-center max-w-[58%] px-2 py-0.5 rounded-full bg-transparent border border-[var(--color-border)] text-[11px] font-medium text-[var(--color-primary)] truncate">
-                            {row.fdMarkingCode}{row.fdMarkingNo ? ` · #${row.fdMarkingNo}` : ''}
-                          </span>
-                        ) : (
-                          <span />
-                        )}
-                        <span className="flex items-center gap-1.5 flex-shrink-0">
-                          <span className="text-[15px] font-semibold text-[var(--color-primary)] tabular-nums">
-                            <CurrencyValue value={row.fdJumlah1} currency={row.fdCurr1} />
-                          </span>
-                          <ChevronRight className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
-                        </span>
-                      </div>
-                    </button>
-                  ))}
+                        {/* Line 3: Marking Chip + Total Amount + Arrow */}
+                        <div className="flex items-center justify-between gap-2 pt-0.5">
+                          {row.fdMarkingCode ? (
+                            <span className="inline-flex items-center max-w-[55%] px-2 py-0.5 rounded-md bg-[var(--color-neutral)] border border-[var(--color-border)] text-[11px] font-mono text-[var(--color-primary)] truncate">
+                              {row.fdMarkingCode}{row.fdMarkingNo ? ` · #${row.fdMarkingNo}` : ''}
+                            </span>
+                          ) : (
+                            <span className="text-[10px] text-[var(--color-secondary)]">Tanpa Marking</span>
+                          )}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <span className="text-sm font-bold text-[var(--color-primary)] tabular-nums">
+                              <CurrencyValue value={row.fdJumlah1} currency={row.fdCurr1} />
+                            </span>
+                            <ChevronRight className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
                 </div>
               ))
             )}
@@ -414,7 +426,7 @@ export default function BillingPage() {
                     }}
                     className="w-14 text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-xs text-[var(--color-primary)] font-semibold focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]/30 transition-all"
                   />
-                  <span className="tabular-nums">/ {totalPages.toLocaleString('id-ID')}</span>
+                  <span className="tabular-nums">/ {totalPages.toLocaleString('en-US')}</span>
                 </div>
               )}
             </div>

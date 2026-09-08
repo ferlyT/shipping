@@ -1,3 +1,4 @@
+import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
@@ -37,6 +38,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
 ]
 
 export function ShipmentDetailModal({
+
   shipment,
   isLoadingDetail = false,
   dimsGudang,
@@ -47,6 +49,7 @@ export function ShipmentDetailModal({
   isLoadingKomplain,
   onClose,
 }: ShipmentDetailModalProps) {
+  useModalEscape(Boolean(shipment), onClose)
   const [activeTab, setActiveTab] = useState<TabId>('info')
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
@@ -111,7 +114,7 @@ export function ShipmentDetailModal({
 
                   {status?.fdGudang?.trim() && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-secondary)] bg-[var(--color-neutral)] px-2.5 py-0.5 rounded-lg">
-                      <MapPin size={11} className="text-[var(--color-secondary)]" />
+                      <MapPin size={11} className="hidden sm:inline-block text-[var(--color-secondary)]" />
                       {status.fdGudang.trim()}
                     </span>
                   )}
@@ -145,7 +148,7 @@ export function ShipmentDetailModal({
                         : 'text-[var(--color-secondary)] hover:text-[var(--color-text)]'
                     )}
                   >
-                    <Icon size={14} className={isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-secondary)]'} />
+                    <Icon size={14} className={cn("hidden sm:inline-block", isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-secondary)]')} />
                     <span>{label}</span>
                     {id === 'dimensions' && totalDimCount > 0 && (
                       <span
