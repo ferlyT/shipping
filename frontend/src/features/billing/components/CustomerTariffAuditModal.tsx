@@ -63,8 +63,8 @@ function renderBranchPill(branchCode?: string | null, branchName?: string | null
   )
 }
 
-// 2. Mode Pill (Icon Only)
-function renderModePill(mode?: string | null, serviceType?: string | null) {
+// 2. Mode Pill
+function renderModePill(mode?: string | null, serviceType?: string | null, showLabel = false) {
   if (!mode && !serviceType) return null
   const isAir = mode === 'BY AIR' || (serviceType && (serviceType.includes('Udara') || serviceType.includes('UC') || serviceType.includes('AS')))
   const label = serviceType || mode || (isAir ? 'BY AIR' : 'BY SEA')
@@ -73,13 +73,15 @@ function renderModePill(mode?: string | null, serviceType?: string | null) {
     <span
       title={label}
       className={cn(
-        'inline-flex items-center justify-center w-6 h-6 rounded-full border shadow-2xs shrink-0 cursor-default',
+        'inline-flex items-center gap-1 rounded-full border shadow-2xs shrink-0 cursor-default font-bold text-[10px]',
+        showLabel ? 'px-2.5 py-0.5' : 'justify-center w-6 h-6',
         isAir
           ? 'bg-violet-500/15 text-violet-700 dark:text-violet-300 border-violet-500/30'
           : 'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30'
       )}
     >
       {isAir ? <Plane className="w-3.5 h-3.5" /> : <Ship className="w-3.5 h-3.5" />}
+      {showLabel && <span>{isAir ? 'UDARA' : 'LAUT'}</span>}
     </span>
   )
 }
@@ -372,8 +374,8 @@ export function CustomerTariffAuditModal({
                   <span>Tarif Terakhir Diubah</span>
                 </div>
                 <div className="flex items-center gap-1.5 flex-wrap">
+                  {renderModePill(latestAudit.mapping?.mode, latestAudit.mapping?.serviceType, true)}
                   {renderBranchPill(latestAudit.mapping?.branchCode)}
-                  {renderModePill(latestAudit.mapping?.mode, latestAudit.mapping?.serviceType)}
                   {renderCommodityPill(latestAudit.mapping?.commodityType, latestAudit.fdColumnName)}
                 </div>
                 <div className="flex items-center gap-1 text-[11px] pt-0.5">
@@ -481,16 +483,59 @@ export function CustomerTariffAuditModal({
               </div>
             </div>
 
-            {/* Quick Filter Selectors */}
-            <div className="flex items-center gap-2 flex-wrap text-xs pt-2 border-t border-[var(--color-border)]/60">
-              {/* Branch Filter */}
+            {/* Quick Filter Selectors: URUTAN: MODA (PILLS), CABANG, AKSI */}
+            <div className="flex items-center gap-3 flex-wrap text-xs pt-2 border-t border-[var(--color-border)]/60">
+              {/* 1. Moda Filter (Pills) */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] font-mono">Moda:</span>
+                <div className="inline-flex rounded-lg border border-[var(--color-border)] p-0.5 bg-[var(--color-neutral)] shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMode('ALL')}
+                    className={cn(
+                      'px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer',
+                      selectedMode === 'ALL'
+                        ? 'bg-[var(--color-surface)] text-[var(--color-primary)] shadow-2xs font-bold'
+                        : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                    )}
+                  >
+                    Semua
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMode('BY SEA')}
+                    className={cn(
+                      'px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1',
+                      selectedMode === 'BY SEA'
+                        ? 'bg-[var(--color-surface)] text-sky-600 dark:text-sky-400 shadow-2xs font-bold'
+                        : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                    )}
+                  >
+                    <Ship size={12} /> Laut (Sea)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedMode('BY AIR')}
+                    className={cn(
+                      'px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all cursor-pointer flex items-center gap-1',
+                      selectedMode === 'BY AIR'
+                        ? 'bg-[var(--color-surface)] text-violet-600 dark:text-violet-400 shadow-2xs font-bold'
+                        : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                    )}
+                  >
+                    <Plane size={12} /> Udara (Air)
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. Cabang Filter */}
               {branchOptions.length > 0 && (
-                <div className="flex items-center gap-1">
-                  <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)]">Cabang:</span>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] font-mono">Cabang:</span>
                   <select
                     value={selectedBranch}
                     onChange={(e) => setSelectedBranch(e.target.value)}
-                    className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-full px-2.5 py-1 text-xs text-[var(--color-primary)] focus:outline-none"
+                    className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-lg px-2.5 py-1 text-xs font-semibold text-[var(--color-primary)] focus:outline-none cursor-pointer"
                   >
                     <option value="ALL">Semua Cabang</option>
                     {branchOptions.map((b) => (
@@ -502,27 +547,13 @@ export function CustomerTariffAuditModal({
                 </div>
               )}
 
-              {/* Mode Filter */}
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)]">Moda:</span>
-                <select
-                  value={selectedMode}
-                  onChange={(e) => setSelectedMode(e.target.value as any)}
-                  className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-full px-2.5 py-1 text-xs text-[var(--color-primary)] focus:outline-none"
-                >
-                  <option value="ALL">Semua Moda</option>
-                  <option value="BY SEA">Laut (Sea)</option>
-                  <option value="BY AIR">Udara (Air)</option>
-                </select>
-              </div>
-
-              {/* Action Filter */}
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)]">Aksi:</span>
+              {/* 3. Aksi Filter */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] font-mono">Aksi:</span>
                 <select
                   value={selectedAction}
                   onChange={(e) => setSelectedAction(e.target.value)}
-                  className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-full px-2.5 py-1 text-xs text-[var(--color-primary)] focus:outline-none"
+                  className="bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-lg px-2.5 py-1 text-xs font-semibold text-[var(--color-primary)] focus:outline-none cursor-pointer"
                 >
                   <option value="ALL">Semua Aksi</option>
                   <option value="UPDATE">UPDATE</option>
@@ -577,11 +608,11 @@ export function CustomerTariffAuditModal({
                         </button>
 
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {/* 1. Cabang Pill */}
-                          {renderBranchPill(group.mapping?.branchCode, group.mapping?.branchName)}
+                          {/* 1. Moda Pill */}
+                          {renderModePill(group.mapping?.mode, group.mapping?.serviceType, true)}
 
-                          {/* 2. Moda Pill (Icon Only) */}
-                          {renderModePill(group.mapping?.mode, group.mapping?.serviceType)}
+                          {/* 2. Cabang Pill */}
+                          {renderBranchPill(group.mapping?.branchCode, group.mapping?.branchName)}
 
                           {/* 3. Tipe Komoditi Pill */}
                           {renderCommodityPill(group.mapping?.commodityType, group.colName)}
@@ -694,7 +725,7 @@ export function CustomerTariffAuditModal({
                   <thead className="bg-[var(--color-neutral)] border-b border-[var(--color-border)] text-[10px] uppercase font-bold text-[var(--color-secondary)] tracking-wider">
                     <tr>
                       <th className="px-3 py-2.5">Waktu Perubahan</th>
-                      <th className="px-3 py-2.5">Cabang & Moda</th>
+                      <th className="px-3 py-2.5">Moda & Cabang</th>
                       <th className="px-3 py-2.5">Tipe Komoditi</th>
                       <th className="px-3 py-2.5 text-center">Aksi</th>
                       <th className="px-3 py-2.5">Perubahan Nilai (Lama → Baru)</th>
@@ -718,18 +749,18 @@ export function CustomerTariffAuditModal({
                             </div>
                           </td>
 
-                          {/* Cabang & Moda Pills */}
+                          {/* Moda & Cabang Pills */}
                           <td className="px-3 py-2.5 whitespace-nowrap">
-                            {item.mapping?.branchCode ? (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {renderBranchPill(item.mapping.branchCode)}
-                                {renderModePill(item.mapping.mode, item.mapping.serviceType)}
-                              </div>
-                            ) : (
-                              <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] text-[var(--color-secondary)] font-mono bg-[var(--color-neutral)] border border-[var(--color-border)]">
-                                {item.mapping?.serviceType || 'Metadata/Rasio'}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {renderModePill(item.mapping?.mode, item.mapping?.serviceType, true)}
+                              {item.mapping?.branchCode ? (
+                                renderBranchPill(item.mapping.branchCode)
+                              ) : (
+                                <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] text-[var(--color-secondary)] font-mono bg-[var(--color-neutral)] border border-[var(--color-border)]">
+                                  {item.mapping?.serviceType || 'Metadata/Rasio'}
+                                </span>
+                              )}
+                            </div>
                           </td>
 
                           {/* Tipe Komoditi Pill */}

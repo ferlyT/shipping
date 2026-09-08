@@ -31,6 +31,7 @@ interface Billing {
   fdGive?: number | null
   fdGive2?: number | null
   fdCekDate?: string | null
+  fdConsignee?: string | null
   employee?: {
     fdEmpName: string | null
   } | null
@@ -85,7 +86,6 @@ export function ValidationListDrawer({
 
   const billingsData = listRes?.data || []
 
-  // Filter active draft billings (> 2022, draft status, amount > 0)
   const activeDraftBillings = useMemo(() => {
     return billingsData.filter((b: Billing) => {
       if (b.fdInvDate) {
@@ -339,10 +339,15 @@ export function ValidationListDrawer({
                   </div>
 
                   <div className="mt-2 pt-2 border-t border-[var(--color-border)]/60 flex items-center justify-between gap-2 text-[11px] text-[var(--color-secondary)]">
-                    <div>
+                    <div className="truncate max-w-[220px]">
                       {t('billing.validation.markingLabel')} <span className="font-medium text-[var(--color-primary)]">{b.fdMarkingNo || b.fdMarkingCode || '—'}</span>
+                      {b.fdConsignee && (
+                        <span className="text-[10px] text-[var(--color-secondary)] block truncate">
+                          {t('billing.consignee')}: <span className="font-semibold text-[var(--color-primary)]">{b.fdConsignee}</span>
+                        </span>
+                      )}
                     </div>
-                    <div className="font-bold text-[var(--color-primary)] font-mono">
+                    <div className="font-bold text-[var(--color-primary)] font-mono shrink-0">
                       <CurrencyValue value={b.fdJumlah1} currency={b.fdCurr1 || 'IDR'} />
                     </div>
                   </div>

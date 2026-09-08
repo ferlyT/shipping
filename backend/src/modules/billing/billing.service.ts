@@ -23,9 +23,10 @@ export async function getBillings(query: Record<string, string | undefined>) {
 
   let custCodesFromSearch: string[] = []
   let empCodesFromSearch: string[] = []
+  let markingCodesFromSearch: string[] = []
 
   if (search) {
-    const [matchingCustomers, matchingEmployees] = await Promise.all([
+    const [matchingCustomers, matchingEmployees, matchingMarkings] = await Promise.all([
       prisma.tbCustomers.findMany({
         where: {
           OR: [
@@ -46,9 +47,17 @@ export async function getBillings(query: Record<string, string | undefined>) {
         select: { fdEmpCode: true },
         take: 50,
       }),
+      prisma.tbMarking.findMany({
+        where: {
+          fdConsignee: { contains: search },
+        },
+        select: { fdMarkingCode: true },
+        take: 500,
+      }),
     ])
     custCodesFromSearch = matchingCustomers.map((c) => c.fdCustCode.trim())
     empCodesFromSearch = matchingEmployees.map((e) => e.fdEmpCode.trim())
+    markingCodesFromSearch = matchingMarkings.map((m) => m.fdMarkingCode.trim())
   }
 
   const draftOnly = query.draftOnly === 'true' || query.status === 'draft'
@@ -70,6 +79,9 @@ export async function getBillings(query: Record<string, string | undefined>) {
           : []),
         ...(empCodesFromSearch.length > 0
           ? [{ fdEmpCode: { in: empCodesFromSearch } }]
+          : []),
+        ...(markingCodesFromSearch.length > 0
+          ? [{ fdMarkingCode: { in: markingCodesFromSearch } }]
           : []),
       ],
     })
@@ -165,6 +177,13 @@ export async function getBillings(query: Record<string, string | undefined>) {
             fdFinish: true,
           },
         },
+        details: {
+          select: {
+            fdItemName: true,
+            fdListCode: true,
+            fdComodity: true,
+          },
+        },
       }
     }),
     prisma.tbBilling.count({ where }),
@@ -179,6 +198,30 @@ export async function getBillings(query: Record<string, string | undefined>) {
       select: { fdEmpCode: true, fdEmpName: true }
     })
     empMap = new Map(employees.map(e => [e.fdEmpCode.trim(), e.fdEmpName.trim()]))
+  }
+
+  // Collect unique marking codes to fetch consignee
+  const allMarkingCodes = new Set<string>()
+  data.forEach((d) => {
+    if (d.fdMarkingCode) {
+      d.fdMarkingCode.split(';').forEach((c) => {
+        const trimmed = c.trim()
+        if (trimmed) allMarkingCodes.add(trimmed)
+      })
+    }
+  })
+
+  let consigneeMap = new Map<string, string>()
+  if (allMarkingCodes.size > 0) {
+    const markings = await prisma.tbMarking.findMany({
+      where: { fdMarkingCode: { in: Array.from(allMarkingCodes) } },
+      select: { fdMarkingCode: true, fdConsignee: true },
+    })
+    consigneeMap = new Map(
+      markings
+        .filter((m) => m.fdConsignee && m.fdConsignee.trim())
+        .map((m) => [m.fdMarkingCode.trim(), m.fdConsignee.trim()])
+    )
   }
 
   const now = new Date()
@@ -216,6 +259,15 @@ export async function getBillings(query: Record<string, string | undefined>) {
       paymentStatus = 'UNPAID'
     }
 
+    let fdConsignee: string | null = null
+    if (d.fdMarkingCode) {
+      const codes = d.fdMarkingCode.split(';').map((c) => c.trim()).filter(Boolean)
+      const consignees = codes.map((c) => consigneeMap.get(c)).filter(Boolean)
+      if (consignees.length > 0) {
+        fdConsignee = [...new Set(consignees)].join(', ')
+      }
+    }
+
     return {
       ...rest,
       totals,
@@ -223,6 +275,7 @@ export async function getBillings(query: Record<string, string | undefined>) {
       totalBayar,
       sisaBayar: Math.max(0, totalJumlah - totalBayar),
       paymentStatus,
+      fdConsignee,
       employee: fdEmpCode ? { fdEmpName: empMap.get(fdEmpCode.trim()) || null } : null
     }
   })
@@ -314,16 +367,21 @@ export async function getBillingById(id: string) {
 
   // 2. Query tbMarking for fdConsignee using fdMarkingCode
   if (markingCode) {
+    const markingCodes = markingCode.split(';').map((c) => c.trim()).filter(Boolean)
     const markingInfo = await safeRunRaw(async () => {
-      return prisma.$queryRaw<any[]>`
-        SELECT TOP 1 RTRIM(fdConsignee) as fdConsignee
-        FROM tbMarking WITH (NOLOCK)
-        WHERE fdMarkingCode = ${markingCode}
-      `
+      return prisma.tbMarking.findMany({
+        where: { fdMarkingCode: { in: markingCodes } },
+        select: { fdMarkingCode: true, fdConsignee: true },
+      })
     }, 'get_marking_consignee')
 
-    if (markingInfo && markingInfo.length > 0 && markingInfo[0]?.fdConsignee) {
-      fdConsignee = String(markingInfo[0].fdConsignee).trim()
+    if (markingInfo && markingInfo.length > 0) {
+      const consignees = markingInfo
+        .map((m) => (m.fdConsignee ? String(m.fdConsignee).trim() : ''))
+        .filter(Boolean)
+      if (consignees.length > 0) {
+        fdConsignee = Array.from(new Set(consignees)).join(', ')
+      }
     }
   }
 

@@ -26,7 +26,7 @@ import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { billingApi } from '../services/billing.service'
 import { formatDate, formatDecimal, formatNumber, formatCurrency, calculateOverweight } from '@/lib/utils'
-import { evaluateItemPrice, isMktCustomer, type PriceEvaluationContext, type ItemPriceEvaluation } from '../utils/billing.utils'
+import { evaluateItemPrice, isMktCustomer, type PriceEvaluationContext } from '../utils/billing.utils'
 import { BILL_TYPES, BILL_TYPE_CONFIGS, getBillType, type BillType } from '../constants/billing.constants'
 import type { Billing } from '../types/billing.types'
 
@@ -423,11 +423,12 @@ export function BillingValidationSummaryModal({
   }
 
   // Evaluasi harga seluruh item invoice
-  const itemEvaluations: ItemPriceEvaluation[] = details.map((item) =>
-    evaluateItemPrice(item, priceEvaluationCtx)
-  )
+  const evaluatedDetails = details.map((item) => ({
+    item,
+    ...evaluateItemPrice(item, priceEvaluationCtx),
+  }))
 
-  const itemsWithTarget = itemEvaluations.filter((e) => e.hasTargetPrice)
+  const itemsWithTarget = evaluatedDetails.filter((e) => e.hasTargetPrice)
   const underchargedItems = itemsWithTarget.filter((e) => e.statusType === 'LOWER')
   const overchargedItems = itemsWithTarget.filter((e) => e.statusType === 'HIGHER')
   const hasUnderchargePrice = underchargedItems.length > 0
@@ -453,6 +454,65 @@ export function BillingValidationSummaryModal({
     isBilledUnneededOverweight ||
     (isOverweight && !isBilledOverweightMatch)
   )
+
+  // Keterangan spesifik Undercharge & Overcharge
+  const underchargeSummary = underchargedItems
+    .map((u) => `${u.item.fdItemName || u.comodityName} (${formatCurrency(u.item.fdItemPrice)} < Acuan ${formatCurrency(u.minTargetPrice || 0)})`)
+    .join(', ')
+
+  const overchargeSummary = overchargedItems
+    .map((o) => `${o.item.fdItemName || o.comodityName} (${formatCurrency(o.item.fdItemPrice)} > Acuan ${formatCurrency(o.maxTargetPrice || 0)})`)
+    .join(', ')
+
+  let verdictTitle = ''
+  let verdictDescription = ''
+
+  if (isAllValid) {
+    if (isBilledMatchedApprovedKomplain) {
+      verdictTitle = `Tagihan Sesuai dengan Ukuran Komplain (${formatDecimal(targetKomplainM3 ?? 0, 4)} m³)`
+      verdictDescription = `Tagihan telah divalidasi tepat menggunakan ukuran komplain fisik (Qty cocok ${effectiveQtyKomplain}/${effectiveQtyList} coly).`
+    } else if (hasOverchargePrice) {
+      verdictTitle = `Data Fisik Sesuai & Tarif Valid (Overcharge: ${overchargedItems.map((o) => o.comodityName || o.item.fdItemName).join(', ')})`
+      verdictDescription = `Seluruh data volume/berat valid. Ditemukan tarif di atas acuan ${firstOvercharge?.targetColName || 'Price List'} (${overchargeSummary}).`
+    } else {
+      verdictTitle = 'Tagihan Sesuai dengan Data Fisik & Acuan Price List'
+      verdictDescription = 'Seluruh data kubikasi/timbangan dan tarif telah diverifikasi valid terhadap data operasional.'
+    }
+  } else if (hasUnderchargePrice) {
+    verdictTitle = `Ditemukan Tarif di Bawah Acuan (Undercharge: ${underchargedItems.map((u) => u.comodityName || u.item.fdItemName).join(', ')})`
+    verdictDescription = `Ditemukan harga satuan di bawah acuan ${firstUndercharge?.targetColName || 'Price List'} pada: ${underchargeSummary}.`
+  } else if (hasOverchargePrice) {
+    verdictTitle = `Ditemukan Tarif di Atas Acuan (Overcharge: ${overchargedItems.map((o) => o.comodityName || o.item.fdItemName).join(', ')})`
+    verdictDescription = `Harga satuan berada di atas acuan ${firstOvercharge?.targetColName || 'Price List'} pada: ${overchargeSummary}.`
+  } else if (isBilledUsingRejectedKomplain) {
+    verdictTitle = `Ukuran Komplain Ditolak (Qty ${qtyKomplain ?? 0}/${qtyList ?? 0} Coly Tidak Cocok)`
+    verdictDescription = `Ukuran komplain (${formatDecimal(normM3(rawKomplainM3 ?? 0), 4)} m³) tidak dapat diterima karena Qty komplain (${effectiveQtyKomplain ?? 0} coly) tidak sama dengan Qty EntryList (${effectiveQtyList ?? 0} coly). Tagihan harus menggunakan ukuran operasional (Gudang/PL).`
+  } else if (isBilledMismatchedApprovedKomplain) {
+    verdictTitle = `Terdapat Ukuran Komplain (${formatDecimal(targetKomplainM3 ?? 0, 4)} m³), Tagihan Masih Menggunakan ${matchLabel}`
+    verdictDescription = `Ukuran komplain (${formatDecimal(targetKomplainM3 ?? 0, 4)} m³, Qty ${effectiveQtyKomplain}/${effectiveQtyList} coly cocok) telah disetujui. Tagihan saat ini masih ditagihkan ${formatDecimal(billedM3, 4)} m³ (${matchLabel}). Disarankan tagihan direvisi ke ukuran komplain.`
+  } else if (!isMatch) {
+    verdictTitle = isAir ? 'Selisih Berat Tagihan dengan Data Timbangan' : 'Selisih Kubikasi (M3) Tagihan dengan Data Operasional'
+    verdictDescription = isAir
+      ? effectiveBilledKg === 0
+        ? `Tagihan berat belum diisi (0 kg). Berat Real EntryList adalah ${formatDecimal(beratList, 2)} kg${minChargeKg > 0 ? ` (Min. Charge: ${formatDecimal(minChargeKg, 2)} kg)` : ''}.`
+        : `Berat Tagihan (${formatDecimal(effectiveBilledKg, 2)} kg) tidak cocok dengan Berat Real (${formatDecimal(beratList, 2)} kg)${minChargeKg > 0 ? ` maupun Min. Charge (${formatDecimal(minChargeKg, 2)} kg)` : ''}.`
+      : `M3 Tagihan (${formatDecimal(billedM3, 4)} m³) tidak cocok dengan data dokumen operasional mana pun.`
+  } else if (hasQtyMismatch) {
+    verdictTitle = 'Terdapat Selisih Jumlah Koli (Qty Mismatch)'
+    verdictDescription = `Terdapat perbedaan jumlah Qty koli antara ${activeQtys.map((q) => `${q.label} (${formatNumber(q.val)})`).join(', ')}. Harap periksa dokumen operasional.`
+  } else if (isBilledOverweightTolerated) {
+    verdictTitle = `Tagihan Sesuai dengan Catatan Selisih Pembulatan Overweight ${Math.abs(overweightDiff ?? 0)} kg`
+    verdictDescription = `Tagihan memuat item penagihan KG (${formatNumber(effectiveBilledKg)} kg) dengan selisih pembulatan wajar ${Math.abs(overweightDiff ?? 0)} kg terhadap hitungan sistem (${formatNumber(overweightKg)} kg).`
+  } else if (isOverweight && !isBilledOverweightMatch) {
+    verdictTitle = `Muatan Melebihi Kuota Rasio (Overweight +${formatNumber(overweightKg)} kg Belum Ditagihkan)`
+    verdictDescription = `Muatan fisik (${formatNumber(actualWeightKg)} kg) melebihi batas kuota rasio (${formatNumber(rasio)} kg/m³ untuk ${formatDecimal(billedM3, 4)} m³). Terdapat kelebihan berat +${formatNumber(overweightKg)} kg yang belum ditagihkan.`
+  } else if (isBilledUnneededOverweight) {
+    verdictTitle = 'Penagihan Overweight Tidak Diperlukan'
+    verdictDescription = `Tagihan memuat item penagihan KG (${formatNumber(effectiveBilledKg)} kg), padahal muatan fisik tidak melebihi kuota rasio berat.`
+  } else {
+    verdictTitle = 'Ditemukan Selisih Antara Tagihan dan Data Operasional'
+    verdictDescription = 'Terdapat ketidaksesuaian nilai tagihan dengan acuan operasional atau price list.'
+  }
 
   // Otomatis aktifkan tab yang bermasalah saat modal dibuka / data validasi dimuat
   useEffect(() => {
@@ -649,6 +709,11 @@ export function BillingValidationSummaryModal({
               {billingData.fdMarkingNo && (
                 <p className="font-mono text-[11px] text-[var(--color-secondary)] truncate mt-0.5" title={billingData.fdMarkingNo.trim()}>
                   ({billingData.fdMarkingNo.trim()})
+                </p>
+              )}
+              {billingData.fdConsignee && (
+                <p className="text-[10px] text-[var(--color-secondary)] truncate mt-0.5" title={billingData.fdConsignee}>
+                  Consignee: <span className="font-semibold text-[var(--color-primary)]">{billingData.fdConsignee}</span>
                 </p>
               )}
             </div>
@@ -1004,42 +1069,10 @@ export function BillingValidationSummaryModal({
                     <span>Hasil Analisis Sistem</span>
                   </div>
                   <h3 className="text-sm sm:text-base font-bold text-[var(--color-primary)] leading-snug">
-                    {isAllValid
-                      ? isBilledMatchedApprovedKomplain
-                        ? `Tagihan Sesuai dengan Ukuran Komplain (${formatDecimal(targetKomplainM3 ?? 0, 4)} m³)`
-                        : hasOverchargePrice
-                        ? `Data Fisik Sesuai & Tarif Valid (Harga di Atas Acuan ${firstOvercharge?.targetColName || 'Price List'})`
-                        : 'Tagihan Sesuai dengan Data Fisik & Acuan Price List'
-                      : hasWarning
-                      ? isBilledUsingRejectedKomplain
-                        ? `Ukuran Komplain Ditolak (Qty ${qtyKomplain ?? 0}/${qtyList ?? 0} Coly Tidak Cocok)`
-                        : isBilledMismatchedApprovedKomplain
-                        ? `Terdapat Ukuran Komplain (${formatDecimal(targetKomplainM3 ?? 0, 4)} m³), Tagihan Masih Menggunakan ${matchLabel}`
-                        : hasUnderchargePrice
-                        ? `Data Fisik Sesuai, Namun Ditemukan Tarif di Bawah Acuan ${firstUndercharge?.targetColName || 'Price List'}`
-                        : isBilledOverweightTolerated
-                        ? `Tagihan Sesuai dengan Catatan Selisih Pembulatan Overweight ${Math.abs(overweightDiff ?? 0)} kg`
-                        : 'Tagihan Memerlukan Perhatian Petugas'
-                      : 'Ditemukan Selisih Antara Tagihan dan Data Operasional'}
+                    {verdictTitle}
                   </h3>
                   <p className="text-xs text-[var(--color-secondary)] leading-relaxed">
-                    {isAllValid
-                      ? isBilledMatchedApprovedKomplain
-                        ? `Tagihan telah divalidasi tepat menggunakan ukuran komplain fisik (Qty cocok ${effectiveQtyKomplain}/${effectiveQtyList} coly).`
-                        : 'Seluruh data kubikasi/timbangan dan tarif telah diverifikasi valid terhadap data operasional.'
-                      : hasWarning
-                      ? isBilledUsingRejectedKomplain
-                        ? `Ukuran komplain (${formatDecimal(normM3(rawKomplainM3 ?? 0), 4)} m³) tidak dapat diterima karena Qty komplain (${effectiveQtyKomplain ?? 0} coly) tidak sama dengan Qty EntryList (${effectiveQtyList ?? 0} coly). Tagihan harus menggunakan ukuran operasional (Gudang/PL).`
-                        : isBilledMismatchedApprovedKomplain
-                        ? `Ukuran komplain (${formatDecimal(targetKomplainM3 ?? 0, 4)} m³, Qty ${effectiveQtyKomplain}/${effectiveQtyList} coly cocok) telah disetujui. Tagihan saat ini masih ditagihkan ${formatDecimal(billedM3, 4)} m³ (${matchLabel}). Disarankan tagihan direvisi ke ukuran komplain.`
-                        : hasUnderchargePrice
-                        ? `Seluruh data volume/berat valid, namun ditemukan harga satuan di bawah acuan (${firstUndercharge?.comodityName || 'Item'}, acuan ${firstUndercharge?.targetColName || 'Price List'} = ${formatCurrency(firstUndercharge?.minTargetPrice || 0)}).`
-                        : isBilledOverweightTolerated
-                        ? `Tagihan memuat item penagihan KG (${formatNumber(effectiveBilledKg)} kg) dengan selisih pembulatan wajar ${Math.abs(overweightDiff ?? 0)} kg terhadap hitungan sistem (${formatNumber(overweightKg)} kg).`
-                        : isOverweight
-                        ? `Muatan fisik melebihi batas kuota rasio (+${formatNumber(overweightKg)} kg), namun belum ditagihkan item penagihan KG.`
-                        : 'Terdapat ketidaksesuaian nilai tagihan dengan acuan operasional atau price list.'
-                      : 'Ditemukan selisih antara kubikasi/berat tagihan dengan dokumen operasional.'}
+                    {verdictDescription}
                   </p>
                 </div>
               </div>
@@ -1175,8 +1208,8 @@ export function BillingValidationSummaryModal({
 
                   {/* Per-item card list */}
                   <div className="space-y-1.5">
-                    {itemEvaluations.map((evalRes, idx) => {
-                      const item = details[idx]
+                    {evaluatedDetails.map((evalRes, idx) => {
+                      const item = evalRes.item
                       const billedPrice = Number(item?.fdItemPrice || 0)
 
                       const statusBadge = evalRes.isMatched ? (
@@ -1413,9 +1446,15 @@ export function BillingValidationSummaryModal({
                         ⚠ Berat aktual fisik masih berada dalam batas kuota rasio (0 kg overweight), namun invoice menagihkan item KG sebesar {formatNumber(effectiveBilledKg)} kg.
                       </span>
                     ) : isOverweight ? (
-                      <span className="text-rose-800 dark:text-rose-200 font-medium">
-                        ⚠ Muatan fisik melebihi batas kuota rasio sebesar +{formatNumber(overweightKg)} kg, namun invoice belum memuat item penagihan KG.
-                      </span>
+                      effectiveBilledKg > 0 ? (
+                        <span className="text-rose-800 dark:text-rose-200 font-medium">
+                          ⚠ Muatan fisik melebihi batas kuota rasio sebesar +{formatNumber(overweightKg)} kg, namun item penagihan KG pada invoice ({formatNumber(effectiveBilledKg)} kg) memiliki selisih {Math.abs(overweightDiff ?? 0)} kg dengan sistem.
+                        </span>
+                      ) : (
+                        <span className="text-rose-800 dark:text-rose-200 font-medium">
+                          ⚠ Muatan fisik melebihi batas kuota rasio sebesar +{formatNumber(overweightKg)} kg, namun invoice belum memuat item penagihan KG.
+                        </span>
+                      )
                     ) : (
                       <span className="text-emerald-800 dark:text-emerald-200">
                         ✓ Berat fisik aktual berada di dalam batas kuota rasio ({formatNumber(Math.max(0, maxAllowedWeight - actualWeightKg))} kg sisa kuota).

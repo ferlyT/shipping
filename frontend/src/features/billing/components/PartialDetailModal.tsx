@@ -1,7 +1,7 @@
 import { useModalEscape } from '@/hooks/useModalEscape'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { X, Layers, FileText, User, Box, Hash, Receipt } from 'lucide-react'
+import { X, Layers, FileText, User, Box, Hash, Receipt, Tag } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { formatDateTime, formatDecimal } from '@/lib/utils'
@@ -16,11 +16,12 @@ export function PartialDetailModal({ item, onClose }: PartialDetailModalProps) {
   useModalEscape(Boolean(item), onClose)
   const markingCode = item?.markingCode || ''
   const customer = item?.customer || ''
+  const custCode = item?.custCode || ''
 
   const { data: resData, isLoading } = useQuery({
-    queryKey: ['billingPartialDetails', markingCode, customer],
+    queryKey: ['billingPartialDetails', markingCode, customer, custCode],
     queryFn: async () => {
-      const res = await billingApi.partialDetails({ markingCode, customer })
+      const res = await billingApi.partialDetails({ markingCode, customer, custCode })
       return res.data as { data: PartialDetailItem[] }
     },
     enabled: Boolean(markingCode),
@@ -62,7 +63,7 @@ export function PartialDetailModal({ item, onClose }: PartialDetailModalProps) {
                 {distinctTerima.length > 0 && (
                   <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold bg-transparent border border-blue-500/40 text-blue-600 dark:text-blue-400">
                     <FileText className="hidden sm:inline-block w-3 h-3 text-blue-500" />
-                    <span>Tanda Terima: <strong className="font-mono">{distinctTerima.join(', ')}</strong></span>
+                    <span>Resi Agent ({distinctTerima.length}): <strong className="font-mono">{distinctTerima.join(', ')}</strong></span>
                   </span>
                 )}
               </div>
@@ -93,6 +94,14 @@ export function PartialDetailModal({ item, onClose }: PartialDetailModalProps) {
             </div>
             <div className="p-2.5 sm:p-3.5 rounded-xl bg-[var(--color-neutral)]/40 border border-[var(--color-border)]">
               <span className="text-[9px] sm:text-[10px] font-bold text-[var(--color-secondary)] uppercase tracking-wider block">
+                No. Resi
+              </span>
+              <span className="text-sm sm:text-base font-bold text-blue-600 dark:text-blue-400 font-mono">
+                {distinctTerima.length} resi
+              </span>
+            </div>
+            <div className="p-2.5 sm:p-3.5 rounded-xl bg-[var(--color-neutral)]/40 border border-[var(--color-border)]">
+              <span className="text-[9px] sm:text-[10px] font-bold text-[var(--color-secondary)] uppercase tracking-wider block">
                 Total Qty
               </span>
               <span className="text-sm sm:text-base font-bold text-[var(--color-primary)] font-mono">
@@ -101,18 +110,10 @@ export function PartialDetailModal({ item, onClose }: PartialDetailModalProps) {
             </div>
             <div className="p-2.5 sm:p-3.5 rounded-xl bg-[var(--color-neutral)]/40 border border-[var(--color-border)]">
               <span className="text-[9px] sm:text-[10px] font-bold text-[var(--color-secondary)] uppercase tracking-wider block">
-                Total M3
+                Total M3 / Berat
               </span>
               <span className="text-sm sm:text-base font-bold text-[var(--color-primary)] font-mono">
-                {formatDecimal(totalM3, 4)} m³
-              </span>
-            </div>
-            <div className="p-2.5 sm:p-3.5 rounded-xl bg-[var(--color-neutral)]/40 border border-[var(--color-border)]">
-              <span className="text-[9px] sm:text-[10px] font-bold text-[var(--color-secondary)] uppercase tracking-wider block">
-                Total Berat
-              </span>
-              <span className="text-sm sm:text-base font-bold text-[var(--color-primary)] font-mono">
-                {formatDecimal(totalKg, 2)} kg
+                {formatDecimal(totalM3, 4)} m³ <span className="text-xs text-[var(--color-secondary)]">({formatDecimal(totalKg, 2)} kg)</span>
               </span>
             </div>
           </div>
@@ -139,7 +140,7 @@ export function PartialDetailModal({ item, onClose }: PartialDetailModalProps) {
                     >
                       {/* Top: No. List + Invoice Badge */}
                       <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-[10px] font-bold text-[var(--color-secondary)] uppercase">No. List:</span>
                           <span className="font-mono font-bold text-xs text-[var(--color-primary)]">
                             {row.listCode || '-'}
@@ -157,10 +158,26 @@ export function PartialDetailModal({ item, onClose }: PartialDetailModalProps) {
                         )}
                       </div>
 
-                      {/* Marking No & Description */}
-                      <div className="p-2.5 rounded-lg bg-[var(--color-neutral)]/50 border border-[var(--color-border)]/60 space-y-1">
-                        <div className="font-bold text-xs text-[var(--color-primary)] font-mono">
-                          {row.markingNo || '-'}
+                      {/* Marking Code, No & Resi Agent */}
+                      <div className="p-2.5 rounded-lg bg-[var(--color-neutral)]/50 border border-[var(--color-border)]/60 space-y-1.5">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {row.markingCode && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-400 font-mono">
+                                <Tag className="w-2.5 h-2.5 text-purple-500" />
+                                {row.markingCode}
+                              </span>
+                            )}
+                            <span className="font-bold text-xs text-[var(--color-primary)] font-mono">
+                              {row.markingNo || '-'}
+                            </span>
+                          </div>
+                          {row.fdTerima && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold bg-transparent border border-blue-500/40 text-blue-600 dark:text-blue-400 font-mono" title="Resi Agent">
+                              <FileText className="w-2.5 h-2.5 text-blue-500" />
+                              {row.fdTerima}
+                            </span>
+                          )}
                         </div>
                         {row.desc && (
                           <p className="text-[11px] text-[var(--color-secondary)] leading-snug break-words">
@@ -196,25 +213,37 @@ export function PartialDetailModal({ item, onClose }: PartialDetailModalProps) {
                 <table className="w-full text-left text-xs">
                   <thead className="bg-[var(--color-neutral)] text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)] border-b border-[var(--color-border)] font-[var(--font-display)]">
                     <tr>
-                      <th className="px-4 py-3.5 w-[18%]">
+                      <th className="px-4 py-3.5 w-[14%]">
                         <div className="flex items-center gap-1.5">
                           <Hash className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
                           <span>No. List</span>
                         </div>
                       </th>
-                      <th className="px-4 py-3.5 w-[32%]">
+                      <th className="px-4 py-3.5 w-[14%]">
                         <div className="flex items-center gap-1.5">
-                          <Box className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
-                          <span>Marking No / Coly</span>
+                          <Tag className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
+                          <span>Marking Code</span>
+                        </div>
+                      </th>
+                      <th className="px-4 py-3.5 w-[14%]">
+                        <div className="flex items-center gap-1.5">
+                          <FileText className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
+                          <span>Resi Agent</span>
                         </div>
                       </th>
                       <th className="px-4 py-3.5 w-[22%]">
+                        <div className="flex items-center gap-1.5">
+                          <Box className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
+                          <span>Marking No / Deskripsi</span>
+                        </div>
+                      </th>
+                      <th className="px-4 py-3.5 w-[16%]">
                         <div className="flex items-center gap-1.5">
                           <User className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
                           <span>Input Oleh & Tgl</span>
                         </div>
                       </th>
-                      <th className="px-4 py-3.5 w-[18%]">
+                      <th className="px-4 py-3.5 w-[10%]">
                         <div className="flex items-center gap-1.5">
                           <Receipt className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
                           <span>No. Invoice</span>
@@ -231,19 +260,42 @@ export function PartialDetailModal({ item, onClose }: PartialDetailModalProps) {
                       return (
                         <tr
                           key={idx}
-                          className={`transition-colors hover:bg-[var(--color-neutral)]/40 ${
-                            idx % 2 === 0 ? 'bg-[var(--color-surface)]' : 'bg-[var(--color-neutral)]/15'
-                          }`}
+                          className={`transition-colors hover:bg-[var(--color-neutral)]/40 ${idx % 2 === 0 ? 'bg-[var(--color-surface)]' : 'bg-[var(--color-neutral)]/15'
+                            }`}
                         >
                           {/* No List */}
                           <td className="px-4 py-3.5 whitespace-nowrap font-mono font-bold text-[var(--color-primary)]">
                             {row.listCode || '-'}
                           </td>
 
+                          {/* Marking Code */}
+                          <td className="px-4 py-3.5 whitespace-nowrap">
+                            {row.markingCode ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-transparent border border-purple-500/40 text-purple-600 dark:text-purple-400 font-mono">
+                                <Tag className="w-3 h-3 text-purple-500" />
+                                {row.markingCode}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-[var(--color-secondary)]">-</span>
+                            )}
+                          </td>
+
+                          {/* Tanda Terima (fdTerima) */}
+                          <td className="px-4 py-3.5 whitespace-nowrap">
+                            {row.fdTerima ? (
+                              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-transparent border border-blue-500/40 text-blue-600 dark:text-blue-400 font-mono">
+                                <FileText className="w-3 h-3 text-blue-500" />
+                                {row.fdTerima}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] text-[var(--color-secondary)]">-</span>
+                            )}
+                          </td>
+
                           {/* Marking No */}
                           <td className="px-4 py-3.5">
                             <span className="font-semibold text-[var(--color-primary)] block leading-snug">{row.markingNo || '-'}</span>
-                            {row.desc && <p className="text-[10px] text-[var(--color-secondary)] truncate max-w-[280px] mt-0.5">{row.desc}</p>}
+                            {row.desc && <p className="text-[10px] text-[var(--color-secondary)] truncate max-w-[220px] mt-0.5">{row.desc}</p>}
                           </td>
 
                           {/* Input Oleh & Tgl Input */}
@@ -304,3 +356,4 @@ export function PartialDetailModal({ item, onClose }: PartialDetailModalProps) {
     document.body
   )
 }
+

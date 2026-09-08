@@ -66,36 +66,30 @@ export function isGenuineBattery(text: string): boolean {
 
   if (!hasBatteryWord) return false
 
-  const nonBatteryAccessories = [
-    'CHARGER',
-    'CHARGING',
-    'CASAN',
-    'CASE',
-    'CASING',
-    'HOLDER',
-    'TESTER',
-    'COVER',
-    'BAG',
-    'BOX',
-    'STRAP',
-    'SPRING',
-    'CONNECTOR',
-    'CLIP',
-    'CLAMP',
-    'INSULATOR',
-    'WRAP',
-    'CABLE',
-    'WIRE',
-    'BRACKET',
-    'INDICATOR',
-    'GAUGE',
-  ]
+  // Jika teks adalah kombinasi barang (misal: "BATTERY, CHARGER", "BATTERY & CHARGER", "BATTERY / CHARGER", "BATTERY AND CHARGER"),
+  // maka barang tersebut mengandung baterai fisik bersama aksesorisnya.
+  const isCombinedItem =
+    /\b(BATTERY|BATTERIES|BATERAI|BATRE|POWERBANK|ACCU|AKI)\b\s*[,/&+]\s*|\s*[,/&+]\s*\b(BATTERY|BATTERIES|BATERAI|BATRE|POWERBANK|ACCU|AKI)\b/i.test(upper) ||
+    /\b(BATTERY|BATTERIES|BATERAI|BATRE)\b\s+(AND|DAN|WITH|SERTA|BESERTA)\b/i.test(upper)
 
-  for (const acc of nonBatteryAccessories) {
-    const regex = new RegExp(`\\b${acc}\\b`, 'i')
-    if (regex.test(upper)) {
-      return false
-    }
+  if (isCombinedItem) {
+    return true
+  }
+
+  // Cek apakah ini murni aksesoris/alat (misal: "BATTERY CHARGER", "BATTERY CASE", "BATTERY HOLDER", "BATTERY TESTER")
+  // di mana kata BATTERY hanya sebagai penjelas fungsi alat tersebut dan tidak ada baterai fisiknya.
+  const pureAccessoriesPattern =
+    /\b(BATTERY|BATTERIES|BATERAI|BATRE)\s+(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE)\b/i
+
+  if (pureAccessoriesPattern.test(upper)) {
+    return false
+  }
+
+  const reverseAccessoriesPattern =
+    /\b(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE)\s+(BATTERY|BATTERIES|BATERAI|BATRE)\b/i
+
+  if (reverseAccessoriesPattern.test(upper)) {
+    return false
   }
 
   return true

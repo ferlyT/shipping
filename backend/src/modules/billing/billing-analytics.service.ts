@@ -402,17 +402,30 @@ export async function getBillingTargetDetails(query: Record<string, string | und
       try {
         const [partialRows, entryRows] = await Promise.all([
           prisma.$queryRaw<any[]>`
+            WITH PartialSJ AS (
+              SELECT 
+                RTRIM(el.fdTerima) AS fdTerima,
+                RTRIM(el.fdCustCode) AS custCode,
+                COUNT(DISTINCT RTRIM(el.fdMarkingCode)) AS countMarking
+              FROM tbEntryList el WITH (NOLOCK)
+              WHERE el.fdTerima IS NOT NULL 
+                AND RTRIM(el.fdTerima) <> ''
+                AND el.fdLoad >= DATEADD(MONTH, -6, GETDATE())
+              GROUP BY RTRIM(el.fdTerima), RTRIM(el.fdCustCode)
+              HAVING COUNT(DISTINCT RTRIM(el.fdMarkingCode)) > 1
+            )
             SELECT 
               RTRIM(el.fdMarkingCode) AS markingCode,
               RTRIM(el.fdCustCode) AS custCode,
-              RTRIM(c.fdCustName) AS custName,
-              COUNT(el.fdTerima) AS countTerima
+              RTRIM(el.fdTerima) AS fdTerima,
+              MAX(p.countMarking) AS countMarking
             FROM tbEntryList el WITH (NOLOCK)
-            LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+            INNER JOIN PartialSJ p 
+              ON p.fdTerima = RTRIM(el.fdTerima) 
+             AND (p.custCode = RTRIM(el.fdCustCode) OR p.custCode = '' OR el.fdCustCode IS NULL)
             WHERE RTRIM(el.fdMarkingCode) IN (${Prisma.join(distinctMarkings)})
-              AND el.fdTerima IS NOT NULL AND RTRIM(el.fdTerima) <> ''
-            GROUP BY RTRIM(el.fdMarkingCode), RTRIM(el.fdCustCode), RTRIM(c.fdCustName)
-            HAVING COUNT(el.fdTerima) > 1
+              AND el.fdLoad >= DATEADD(MONTH, -6, GETDATE())
+            GROUP BY RTRIM(el.fdMarkingCode), RTRIM(el.fdCustCode), RTRIM(el.fdTerima)
           `,
           prisma.$queryRaw<any[]>`
             SELECT
@@ -431,7 +444,12 @@ export async function getBillingTargetDetails(query: Record<string, string | und
         ])
 
         for (const pr of partialRows) {
-          partialMap.set(pr.markingCode, Number(pr.countTerima || 0))
+          const cCode = pr.custCode?.trim() || ''
+          const mCode = pr.markingCode?.trim() || ''
+          const count = Number(pr.countMarking || 0)
+          if (cCode && mCode) {
+            partialMap.set(`${mCode}_${cCode}`, count)
+          }
         }
         for (const er of entryRows) {
           if (er.maxLoadDate) loadDateMap.set(er.markingCode, er.maxLoadDate)
@@ -490,6 +508,10 @@ export async function getBillingTargetDetails(query: Record<string, string | und
       const typeStr = String(r.Type || '').toUpperCase().trim()
       const comodityStr = String(r.Comodity || '').toUpperCase().trim()
       const marking = (r.Marking_code ?? r.markingCode ?? '').trim()
+      const custName = String(r.Customer ?? r.customer ?? '').trim()
+      const resolvedCustCode =
+        custNameToCodeMap.get(custName.toUpperCase()) ||
+        String(entryMap.get(marking)?.sampleCustCode || '').trim()
 
       let pic = 'rico'
       if (mode === 'udara') {
@@ -504,12 +526,15 @@ export async function getBillingTargetDetails(query: Record<string, string | und
         }
       }
 
-      const countTerima = partialMap.get(marking) || 0
+      const countTerima =
+        (resolvedCustCode ? partialMap.get(`${marking}_${resolvedCustCode}`) : undefined) ??
+        (resolvedCustCode ? partialMap.get(resolvedCustCode) : undefined) ??
+        0
       const isPartial = countTerima > 1
       const loadDate = loadDateMap.get(marking) || null
       const entryInfo = entryMap.get(marking) || null
       const custHarga = hargaMap.get(marking) || null
-      const custCode = entryInfo?.sampleCustCode || ''
+      const custCode = resolvedCustCode || entryInfo?.sampleCustCode || ''
 
       const pRes = priceCheckMap.get(String(idx)) || priceCheckMap.get(marking)
       const hargaDb = pRes?.dbPrice || 0

@@ -14,6 +14,7 @@ import {
   Receipt,
   User,
   Edit3,
+  History,
 } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { Button } from '@/components/ui/Button'
@@ -26,6 +27,7 @@ import { CustomerBillingHistoryModal } from '../components/CustomerBillingHistor
 import { IssueInvoiceModal } from '../components/IssueInvoiceModal'
 import { BillResiMarkingModal } from '../components/BillResiMarkingModal'
 import { EditBillingDetailsModal } from '../components/EditBillingDetailsModal'
+import { CustomerTariffAuditModal } from '../components/CustomerTariffAuditModal'
 import { BILL_TYPE_CONFIGS, getBillType, isUnitCode } from '../constants/billing.constants'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
@@ -142,6 +144,8 @@ export function ValidationDetailPage() {
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false)
   const [isResiModalOpen, setIsResiModalOpen] = useState(false)
   const [isEditItemsModalOpen, setIsEditItemsModalOpen] = useState(false)
+  const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
+  const [mobileTab, setMobileTab] = useState<'validation' | 'items'>('validation')
 
   // Re-open summary modal on invoice change
   useEffect(() => { if (id) setIsSummaryModalOpen(true) }, [id])
@@ -222,11 +226,15 @@ export function ValidationDetailPage() {
     const custName = data.customer?.fdCustName || data.fdCustCode || '—'
     const markingCode = data.fdMarkingCode || '—'
     const markingNo = data.fdMarkingNo || '—'
+    const consignee = data.fdConsignee || ''
     const comodity = data.fdComodity || ''
     const comodityType = data.fdTypeComodityName || ''
     const tglAgent = data.fdTglAgent ? formatDate(data.fdTglAgent) : '—'
 
     let text = `Customer: ${custName}\nMarking Code: ${markingCode}\nMarking No: ${markingNo}`
+    if (consignee) {
+      text += `\nConsignee: ${consignee}`
+    }
     if (comodity || comodityType) {
       text += `\nKomoditi: ${[comodity, comodityType ? `(${comodityType})` : ''].filter(Boolean).join(' ')}`
     }
@@ -235,7 +243,7 @@ export function ValidationDetailPage() {
     const success = await copyToClipboard(text)
     if (success) {
       setIsCopied(true)
-      addToast({ type: 'success', message: 'Data customer, marking, komoditi & tgl agent berhasil disalin!' })
+      addToast({ type: 'success', message: 'Data customer, marking, consignee, komoditi & tgl agent berhasil disalin!' })
       setTimeout(() => setIsCopied(false), 2000)
     } else {
       addToast({ type: 'error', message: 'Gagal menyalin data ke clipboard' })
@@ -248,99 +256,155 @@ export function ValidationDetailPage() {
     <div className="flex flex-col min-h-screen lg:h-[calc(100vh-4.25rem)] lg:overflow-hidden p-2 sm:p-3 gap-2 sm:gap-2.5 bg-[var(--color-neutral)] text-[var(--color-primary)] font-[var(--font-body)] animate-fadeIn overflow-y-auto lg:overflow-y-hidden">
 
       {/* ─── 1. COMPACT TOP HEADER BAR ─── */}
-      <div className="flex items-center justify-between gap-2 px-2.5 sm:px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs shrink-0 flex-wrap">
-        {/* Left: Back + Inv No + Status Badges */}
-        <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-wrap">
-          <button
-            type="button"
-            onClick={() => navigate(ROUTES.BILLING_VALIDATION_LIST)}
-            className="p-1 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-            title={t('billing.validation.backToList')}
-          >
-            <ArrowLeft className="w-4 h-4" />
-          </button>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-2.5 sm:px-3 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs shrink-0">
+        {/* Row 1 / Left: Back + Inv No + Status Badges */}
+        <div className="flex items-center justify-between sm:justify-start gap-1.5 sm:gap-2 min-w-0">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate(ROUTES.BILLING_VALIDATION_LIST)}
+              className="p-1.5 rounded-lg border border-[var(--color-border)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer shrink-0"
+              title={t('billing.validation.backToList')}
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
 
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] sm:text-xs uppercase font-bold tracking-wider text-[var(--color-secondary)]">Inv:</span>
-            <span className="font-mono font-bold text-xs sm:text-sm text-[var(--color-primary)]">{data.fdInvNo}</span>
-            <span className={cn('text-[9px] sm:text-[10px] px-1.5 py-0.2 font-bold rounded border uppercase', billTypeConfig.badgeClasses)}>
-              {billTypeConfig.label}
-            </span>
+            <div className="flex items-center gap-1 min-w-0">
+              <span className="text-[10px] sm:text-xs uppercase font-bold tracking-wider text-[var(--color-secondary)] shrink-0">Inv:</span>
+              <span className="font-mono font-bold text-xs sm:text-sm text-[var(--color-primary)] truncate">{data.fdInvNo}</span>
+              <span className={cn('text-[9px] sm:text-[10px] px-1.5 py-0.2 font-bold rounded border uppercase shrink-0', billTypeConfig.badgeClasses)}>
+                {billTypeConfig.label}
+              </span>
+            </div>
           </div>
 
-          <div className="hidden md:flex items-center gap-1 text-xs px-2 py-0.5 rounded-lg bg-[var(--color-neutral)] border border-[var(--color-border)] max-w-[200px] truncate">
-            <User size={12} className="text-[var(--color-secondary)] shrink-0" />
+          <div className="flex items-center gap-1 shrink-0">
+            <IssuedBadge isIssued={Number(data.fdGive) === 1} />
+            <PaymentBadge status={data.paymentStatus} />
+          </div>
+        </div>
+
+        {/* Row 2 / Right: Customer info + Quick Action Buttons Ribbon */}
+        <div className="flex items-center justify-between sm:justify-end gap-1.5 sm:gap-2 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-[var(--color-border)]/60 min-w-0">
+          <div className="flex items-center gap-1 text-[11px] sm:text-xs px-2 py-0.5 rounded-md bg-[var(--color-neutral)] border border-[var(--color-border)] max-w-[140px] sm:max-w-[200px] truncate">
+            <User size={11} className="text-[var(--color-secondary)] shrink-0" />
             <span className="font-semibold truncate text-[var(--color-primary)]" title={data.customer?.fdCustName || data.fdCustCode || '—'}>
               {data.customer?.fdCustName || data.fdCustCode || '—'}
             </span>
           </div>
 
-          <IssuedBadge isIssued={Number(data.fdGive) === 1} />
-          <PaymentBadge status={data.paymentStatus} />
-        </div>
+          {/* Quick Action Buttons Ribbon */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 overflow-x-auto no-scrollbar py-0.5">
+            {Number(data.fdGive) !== 1 && (
+              <button
+                type="button"
+                onClick={() => setIsIssueModalOpen(true)}
+                className="px-2 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-2xs transition-colors cursor-pointer shrink-0"
+                title="Terbitkan invoice menjadi status Issued"
+              >
+                <Send className="w-3 h-3" />
+                <span className="hidden sm:inline">Terbitkan</span>
+              </button>
+            )}
 
-        {/* Right: Quick Action Buttons */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0 flex-wrap ml-auto">
-          {Number(data.fdGive) !== 1 && (
             <button
               type="button"
-              onClick={() => setIsIssueModalOpen(true)}
-              className="px-2 sm:px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
-              title="Terbitkan invoice menjadi status Issued"
+              onClick={() => setIsSummaryModalOpen(true)}
+              className="px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              title="Buka dialog kesimpulan validasi operasional & tarif"
             >
-              <Send className="w-3 h-3" />
-              <span>Terbitkan</span>
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span>Inspeksi</span>
             </button>
-          )}
 
-          <button
-            type="button"
-            onClick={() => setIsSummaryModalOpen(true)}
-            className="px-2 sm:px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
-            title="Buka dialog kesimpulan validasi operasional & tarif"
-          >
-            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-            <span className="hidden sm:inline">Inspeksi Ringkas</span>
-            <span className="sm:hidden">Inspeksi</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setIsResiModalOpen(true)}
+              className="px-1.5 sm:px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              title="Pengecekan Resi & Persebaran Marking"
+            >
+              <ScanBarcode className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>Resi</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setIsResiModalOpen(true)}
-            className="px-1.5 sm:px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
-            title="Pengecekan Resi & Persebaran Marking"
-          >
-            <ScanBarcode className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-            <span className="hidden sm:inline">Cek Resi</span>
-            <span className="sm:hidden">Resi</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setIsHistoryModalOpen(true)}
+              className="px-1.5 sm:px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              title="Riwayat Tagihan / Billing Customer"
+            >
+              <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
+              <span>History</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setIsHistoryModalOpen(true)}
-            className="px-1.5 sm:px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer"
-            title="Riwayat Tagihan / Billing Customer"
-          >
-            <FileText className="w-3.5 h-3.5 text-purple-600 dark:text-purple-400" />
-            <span className="hidden sm:inline">History</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setIsAuditModalOpen(true)}
+              className="px-1.5 sm:px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer shrink-0"
+              title={t('billing.validation.priceAuditTooltip')}
+            >
+              <History className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <span>Audit</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setIsListDrawerOpen(true)}
-            className="p-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] shadow-2xs transition-all cursor-pointer"
-            title="Cari Invoice Lain (Ctrl+F)"
-          >
-            <ListFilter className="w-3.5 h-3.5" />
-          </button>
+            <button
+              type="button"
+              onClick={() => setIsListDrawerOpen(true)}
+              className="p-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] shadow-2xs transition-all cursor-pointer shrink-0"
+              title="Cari Invoice Lain (Ctrl+F)"
+            >
+              <ListFilter className="w-3.5 h-3.5" />
+            </button>
+          </div>
         </div>
       </div>
 
-      {/* ─── 2. MAIN 2-COLUMN LAYOUT ─── */}
+      {/* ─── 2. MOBILE SEGMENTED CONTROL TAB SWITCHER (lg:hidden) ─── */}
+      <div className="lg:hidden flex items-center p-1 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-2xs shrink-0">
+        <button
+          type="button"
+          onClick={() => setMobileTab('validation')}
+          className={cn(
+            'flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+            mobileTab === 'validation'
+              ? 'bg-[var(--color-neutral)] text-[var(--color-tertiary)] shadow-2xs border border-[var(--color-border)]'
+              : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+          )}
+        >
+          <ShieldCheck size={14} className={mobileTab === 'validation' ? 'text-[var(--color-tertiary)]' : ''} />
+          <span>Validasi Sistem</span>
+          {underchargedItems.length > 0 && (
+            <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-rose-500/15 text-rose-600 dark:text-rose-400 font-mono font-bold border border-rose-500/30">
+              {underchargedItems.length}
+            </span>
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab('items')}
+          className={cn(
+            'flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer',
+            mobileTab === 'items'
+              ? 'bg-[var(--color-neutral)] text-[var(--color-tertiary)] shadow-2xs border border-[var(--color-border)]'
+              : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+          )}
+        >
+          <Receipt size={14} className={mobileTab === 'items' ? 'text-[var(--color-tertiary)]' : ''} />
+          <span>Info & Item Tagihan</span>
+          <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-[var(--color-surface)] text-[var(--color-secondary)] font-mono border border-[var(--color-border)]">
+            {details.length}
+          </span>
+        </button>
+      </div>
+
+      {/* ─── 3. MAIN 2-COLUMN / ADAPTIVE LAYOUT ─── */}
       <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 xl:grid-cols-12 2xl:grid-cols-12 gap-3 sm:gap-3.5 lg:min-h-0 lg:overflow-hidden">
 
         {/* ── Kolom Kiri: Identitas Tagihan & Rincian Item ── */}
-        <div className="lg:col-span-5 xl:col-span-5 2xl:col-span-5 flex flex-col gap-3 lg:gap-3.5 lg:min-h-0 lg:overflow-hidden">
+        <div className={cn(
+          "lg:col-span-5 xl:col-span-5 2xl:col-span-5 flex flex-col gap-3 lg:gap-3.5 lg:min-h-0 lg:overflow-hidden",
+          mobileTab !== 'items' && "hidden lg:flex"
+        )}>
 
           {/* Card: Identitas Tagihan & Customer */}
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5 sm:p-4 shadow-2xs shrink-0 space-y-3">
@@ -397,6 +461,11 @@ export function ValidationDetailPage() {
                     ({data.fdMarkingNo.trim()})
                   </p>
                 )}
+                {data.fdConsignee && (
+                  <p className="text-[11px] text-[var(--color-secondary)] truncate" title={data.fdConsignee}>
+                    Consignee: <span className="font-semibold text-[var(--color-primary)]">{data.fdConsignee}</span>
+                  </p>
+                )}
                 {data.resiSummary?.resiList && data.resiSummary.resiList.length > 0 && (
                   <p className="text-[10px] text-blue-600 dark:text-blue-400 font-mono truncate" title={data.resiSummary.resiList.join(', ')}>
                     Resi: {data.resiSummary.resiList[0]}{data.resiSummary.resiList.length > 1 ? ` (+${data.resiSummary.resiList.length - 1})` : ''}
@@ -447,53 +516,97 @@ export function ValidationDetailPage() {
             {/* Body */}
             <div className="overflow-y-auto min-h-0 max-h-[calc(100vh-20rem)] divide-y divide-[var(--color-border)]/60">
               {details.length > 0 ? (
-                <table className="w-full table-fixed text-left text-xs">
-                  <colgroup>
-                    <col style={{ width: '52%' }} />
-                    <col style={{ width: '18%' }} />
-                    <col style={{ width: '30%' }} />
-                  </colgroup>
-                  <thead className="bg-[var(--color-neutral)]/80 sticky top-0 z-10 text-[10px] uppercase font-bold text-[var(--color-secondary)] border-b border-[var(--color-border)]">
-                    <tr>
-                      <th className="px-3.5 py-2">Deskripsi / Komoditas</th>
-                      <th className="px-3 py-2 text-right">Qty</th>
-                      <th className="px-3.5 py-2 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[var(--color-border)]/60">
+                <>
+                  {/* MOBILE CARDS VIEW (< sm) */}
+                  <div className="sm:hidden divide-y divide-[var(--color-border)]/60">
                     {details.map((row) => (
-                      <tr key={row.fdID} className="hover:bg-[var(--color-neutral)]/30 transition-colors">
-                        <td className="px-3.5 py-2.5 leading-snug">
-                          <p className="font-semibold text-[var(--color-primary)] text-xs line-clamp-2" title={row.fdItemName}>
+                      <div key={row.fdID} className="p-3 space-y-2 hover:bg-[var(--color-neutral)]/30 transition-colors">
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="font-semibold text-[var(--color-primary)] text-xs leading-snug flex-1" title={row.fdItemName}>
                             {row.fdItemName}
                           </p>
-                          <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <div className="text-right font-mono font-bold text-xs text-[var(--color-primary)] shrink-0">
+                            <CurrencyValue value={row.fdTotal} currency={row.fdCurr} />
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] font-mono text-[var(--color-secondary)]">
+                          <span className="flex items-center gap-1 font-sans">
+                            <span className="font-semibold text-[var(--color-primary)] font-mono">
+                              {formatQtyDecimal(row.fdQty, row.fdListCode, row.fdItemName)}
+                            </span>
+                            {row.fdListCode && (
+                              <span className="text-[9px] px-1 py-0.2 rounded bg-[var(--color-neutral)] border border-[var(--color-border)]">
+                                {row.fdListCode.trim()}
+                              </span>
+                            )}
+                          </span>
+                          <span>@ {formatWithCurrency(row.fdItemPrice, row.fdCurr)}</span>
+                        </div>
+
+                        <div className="flex items-center justify-between gap-1 pt-1 border-t border-[var(--color-border)]/40 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {row.fdComodity && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] font-medium truncate max-w-[130px]">
+                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] font-medium truncate max-w-[150px]">
                                 {row.fdComodity}
                               </span>
                             )}
-                            <span className="text-[10px] text-[var(--color-secondary)] font-mono">
-                              @ {formatWithCurrency(row.fdItemPrice, row.fdCurr)}
-                            </span>
-                            <ItemPriceBadge row={row} validationData={validationData} />
                           </div>
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-mono font-medium text-[var(--color-primary)]">
-                          {formatQtyDecimal(row.fdQty, row.fdListCode, row.fdItemName)}
-                          {row.fdListCode && (
-                            <span className="text-[9px] text-[var(--color-secondary)] block font-sans">
-                              {row.fdListCode.trim()}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3.5 py-2.5 text-right font-mono font-bold text-[var(--color-primary)]">
-                          <CurrencyValue value={row.fdTotal} currency={row.fdCurr} />
-                        </td>
-                      </tr>
+                          <ItemPriceBadge row={row} validationData={validationData} />
+                        </div>
+                      </div>
                     ))}
-                  </tbody>
-                </table>
+                  </div>
+
+                  {/* DESKTOP / TABLET SPREADSHEET TABLE (>= sm) */}
+                  <table className="hidden sm:table w-full table-fixed text-left text-xs">
+                    <colgroup>
+                      <col style={{ width: '52%' }} />
+                      <col style={{ width: '18%' }} />
+                      <col style={{ width: '30%' }} />
+                    </colgroup>
+                    <thead className="bg-[var(--color-neutral)]/80 sticky top-0 z-10 text-[10px] uppercase font-bold text-[var(--color-secondary)] border-b border-[var(--color-border)]">
+                      <tr>
+                        <th className="px-3.5 py-2">Deskripsi / Komoditas</th>
+                        <th className="px-3 py-2 text-right">Qty</th>
+                        <th className="px-3.5 py-2 text-right">Total</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[var(--color-border)]/60">
+                      {details.map((row) => (
+                        <tr key={row.fdID} className="hover:bg-[var(--color-neutral)]/30 transition-colors">
+                          <td className="px-3.5 py-2.5 leading-snug">
+                            <p className="font-semibold text-[var(--color-primary)] text-xs line-clamp-2" title={row.fdItemName}>
+                              {row.fdItemName}
+                            </p>
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              {row.fdComodity && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] font-medium truncate max-w-[130px]">
+                                  {row.fdComodity}
+                                </span>
+                              )}
+                              <span className="text-[10px] text-[var(--color-secondary)] font-mono">
+                                @ {formatWithCurrency(row.fdItemPrice, row.fdCurr)}
+                              </span>
+                              <ItemPriceBadge row={row} validationData={validationData} />
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5 text-right font-mono font-medium text-[var(--color-primary)]">
+                            {formatQtyDecimal(row.fdQty, row.fdListCode, row.fdItemName)}
+                            {row.fdListCode && (
+                              <span className="text-[9px] text-[var(--color-secondary)] block font-sans">
+                                {row.fdListCode.trim()}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3.5 py-2.5 text-right font-mono font-bold text-[var(--color-primary)]">
+                            <CurrencyValue value={row.fdTotal} currency={row.fdCurr} />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               ) : (
                 <div className="py-10 text-center text-xs text-[var(--color-secondary)]">
                   {t('billing.detail.noItems')}
@@ -524,7 +637,10 @@ export function ValidationDetailPage() {
         </div>
 
         {/* ── Kolom Kanan: Mesin Validasi ── */}
-        <div className="lg:col-span-7 xl:col-span-7 2xl:col-span-7 flex flex-col min-h-0 h-auto lg:h-full lg:overflow-hidden">
+        <div className={cn(
+          "lg:col-span-7 xl:col-span-7 2xl:col-span-7 flex flex-col min-h-0 h-auto lg:h-full lg:overflow-hidden",
+          mobileTab !== 'validation' && "hidden lg:flex"
+        )}>
           {primaryListCode && (
             <BillingValidationCard
               listCode={primaryListCode}
@@ -540,6 +656,7 @@ export function ValidationDetailPage() {
               customerName={data.customer?.fdCustName}
               custCode={data.fdCustCode}
               onOpenSummaryModal={() => setIsSummaryModalOpen(true)}
+              onOpenAuditModal={() => setIsAuditModalOpen(true)}
             />
           )}
         </div>
@@ -603,6 +720,13 @@ export function ValidationDetailPage() {
         custCode={data.fdCustCode || undefined}
         markingCode={data.fdMarkingCode || undefined}
         markingNo={data.fdMarkingNo || undefined}
+      />
+
+      <CustomerTariffAuditModal
+        isOpen={isAuditModalOpen}
+        custCode={data.fdCustCode || null}
+        custName={data.customer?.fdCustName || data.fdCustCode || undefined}
+        onClose={() => setIsAuditModalOpen(false)}
       />
 
       <EditBillingDetailsModal

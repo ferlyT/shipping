@@ -284,7 +284,7 @@ export default function TargetPage() {
       'List No':            item.listNo      || '-',
       'Marking Code':       item.markingCode || '-',
       'Marking No':         item.markingNo   || '-',
-      'Parsial':            item.isPartial   ? `Parsial (${item.countTerima || 1} terima)` : 'Normal',
+      'Parsial':            item.isPartial   ? `Parsial (${item.countTerima || 2} marking)` : 'Normal',
       'Tgl Input':          item.fdLoad      ? formatDateTime(item.fdLoad) : '-',
       'Cabang':             item.branch      || '-',
       'Customer':           item.customer    || '-',

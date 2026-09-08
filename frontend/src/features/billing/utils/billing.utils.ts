@@ -103,36 +103,30 @@ export function isGenuineBattery(text: string): boolean {
 
   if (!hasBatteryWord) return false
 
-  const nonBatteryAccessories = [
-    'CHARGER',
-    'CHARGING',
-    'CASAN',
-    'CASE',
-    'CASING',
-    'HOLDER',
-    'TESTER',
-    'COVER',
-    'BAG',
-    'BOX',
-    'STRAP',
-    'SPRING',
-    'CONNECTOR',
-    'CLIP',
-    'CLAMP',
-    'INSULATOR',
-    'WRAP',
-    'CABLE',
-    'WIRE',
-    'BRACKET',
-    'INDICATOR',
-    'GAUGE',
-  ]
+  // Jika teks adalah kombinasi barang (misal: "BATTERY, CHARGER", "BATTERY & CHARGER", "BATTERY / CHARGER", "BATTERY AND CHARGER"),
+  // maka barang tersebut mengandung baterai fisik bersama aksesorisnya.
+  const isCombinedItem =
+    /\b(BATTERY|BATTERIES|BATERAI|BATRE|POWERBANK|ACCU|AKI)\b\s*[,/&+]\s*|\s*[,/&+]\s*\b(BATTERY|BATTERIES|BATERAI|BATRE|POWERBANK|ACCU|AKI)\b/i.test(upper) ||
+    /\b(BATTERY|BATTERIES|BATERAI|BATRE)\b\s+(AND|DAN|WITH|SERTA|BESERTA)\b/i.test(upper)
 
-  for (const acc of nonBatteryAccessories) {
-    const regex = new RegExp(`\\b${acc}\\b`, 'i')
-    if (regex.test(upper)) {
-      return false
-    }
+  if (isCombinedItem) {
+    return true
+  }
+
+  // Cek apakah ini murni aksesoris/alat (misal: "BATTERY CHARGER", "BATTERY CASE", "BATTERY HOLDER", "BATTERY TESTER")
+  // di mana kata BATTERY hanya sebagai penjelas fungsi alat tersebut dan tidak ada baterai fisiknya.
+  const pureAccessoriesPattern =
+    /\b(BATTERY|BATTERIES|BATERAI|BATRE)\s+(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE)\b/i
+
+  if (pureAccessoriesPattern.test(upper)) {
+    return false
+  }
+
+  const reverseAccessoriesPattern =
+    /\b(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE)\s+(BATTERY|BATTERIES|BATERAI|BATRE)\b/i
+
+  if (reverseAccessoriesPattern.test(upper)) {
+    return false
   }
 
   return true
@@ -264,6 +258,7 @@ export const MKT_SALES_GROUP = [
   'SUSI',
   'TSC',
   'KB',
+  'ALDY',
 ] as const
 
 /**
@@ -531,6 +526,12 @@ export function evaluateItemPrice(
   let comodityName = ''
   if (isKgOverweightItem) {
     comodityName = 'HARGA KG (PER AGEN)'
+  } else if (isGenuineBattery(itemNameUpper) || isGenuineBattery(directComodityName) || isGenuineBattery(item?.fdComodity)) {
+    comodityName = isAir ? 'LS & (GOODS WITH BATTERY)' : 'SEMI GARMENT'
+  } else if (isGenuineIpad(itemNameUpper)) {
+    comodityName = isAir ? 'TABLET' : 'KHUSUS IPAD'
+  } else if (isGenuineLaptop(itemNameUpper)) {
+    comodityName = !isAir && isAppleDevice(itemNameUpper) ? 'APPLE LAPTOP' : 'LAPTOP'
   } else {
     if (typeId) {
       const matchType = res?.comodityTypes?.find(
@@ -607,7 +608,23 @@ export function evaluateItemPrice(
       let minP = 0
       let maxP = 0
 
-      if (isAir) {
+      // 3b. Prioritaskan pengecekan komoditas fisik khusus (Baterai, iPad, Laptop) sebelum sinonim umum
+      if (isGenuineBattery(itemNameUpper) || isGenuineBattery(normName) || normName.includes('SEMI GARMENT')) {
+        heuristicItem = isAir
+          ? items.find((p: any) => String(p?.category || '').toLowerCase().includes('goods with battery') || String(p?.category || '').toLowerCase().includes('ls &'))
+          : items.find((p: any) => String(p?.category || '').toLowerCase().includes('semi garment') || String(p?.category || '').toLowerCase().includes('battery'))
+      } else if (isGenuineIpad(itemNameUpper) || isGenuineIpad(normName) || normName.includes('TABLET') || normName.includes('IPAD')) {
+        heuristicItem = isAir
+          ? items.find((p: any) => String(p?.category || '').toLowerCase().includes('tablet') || String(p?.category || '').toLowerCase().includes('ipad'))
+          : items.find((p: any) => String(p?.category || '').toLowerCase().includes('khusus ipad') || String(p?.category || '').toLowerCase().includes('ipad') || String(p?.category || '').toLowerCase().includes('tablet'))
+      } else if (isGenuineLaptop(itemNameUpper) || isGenuineLaptop(normName) || normName.includes('LAPTOP') || normName.includes('MACBOOK')) {
+        if (isAppleDevice(itemNameUpper) || isAppleDevice(normName)) {
+          heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('apple laptop') || String(p?.category || '').toLowerCase().includes('macbook'))
+        }
+        if (!heuristicItem) {
+          heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('laptop') || String(p?.category || '').toLowerCase().includes('selain merek apple') || String(p?.category || '').toLowerCase().includes('notebook'))
+        }
+      } else if (isAir) {
         if (normName.includes('GENERAL') || normName.includes('UMUM')) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('general goods') || String(p?.category || '').toUpperCase() === 'UMUM') || null
         } else if (normName.includes('BRANDED')) {
@@ -616,15 +633,6 @@ export function evaluateItemPrice(
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('fabric') || String(p?.category || '').toLowerCase().includes('garment')) || null
         } else if (normName.includes('FOOD')) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('ls &') || String(p?.category || '').toLowerCase().includes('food')) || null
-        } else if (isGenuineIpad(normName) || normName.includes('TABLET') || normName.includes('IPAD')) {
-          heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('tablet') || String(p?.category || '').toLowerCase().includes('ipad')) || null
-        } else if (isGenuineLaptop(normName) || normName.includes('LAPTOP') || normName.includes('MACBOOK')) {
-          if (isAppleDevice(normName)) {
-            heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('apple laptop')) || null
-          }
-          if (!heuristicItem) {
-            heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('selain merek apple') || String(p?.category || '').toLowerCase().includes('laptop')) || null
-          }
         }
       } else {
         if (normName.includes('UMUM') || normName.includes('GENERAL')) {
@@ -646,14 +654,8 @@ export function evaluateItemPrice(
             minP = Math.min(...matchedItems.map((p: any) => Number(p?.price || 0)))
             maxP = Math.max(...matchedItems.map((p: any) => Number(p?.price || 0)))
           }
-        } else if (normName.includes('SEMI GARMENT') || isGenuineBattery(normName) || isGenuineBattery(itemNameUpper)) {
-          heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('semi garment')) || null
         } else if (normName.includes('GARMENT')) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('garment')) || null
-        } else if (isGenuineLaptop(normName) || normName.includes('MACBOOK') || normName.includes('LAPTOP')) {
-          heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('laptop')) || null
-        } else if (isGenuineIpad(normName) || normName.includes('IPAD') || normName.includes('TABLET')) {
-          heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('khusus ipad') || String(p?.category || '').toLowerCase().includes('ipad') || String(p?.category || '').toLowerCase().includes('tablet')) || null
         }
       }
 
@@ -803,7 +805,7 @@ export function resolveInvoiceRelation(invNo?: string | null) {
     return {
       isCombined: false,
       subCode: null,
-      parentInvNo: '',
+      parentInvNo: null,
       targetInvNo: '',
     }
   }
@@ -829,6 +831,100 @@ export function resolveInvoiceRelation(invNo?: string | null) {
     parentInvNo: null,
     targetInvNo: clean,
   }
+}
+
+/**
+ * Normalisasi dan deteksi branch code dari raw branch, prefix nomor invoice, atau marking code.
+ */
+export function resolveBranchCode(
+  rawBranch?: string | null,
+  invNo?: string | null,
+  markingCode?: string | null
+): string | null {
+  const clean = (rawBranch || '').trim().toUpperCase()
+  if (clean && clean !== '--' && clean !== '-' && clean !== 'NONE' && clean !== 'NULL') {
+    return clean
+  }
+
+  const cleanInv = (invNo || '').trim().toUpperCase()
+  if (cleanInv) {
+    if (
+      cleanInv.startsWith('--S') ||
+      cleanInv.startsWith('--A') ||
+      cleanInv.startsWith('SGS') ||
+      cleanInv.startsWith('SGA') ||
+      cleanInv.startsWith('SG-')
+    ) {
+      return 'SG'
+    }
+    if (
+      cleanInv.startsWith('GZS') ||
+      cleanInv.startsWith('GZA') ||
+      cleanInv.startsWith('GZ-')
+    ) {
+      return 'GZ'
+    }
+    if (
+      cleanInv.startsWith('YWS') ||
+      cleanInv.startsWith('YWA') ||
+      cleanInv.startsWith('YW-')
+    ) {
+      return 'YW'
+    }
+    if (
+      cleanInv.startsWith('SHS') ||
+      cleanInv.startsWith('SHA') ||
+      cleanInv.startsWith('SH-')
+    ) {
+      return 'SH'
+    }
+    if (
+      cleanInv.startsWith('SZS') ||
+      cleanInv.startsWith('SZA') ||
+      cleanInv.startsWith('SZ-')
+    ) {
+      return 'SZ'
+    }
+    if (
+      cleanInv.startsWith('HKS') ||
+      cleanInv.startsWith('HKA') ||
+      cleanInv.startsWith('HK-')
+    ) {
+      return 'HK'
+    }
+    if (
+      cleanInv.startsWith('KRS') ||
+      cleanInv.startsWith('KRA') ||
+      cleanInv.startsWith('KR-')
+    ) {
+      return 'KR'
+    }
+    if (
+      cleanInv.startsWith('BKS') ||
+      cleanInv.startsWith('BKA') ||
+      cleanInv.startsWith('THS') ||
+      cleanInv.startsWith('THA')
+    ) {
+      return 'BK'
+    }
+    const match = cleanInv.match(/^([A-Z]{2})/)
+    if (match && match[1]) {
+      return match[1]
+    }
+  }
+
+  const cleanMark = (markingCode || '').trim().toUpperCase()
+  if (cleanMark) {
+    if (cleanMark.includes('SG')) return 'SG'
+    if (cleanMark.includes('GZ')) return 'GZ'
+    if (cleanMark.includes('YW')) return 'YW'
+    if (cleanMark.includes('SH')) return 'SH'
+    if (cleanMark.includes('SZ')) return 'SZ'
+    if (cleanMark.includes('HK')) return 'HK'
+    if (cleanMark.includes('KR')) return 'KR'
+  }
+
+  return null
 }
 
 // ─── Item Classifiers ────────────────────────────────────────────────────────

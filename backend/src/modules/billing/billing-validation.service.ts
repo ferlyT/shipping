@@ -19,12 +19,43 @@ export async function getBillingPartialDetails(query: Record<string, string | un
   const customer = query.customer?.trim() || ''
   const custCode = query.custCode?.trim() || ''
 
-  if (!markingCode) {
+  if (!markingCode && !custCode && !customer) {
     return []
   }
 
   try {
     const rows = await prisma.$queryRaw<any[]>`
+      WITH TargetSJ AS (
+        SELECT DISTINCT 
+          RTRIM(el.fdTerima) AS fdTerima, 
+          RTRIM(el.fdCustCode) AS custCode
+        FROM tbEntryList el WITH (NOLOCK)
+        LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+        WHERE el.fdTerima IS NOT NULL AND RTRIM(el.fdTerima) <> ''
+          AND (
+            (${markingCode} <> '' AND RTRIM(el.fdMarkingCode) = ${markingCode})
+            OR (${markingCode} = '')
+          )
+          AND (
+            (${customer} <> '' AND RTRIM(c.fdCustName) = ${customer})
+            OR (${custCode} <> '' AND RTRIM(el.fdCustCode) = ${custCode})
+            OR (${customer} = '' AND ${custCode} = '')
+          )
+          AND el.fdLoad >= DATEADD(MONTH, -6, GETDATE())
+      ),
+      PartialSJ AS (
+        SELECT 
+          ts.fdTerima,
+          ts.custCode,
+          COUNT(DISTINCT RTRIM(el2.fdMarkingCode)) AS countMarking
+        FROM TargetSJ ts
+        INNER JOIN tbEntryList el2 WITH (NOLOCK) 
+          ON RTRIM(el2.fdTerima) = ts.fdTerima
+         AND (RTRIM(el2.fdCustCode) = ts.custCode OR ts.custCode = '' OR el2.fdCustCode IS NULL)
+        WHERE el2.fdLoad >= DATEADD(MONTH, -6, GETDATE())
+        GROUP BY ts.fdTerima, ts.custCode
+        HAVING COUNT(DISTINCT RTRIM(el2.fdMarkingCode)) > 1
+      )
       SELECT
         RTRIM(el.fdListCode) AS fdListCode,
         RTRIM(el.fdMarkingCode) AS fdMarkingCode,
@@ -41,18 +72,66 @@ export async function getBillingPartialDetails(query: Record<string, string | un
         el.fdJmlBerat AS fdJmlBerat,
         RTRIM(el.fdDesc) AS fdDesc
       FROM tbEntryList el WITH (NOLOCK)
+      INNER JOIN PartialSJ ps 
+        ON RTRIM(el.fdTerima) = ps.fdTerima
+       AND (RTRIM(el.fdCustCode) = ps.custCode OR ps.custCode = '' OR el.fdCustCode IS NULL)
       LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
       LEFT JOIN tbEmployees emp1 WITH (NOLOCK) ON emp1.fdEmpCode = el.fdEmp1
       LEFT JOIN tbBilling b WITH (NOLOCK) ON b.fdListCode = el.fdListCode
       LEFT JOIN tbBillingDetail bd WITH (NOLOCK) ON bd.fdListCode = el.fdListCode
-      WHERE RTRIM(el.fdMarkingCode) = ${markingCode}
-        AND (
-          (${customer} <> '' AND RTRIM(c.fdCustName) = ${customer})
-          OR (${custCode} <> '' AND RTRIM(el.fdCustCode) = ${custCode})
-          OR (${customer} = '' AND ${custCode} = '')
-        )
-      ORDER BY el.fdLoad ASC, el.fdListCode ASC
+      WHERE el.fdLoad >= DATEADD(MONTH, -6, GETDATE())
+      ORDER BY el.fdTerima ASC, el.fdLoad ASC, el.fdMarkingCode ASC, el.fdListCode ASC
     `
+
+    // Fallback jika tidak ada data dari PartialSJ (misal bukan multi-marking tapi user ingin cek marking saat ini)
+    if (rows.length === 0 && markingCode) {
+      const fallbackRows = await prisma.$queryRaw<any[]>`
+        SELECT
+          RTRIM(el.fdListCode) AS fdListCode,
+          RTRIM(el.fdMarkingCode) AS fdMarkingCode,
+          RTRIM(el.fdMarkingNo) AS fdMarkingNo,
+          RTRIM(el.fdCustCode) AS fdCustCode,
+          RTRIM(c.fdCustName) AS custName,
+          COALESCE(RTRIM(emp1.fdEmpName), RTRIM(el.fdEmp1), '') AS fdEmp1,
+          el.fdLoad AS fdLoad,
+          RTRIM(el.fdTerima) AS fdTerima,
+          COALESCE(RTRIM(b.fdInvNo), RTRIM(bd.fdInvNo), RTRIM(el.fdInvoiceNo), '') AS fdInvNo,
+          el.fdJmlPack AS fdJmlPack,
+          RTRIM(el.fdSatuan) AS fdSatuan,
+          el.fdM3 AS fdM3,
+          el.fdJmlBerat AS fdJmlBerat,
+          RTRIM(el.fdDesc) AS fdDesc
+        FROM tbEntryList el WITH (NOLOCK)
+        LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+        LEFT JOIN tbEmployees emp1 WITH (NOLOCK) ON emp1.fdEmpCode = el.fdEmp1
+        LEFT JOIN tbBilling b WITH (NOLOCK) ON b.fdListCode = el.fdListCode
+        LEFT JOIN tbBillingDetail bd WITH (NOLOCK) ON bd.fdListCode = el.fdListCode
+        WHERE RTRIM(el.fdMarkingCode) = ${markingCode}
+          AND (
+            (${customer} <> '' AND RTRIM(c.fdCustName) = ${customer})
+            OR (${custCode} <> '' AND RTRIM(el.fdCustCode) = ${custCode})
+            OR (${customer} = '' AND ${custCode} = '')
+          )
+          AND el.fdLoad >= DATEADD(MONTH, -6, GETDATE())
+        ORDER BY el.fdLoad ASC, el.fdListCode ASC
+      `
+      return fallbackRows.map((r) => ({
+        listCode: r.fdListCode?.trim() || '',
+        markingCode: r.fdMarkingCode?.trim() || '',
+        markingNo: r.fdMarkingNo?.trim() || '',
+        custCode: r.fdCustCode?.trim() || '',
+        customer: r.custName?.trim() || customer,
+        fdEmp1: r.fdEmp1?.trim() || '',
+        fdLoad: r.fdLoad ? new Date(r.fdLoad).toISOString() : null,
+        fdTerima: r.fdTerima?.trim() || '',
+        invNo: r.fdInvNo?.trim() || '',
+        jmlPack: Number(r.fdJmlPack || 0),
+        satuan: r.fdSatuan?.trim() || 'COLY',
+        m3: Number(r.fdM3 || 0),
+        berat: Number(r.fdJmlBerat || 0),
+        desc: r.fdDesc?.trim() || '',
+      }))
+    }
 
     return rows.map((r) => ({
       listCode: r.fdListCode?.trim() || '',

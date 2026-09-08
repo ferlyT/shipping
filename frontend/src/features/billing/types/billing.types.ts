@@ -419,6 +419,8 @@ export interface CustomerBillingHistoryDetail {
   prevCurr?: string | null
   fdListCode: string | null
   fdComodity?: string | null
+  fdTypeComodity?: number | null
+  typeComodityName?: string | null
   changeStatus?: 'UNCHANGED' | 'UPDATE' | 'INSERT' | 'DELETE'
   hasAdjustment?: boolean
   diffs?: {
@@ -442,10 +444,19 @@ export interface CustomerBillingHistoryItem {
   fdInvNo: string
   fdInvDate: string
   fdCustCode: string
+  fdBranchCode: string | null
+  fdBranchName?: string | null
   fdMarkingCode: string | null
   fdMarkingNo: string | null
   fdListCode: string | null
   fdListType: number | null
+  fdTglAgent: string | null
+  fdTypeComodity: number | null
+  fdTypeComodityName: string | null
+  fdConsignee: string | null
+  hasPrevDiff?: boolean
+  prevDiffCount?: number
+  prevItemCount?: number
   moda: 'Udara' | 'Laut' | 'Unknown'
   fdDescr: string
   commodities: string[]

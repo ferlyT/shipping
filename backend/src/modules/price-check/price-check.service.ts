@@ -43,6 +43,7 @@ export const MKT_SALES_GROUP = [
   'SUSI',
   'TSC',
   'KB',
+  'ALDY',
 ] as const
 
 /**

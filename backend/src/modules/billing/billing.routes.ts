@@ -132,6 +132,9 @@ billingRoutes.get('/customer-history/:custCode?', async (c) => {
   const result = await getCustomerBillingHistory(custCode, {
     search: query.search,
     year: query.year,
+    branch: query.branch,
+    typeComodity: query.typeComodity,
+    diffStatus: query.diffStatus as any,
     moda: query.moda as any,
     status: query.status as any,
     limit: query.limit ? parseInt(query.limit, 10) : undefined,

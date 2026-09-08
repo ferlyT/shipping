@@ -118,6 +118,7 @@ export function ValidationListPage() {
         const markingNo = (b.fdMarkingNo || '').toLowerCase()
         const author = (b.employee?.fdEmpName || '').toLowerCase()
         const descr = (b.fdDescr || '').toLowerCase()
+        const consignee = (b.fdConsignee || '').toLowerCase()
 
         return (
           invNo.includes(q) ||
@@ -126,7 +127,8 @@ export function ValidationListPage() {
           markingCode.includes(q) ||
           markingNo.includes(q) ||
           author.includes(q) ||
-          descr.includes(q)
+          descr.includes(q) ||
+          consignee.includes(q)
         )
       })
     }
@@ -210,9 +212,16 @@ export function ValidationListPage() {
       header: t('billing.marking'),
       className: 'w-[15%]',
       render: (row: Billing) => (
-        <div className="py-0.5 text-xs text-[var(--color-primary)] font-medium">
-          {row.fdMarkingCode || '—'}
-          {row.fdMarkingNo && <span className="text-[var(--color-secondary)] font-normal"> ({row.fdMarkingNo})</span>}
+        <div className="py-0.5 space-y-0.5">
+          <div className="text-xs text-[var(--color-primary)] font-medium">
+            {row.fdMarkingCode || '—'}
+            {row.fdMarkingNo && <span className="text-[var(--color-secondary)] font-normal"> ({row.fdMarkingNo})</span>}
+          </div>
+          {row.fdConsignee && (
+            <div className="text-[11px] text-[var(--color-secondary)] font-normal truncate max-w-[190px]" title={row.fdConsignee}>
+              <span className="font-semibold text-[10px] uppercase text-[var(--color-secondary)]/80">{t('billing.consignee')}:</span> {row.fdConsignee}
+            </div>
+          )}
         </div>
       ),
     },
@@ -585,6 +594,17 @@ export function ValidationListPage() {
                       formatWithCurrency(b.fdJumlah1, 'Rp.')
                     )}
                   </span>
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-[var(--color-secondary)] pt-1 border-t border-[var(--color-border)]/50">
+                  <span className="font-medium text-[var(--color-primary)]">
+                    {b.fdMarkingCode || '—'}{b.fdMarkingNo ? ` (${b.fdMarkingNo})` : ''}
+                  </span>
+                  {b.fdConsignee && (
+                    <span className="text-[var(--color-secondary)] truncate max-w-[180px]" title={b.fdConsignee}>
+                      {t('billing.consignee')}: <span className="font-semibold text-[var(--color-primary)]">{b.fdConsignee}</span>
+                    </span>
+                  )}
                 </div>
               </div>
             )
