@@ -32,5 +32,6 @@ backend/public/uploads/*
 !backend/public/uploads/.gitkeep
 !backend/public/uploads/**/.gitkeep
 
-# Ignore all markdown files in root folder only
+# Ignore all markdown files in root folder only (except README.md)
 /*.md
+!/README.md
