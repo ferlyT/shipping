@@ -31,6 +31,10 @@
     4. **Pembaruan Pipeline CI**: `.github/workflows/build-apk.yml` diselaraskan agar selalu menggunakan `release.keystore` dengan `apksigner` dual-signing.
 
 
+- [x] Pembuatan Dokumentasi Arsitektur, Logika, & Integrasi Endpoint Mobile App ([mobile-app.md](file:///c:/shipping/mobile-app.md)):
+  - Menyusun dokumentasi komprehensif seluruh halaman mobile app (`app/index.tsx`, `login.tsx`, `register.tsx`, `overview.tsx`, `logistics.tsx`, `finance.tsx`, `master.tsx`, `profile.tsx`, `BarcodeScannerModal.tsx`).
+  - Merinci logika interaksi, manajemen state (Zustand + React Query), integrasi hardware (Kamera, Biometrik, Print & Share PDF, Telepon, WhatsApp), mapping struktur data visual, dan tabel matriks 11 endpoint API backend.
+
 - [x] Perbaikan Tuntas Toast 'Network Error' & Cleartext HTTP Android pada Mobile APK ([withCleartextTraffic.js](file:///c:/shipping/mobile/plugins/withCleartextTraffic.js), [app.json](file:///c:/shipping/mobile/app.json), [build-apk.yml](file:///c:/shipping/.github/workflows/build-apk.yml)):
   - **Akar Masalah**:
     1. **Cleartext HTTP Block di Android OS**: Android 9+ secara bawaan menolak semua koneksi non-HTTPS (`http://36.93.22.142:3010`) sebelum paket keluar dari HP jika `android:usesCleartextTraffic="true"` belum terkompilasi ke dalam binary `AndroidManifest.xml`, memicu error Axios `Network Error`.
