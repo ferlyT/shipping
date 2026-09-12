@@ -15,11 +15,15 @@
       }
     },
     "android": {
+      "package": "com.mshipping.mobile",
+      "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#0B0F17",
         "foregroundImage": "./assets/android-icon-foreground.png"
       },
       "permissions": [
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
         "CAMERA",
         "USE_BIOMETRIC",
         "USE_FINGERPRINT"

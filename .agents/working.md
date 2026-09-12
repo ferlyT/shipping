@@ -8,13 +8,30 @@
 ## 🕐 Terakhir Diperbarui
 - **Tanggal**: 2026-09-12
 - **Oleh**: Antigravity (Gemini 3.8 Flash)
-- **Sesi**: Implementasi Penuh Expo Mobile App (mshipping) dengan Seluruh Modul & Biometrik
+- **Sesi**: Perbaikan Koneksi Backend & Izin Jaringan Cleartext Android APK Mobile (Fix Gagal Login)
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
 ### Task Selesai
+- [x] Perbaikan Koneksi Backend & Izin Jaringan Cleartext HTTP pada Mobile APK ([client.ts](file:///c:/shipping/mobile/src/api/client.ts), [app.json](file:///c:/shipping/mobile/app.json), [login.tsx](file:///c:/shipping/mobile/app/%28auth%29/login.tsx), [profile.tsx](file:///c:/shipping/mobile/app/%28tabs%29/profile.tsx)):
+  - **Akar Masalah Gagal Login**:
+    1. `mobile/src/api/client.ts` menggunakan `Platform.select({ android: 'http://10.0.2.2:3001' })` yang hanya berlaku di emulator Android lokal, sehingga saat diinstall di HP fisik memicu Network Error.
+    2. URL tidak menyertakan prefix base path `/api`.
+    3. Pada Android 9+ (Pie ke atas), release build secara default memblokir cleartext HTTP traffic (`http://`) tanpa izin eksplisit di AndroidManifest.
+  - **Perbaikan**:
+    1. Mengubah `DEFAULT_API_URL` menjadi `http://36.93.22.142:3010/api` secara permanen.
+    2. Menambahkan `package: "com.mshipping.mobile"`, `usesCleartextTraffic: true`, serta izin `INTERNET` dan `ACCESS_NETWORK_STATE` pada `mobile/app.json`.
+    3. Meningkatkan penanganan pesan error di `login.tsx` agar menampilkan pesan detail dari server / koneksi secara presisi.
+    4. Menampilkan indikator host server aktif di `profile.tsx`.
+    5. Menambahkan `*.apk` pada `.gitignore` root.
+  - **Verifikasi**:
+    - `bun run tsc --noEmit` lulus 100% (0 errors).
+    - `bunx expo config --type public` tervalidasi sukses dengan `usesCleartextTraffic: true`.
+    - `bunx expo export --platform android` sukses membundel 3.301 modul.
+    - Uji coba login langsung via HTTP POST ke backend `http://36.93.22.142:3010/api/auth/login` berhasil `HTTP 200 OK`.
+
 - [x] Implementasi Penuh Expo Mobile App ([mobile/](file:///c:/shipping/mobile/), [walkthrough.md](file:///C:/Users/Administrator/.gemini/antigravity/brain/216aaf69-6285-4be2-afee-3555b5744e2f/walkthrough.md), [implementation_plan.md](file:///C:/Users/Administrator/.gemini/antigravity/brain/216aaf69-6285-4be2-afee-3555b5744e2f/implementation_plan.md)):
   - **Inisialisasi & Setup**: Expo SDK 57 + Expo Router v4 + React 19.2 + TypeScript 6.0 di folder `mobile/`.
   - **Theme & Desain Sistem**: Token warna resmi mshipping (Midnight Dark `#0B0F17` & Heritage Light `#F7F5F2`), switch dinamis di Zustand `themeStore`.
@@ -28,11 +45,10 @@
     - [master.tsx](file:///c:/shipping/mobile/app/%28tabs%29/master.tsx): Direktori customer master dengan aksi 1-ketukan panggilan telepon (`tel:`) dan chat WhatsApp (`wa.me/`).
     - [profile.tsx](file:///c:/shipping/mobile/app/%28tabs%29/profile.tsx): Pengaturan akun, toggle biometrik, switcher tema Midnight/Heritage, bahasa bilingual (ID/EN), status server ERP, dan logout.
   - **Download APK & Akses Publik IP**:
-    - Landing page download publik di IIS Port 80: `http://36.93.22.142/mshipping/download/` (lengkap dengan QR Code scan download).
-    - Direct download link APK: `http://36.93.22.142/mshipping/mshipping.apk` (IIS Port 80 dengan MIME type `application/vnd.android.package-archive`).
-    - Mirror API download endpoint: `http://36.93.22.142:3010/download/apk`.
-    - Perbaikan `web.config`: Menambahkan guard rewrite rule agar file `.apk` yang belum ada tidak memicu SPA fallback ke web dashboard.
-    - Cloud build pipeline: [.github/workflows/build-apk.yml](file:///c:/shipping/.github/workflows/build-apk.yml) & [eas.json](file:///c:/shipping/mobile/eas.json).
+    - File APK fisik (123.63 MB) berhasil diunduh dari GitHub Actions Artifact (`run 34681198544`) dan ditempatkan di `C:\shipping\frontend\dist\mshipping.apk`, `C:\shipping\backend\public\uploads\mshipping.apk`, dan root `C:\shipping\mshipping.apk`.
+    - Pengujian HTTP Response: `http://36.93.22.142/mshipping/mshipping.apk` mengembalikan **HTTP 200 OK** (`Content-Type: application/vnd.android.package-archive`, ukuran 129.637.851 bytes).
+    - Landing page publik dengan QR Code scan aktif di: `http://36.93.22.142/mshipping/download/`.
+    - Mirror API download aktif di: `http://36.93.22.142:3010/download/apk`.
   - **Komponen UI**: Button + haptics (`expo-haptics`), Card, Badge outline semantik, SearchBar + scan, SegmentedControl, SkeletonShimmer, ToastContainer.
   - **Verifikasi**:
     - `bun run tsc --noEmit` lulus 100% (0 errors).

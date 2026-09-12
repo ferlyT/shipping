@@ -207,7 +207,7 @@ export default function ProfileScreen() {
               </View>
               <View>
                 <Text style={[styles.settingLabel, { color: colors.primary }]}>Status Server ERP</Text>
-                <Text style={[styles.settingDesc, { color: colors.success }]}>Online • Hono.js Engine</Text>
+                <Text style={[styles.settingDesc, { color: colors.success }]}>Online • 36.93.22.142:3010</Text>
               </View>
             </View>
             <Badge label="v1.0.0" variant="neutral" />

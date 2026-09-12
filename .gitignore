@@ -17,6 +17,7 @@ dist/
 backend/scratch/
 *.xlsx
 *.pdf
+*.apk
 
 # Environment files
 .env

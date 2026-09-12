@@ -107,7 +107,10 @@ export default function LoginPage() {
     } catch (err: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
       const errorMsg =
-        err.response?.data?.message || err.response?.data?.error || 'Login gagal, periksa kredensial Anda.'
+        err.response?.data?.error ||
+        err.response?.data?.message ||
+        err.message ||
+        'Login gagal, periksa koneksi atau kredensial Anda.'
       showToast(errorMsg, 'error')
     } finally {
       setLoading(false)
