@@ -18,6 +18,7 @@ backend/scratch/
 *.xlsx
 *.pdf
 *.apk
+*.idsig
 
 # Environment files
 .env

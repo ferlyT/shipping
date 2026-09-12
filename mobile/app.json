@@ -16,6 +16,10 @@
     },
     "android": {
       "package": "com.mshipping.mobile",
+      "compileSdkVersion": 34,
+      "targetSdkVersion": 34,
+      "minSdkVersion": 24,
+      "buildToolsVersion": "34.0.0",
       "usesCleartextTraffic": true,
       "adaptiveIcon": {
         "backgroundColor": "#0B0F17",

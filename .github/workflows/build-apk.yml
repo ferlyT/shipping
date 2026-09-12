@@ -45,8 +45,11 @@ jobs:
       - name: Configure Keystore and Dual Signing (v1 + v2)
         working-directory: ./mobile
         run: |
-          cp keystore/debug.keystore android/app/debug.keystore
-          sed -i '/keyPassword .android./a \            v1SigningEnabled true\n            v2SigningEnabled true' android/app/build.gradle
+          cp keystore/release.keystore android/app/release.keystore
+          sed -i 's/storeFile file(.debug.keystore.)/storeFile file("release.keystore")/g' android/app/build.gradle
+          sed -i 's/storePassword .android./storePassword "mshipping2026"/g' android/app/build.gradle
+          sed -i 's/keyAlias .androiddebugkey./keyAlias "mshipping"/g' android/app/build.gradle
+          sed -i 's/keyPassword .android./keyPassword "mshipping2026"\n            v1SigningEnabled true\n            v2SigningEnabled true/g' android/app/build.gradle
 
       - name: Build Android Release APK
         working-directory: ./mobile/android
@@ -59,7 +62,7 @@ jobs:
           APK_PATH=$(find mobile/android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
           APKSIGNER=$(find $ANDROID_HOME/build-tools -name apksigner | sort -V | tail -n 1)
           echo "Using apksigner: $APKSIGNER on $APK_PATH"
-          $APKSIGNER sign --ks mobile/keystore/debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true "$APK_PATH"
+          $APKSIGNER sign --ks mobile/keystore/release.keystore --ks-key-alias mshipping --ks-pass pass:mshipping2026 --key-pass pass:mshipping2026 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true "$APK_PATH"
           $APKSIGNER verify --verbose "$APK_PATH"
 
       - name: Upload APK Artifact
