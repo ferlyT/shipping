@@ -261,12 +261,13 @@ Halaman utama setelah login yang berfungsi sebagai pusat informasi eksekutif, st
     "success": true,
     "data": [
       {
-        "fdListCode": "LC-260901-001",
+        "fdMarkingCode": "MK-260901-001",
         "fdTerima": "RESI-889102",
         "fdCustName": "PT. MITRA JAYA MAKMUR",
         "fdListType": 1,
-        "fdColy": 25,
-        "fdWeight": 350.5,
+        "fdJmlPack": 25,
+        "fdSatuan": "Ctn",
+        "fdJmlBerat": 350.5,
         "fdM3": 1.254,
         "fdDateTerima": "2026-09-12T04:15:00.000Z"
       }
@@ -290,9 +291,9 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
    - Hasil pemindaian kamera otomatis masuk ke kolom pencarian dan memfilter data list secara *live*.
 3. **Sub-Tab 1: Daftar Resi**:
    - Filter tambahan: `Semua`, `Udara`, `Laut`.
-   - Menampilkan nomor resi (`fdTerima`), listcode (`fdListCode`), nomor marking (`fdMarkingNo`), nama customer, jumlah koli, berat, dan volume kubikasi.
+   - Menampilkan nomor resi (`fdTerima`), kode marking (`fdMarkingCode`), nomor marking (`fdMarkingNo`), nama customer, jumlah pack & satuan (`fdJmlPack`, `fdSatuan`), berat (`fdJmlBerat`), dan volume kubikasi (`fdM3`).
    - **Modal Rincian Muatan (Bottom Sheet)**:
-     - Jika item kartu diklik, muncul modal bawah yang membedah ukuran fisik: Coly, Berat (kg), Volume (m³), cabang gudang, dan identifikasi marking.
+     - Jika item kartu diklik, muncul modal bawah yang membedah ukuran fisik: Pack / Satuan, Berat (kg), Volume (m³), cabang gudang, dan identifikasi marking.
 4. **Sub-Tab 2: Batch Marking**:
    - Menampilkan kode batch marking (`fdMarkingCode`), cabang gudang (`fdBranch`), deskripsi batch, tanggal keberangkatan (`fdDate`), dan estimasi kedatangan/ETA (`fdExitDate`).
 5. **Sub-Tab 3: Surat Jalan (Delivery Orders)**:
@@ -305,16 +306,17 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
 - **Endpoint**: `/api/shipments`
 - **Query Params**:
   - `limit=20`
-  - `search=<keyword>` (pencarian nomor resi, listcode, customer, marking)
+  - `search=<keyword>` (pencarian nomor resi, kode marking, customer, marking no)
   - `listType=1|2` (opsional: 1 untuk Udara, 2 untuk Laut)
 - **Data Kunci yang Ditampilkan**:
   - `fdTerima`: Nomor resi penerimaan fisik
-  - `fdListCode`: Nomor kode manifest listcode
+  - `fdMarkingCode`: Nomor kode batch marking manifest
   - `fdMarkingNo`: Tanda marking fisik karton
   - `fdCustName`: Nama customer pemilik barang
   - `fdListType`: 1 = Udara (`Plane`), 2 = Laut (`Ship`)
-  - `fdColy`: Jumlah koli/karton
-  - `fdWeight`: Berat timbangan gudang (kg)
+  - `fdJmlPack`: Jumlah koli / karton / pack
+  - `fdSatuan`: Satuan muatan kemasan (misal: Ctn, Pcs, Koli, Roll, Zak)
+  - `fdJmlBerat`: Berat timbangan gudang (kg)
   - `fdM3`: Volume kubikasi riil ($m^3$)
 
 ##### 2. Data Batch Marking
@@ -526,7 +528,7 @@ Menangani alur pembaruan aplikasi mobile secara mandiri (*self-hosted sideload*)
 | **3** | Registrasi | `/api/auth/register` | `POST` | `{ fullName, username, password }` | Konfirmasi pendaftaran akun |
 | **4** | Dashboard KPI | `/api/shipments/kpi` | `GET` | `listType` (`all`, `1`, `2`) | Total resi, koli, berat, volume, MoM |
 | **5** | Dashboard Terkini | `/api/shipments` | `GET` | `limit=5` | 5 transaksi resi & shipment terbaru |
-| **6** | Logistik - Resi | `/api/shipments` | `GET` | `limit=20`, `search`, `listType` | Nomor resi, listcode, koli, kg, m³ |
+| **6** | Logistik - Resi | `/api/shipments` | `GET` | `limit=20`, `search`, `listType` | Nomor resi, marking code, jml pack, satuan, berat (kg), m³ |
 | **7** | Logistik - Batch | `/api/marking` | `GET` | `limit=20`, `search` | Kode batch marking, cabang, ETA |
 | **8** | Logistik - Surat Jalan | `/api/delivery-orders` | `GET` | `limit=20`, `search` | No. surat jalan, supir, plat, status |
 | **9** | Finance - Invoice | `/api/billing` | `GET` | `limit=20`, `search` | No. inv, nama customer, tanggal, nominal |

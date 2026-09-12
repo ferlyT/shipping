@@ -212,10 +212,10 @@ export default function LogisticsScreen() {
                 <View style={styles.itemHeader}>
                   <View style={{ flex: 1 }}>
                     <Text style={[styles.itemTitle, { color: colors.primary }]}>
-                      {item.fdTerima || item.fdListCode}
+                      {item.fdTerima || item.fdMarkingCode || item.fdListCode}
                     </Text>
                     <Text style={[styles.itemSub, { color: colors.secondary }]}>
-                      Listcode: {item.fdListCode} • Marking: {item.fdMarkingNo || '—'}
+                      Marking: {item.fdMarkingNo || '—'} • Code: {item.fdMarkingCode || item.fdListCode || '—'}
                     </Text>
                   </View>
                   <Badge
@@ -229,10 +229,10 @@ export default function LogisticsScreen() {
                 </Text>
                 <View style={styles.metricsRow}>
                   <Text style={[styles.metricText, { color: colors.secondary }]}>
-                    📦 {formatNumber(item.fdColy)} Koli
+                    📦 {formatNumber(item.fdJmlPack ?? item.fdColy)} {item.fdSatuan || 'Koli'}
                   </Text>
                   <Text style={[styles.metricText, { color: colors.secondary }]}>
-                    ⚖️ {formatDecimal(item.fdWeight, 1)} kg
+                    ⚖️ {formatDecimal(item.fdJmlBerat ?? item.fdWeight, 1)} kg
                   </Text>
                   <Text style={[styles.metricText, { color: colors.secondary }]}>
                     📐 {formatDecimal(item.fdM3, 4)} m³
@@ -387,9 +387,9 @@ export default function LogisticsScreen() {
                     </Text>
                   </View>
                   <View style={styles.infoRow}>
-                    <Text style={[styles.infoLabel, { color: colors.secondary }]}>No. Listcode</Text>
+                    <Text style={[styles.infoLabel, { color: colors.secondary }]}>Marking Code</Text>
                     <Text style={[styles.infoVal, { color: colors.primary }]}>
-                      {selectedItem?.fdListCode || '—'}
+                      {selectedItem?.fdMarkingCode || selectedItem?.fdListCode || '—'}
                     </Text>
                   </View>
                   <View style={styles.infoRow}>
@@ -413,15 +413,17 @@ export default function LogisticsScreen() {
                   </Text>
                   <View style={styles.dimensionGrid}>
                     <View style={styles.dimCard}>
-                      <Text style={[styles.dimLabel, { color: colors.secondary }]}>Coly</Text>
+                      <Text style={[styles.dimLabel, { color: colors.secondary }]}>
+                        {selectedItem?.fdSatuan || 'Pack / Koli'}
+                      </Text>
                       <Text style={[styles.dimVal, { color: colors.primary }]}>
-                        {formatNumber(selectedItem?.fdColy)}
+                        {formatNumber(selectedItem?.fdJmlPack ?? selectedItem?.fdColy)}
                       </Text>
                     </View>
                     <View style={styles.dimCard}>
                       <Text style={[styles.dimLabel, { color: colors.secondary }]}>Berat</Text>
                       <Text style={[styles.dimVal, { color: colors.primary }]}>
-                        {formatDecimal(selectedItem?.fdWeight, 1)} kg
+                        {formatDecimal(selectedItem?.fdJmlBerat ?? selectedItem?.fdWeight, 1)} kg
                       </Text>
                     </View>
                     <View style={styles.dimCard}>

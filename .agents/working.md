@@ -15,6 +15,14 @@
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
 ### Task Selesai
+- [x] Penyelarasan Nama Field Data Shipment (`fdMarkingCode`, `fdJmlPack`, `fdSatuan`, `fdJmlBerat`) ([mobile-app.md](file:///c:/shipping/mobile-app.md), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [overview.tsx](file:///c:/shipping/mobile/app/%28tabs%29/overview.tsx)):
+  - Menyelaraskan seluruh dokumentasi dan data mapping field sesuai skema aktual view SQL `vwShipment`:
+    - `fdListCode` $\to$ `fdMarkingCode` (Nomor kode batch marking manifest)
+    - `fdColy` $\to$ `fdJmlPack` (Jumlah koli/pack) dan `fdSatuan` (Satuan muatan kemasan: Ctn, Pcs, Koli, Roll, Zak)
+    - `fdWeight` $\to$ `fdJmlBerat` (Berat timbangan gudang dalam kg)
+  - Memperbarui komponen `logistics.tsx` dan `overview.tsx` agar membaca `fdMarkingCode`, `fdJmlPack`, `fdSatuan`, dan `fdJmlBerat` dengan fallback aman.
+  - Re-bundle Metro (3.304 modul), patch APK, re-sign dengan `release.keystore`, dan deploy ke seluruh endpoint unduhan server.
+
 - [x] Implementasi Penuh Fitur Auto Update Mobile App ([app-version.routes.ts](file:///c:/shipping/backend/src/modules/app-version/app-version.routes.ts), [app-version.service.ts](file:///c:/shipping/backend/src/modules/app-version/app-version.service.ts), [app-version.json](file:///c:/shipping/backend/src/config/app-version.json), [updateStore.ts](file:///c:/shipping/mobile/src/stores/updateStore.ts), [UpdateModal.tsx](file:///c:/shipping/mobile/src/components/update/UpdateModal.tsx), [profile.tsx](file:///c:/shipping/mobile/app/%28tabs%29/profile.tsx), [_layout.tsx](file:///c:/shipping/mobile/app/_layout.tsx)):
   - **Backend (`backend/`)**:
     - Berkas konfigurasi versi terpusat `backend/src/config/app-version.json` memuat `version`, `versionCode`, `minVersion`, `forceUpdate`, `downloadUrl`, `releaseNotes`, dan timestamp rilis.

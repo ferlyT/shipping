@@ -346,7 +346,10 @@ export default function OverviewScreen() {
                 </Text>
                 <View style={styles.itemMetaRow}>
                   <Text style={[styles.itemMetaText, { color: colors.secondary }]}>
-                    {s.fdColy ? `${formatNumber(s.fdColy)} Koli` : '—'} • {formatDecimal(s.fdWeight, 1)} kg
+                    {(s.fdJmlPack ?? s.fdColy)
+                      ? `${formatNumber(s.fdJmlPack ?? s.fdColy)} ${s.fdSatuan || 'Koli'}`
+                      : '—'}{' '}
+                    • {formatDecimal(s.fdJmlBerat ?? s.fdWeight, 1)} kg
                   </Text>
                   <Text style={[styles.itemDate, { color: colors.secondary }]}>
                     {formatDate(s.fdDateTerima || s.fdDate)}
