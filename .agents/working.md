@@ -31,13 +31,20 @@
     4. **Pembaruan Pipeline CI**: `.github/workflows/build-apk.yml` diselaraskan agar selalu menggunakan `release.keystore` dengan `apksigner` dual-signing.
 
 
-- [x] Restart PM2 & Penanganan Toast 'Network Error' pada Mobile App:
-  - **Status PM2**: Instance `ShippingApi` (ID 2, PID 17720) telah direstart dan berjalan normal di port 3010 (`Bun 1.3.12`). Uji coba request langsung mengembalikan HTTP 200 OK.
-  - **Inbound Firewall Port 3010**: Dibuat aturan firewall baru `ShippingApi Port 3010` (Allow Inbound TCP 3010 untuk semua profil) pada Windows Defender Firewall.
-  - **Akar Masalah 'Network Error' di Android**:
-    1. **Cleartext HTTP Block**: Android 9+ secara bawaan menolak koneksi `http://` tanpa deklarasi `usesCleartextTraffic: true` di native manifest terkompilasi, memicu Axios `Network Error`.
-    2. **Firewall Port 3010**: Port 3010 sebelumnya belum memiliki Inbound Allow rule di Windows Firewall.
-    3. **Penyelarasan Build APK**: Pipeline GitHub Actions (Run 34690001995) telah selesai mengompilasi APK rilis dengan Target SDK 34, `usesCleartextTraffic: true`, dan sertifikat rilis SHA256withRSA. File APK sedang disinkronisasikan ke server.
+- [x] Perbaikan Tuntas Toast 'Network Error' & Cleartext HTTP Android pada Mobile APK ([withCleartextTraffic.js](file:///c:/shipping/mobile/plugins/withCleartextTraffic.js), [app.json](file:///c:/shipping/mobile/app.json), [build-apk.yml](file:///c:/shipping/.github/workflows/build-apk.yml)):
+  - **Akar Masalah**:
+    1. **Cleartext HTTP Block di Android OS**: Android 9+ secara bawaan menolak semua koneksi non-HTTPS (`http://36.93.22.142:3010`) sebelum paket keluar dari HP jika `android:usesCleartextTraffic="true"` belum terkompilasi ke dalam binary `AndroidManifest.xml`, memicu error Axios `Network Error`.
+    2. Expo SDK 50+ mengabaikan `usesCleartextTraffic` di `app.json` tanpa config plugin resmi.
+    3. Windows Firewall belum memiliki inbound rule untuk port 3010.
+  - **Solusi & Hasil**:
+    1. **Expo Config Plugin**: Dibuat `mobile/plugins/withCleartextTraffic.js` menggunakan `@expo/config-plugins` (`withAndroidManifest`) untuk menginjeksi `android:usesCleartextTraffic="true"` secara permanen ke elemen `<application>` di AndroidManifest.
+    2. **Firewall Rule**: Dibuat aturan inbound `ShippingApi Port 3010` (Allow Inbound TCP 3010 Semua Profil) di Windows Defender Firewall.
+    3. **APK Rilis Terverifikasi**: APK telah dibangun ulang dan ditandatangani dengan `release.keystore` (SHA256withRSA), `compileSdkVersion: 34`, `targetSdkVersion: 34`, dan terbukti memiliki string `usesCleartextTraffic` di binary AXML.
+    4. **Deploy Server Selesai**: File APK rilis aktif (`129.159.514 bytes`) telah disalin ke:
+       - `C:\shipping\frontend\dist\mshipping.apk` (unduh via web port 80)
+       - `C:\shipping\backend\public\uploads\mshipping.apk` (unduh via mirror port 3010)
+       - `C:\shipping\mshipping.apk`
+    5. **Git Push**: Commit `7fbbf29` berhasil dipush ke branch `main`.
   - **Akar Masalah Gagal Login**:
     1. `mobile/src/api/client.ts` menggunakan `Platform.select({ android: 'http://10.0.2.2:3001' })` yang hanya berlaku di emulator Android lokal, sehingga saat diinstall di HP fisik memicu Network Error.
     2. URL tidak menyertakan prefix base path `/api`.
