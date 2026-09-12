@@ -12,6 +12,8 @@ on:
 jobs:
   build-apk:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout repository
@@ -51,3 +53,14 @@ jobs:
           name: mshipping-release-apk
           path: mobile/android/app/build/outputs/apk/release/*.apk
           retention-days: 30
+
+      - name: Create or Update GitHub Release
+        uses: softprops/action-gh-release@v2
+        if: github.ref == 'refs/heads/main'
+        with:
+          tag_name: mobile-v1.0.0
+          name: "M-Shipping Mobile v1.0.0"
+          body: "Aplikasi mobile resmi ERP M-Shipping (Release APK)"
+          files: mobile/android/app/build/outputs/apk/release/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
