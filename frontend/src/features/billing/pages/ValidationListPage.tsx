@@ -1,13 +1,15 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
-import { ChevronRight, SlidersHorizontal, Plane, Ship, ShieldCheck, LayoutGrid, User } from 'lucide-react'
+import { ChevronRight, SlidersHorizontal, Plane, Ship, ShieldCheck, LayoutGrid, User, ScrollText, RotateCcw, Search } from 'lucide-react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { billingApi } from '../services/billing.service'
 import { useDebounce } from '@/hooks/useDebounce'
+import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
 import { SearchBar } from '@/components/ui/SearchBar'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { EmptyState } from '@/components/ui/EmptyState'
 import { formatWithCurrency } from '@/components/ui/CurrencyValue'
 import { AgingBadge } from '../components/AgingBadge'
 import { BillingStatusTag } from '../components/BillingStatusTag'
@@ -22,11 +24,78 @@ import { getAgingDays } from '../utils/billing.utils'
 
 import { BILL_TYPE_CONFIGS, getBillType } from '../constants/billing.constants'
 
-const LIST_TYPE_FILTERS: { value: 'all' | 1 | 2; label: string; icon: typeof LayoutGrid; accent: string }[] = [
-  { value: 'all', label: 'Semua', icon: LayoutGrid, accent: '' },
-  { value: 1, label: 'Udara', icon: Plane, accent: 'text-amber-600' },
-  { value: 2, label: 'Laut', icon: Ship, accent: 'text-blue-600' },
-]
+function ValidationListPageSkeleton() {
+  const { t } = useTranslation()
+  return (
+    <div className="p-3 sm:p-6 lg:p-8 w-full space-y-4 sm:space-y-6 animate-fadeIn pb-24 font-[var(--font-body)]">
+      <PageHeader
+        title={t('nav.validationList')}
+        subtitle={t('billing.validationList.subtitle')}
+        breadcrumbs={[
+          { label: t('module.finance'), path: ROUTES.BILLING },
+          { label: t('nav.billing'), path: ROUTES.BILLING },
+          { label: t('nav.validationList') },
+        ]}
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="h-8 w-24 rounded-lg skeleton-shimmer" />
+            <div className="h-8 w-28 rounded-lg skeleton-shimmer" />
+          </div>
+        }
+      />
+
+      {/* Filter toolbar skeleton */}
+      <div className="flex flex-col gap-3">
+        <div className="hidden sm:flex sm:items-center sm:justify-between gap-3">
+          <div className="h-9 w-80 rounded-lg skeleton-shimmer" />
+          <div className="h-9 w-52 rounded-lg skeleton-shimmer" />
+        </div>
+        <div className="sm:hidden h-9 w-full rounded-lg skeleton-shimmer" />
+
+        {/* PIC Filter Skeleton */}
+        <div className="flex items-center gap-2 pt-1 overflow-x-auto pb-1">
+          <div className="h-5 w-12 rounded skeleton-shimmer shrink-0" />
+          <div className="h-6 w-20 rounded-full skeleton-shimmer shrink-0" />
+          <div className="h-6 w-24 rounded-full skeleton-shimmer shrink-0" />
+          <div className="h-6 w-20 rounded-full skeleton-shimmer shrink-0" />
+          <div className="h-6 w-28 rounded-full skeleton-shimmer shrink-0" />
+        </div>
+      </div>
+
+      {/* Desktop Table Skeleton */}
+      <div className="hidden sm:block bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-sm overflow-hidden p-4 space-y-3">
+        <div className="h-8 w-full rounded skeleton-shimmer" />
+        <div className="space-y-2 pt-1">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-11 w-full rounded-lg skeleton-shimmer" />
+          ))}
+        </div>
+      </div>
+
+      {/* Mobile Card Skeleton */}
+      <div className="sm:hidden space-y-2.5">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-3.5 shadow-sm space-y-2.5"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="space-y-1.5 flex-1">
+                <div className="h-4 w-28 rounded skeleton-shimmer" />
+                <div className="h-3 w-20 rounded skeleton-shimmer" />
+              </div>
+              <div className="h-5 w-16 rounded-full skeleton-shimmer" />
+            </div>
+            <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-2">
+              <div className="h-4 w-32 rounded skeleton-shimmer" />
+              <div className="h-4 w-20 rounded skeleton-shimmer" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export function ValidationListPage() {
   const { t } = useTranslation()
@@ -39,6 +108,15 @@ export function ValidationListPage() {
   const [showMobilePanel, setShowMobilePanel] = useState(false)
   const [listTypeFilter, setListTypeFilter] = useState<'all' | 1 | 2>('all')
   const [authorFilter, setAuthorFilter] = useState<string>('all')
+
+  const listTypeFilters = useMemo(
+    () => [
+      { value: 'all' as const, label: t('common.all') || 'Semua', icon: LayoutGrid, accent: '' },
+      { value: 1 as const, label: t('billing.validation.filterAir') || 'Udara', icon: Plane, accent: 'text-amber-600 dark:text-amber-400' },
+      { value: 2 as const, label: t('billing.validation.filterSea') || 'Laut', icon: Ship, accent: 'text-blue-600 dark:text-blue-400' },
+    ],
+    [t]
+  )
 
   const { data: listRes, isLoading: isListLoading, isFetching, error } = useQuery({
     queryKey: ['billingValidationList', debouncedSearch],
@@ -142,6 +220,10 @@ export function ValidationListPage() {
 
   const isInitialLoading = isListLoading && billingsData.length === 0
   const isRefreshing = (isListLoading || isFetching) && billingsData.length > 0
+
+  if (isInitialLoading) {
+    return <ValidationListPageSkeleton />
+  }
 
   const columns = [
     {
@@ -284,9 +366,31 @@ export function ValidationListPage() {
         subtitle={t('billing.validationList.subtitle')}
         breadcrumbs={[
           { label: t('module.finance'), path: ROUTES.BILLING },
-          { label: t('nav.billing'), path: ROUTES.BILLING_LIST },
+          { label: t('nav.billing'), path: ROUTES.BILLING },
           { label: t('nav.validationList') },
         ]}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(ROUTES.BILLING)}
+              className="flex items-center gap-1.5 cursor-pointer"
+            >
+              <LayoutGrid className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span>{t('nav.dashboard') || 'Dashboard'}</span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(ROUTES.BILLING_LIST)}
+              className="flex items-center gap-1.5 cursor-pointer"
+            >
+              <ScrollText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>{t('nav.billingList') || 'Daftar Tagihan'}</span>
+            </Button>
+          </div>
+        }
       />
 
       <div className="flex flex-col gap-3">
@@ -311,7 +415,7 @@ export function ValidationListPage() {
 
           {/* Mode Tipe Filter (Udara / Laut) */}
           <div className="flex items-center gap-1.5 bg-[var(--color-surface)] p-1 rounded-[var(--radius-lg)] border border-[var(--color-border)] shadow-xs">
-            {LIST_TYPE_FILTERS.map((tf) => {
+            {listTypeFilters.map((tf) => {
               const Icon = tf.icon
               const isActive = listTypeFilter === tf.value
               return (
@@ -402,8 +506,8 @@ export function ValidationListPage() {
 
       {/* Progress bar during refresh */}
       {isRefreshing && (
-        <div className="w-full bg-blue-100 h-1 overflow-hidden rounded-full animate-pulse">
-          <div className="bg-[var(--color-primary)] h-full w-1/3 animate-bounce" />
+        <div className="w-full bg-[var(--color-border)] h-1 overflow-hidden rounded-full">
+          <div className="bg-[var(--color-tertiary)] h-full w-1/3 animate-pulse" />
         </div>
       )}
 
@@ -429,7 +533,7 @@ export function ValidationListPage() {
                 {t('billing.filterMode')}
               </label>
               <div className="grid grid-cols-3 gap-2">
-                {LIST_TYPE_FILTERS.map((tf) => (
+                {listTypeFilters.map((tf) => (
                   <button
                     key={String(tf.value)}
                     onClick={() => {
@@ -506,115 +610,140 @@ export function ValidationListPage() {
         </div>
       )}
 
-      {/* Table Desktop (Single Table) */}
-      <div className="hidden sm:block bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-sm overflow-hidden">
-        <Table<Billing>
-          columns={columns}
-          data={filteredBillings}
-          isLoading={isInitialLoading}
-          keyExtractor={(row) => row.fdInvNo}
-          onRowClick={(row) => navigate(ROUTES.BILLING_VALIDATION_DETAIL(row.fdInvNo))}
-          emptyMessage={t('billing.noBillingData')}
-        />
-      </div>
-
-      {/* Mobile Card List */}
-      <div className="sm:hidden space-y-2.5">
-        {isInitialLoading ? (
-          Array.from({ length: 5 }).map((_, i) => (
-            <div
-              key={i}
-              className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-3.5 shadow-sm space-y-2.5"
-            >
-              <div className="flex items-start justify-between gap-2">
-                <div className="space-y-1.5 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-4 w-28 rounded skeleton-shimmer" />
-                    <div className="h-4 w-12 rounded skeleton-shimmer" />
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-3 w-20 rounded skeleton-shimmer" />
-                    <div className="h-3.5 w-12 rounded skeleton-shimmer" />
-                  </div>
+      {/* Content Section: Table Desktop & Cards Mobile OR EmptyState */}
+      {filteredBillings.length === 0 ? (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-6 sm:p-10 shadow-xs">
+          {activeDraftBillings.length === 0 ? (
+            <EmptyState
+              icon={<ShieldCheck className="w-8 h-8 text-emerald-500" />}
+              title={t('billing.validationList.emptyAllTitle')}
+              description={t('billing.validationList.emptyAllDesc')}
+              action={
+                <div className="flex items-center gap-2 flex-wrap justify-center">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => navigate(ROUTES.BILLING)}
+                    className="flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <LayoutGrid className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                    <span>{t('nav.dashboard') || 'Dashboard'}</span>
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => navigate(ROUTES.BILLING_LIST)}
+                    className="flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <ScrollText className="w-4 h-4" />
+                    <span>{t('nav.billingList') || 'Daftar Tagihan'}</span>
+                  </Button>
                 </div>
-                <div className="h-5 w-20 rounded-full skeleton-shimmer" />
-              </div>
-
-              <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-2">
-                <div className="h-4 w-36 rounded skeleton-shimmer" />
-                <div className="h-4 w-24 rounded skeleton-shimmer" />
-              </div>
-            </div>
-          ))
-        ) : filteredBillings.length > 0 ? (
-          filteredBillings.map((b: Billing) => {
-            const custName = b.customer?.fdCustName || b.fdCustCode || '—'
-            const custStatus = b.customer?.fdBlocked ?? 0
-            const badgeCfg = statusConfig[custStatus as keyof typeof statusConfig] || statusConfig[0]
-            const bType = getBillType(b)
-            const bCfg = BILL_TYPE_CONFIGS[bType]
-
-            return (
-              <div
-                key={b.fdInvNo}
-                onClick={() => navigate(ROUTES.BILLING_VALIDATION_DETAIL(b.fdInvNo))}
-                className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-3.5 shadow-sm active:bg-[var(--color-neutral)] transition-colors cursor-pointer space-y-2.5"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-xs font-bold font-[var(--font-label)] text-[var(--color-primary)]">
-                        {b.fdInvNo}
-                      </span>
-                      <span className={`text-[9px] px-1.5 py-0 font-bold rounded border ${bCfg.badgeClasses}`}>
-                        {bCfg.shortLabel}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <span className="text-[11px] text-[var(--color-secondary)]">{formatDate(b.fdInvDate)}</span>
-                      <AgingBadge hari={getAgingDays(b.fdInvDate)} />
-                    </div>
-                  </div>
-                  <BillingStatusTag row={b} />
-                </div>
-
-                <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-2 text-xs">
-                  <div className="flex items-center gap-1.5 flex-wrap min-w-0 pr-2">
-                    <span className="font-semibold text-[var(--color-primary)] truncate">{custName}</span>
-                    {b.customer && (
-                      <Badge variant={badgeCfg.badgeVariant} className="text-[10px] px-1.5 py-0 shrink-0">
-                        {badgeCfg.label}
-                      </Badge>
-                    )}
-                  </div>
-                  <span className="font-bold text-[var(--color-tertiary)] tabular-nums shrink-0">
-                    {Number(b.fdJumlah2 || 0) > 0 ? (
-                      formatWithCurrency(b.fdJumlah2, b.fdCurr1)
-                    ) : (
-                      formatWithCurrency(b.fdJumlah1, 'Rp.')
-                    )}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between text-[11px] text-[var(--color-secondary)] pt-1 border-t border-[var(--color-border)]/50">
-                  <span className="font-medium text-[var(--color-primary)]">
-                    {b.fdMarkingCode || '—'}{b.fdMarkingNo ? ` (${b.fdMarkingNo})` : ''}
-                  </span>
-                  {b.fdConsignee && (
-                    <span className="text-[var(--color-secondary)] truncate max-w-[180px]" title={b.fdConsignee}>
-                      {t('billing.consignee')}: <span className="font-semibold text-[var(--color-primary)]">{b.fdConsignee}</span>
-                    </span>
-                  )}
-                </div>
-              </div>
-            )
-          })
-        ) : (
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-8 text-center text-xs text-[var(--color-secondary)]">
-            {t('billing.noBillingData')}
+              }
+            />
+          ) : (
+            <EmptyState
+              icon={<Search className="w-8 h-8 text-[var(--color-secondary)]" />}
+              title={t('billing.validationList.noMatchTitle')}
+              description={t('billing.validationList.noMatchDesc')}
+              action={
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setSearch('')
+                    setListTypeFilter('all')
+                    setAuthorFilter('all')
+                  }}
+                  className="flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RotateCcw className="w-4 h-4" />
+                  <span>{t('billing.validationList.resetFilter')}</span>
+                </Button>
+              }
+            />
+          )}
+        </div>
+      ) : (
+        <>
+          {/* Table Desktop (Single Table) */}
+          <div className="hidden sm:block bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-sm overflow-hidden">
+            <Table<Billing>
+              columns={columns}
+              data={filteredBillings}
+              keyExtractor={(row) => row.fdInvNo}
+              onRowClick={(row) => navigate(ROUTES.BILLING_VALIDATION_DETAIL(row.fdInvNo))}
+              emptyMessage={t('billing.noBillingData')}
+            />
           </div>
-        )}
-      </div>
+
+          {/* Mobile Card List */}
+          <div className="sm:hidden space-y-2.5">
+            {filteredBillings.map((b: Billing) => {
+              const custName = b.customer?.fdCustName || b.fdCustCode || '—'
+              const custStatus = b.customer?.fdBlocked ?? 0
+              const badgeCfg = statusConfig[custStatus as keyof typeof statusConfig] || statusConfig[0]
+              const bType = getBillType(b)
+              const bCfg = BILL_TYPE_CONFIGS[bType]
+
+              return (
+                <div
+                  key={b.fdInvNo}
+                  onClick={() => navigate(ROUTES.BILLING_VALIDATION_DETAIL(b.fdInvNo))}
+                  className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] p-3.5 shadow-sm active:bg-[var(--color-neutral)] transition-colors cursor-pointer space-y-2.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-bold font-[var(--font-label)] text-[var(--color-primary)]">
+                          {b.fdInvNo}
+                        </span>
+                        <span className={`text-[9px] px-1.5 py-0 font-bold rounded border ${bCfg.badgeClasses}`}>
+                          {bCfg.shortLabel}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        <span className="text-[11px] text-[var(--color-secondary)]">{formatDate(b.fdInvDate)}</span>
+                        <AgingBadge hari={getAgingDays(b.fdInvDate)} />
+                      </div>
+                    </div>
+                    <BillingStatusTag row={b} />
+                  </div>
+
+                  <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-2 text-xs">
+                    <div className="flex items-center gap-1.5 flex-wrap min-w-0 pr-2">
+                      <span className="font-semibold text-[var(--color-primary)] truncate">{custName}</span>
+                      {b.customer && (
+                        <Badge variant={badgeCfg.badgeVariant} className="text-[10px] px-1.5 py-0 shrink-0">
+                          {badgeCfg.label}
+                        </Badge>
+                      )}
+                    </div>
+                    <span className="font-bold text-[var(--color-tertiary)] tabular-nums shrink-0">
+                      {Number(b.fdJumlah2 || 0) > 0 ? (
+                        formatWithCurrency(b.fdJumlah2, b.fdCurr1)
+                      ) : (
+                        formatWithCurrency(b.fdJumlah1, 'Rp.')
+                      )}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] text-[var(--color-secondary)] pt-1 border-t border-[var(--color-border)]/50">
+                    <span className="font-medium text-[var(--color-primary)]">
+                      {b.fdMarkingCode || '—'}{b.fdMarkingNo ? ` (${b.fdMarkingNo})` : ''}
+                    </span>
+                    {b.fdConsignee && (
+                      <span className="text-[var(--color-secondary)] truncate max-w-[180px]" title={b.fdConsignee}>
+                        {t('billing.consignee')}: <span className="font-semibold text-[var(--color-primary)]">{b.fdConsignee}</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </>
+      )}
 
     </div>
   )

@@ -47,19 +47,19 @@ if (!selectedRow) return null
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header Panel */}
-          <div className="flex-shrink-0 px-5 sm:px-8 pt-5 sm:pt-6 pb-4 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-surface)] sticky top-0 z-10">
-            <div className="flex items-start gap-3">
-              <div className="hidden sm:flex h-10 w-10 shrink-0 items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-primary)]/5 text-[var(--color-primary)] border border-[var(--color-border)]">
-                <Box className="h-5 w-5" />
+          <div className="flex-shrink-0 px-5 sm:px-6 pt-3.5 sm:pt-4 pb-3 border-b border-[var(--color-border)] flex items-center justify-between bg-[var(--color-surface)] sticky top-0 z-10">
+            <div className="flex items-center gap-2.5">
+              <div className="hidden sm:flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[var(--color-primary)]/5 text-[var(--color-primary)] border border-[var(--color-border)]">
+                <Box className="h-4 w-4" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-lg sm:text-xl font-bold font-[var(--font-display)] text-[var(--color-primary)] leading-none">{selectedRow.fdMarkingCode}</h2>
-                  <span className="rounded-full bg-[var(--color-neutral)] border border-[var(--color-border)] px-2 py-0.5 text-xs font-[var(--font-label)] font-medium text-[var(--color-secondary)]">
+                  <h2 className="text-[15px] font-bold font-[var(--font-label)] text-[var(--color-primary)] uppercase tracking-wide leading-none">{selectedRow.fdMarkingCode}</h2>
+                  <span className="rounded-full bg-[var(--color-neutral)] border border-[var(--color-border)] px-2 py-0.5 text-[11px] font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">
                     {listTypeFilter === '1' ? 'AIR' : 'SEA'}
                   </span>
                 </div>
-                <p className="text-xs sm:text-sm text-[var(--color-secondary)] mt-1 font-[var(--font-body)]">{listTypeFilter === '1' ? 'Air freight batch' : 'Sea freight batch'}</p>
+                <p className="text-xs text-[var(--color-secondary)] mt-0.5 font-[var(--font-body)]">{listTypeFilter === '1' ? 'Air freight batch' : 'Sea freight batch'}</p>
               </div>
             </div>
             <button
@@ -67,21 +67,21 @@ if (!selectedRow) return null
                 onClose()
                 setModalTab('detail')
               }}
-              className="p-2 hover:bg-[var(--color-neutral)] rounded-full transition-colors text-[var(--color-secondary)] hover:text-[var(--color-primary)] cursor-pointer"
+              className="p-1.5 hover:bg-[var(--color-neutral)] rounded-lg transition-colors text-[var(--color-secondary)] hover:text-[var(--color-primary)] cursor-pointer"
             >
-              <X size={20} />
+              <X size={18} />
             </button>
           </div>
           
-          <div className="flex px-5 sm:px-8 border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-[79px] z-10 text-sm shrink-0">
+          <div className="flex px-5 sm:px-6 border-b border-[var(--color-border)] bg-[var(--color-surface)] sticky top-[57px] z-10 text-xs shrink-0">
             <button 
-              className={cn("px-4 py-3 font-semibold border-b-2 transition-colors cursor-pointer", modalTab === 'detail' ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]")}
+              className={cn("px-3.5 py-2.5 font-medium border-b-2 transition-colors cursor-pointer text-xs", modalTab === 'detail' ? "border-[var(--color-primary)] text-[var(--color-primary)] font-bold" : "border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]")}
               onClick={() => setModalTab('detail')}
             >
               Info Detail
             </button>
             <button 
-              className={cn("px-4 py-3 font-semibold border-b-2 transition-colors cursor-pointer", modalTab === 'timeline' ? "border-[var(--color-primary)] text-[var(--color-primary)]" : "border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]")}
+              className={cn("px-3.5 py-2.5 font-medium border-b-2 transition-colors cursor-pointer text-xs", modalTab === 'timeline' ? "border-[var(--color-primary)] text-[var(--color-primary)] font-bold" : "border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)]")}
               onClick={() => setModalTab('timeline')}
             >
               Timeline & Performance
@@ -95,83 +95,83 @@ if (!selectedRow) return null
                 <div className="animate-spin w-8 h-8 border-4 border-[var(--color-primary)] border-t-transparent rounded-full" />
               </div>
             ) : selectedMarking ? (
-              <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+              <div className="p-4 sm:p-5 space-y-4">
                 {modalTab === 'detail' && (
                   <>
                     {/* Info Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                        <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Consignee</p>
-                        <p className="mt-1 text-sm font-semibold text-[var(--color-primary)]">{selectedMarking.fdConsignee || '-'}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-2xs">
+                        <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">Consignee</p>
+                        <p className="mt-0.5 text-xs font-semibold text-[var(--color-primary)]">{selectedMarking.fdConsignee || '-'}</p>
                       </div>
-                      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                        <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Region</p>
-                        <p className={cn("mt-1 text-sm font-semibold", selectedMarking.fdWilayah ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
+                      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-2xs">
+                        <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">Region</p>
+                        <p className={cn("mt-0.5 text-xs font-semibold", selectedMarking.fdWilayah ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
                           {selectedMarking.fdWilayah || 'Not recorded'}
                         </p>
                       </div>
-                      <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                        <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">{listTypeFilter === '1' ? 'AWB No.' : 'BL No.'}</p>
-                        <p className={cn("mt-1 text-sm font-semibold break-all", (listTypeFilter === '1' ? selectedMarking.fdAWB : selectedMarking.fdBLNo) ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
+                      <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-2xs">
+                        <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">{listTypeFilter === '1' ? 'AWB No.' : 'BL No.'}</p>
+                        <p className={cn("mt-0.5 text-xs font-semibold break-all", (listTypeFilter === '1' ? selectedMarking.fdAWB : selectedMarking.fdBLNo) ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
                           {listTypeFilter === '1' ? (selectedMarking.fdAWB || 'Not recorded') : (selectedMarking.fdBLNo || 'Not recorded')}
                         </p>
                       </div>
                       {listTypeFilter === '2' && (
-                        <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                          <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Container</p>
-                          <p className={cn("mt-1 text-sm font-semibold", selectedMarking.fdContNo ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
+                        <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-2xs">
+                          <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">Container</p>
+                          <p className={cn("mt-0.5 text-xs font-semibold", selectedMarking.fdContNo ? "text-[var(--color-primary)]" : "text-[var(--color-muted)]")}>
                             {selectedMarking.fdContNo ? `${selectedMarking.fdContNo} ${selectedMarking.fdContSize ? `(${selectedMarking.fdContSize})` : ''}` : '—'}
                           </p>
                         </div>
                       )}
                       {selectedMarking.fdGudang && selectedMarking.fdGudang.trim() !== '' && (
-                        <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                          <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Gudang</p>
-                          <p className="mt-1 text-sm font-semibold text-[var(--color-primary)]">
+                        <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-2xs">
+                          <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">Gudang</p>
+                          <p className="mt-0.5 text-xs font-semibold text-[var(--color-primary)]">
                             {selectedMarking.fdGudang}
                           </p>
                         </div>
                       )}
                       {selectedMarking.fdKet && selectedMarking.fdKet.trim() !== '' && (
-                        <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                          <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Keterangan</p>
-                          <p className="mt-1 text-sm font-semibold text-[var(--color-primary)]">
+                        <div className="col-span-1 sm:col-span-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-2xs">
+                          <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">Keterangan</p>
+                          <p className="mt-0.5 text-xs font-semibold text-[var(--color-primary)]">
                             {selectedMarking.fdKet}
                           </p>
                         </div>
                       )}
                     </div>
 
-                    {/* Volume & Weight */}
-                    <div className={cn("grid grid-cols-1 gap-3", listTypeFilter === '2' ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
-                      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center shadow-sm">
-                        <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Packages</p>
-                        <p className="mt-1 text-lg sm:text-[1.15rem] md:text-[1.2rem] font-bold text-[var(--color-tertiary)]">
+                    {/* Volume & Weight KPI Cards */}
+                    <div className={cn("grid grid-cols-1 gap-2.5", listTypeFilter === '2' ? "sm:grid-cols-3" : "sm:grid-cols-2")}>
+                      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center shadow-2xs">
+                        <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">Packages</p>
+                        <p className="mt-0.5 text-[18px] font-bold tabular-nums text-[var(--color-tertiary)]">
                           {selectedMarking.fdJmlPack != null ? Number(selectedMarking.fdJmlPack).toLocaleString('en-US') : 0}
                         </p>
                       </div>
-                      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center shadow-sm">
-                        <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Weight</p>
-                        <p className="mt-1 text-lg sm:text-[1.15rem] md:text-[1.2rem] font-bold text-[var(--color-tertiary)]">
+                      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center shadow-2xs">
+                        <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">Weight</p>
+                        <p className="mt-0.5 text-[18px] font-bold tabular-nums text-[var(--color-tertiary)]">
                           {selectedMarking.fdJmlBerat != null ? Number(selectedMarking.fdJmlBerat).toLocaleString('en-US') : 0}
-                          <span className="ml-1 text-xs sm:text-[13px] md:text-[14px] font-medium text-[var(--color-secondary)]">kg</span>
+                          <span className="ml-1 text-[11px] font-medium text-[var(--color-secondary)]">kg</span>
                         </p>
                       </div>
                       {listTypeFilter === '2' && (
-                        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center shadow-sm">
-                          <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Volume</p>
-                          <p className="mt-1 text-lg sm:text-[1.15rem] md:text-[1.2rem] font-bold text-[var(--color-primary)]">
+                        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center shadow-2xs">
+                          <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">Volume</p>
+                          <p className="mt-0.5 text-[18px] font-bold tabular-nums text-[var(--color-primary)]">
                             {selectedMarking.fdM3 != null ? Number(selectedMarking.fdM3).toLocaleString('en-US') : 0}
-                            <span className="ml-1 text-xs sm:text-[13px] md:text-[14px] font-medium text-[var(--color-secondary)]">m³</span>
+                            <span className="ml-1 text-[11px] font-medium text-[var(--color-secondary)]">m³</span>
                           </p>
                         </div>
                       )}
                       {listTypeFilter === '1' && (
-                        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center shadow-sm">
-                          <p className="text-[10px] sm:text-[11px] md:text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Branded</p>
-                          <p className="mt-1 text-lg sm:text-[1.15rem] md:text-[1.2rem] font-bold text-[var(--color-primary)]">
+                        <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 text-center shadow-2xs">
+                          <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">Branded</p>
+                          <p className="mt-0.5 text-[18px] font-bold tabular-nums text-[var(--color-primary)]">
                             {selectedMarking.fdBranded || 0}
-                            <span className="ml-1 text-xs sm:text-[13px] md:text-[14px] font-medium text-[var(--color-secondary)]">kg</span>
+                            <span className="ml-1 text-[11px] font-medium text-[var(--color-secondary)]">kg</span>
                           </p>
                         </div>
                       )}
@@ -348,15 +348,15 @@ if (!selectedRow) return null
                             </div>
 
                             {/* KpiCard 4 */}
-                            <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-sm">
-                              <p className="text-xs uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">Total shipment cycle</p>
-                              <div className="mt-2 flex items-baseline gap-1">
-                                <span className={cn("text-2xl font-bold font-[var(--font-display)]", isCycleDelayed ? "text-[var(--color-danger)]" : "text-[var(--color-primary)]")}>
+                            <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 shadow-2xs">
+                              <p className="text-[10.5px] uppercase tracking-wider font-[var(--font-label)] font-semibold text-[var(--color-secondary)]">Total shipment cycle</p>
+                              <div className="mt-1 flex items-baseline gap-1">
+                                <span className={cn("text-[18px] font-bold tabular-nums", isCycleDelayed ? "text-[var(--color-danger)]" : "text-[var(--color-primary)]")}>
                                   {totalCycle === null ? "—" : totalCycle}
                                 </span>
-                                {totalCycle !== null && <span className="text-[10px] sm:text-[11px] md:text-xs uppercase font-bold text-[var(--color-secondary)]">days</span>}
+                                {totalCycle !== null && <span className="text-[11px] uppercase font-bold text-[var(--color-secondary)]">days</span>}
                               </div>
-                              <p className="mt-1 text-[10px] sm:text-[11px] md:text-xs font-medium text-[var(--color-secondary)]">Load → {exitDate ? 'Exit' : 'Today'}</p>
+                              <p className="mt-0.5 text-[11px] font-medium text-[var(--color-secondary)]">Load → {exitDate ? 'Exit' : 'Today'}</p>
                             </div>
                           </div>
                         </div>

@@ -49,6 +49,7 @@ export const AVAILABLE_PATHS: AvailablePath[] = [
   { path: ROUTES.BILLING_LIST, label: 'Daftar Billing', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.BILLING_VALIDATION_SUMMARY, label: 'Summary Validasi (Modal)', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.BILLING_VALIDATION_DETAIL_PATH, label: 'Validasi Detail (Halaman)', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
+  { path: ROUTES.BILLING_PAIRING_LOCAL_CHARGE, label: 'Pairing Local Charge', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.PRICE_LIST, label: 'Price List Dashboard', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.PRICE_LIST_LOOKUP, label: 'Pencarian Master Price List', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.PRICE_LIST_UPLOAD, label: 'Upload Price List', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },

@@ -12,6 +12,7 @@ export interface CustomerBillingHistoryItem {
   fdListCode: string | null
   fdListType: number | null
   fdTglAgent: Date | string | null
+  fdTerima: string | null
   fdTypeComodity: number | null
   fdTypeComodityName: string | null
   fdConsignee: string | null
@@ -388,6 +389,7 @@ export async function getCustomerBillingHistory(
       b.fdCekBy,
       b.fdEmp2Code,
       el.fdTglAgent,
+      RTRIM(el.fdTerima) AS fdTerima,
       COALESCE(el.fdTypeComodity, first_tc.fdTypeComodity) AS fdTypeComodity,
       COALESCE(
         tc.fdComodityName,
@@ -707,6 +709,7 @@ export async function getCustomerBillingHistory(
       fdListCode: b.fdListCode ? String(b.fdListCode).trim() : null,
       fdListType: b.fdListType !== null && b.fdListType !== undefined ? Number(b.fdListType) : null,
       fdTglAgent: b.fdTglAgent || null,
+      fdTerima: b.fdTerima ? String(b.fdTerima).trim() : null,
       fdTypeComodity: b.fdTypeComodity !== null && b.fdTypeComodity !== undefined ? Number(b.fdTypeComodity) : null,
       fdTypeComodityName: b.fdTypeComodityName ? String(b.fdTypeComodityName).trim() : null,
       fdConsignee: b.fdConsignee ? String(b.fdConsignee).trim() : null,

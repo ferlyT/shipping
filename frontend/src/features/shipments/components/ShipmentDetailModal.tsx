@@ -84,17 +84,17 @@ export function ShipmentDetailModal({
           </div>
 
           {/* ── HEADER ── */}
-          <div className="flex-shrink-0 bg-[var(--color-surface)] px-5 sm:px-6 pt-3 sm:pt-5 pb-3.5 border-b border-[var(--color-border)]">
+          <div className="flex-shrink-0 bg-[var(--color-surface)] px-5 sm:px-6 pt-3.5 sm:pt-4 pb-3 border-b border-[var(--color-border)]">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
                 {/* Title (Customer Name) */}
-                <h2 className="text-lg sm:text-xl font-bold text-[var(--color-text)] tracking-tight truncate">
+                <h2 className="text-[15px] font-bold font-[var(--font-label)] uppercase tracking-wide text-[var(--color-text)] truncate">
                   {shipment.fdCustName || 'Customer Tidak Dikenal'}
                 </h2>
 
                 {/* Subtitle (List Code Badge + Status + Location) */}
-                <div className="flex items-center gap-2 flex-wrap mt-2">
-                  <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-lg bg-[var(--color-neutral)] text-[var(--color-text)] text-xs font-semibold">
+                <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                  <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-[var(--color-neutral)] text-[var(--color-text)] text-[11px] font-semibold">
                     <span className="font-mono">{shipment.fdListCode}</span>
                     <button
                       type="button"
@@ -113,7 +113,7 @@ export function ShipmentDetailModal({
                   <StatusBadge status={shipment.shipmentStatus} />
 
                   {status?.fdGudang?.trim() && (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--color-secondary)] bg-[var(--color-neutral)] px-2.5 py-0.5 rounded-lg">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-[var(--color-secondary)] bg-[var(--color-neutral)] px-2 py-0.5 rounded-lg">
                       <MapPin size={11} className="hidden sm:inline-block text-[var(--color-secondary)]" />
                       {status.fdGudang.trim()}
                     </span>
@@ -125,7 +125,7 @@ export function ShipmentDetailModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 rounded-xl text-[var(--color-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-neutral)] transition-all shrink-0 cursor-pointer"
+                className="p-1.5 rounded-lg text-[var(--color-secondary)] hover:text-[var(--color-text)] hover:bg-[var(--color-neutral)] transition-all shrink-0 cursor-pointer"
                 aria-label="Tutup modal"
               >
                 <X size={18} />
@@ -133,7 +133,7 @@ export function ShipmentDetailModal({
             </div>
 
             {/* Segmented Main Navigation Bar */}
-            <div className="flex gap-1 mt-4 p-1 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)]">
+            <div className="flex gap-1 mt-3 p-0.5 bg-[var(--color-neutral)] rounded-lg border border-[var(--color-border)]">
               {TABS.map(({ id, label, icon: Icon }) => {
                 const isActive = activeTab === id
                 return (
@@ -142,13 +142,13 @@ export function ShipmentDetailModal({
                     type="button"
                     onClick={() => setActiveTab(id)}
                     className={cn(
-                      'flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-lg text-xs font-semibold transition-all duration-150 cursor-pointer',
+                      'flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-md text-[11.5px] font-medium transition-all duration-150 cursor-pointer',
                       isActive
-                        ? 'bg-[var(--color-surface)] text-[var(--color-text)] shadow-xs'
+                        ? 'bg-[var(--color-surface)] text-[var(--color-text)] font-bold shadow-xs'
                         : 'text-[var(--color-secondary)] hover:text-[var(--color-text)]'
                     )}
                   >
-                    <Icon size={14} className={cn("hidden sm:inline-block", isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-secondary)]')} />
+                    <Icon size={13} className={cn("hidden sm:inline-block", isActive ? 'text-[var(--color-primary)]' : 'text-[var(--color-secondary)]')} />
                     <span>{label}</span>
                     {id === 'dimensions' && totalDimCount > 0 && (
                       <span
@@ -200,20 +200,20 @@ export function ShipmentDetailModal({
           </div>
 
           {/* ── FOOTER ── */}
-          <div className="shrink-0 flex items-center gap-2.5 px-5 sm:px-6 py-3 bg-[var(--color-surface)] border-t border-[var(--color-border)]">
+          <div className="shrink-0 flex items-center gap-2.5 px-5 sm:px-6 py-2.5 bg-[var(--color-surface)] border-t border-[var(--color-border)]">
             <button
               type="button"
               onClick={() => copyToClipboard(shipment.fdTerima || shipment.fdLocalTrackingNo, 'footerCopy')}
               disabled={!shipment.fdTerima && !shipment.fdLocalTrackingNo}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-[var(--color-border)] text-[var(--color-text)] text-xs sm:text-[13px] font-semibold hover:bg-[var(--color-neutral)] active:opacity-80 disabled:opacity-40 transition-colors cursor-pointer"
+              className="flex-1 flex items-center justify-center gap-2 py-1.5 px-3 rounded-lg border border-[var(--color-border)] text-[var(--color-text)] text-xs font-semibold hover:bg-[var(--color-neutral)] active:opacity-80 disabled:opacity-40 transition-colors cursor-pointer"
             >
-              {copiedField === 'footerCopy' ? <Check size={14} className="text-emerald-500" /> : <Copy size={14} />}
+              {copiedField === 'footerCopy' ? <Check size={13} className="text-emerald-500" /> : <Copy size={13} />}
               <span>{copiedField === 'footerCopy' ? 'Nomor Tersalin!' : 'Salin Nomor Resi / Tracking'}</span>
             </button>
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 sm:flex-none sm:px-8 py-2.5 rounded-xl bg-[var(--color-primary)] text-[var(--color-on-primary)] text-xs sm:text-[13px] font-semibold hover:opacity-90 active:scale-[0.99] transition-all shadow-xs cursor-pointer"
+              className="flex-1 sm:flex-none sm:px-6 py-1.5 rounded-lg bg-[var(--color-primary)] text-[var(--color-on-primary)] text-xs font-semibold hover:opacity-90 active:scale-[0.99] transition-all shadow-xs cursor-pointer"
             >
               Tutup
             </button>

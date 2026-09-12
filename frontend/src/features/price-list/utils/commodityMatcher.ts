@@ -1,3 +1,5 @@
+import { isGenuineBattery } from '@/features/billing/utils/billing.utils'
+
 /**
  * Commodity Matcher - Pure utility function
  * Adopted from BillingValidationCard.tsx commodity matching logic
@@ -16,12 +18,7 @@ export function isCommodityMatch(
 
   const isAir = isAirMode || (mode || '').toUpperCase().includes('AIR')
 
-  const isBattery =
-    normCom.includes('BATTERY') ||
-    normCom.includes('BATERAI') ||
-    normCom.includes('POWERBANK') ||
-    normCom.includes('ACCU') ||
-    normCom.includes('AKI')
+  const isBattery = isGenuineBattery(normCom)
 
   // 1. Explicit distinction: SEMI GARMENT vs GARMENT
   const isComSemiGarment = normCom.includes('SEMI GARMENT') || (!isAir && isBattery)

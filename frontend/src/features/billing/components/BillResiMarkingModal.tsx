@@ -118,18 +118,18 @@ export function BillResiMarkingModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Modal */}
-        <div className="px-4 sm:px-6 py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/70 flex items-center justify-between gap-3 shrink-0">
+        <div className="px-4 sm:px-6 py-3 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/70 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center justify-center shrink-0">
-              <ScanBarcode className="w-5 h-5" />
+            <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 flex items-center justify-center shrink-0">
+              <ScanBarcode className="w-4 h-4" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <h3 className="text-sm sm:text-base font-bold text-[var(--color-primary)] font-[var(--font-label)] uppercase tracking-wide">
+                <h3 className="text-[15px] font-bold text-[var(--color-primary)] font-[var(--font-label)] uppercase tracking-wide">
                   Pengecekan Resi & Persebaran Marking
                 </h3>
                 {summary?.isPartial && (
-                  <Badge variant="warning" className="text-[10px] px-2 py-0.5 font-bold animate-pulse">
+                  <Badge variant="warning" className="text-[10.5px] px-2 py-0.5 font-bold animate-pulse">
                     ⚠ PARSIAL (Customer Sama)
                   </Badge>
                 )}
@@ -207,30 +207,30 @@ export function BillResiMarkingModal({
               {/* Summary Cards Grid */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
                 <div className="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/40 space-y-1 shadow-2xs">
-                  <span className="text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider block">
+                  <span className="text-[10.5px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider block">
                     Total Resi (fdTerima)
                   </span>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-xl font-bold font-mono text-[var(--color-primary)]">
+                    <span className="text-[18px] font-bold font-mono tabular-nums text-[var(--color-primary)]">
                       {summary?.totalResi || 0}
                     </span>
-                    <span className="text-[10px] text-[var(--color-secondary)]">nomor</span>
+                    <span className="text-[11px] text-[var(--color-secondary)]">nomor</span>
                   </div>
                 </div>
 
                 <div className="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/40 space-y-1 shadow-2xs">
-                  <span className="text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider block">
+                  <span className="text-[10.5px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider block">
                     Status Parsial Cust
                   </span>
                   <div className="flex items-center gap-1.5">
                     {summary?.isPartial ? (
-                      <span className="text-sm font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                        <AlertTriangle size={14} className="shrink-0" />
+                      <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                        <AlertTriangle size={13} className="shrink-0" />
                         {summary.partialCount} Resi Parsial
                       </span>
                     ) : (
-                      <span className="text-sm font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                        <CheckCircle2 size={14} className="shrink-0" />
+                      <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 size={13} className="shrink-0" />
                         Aman (1 Marking)
                       </span>
                     )}
@@ -238,23 +238,23 @@ export function BillResiMarkingModal({
                 </div>
 
                 <div className="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/40 space-y-1 shadow-2xs">
-                  <span className="text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider block">
+                  <span className="text-[10.5px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider block">
                     Total Colly
                   </span>
                   <div className="flex items-baseline gap-1.5">
-                    <span className="text-xl font-bold font-mono text-[var(--color-primary)]">
+                    <span className="text-[18px] font-bold font-mono tabular-nums text-[var(--color-primary)]">
                       {formatNumber(summary?.totalColly || 0)}
                     </span>
-                    <span className="text-[10px] text-[var(--color-secondary)]">pack</span>
+                    <span className="text-[11px] text-[var(--color-secondary)]">pack</span>
                   </div>
                 </div>
 
                 <div className="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/40 space-y-1 shadow-2xs">
-                  <span className="text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider block">
+                  <span className="text-[10.5px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider block">
                     Total Berat / Volume
                   </span>
                   <div className="text-xs font-mono font-bold text-[var(--color-primary)] space-y-0.5">
-                    <div>{formatDecimal(summary?.totalBerat || 0)} <span className="font-normal text-[10px] text-[var(--color-secondary)]">Kg</span></div>
+                    <div>{formatDecimal(summary?.totalBerat || 0)} <span className="font-normal text-[11px] text-[var(--color-secondary)]">Kg</span></div>
                     <div className="text-[11px] text-[var(--color-secondary)]">{formatDecimal(summary?.totalM3 || 0)} <span className="font-normal text-[10px]">M3</span></div>
                   </div>
                 </div>
@@ -274,10 +274,10 @@ export function BillResiMarkingModal({
               ) : (
                 <div className="space-y-3">
                   <div className="flex items-center justify-between text-xs text-[var(--color-secondary)] px-1">
-                    <span className="font-semibold uppercase tracking-wider text-[10px]">
+                    <span className="font-semibold uppercase tracking-wider text-[10.5px]">
                       Rincian Resi & Persebaran Marking Code ({resiList.length})
                     </span>
-                    <span>Klik kartu resi untuk melihat/menutup tabel rincian</span>
+                    <span className="text-[11px]">Klik kartu resi untuk melihat/menutup tabel rincian</span>
                   </div>
 
                   {resiList.map((item: BillResiItem) => {
@@ -291,10 +291,10 @@ export function BillResiMarkingModal({
                         {/* Header Item Resi */}
                         <div
                           onClick={() => toggleExpand(item.fdTerima)}
-                          className="p-3 sm:p-4 bg-[var(--color-neutral)]/50 hover:bg-[var(--color-neutral)]/80 flex items-center justify-between gap-3 cursor-pointer transition-colors"
+                          className="p-3 bg-[var(--color-neutral)]/50 hover:bg-[var(--color-neutral)]/80 flex items-center justify-between gap-3 cursor-pointer transition-colors"
                         >
                           <div className="flex items-center gap-2.5 min-w-0 flex-wrap">
-                            <span className="text-xs sm:text-sm font-mono font-bold text-[var(--color-primary)] bg-[var(--color-surface)] px-2.5 py-1 rounded-lg border border-[var(--color-border)] shadow-2xs">
+                            <span className="text-xs font-mono font-bold text-[var(--color-primary)] bg-[var(--color-surface)] px-2.5 py-1 rounded-lg border border-[var(--color-border)] shadow-2xs">
                               {item.fdTerima}
                             </span>
 
@@ -325,7 +325,7 @@ export function BillResiMarkingModal({
                               <span className="font-semibold text-[var(--color-primary)]">
                                 {formatNumber(item.totalColly)} pack
                               </span>
-                              <span className="text-[var(--color-secondary)] text-[10px] ml-1.5">
+                              <span className="text-[var(--color-secondary)] text-[11px] ml-1.5">
                                 ({formatDecimal(item.totalBerat)} kg · {formatDecimal(item.totalM3)} m3)
                               </span>
                             </div>
@@ -343,7 +343,7 @@ export function BillResiMarkingModal({
                           <div className="border-t border-[var(--color-border)] overflow-x-auto">
                             <table className="w-full text-left text-xs border-collapse font-sans">
                               <thead>
-                                <tr className="bg-[var(--color-neutral)]/20 text-[10px] uppercase font-semibold text-[var(--color-secondary)] tracking-wider border-b border-[var(--color-border)]">
+                                <tr className="bg-[var(--color-neutral)]/20 text-[11px] uppercase font-semibold text-[var(--color-secondary)] tracking-wider border-b border-[var(--color-border)]">
                                   <th className="py-2 px-3">Marking Code</th>
                                   <th className="py-2 px-3">Marking No</th>
                                   <th className="py-2 px-3">No. SJ (List)</th>
@@ -423,14 +423,14 @@ export function BillResiMarkingModal({
         </div>
 
         {/* Modal Footer */}
-        <div className="px-4 sm:px-6 py-3 border-t border-[var(--color-border)] bg-[var(--color-neutral)]/50 shrink-0 flex items-center justify-between gap-3">
+        <div className="px-4 sm:px-6 py-2.5 border-t border-[var(--color-border)] bg-[var(--color-neutral)]/50 shrink-0 flex items-center justify-between gap-3">
           <span className="text-[11px] text-[var(--color-secondary)] hidden sm:inline">
             Tekan <kbd className="px-1.5 py-0.5 text-[10px] font-mono bg-[var(--color-surface)] border border-[var(--color-border)] rounded shadow-2xs">ESC</kbd> untuk menutup dialog
           </span>
           <button
             type="button"
             onClick={onClose}
-            className="w-full sm:w-auto ml-auto px-5 py-2 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-primary)] text-xs font-semibold shadow-xs transition-all cursor-pointer text-center justify-center flex items-center"
+            className="w-full sm:w-auto ml-auto px-4 py-1.5 rounded-xl bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-primary)] text-xs font-semibold shadow-xs transition-all cursor-pointer text-center justify-center flex items-center"
           >
             Tutup
           </button>

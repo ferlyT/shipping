@@ -15,6 +15,7 @@ import type {
   PriceStatus,
   PriceSourceType,
 } from './price-check.types'
+import { getCustomerHargaAuditInfo } from '../m3-check/m3-check.service'
 
 /**
  * Normalisasi kode cabang (GZ, YW, SH, SZ, HK, SG)
@@ -93,13 +94,52 @@ export function resolveCommodityName(
 ): string {
   const raw = (inputRaw || '').trim().toUpperCase()
   if (!raw) return ''
+
+  const isAirMode = modeStr ? (modeStr.toUpperCase().includes('AIR') || modeStr.toUpperCase().includes('UDARA')) : false
+  const matchesMode = (m: any) => {
+    if (!m.mode || m.mode.trim().toUpperCase() === 'ALL') return true
+    const mMode = m.mode.trim().toUpperCase()
+    if (isAirMode) return mMode.includes('AIR') || mMode.includes('UDARA')
+    return mMode.includes('SEA') || mMode.includes('LAUT')
+  }
+
+  const isValidGadgetMapping = (m: any) => {
+    const mUpper = String(m.commodityName || '').trim().toUpperCase()
+    if (['LAPTOP', 'NOTEBOOK', 'MACBOOK', 'LAPTOPS'].includes(mUpper) && !isGenuineLaptop(raw)) {
+      return false
+    }
+    if (['IPAD', 'TABLET'].includes(mUpper) && !isGenuineIpad(raw)) {
+      return false
+    }
+    const tUpper = String(m.targetCommodity || '').trim().toUpperCase()
+    if (
+      ['BATTERY', 'BATTERIES', 'LAPTOP BATTERY', 'POWERBANK', 'ACCU', 'AKI'].includes(mUpper) ||
+      tUpper.includes('SEMI GARMENT') ||
+      tUpper.includes('BATTERY') ||
+      tUpper.includes('POWERBANK')
+    ) {
+      if (!isGenuineBattery(raw)) return false
+    }
+    return true
+  }
+
   if (custCode) {
     const cm = activeMappings.find(
-      (m) => m.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && m.commodityName.trim().toUpperCase() === raw
+      (m) =>
+        matchesMode(m) &&
+        isValidGadgetMapping(m) &&
+        m.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() &&
+        m.commodityName.trim().toUpperCase() === raw
     )
     if (cm) return cm.targetCommodity.trim().toUpperCase()
   }
-  const gm = activeMappings.find((m) => !m.fdCustCode && m.commodityName.trim().toUpperCase() === raw)
+  const gm = activeMappings.find(
+    (m) =>
+      matchesMode(m) &&
+      isValidGadgetMapping(m) &&
+      !m.fdCustCode &&
+      m.commodityName.trim().toUpperCase() === raw
+  )
   if (gm) return gm.targetCommodity.trim().toUpperCase()
 
   // Aturan bisnis: Jika komoditas adalah genuine battery (bukan charger/case), petakan ke SEMI GARMENT untuk Laut
@@ -192,8 +232,38 @@ export function determineCommodityOverride(params: {
   // 4. Pemetaan Eksplisit di tbCommodityMapping
   if (params.activeMappings && params.activeMappings.length > 0) {
     const custCodeUpper = (params.custCode || '').trim().toUpperCase()
+    const isAirMode = params.modeStr ? (params.modeStr.toUpperCase().includes('AIR') || params.modeStr.toUpperCase().includes('UDARA')) : false
+    const matchesMode = (m: any) => {
+      if (!m.mode || m.mode.trim().toUpperCase() === 'ALL') return true
+      const mMode = m.mode.trim().toUpperCase()
+      if (isAirMode) return mMode.includes('AIR') || mMode.includes('UDARA')
+      return mMode.includes('SEA') || mMode.includes('LAUT')
+    }
+
+    const isValidGadgetMapping = (m: any) => {
+      const mUpper = String(m.commodityName || '').trim().toUpperCase()
+      if (['LAPTOP', 'NOTEBOOK', 'MACBOOK', 'LAPTOPS'].includes(mUpper) && !isGenuineLaptop(rawComodity) && !isGenuineLaptop(rawType)) {
+        return false
+      }
+      if (['IPAD', 'TABLET'].includes(mUpper) && !isGenuineIpad(rawComodity) && !isGenuineIpad(rawType)) {
+        return false
+      }
+      const tUpper = String(m.targetCommodity || '').trim().toUpperCase()
+      if (
+        ['BATTERY', 'BATTERIES', 'LAPTOP BATTERY', 'POWERBANK', 'ACCU', 'AKI'].includes(mUpper) ||
+        tUpper.includes('SEMI GARMENT') ||
+        tUpper.includes('BATTERY') ||
+        tUpper.includes('POWERBANK')
+      ) {
+        if (!isGenuineBattery(rawComodity) && !isGenuineBattery(rawType)) return false
+      }
+      return true
+    }
+
     const mapping = params.activeMappings.find(
       (m) =>
+        matchesMode(m) &&
+        isValidGadgetMapping(m) &&
         (m.fdCustCode?.trim().toUpperCase() === custCodeUpper || !m.fdCustCode) &&
         (rawComodity === m.commodityName.trim().toUpperCase() || rawType === m.commodityName.trim().toUpperCase())
     )
@@ -512,6 +582,7 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
         EXEC dbo.get_profile_harga_dari_listcode ${listCode}
       `
       if (spRes && spRes[0]) {
+        const auditInfo = await getCustomerHargaAuditInfo(spRes[0].fdCustCode || params.custCode || '')
         profileTariff = {
           harga: Number(spRes[0].Harga || 0),
           rasio: Number(spRes[0].Rasio || 0),
@@ -521,6 +592,9 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
           minChargeKg: Number(spRes[0].MinChargeKG || 0),
           taxReturnPrice: Number(spRes[0].fdTaxReturnPrice || 0),
           taxReturnMinCharge: Number(spRes[0].fdTaxReturnMinCharge || 0),
+          fdUpdate: auditInfo.fdUpdate,
+          fdUpdateDate: auditInfo.fdUpdateDate,
+          fdUpdateSource: auditInfo.source,
         }
       }
     } catch (err) {

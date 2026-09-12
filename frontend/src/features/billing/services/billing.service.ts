@@ -32,6 +32,21 @@ export const billingApi = {
   m3CustMarkingDetails: (custCode: string, markingCode: string) =>
     apiClient.get('/billing/m3-cust-marking-details', { params: { custCode, markingCode } }),
 
+  entryListDetails: (listCodes: string[]) =>
+    apiClient.post<{
+      data: Array<{
+        fdListCode: string
+        fdListDCode: string
+        fdDescr: string
+        fdPjg: number
+        fdLbr: number
+        fdTng: number
+        fdQty: number
+        fdM3: number
+        fdLoad: string | null
+      }>
+    }>('/billing/entry-list-details', { listCodes }),
+
   partialDetails: (params: { markingCode: string; customer?: string; custCode?: string }) =>
     apiClient.get('/billing/partial-details', { params }),
 
@@ -63,6 +78,9 @@ export const billingApi = {
   transportCheck: (params: { invNo?: string; custCode?: string; markingCode?: string; markingNo?: string; listCode?: string; amount?: number }) =>
     apiClient.get('/billing/transport-check', { params }),
 
+  type2CompareCheck: (params: { invNo?: string; listCode?: string; markingCode?: string }) =>
+    apiClient.get('/billing/type2-compare-check', { params }),
+
   getEmployees: () =>
     apiClient.get<{ data: { fdEmpCode: string; fdEmpName: string }[] }>('/billing/employees'),
 
@@ -78,7 +96,49 @@ export const billingApi = {
       { params: { resi } }
     ),
 
-  updateDetails: (id: string, items: import('../types/billing.types').BillingDetailInput[]) =>
-    apiClient.put(`/billing/${encodeURIComponent(id)}/details`, { items }),
+  updateDetails: (
+    id: string,
+    items: import('../types/billing.types').BillingDetailInput[],
+    saveToPrev: boolean = true
+  ) =>
+    apiClient.put(`/billing/${encodeURIComponent(id)}/details`, { items, saveToPrev }),
+
+  getReportTemplate: () =>
+    apiClient.get<{ data: { id: string; name: string; config: any; updatedBy?: string; updatedAt?: string } }>(
+      '/billing/report-template'
+    ),
+
+  saveReportTemplate: (config: Record<string, any>) =>
+    apiClient.put<{ data: { id: string; name: string; config: any; updatedBy?: string; updatedAt?: string } }>(
+      '/billing/report-template',
+      { config }
+    ),
+
+  pairingLocalCharge: (formData: FormData) =>
+    apiClient.post<{ data: import('../types/billing.types').PairingLocalChargeResult }>(
+      '/billing/pairing-local-charge',
+      formData,
+      {
+        headers: { 'Content-Type': 'multipart/form-data' },
+        timeout: 120000,
+      }
+    ),
+
+  pairingLocalChargeByReceipts: (receiptNos: string) =>
+    apiClient.post<{ data: import('../types/billing.types').PairingLocalChargeResult }>(
+      '/billing/pairing-local-charge/by-receipts',
+      { receiptNos },
+      { timeout: 120000 }
+    ),
+
+  exportPairingLocalChargeExcel: (rows: import('../types/billing.types').PairingLocalChargeRow[]) =>
+    apiClient.post(
+      '/billing/pairing-local-charge/export-excel',
+      { rows },
+      {
+        responseType: 'blob',
+        timeout: 120000,
+      }
+    ),
 }
 

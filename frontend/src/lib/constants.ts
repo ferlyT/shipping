@@ -22,11 +22,17 @@ export const ROUTES = {
   BILLING: '/mshipping/finance/billing',
   BILLING_TARGET: '/mshipping/finance/billing/target',
   BILLING_LIST: '/mshipping/finance/billing/list',
-  BILLING_DETAIL: (id: string) => `/mshipping/finance/billing/${id}`,
+  BILLING_DETAIL: (id: string) => `/mshipping/finance/billing/${(id || '').trim()}`,
+  BILLING_PRINT: (id: string, mode?: 'pdf' | 'matrix') => {
+    const cleanId = (id || '').trim()
+    return mode ? `/mshipping/finance/billing/${cleanId}/print?mode=${mode}` : `/mshipping/finance/billing/${cleanId}/print`
+  },
+  BILLING_REPORT_DESIGNER: '/mshipping/finance/billing/report-designer',
   BILLING_VALIDATION_SUMMARY: '/mshipping/finance/billing/validation/summary',
   BILLING_VALIDATION_DETAIL_PATH: '/mshipping/finance/billing/validation',
   BILLING_VALIDATION_LIST: '/mshipping/finance/billing/validation/list',
-  BILLING_VALIDATION_DETAIL: (id: string) => `/mshipping/finance/billing/validation/${id}`,
+  BILLING_VALIDATION_DETAIL: (id: string) => `/mshipping/finance/billing/validation/${(id || '').trim()}`,
+  BILLING_PAIRING_LOCAL_CHARGE: '/mshipping/finance/billing/pairing-local-charge',
 
   // Price List
   PRICE_LIST: '/mshipping/finance/price-list',

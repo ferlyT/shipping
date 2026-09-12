@@ -6,6 +6,7 @@ import type { M3CheckResponse } from '../components/BillingValidationSummaryModa
 interface UseInvoiceMetricsParams {
   details: BillingDetail[]
   validationData?: M3CheckResponse | null
+  expedisiList?: any[]
 }
 
 export interface UnderchargedItem {
@@ -17,7 +18,7 @@ export interface UnderchargedItem {
   priceListDisplay?: string
 }
 
-export function useInvoiceMetrics({ details, validationData }: UseInvoiceMetricsParams) {
+export function useInvoiceMetrics({ details, validationData, expedisiList }: UseInvoiceMetricsParams) {
   const unitTotals = useMemo(() => {
     const acc = details.reduce<Record<string, number>>((map, row) => {
       if (isAuxiliaryItem(row.fdItemName)) return map
@@ -88,11 +89,11 @@ export function useInvoiceMetrics({ details, validationData }: UseInvoiceMetrics
   const billedVfc = unitTotals['VOLUME FREIGHT CHARGES (KG)'] ?? rawVfc
 
   const underchargedItems = useMemo<UnderchargedItem[]>(() => {
-    if (!validationData || details.length === 0) return []
+    if ((!validationData && (!expedisiList || expedisiList.length === 0)) || details.length === 0) return []
 
-    const isAir = validationData.fdListType === 1 || validationData.expectedMode === 'BY AIR'
-    const defaultTypeId = validationData.defaultFdTypeComodity ?? validationData.markingComodityType ?? null
-    const defaultComodityName = validationData.markingComodities?.[0]?.fdComodityName || '—'
+    const isAir = validationData?.fdListType === 1 || validationData?.expectedMode === 'BY AIR'
+    const defaultTypeId = validationData?.defaultFdTypeComodity ?? validationData?.markingComodityType ?? null
+    const defaultComodityName = validationData?.markingComodities?.[0]?.fdComodityName || '—'
 
     return details
       .map((row) => {
@@ -101,6 +102,7 @@ export function useInvoiceMetrics({ details, validationData }: UseInvoiceMetrics
           isAir,
           defaultTypeId,
           defaultComodityName,
+          expedisiList,
         })
         if (evalRes.statusType !== 'LOWER') return null
         return {
@@ -113,7 +115,7 @@ export function useInvoiceMetrics({ details, validationData }: UseInvoiceMetrics
         } satisfies UnderchargedItem
       })
       .filter(Boolean) as UnderchargedItem[]
-  }, [details, validationData])
+  }, [details, validationData, expedisiList])
 
   return {
     unitTotals,

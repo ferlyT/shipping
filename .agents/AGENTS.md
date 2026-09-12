@@ -1,47 +1,93 @@
 # Aturan Agen (Agent Rules) - mshipping
 
-Dokumen ini berisi panduan, konvensi, dan aturan operasional wajib bagi AI Agent (seperti Antigravity) saat berinteraksi dengan proyek **mshipping**. Aturan ini dirangkum dari spesifikasi arsitektur dan checklist proyek.
+Dokumen ini berisi panduan, konvensi, dan aturan operasional wajib bagi AI Agent (seperti Antigravity) saat berinteraksi dengan proyek **mshipping**. Aturan ini dirangkum dari spesifikasi arsitektur dan kondisi aktual proyek.
+
+> **⚡ WAJIB**: Setiap sesi dimulai → baca `.agents/working.md`. Sesi selesai → update `.agents/working.md`.
 
 ## 🏗️ Arsitektur Proyek
-- **Frontend**: React 19 + Vite + TypeScript (Berada di folder `frontend/`)
-- **Backend**: Hono.js + Bun + Prisma ORM + MS SQL Server (Berada di folder `backend/`)
+- **Frontend**: React 19 + Vite + TypeScript (folder `frontend/`)
+- **Backend**: Hono.js + Bun + Prisma ORM + MS SQL Server (folder `backend/`)
 - **Struktur Folder Frontend**: **Feature-Driven Architecture** (`src/features/<domain>/`)
-- **Komunikasi**: REST API via Axios.
+- **Komunikasi**: REST API via Axios (client di `src/api/client.ts`, endpoint const di `src/api/endpoints/`)
+
 
 ---
 
 ## 📂 Struktur Feature-Based Architecture (`src/features/`)
-Semua fitur domain wajib diletakkan di bawah `src/features/<domain>/` dengan struktur internal standar berikut:
 
+### Domain Aktif (Frontend)
+| Domain | Path |
+|---|---|
+| `auth` | `src/features/auth/` |
+| `billing` | `src/features/billing/` |
+| `commodity-mapping` | `src/features/commodity-mapping/` |
+| `customer-price-list` | `src/features/customer-price-list/` |
+| `customers` | `src/features/customers/` |
+| `dashboard` | `src/features/dashboard/` |
+| `delivery-orders` | `src/features/delivery-orders/` |
+| `price-list` | `src/features/price-list/` |
+| `profile` | `src/features/profile/` |
+| `shipment-batches` | `src/features/shipment-batches/` |
+| `shipments` | `src/features/shipments/` |
+| `user-management` | `src/features/user-management/` |
+
+### Domain Aktif (Backend Modules)
+| Module | Path |
+|---|---|
+| `auth` | `src/modules/auth/` |
+| `billing` | `src/modules/billing/` |
+| `commodity-mapping` | `src/modules/commodity-mapping/` |
+| `customer-price-list` | `src/modules/customer-price-list/` |
+| `customers` | `src/modules/customers/` |
+| `dashboard` | `src/modules/dashboard/` |
+| `delivery-orders` | `src/modules/delivery-orders/` |
+| `m3-check` | `src/modules/m3-check/` |
+| `marking` | `src/modules/marking/` |
+| `price-check` | `src/modules/price-check/` |
+| `price-list` | `src/modules/price-list/` |
+| `profile` | `src/modules/profile/` |
+| `roles` | `src/modules/roles/` |
+| `shipments` | `src/modules/shipments/` |
+| `users` | `src/modules/users/` |
+
+### Struktur Internal Standar Feature
 ```text
 src/features/<domain>/
-├── components/      # Komponen UI khusus domain (contoh: CustomerBadges.tsx)
+├── components/      # Komponen UI khusus domain
+├── constants/       # Konstanta domain (opsional, ada jika kompleks)
 ├── hooks/           # Custom hooks khusus domain
-├── pages/           # Halaman utama domain (DashboardPage, ListPage, DetailPage)
-├── services/        # Service API domain (contoh: billing.service.ts)
-├── types/           # Interface & tipe data TypeScript (contoh: billing.types.ts)
+├── pages/           # Halaman utama domain
+├── services/        # Service API domain
+├── stores/          # Zustand store domain (opsional)
+├── types/           # Interface & tipe data TypeScript
+├── utils/           # Helper/formatter khusus domain (opsional)
 └── index.ts         # Barrel export untuk fitur
 ```
+
+> **Catatan**: Fitur kompleks seperti `billing` memiliki sub-folder tambahan: `constants/`, `stores/`, `utils/`. Tambahkan sesuai kebutuhan.
 
 ### 🔑 Konvensi Penamaan File Halaman (`pages/`)
 - **DILARANG** mengulang nama domain pada nama file halaman di dalam folder fitur!
   - ❌ `features/billing/pages/BillingDashboardPage.tsx`
-  - ❌ `features/billing/pages/BillingListPage.tsx`
   - ✅ `features/billing/pages/DashboardPage.tsx`
   - ✅ `features/billing/pages/ListPage.tsx`
   - ✅ `features/billing/pages/DetailPage.tsx`
+  - ✅ `features/billing/pages/ValidationListPage.tsx` *(sub-fitur boleh punya prefix konteks)*
+  - ✅ `features/billing/pages/ValidationDetailPage.tsx`
 
 ---
 
-## 🔑 Konvensi Penamaan Lainnya (Naming Conventions)
+## 🔑 Konvensi Penamaan (Naming Conventions)
 Agen WAJIB mematuhi format penamaan berikut:
-- **Backend file**: `kebab-case` (contoh: `auth.service.ts`)
+- **Backend file**: `kebab-case` (contoh: `billing-analytics.service.ts`)
 - **Backend function**: `camelCase` (contoh: `getCustomerById()`)
-- **Frontend component**: `PascalCase` (contoh: `CustomerTable.tsx`)
-- **Frontend hook**: `camelCase` dengan awalan `use` (contoh: `usePagination()`)
-- **Zustand store**: `camelCase` dengan akhiran `Store` (contoh: `authStore.ts`)
-- **API endpoint const**: `UPPER_SNAKE` (contoh: `CUSTOMERS_API`)
-- **CSS class**: `kebab-case` (contoh: `.data-table`)
+- **Frontend component**: `PascalCase` (contoh: `BillingStatusTag.tsx`)
+- **Frontend hook**: `camelCase` dengan awalan `use` (contoh: `useBillingValidation.ts`)
+- **Zustand store file**: `camelCase` dengan akhiran `Store.ts` (contoh: `authStore.ts`, `reportDesignerStore.ts`)
+- **API endpoint const file**: `camelCase` domain di `src/api/endpoints/` (contoh: `billing.ts`, `deliveryOrders.ts`)
+- **Domain constants file**: `<domain>.constants.ts` (contoh: `billing.constants.ts`)
+- **Domain utils file**: `<domain>.utils.ts` (contoh: `billing.utils.ts`)
+- **CSS class**: `kebab-case` (contoh: `.data-table`, `.skeleton-shimmer`)
 - **Prisma model**: `PascalCase` sesuai nama tabel (contoh: `TbCustomers`)
 
 ---
@@ -62,14 +108,59 @@ Seluruh teks visual di frontend **WAJIB** menggunakan sistem i18n (`useTranslati
 
 ## 🧭 Standar Hierarki Breadcrumbs ERP (3-Level)
 
-Setiap halaman yang menggunakan `<PageHeader>` **WAJIB** menyediakan breadcrumb 3-level yang konsisten menggunakan terjemahan `t(...)` dan konstanta `ROUTES`:
+Setiap halaman yang menggunakan `<PageHeader>` **WAJIB** menyediakan breadcrumb 3-level menggunakan terjemahan `t(...)` dan konstanta `ROUTES`:
 
 ```tsx
 breadcrumbs={[
-  { label: t('module.logistics'), path: ROUTES.SHIPMENT_BATCHES }, // Level 1: Modul ERP + Root Path
-  { label: t('nav.batchMarking') },                                // Level 2: Domain/Fitur Utama
-  { label: t('nav.batchList') },                                   // Level 3: Tampilan / Sub-page
+  { label: t('module.finance'), path: ROUTES.BILLING },          // Level 1: Modul ERP + Root Path
+  { label: t('nav.billing') },                                    // Level 2: Domain/Fitur Utama
+  { label: t('nav.billingList') },                                // Level 3: Tampilan / Sub-page
 ]}
+```
+
+---
+
+## 📁 ROUTES — Konstanta Navigasi (`src/lib/constants.ts`)
+
+**DILARANG** navigasi dengan string hardcode. Selalu gunakan `ROUTES` dari `src/lib/constants.ts`.
+
+Daftar ROUTES aktif (sesuai kondisi saat ini):
+```ts
+// Auth
+ROUTES.LOGIN, ROUTES.REGISTER
+
+// Overview
+ROUTES.DASHBOARD
+
+// Logistics
+ROUTES.SHIPMENTS, ROUTES.SHIPMENTS_LIST
+ROUTES.SHIPMENT_DETAIL(id)
+ROUTES.SHIPMENT_BATCHES, ROUTES.SHIPMENT_BATCHES_LIST
+ROUTES.DELIVERY_ORDERS, ROUTES.DELIVERY_ORDERS_LIST
+ROUTES.DELIVERY_DETAIL(id)
+
+// Finance
+ROUTES.BILLING, ROUTES.BILLING_LIST, ROUTES.BILLING_TARGET
+ROUTES.BILLING_DETAIL(id)
+ROUTES.BILLING_PRINT(id, mode?)          // mode: 'pdf' | 'matrix'
+ROUTES.BILLING_REPORT_DESIGNER
+ROUTES.BILLING_VALIDATION_SUMMARY
+ROUTES.BILLING_VALIDATION_LIST
+ROUTES.BILLING_VALIDATION_DETAIL(id)
+ROUTES.PRICE_LIST, ROUTES.PRICE_LIST_LOOKUP, ROUTES.PRICE_LIST_UPLOAD
+ROUTES.PRICE_LIST_HISTORY, ROUTES.PRICE_LIST_DETAIL(id)
+ROUTES.CUSTOMER_PRICE_LIST, ROUTES.CUSTOMER_PRICE_LIST_DETAIL(custCode)
+ROUTES.CUSTOMER_PRICE_LIST_UPLOAD, ROUTES.CUSTOMER_PRICE_LIST_LOOKUP
+ROUTES.COMMODITY_MAPPING
+
+// Master Data
+ROUTES.CUSTOMERS, ROUTES.CUSTOMERS_TIER
+
+// Admin
+ROUTES.USERS, ROUTES.ROLES
+
+// User
+ROUTES.PROFILE
 ```
 
 ---
@@ -83,21 +174,35 @@ breadcrumbs={[
 - ❌ `c.json({ ... })` manual → ✅ Gunakan `successResponse` / `errorResponse` dari `src/utils/response.ts`
 - ❌ Hitung pagination manual → ✅ Gunakan `buildPagination` / `parsePagination`
 - ❌ Query Prisma tanpa fallback/retry pada service agregasi/dashboard → ✅ Gunakan pembungkus `safeQuery` dengan auto-retry & default fallback value
+- ❌ Mengambil/menampilkan `fdCustName` dari `tbCustomersHarga`, `tbEntryList`, atau tabel denormalisasi lain → ✅ **WAJIB SELALU mengutamakan data master `tbCustomers.fdCustName` (Single Source of Truth)**. Jika SP/query pihak ketiga mengembalikan nama dari tabel harga/entrylist, timpa (override) dengan data dari `tbCustomers`.
 
 ### Frontend
-- ❌ Ambil token via `localStorage` langsung → ✅ Gunakan `useAuthStore().token`
-- ❌ Buat state manual untuk page/limit → ✅ Gunakan `usePagination()`
-- ❌ `setTimeout` manual untuk debounce search → ✅ Gunakan `useDebounce()`
-- ❌ Format angka/tanggal bawaan JS → ✅ Gunakan `formatDate`, `formatCurrency`, `formatNumber` dari `src/lib/utils.ts`
-- ❌ Navigasi hardcode string → ✅ Gunakan konstanta dari `ROUTES` (`src/lib/constants.ts`)
-- ❌ Panggil axios langsung di komponen → ✅ Gunakan method service dari `src/features/<domain>/services/`
-- ❌ Buat tag `<table>` manual → ✅ Gunakan komponen `<Table>` dari `src/components/ui/`
-- ❌ Warna HEX hardcoded di CSS → ✅ Gunakan CSS variable bawaan (contoh: `var(--color-primary)`)
-- ❌ Duplikasi komponen/fungsi/interface di file page berbeda → ✅ Pisahkan ke folder `features/<domain>/components/` atau `features/<domain>/types/`
-- ❌ Buat inline spinner JSX (div + border + animate-spin) di page → ✅ Gunakan `<LoadingSpinner>` dari `src/components/ui/LoadingSpinner.tsx`
-- ❌ Tombol aktif solid putih (`bg-white` / `bg-[var(--color-primary)] text-[var(--color-on-primary)]`) di darkmode → ✅ Gunakan `bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)]`
-- ❌ Background solid terang pada badge/chip (`bg-gray-100`, `bg-blue-100`, `bg-amber-100`) → ✅ Gunakan `bg-transparent border border-... text-...`
-- ❌ Highlight tabel solid terang (`bg-blue-50`, `bg-neutral-100`) di darkmode → ✅ Gunakan `bg-blue-500/10` dan `hover:bg-[var(--color-neutral)]/40`
+- ❌ Ambil token via `localStorage` langsung → ✅ `useAuthStore().token` (dari `src/stores/authStore.ts`)
+- ❌ Buat state `page`/`limit` manual → ✅ `usePagination()` (`src/hooks/usePagination.ts`)
+- ❌ `setTimeout` manual untuk debounce search → ✅ `useDebounce()` (`src/hooks/useDebounce.ts`)
+- ❌ Format angka/tanggal bawaan JS → ✅ gunakan dari `src/lib/utils.ts`:
+  - `formatDate()` — tanggal locale id-ID
+  - `formatDateTime()` — tanggal + jam WIB
+  - `formatDateShort()` — tanggal en-GB (komponen dual-bahasa)
+  - `formatDateTimeShort()` — tanggal+jam en-GB
+  - `formatCurrency()` — format Rupiah (`Rp. 1,500,000.00`)
+  - `formatCompactRupiah()` — format ringkas (`Rp 1.64 M` / `Rp 500 Jt`)
+  - `formatNumber()` — angka dengan separator
+  - `formatDecimal()` — angka desimal
+  - `formatWeight()` — berat kg
+  - `formatYearMonthKey()` — label bulan dari key `YYYY-MM`
+  - `cn()` — classnames merger (clsx + tailwind-merge)
+- ❌ Navigasi hardcode string → ✅ konstanta dari `ROUTES` (`src/lib/constants.ts`)
+- ❌ Panggil axios langsung di komponen → ✅ method service dari `src/features/<domain>/services/`
+- ❌ Buat tag `<table>` manual → ✅ komponen `<Table>` dari `src/components/ui/`
+- ❌ Warna HEX hardcoded di CSS → ✅ CSS variable (contoh: `var(--color-primary)`)
+- ❌ Fullscreen spinner saat initial load page → ✅ skeleton wireframe dengan `.skeleton-shimmer`
+- ❌ Spinner bulat / inline spinner JSX (`div + border + animate-spin`) → ✅ skeleton shimmer
+- ❌ Tombol aktif solid putih (`bg-white`) di dark mode → ✅ `bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)]`
+- ❌ Badge solid terang (`bg-gray-100`, `bg-blue-100`, `bg-amber-100`) → ✅ `bg-transparent border border-... text-...`
+- ❌ Highlight tabel solid terang (`bg-blue-50`, `bg-neutral-100`) → ✅ `bg-blue-500/10` dan `hover:bg-[var(--color-neutral)]/40`
+- ❌ `alert()` bawaan browser → ✅ `toastStore` dari `src/stores/toastStore.ts`
+- ❌ Mendefinisikan interface TypeScript yang sama berulang kali → ✅ sentralisasi di `src/features/<domain>/types/`
 
 ---
 
@@ -108,13 +213,15 @@ Sistem styling mshipping mendukung multi-tema dinamis melalui atribut `[data-the
 ### 1. Token Variabel Resmi Per Tema
 | Token CSS | Heritage (Light) | Ocean (Light) | Emerald (Light) | Amber (Light) | Midnight (Dark) |
 |---|---|---|---|---|---|
-| `--color-neutral` | `#F7F5F2` | `#F1F5F9` | `#F0FDF4` | `#FDFBF7` | `#080C14` (Deep Canvas) |
-| `--color-surface` | `#FFFFFF` | `#FFFFFF` | `#FFFFFF` | `#FFFFFF` | `#0F172A` (Card / Panel) |
+| `--color-neutral` | `#F7F5F2` | `#F1F5F9` | `#F0FDF4` | `#FDFBF7` | `#0B0F17` (Deep Canvas) |
+| `--color-surface` | `#FFFFFF` | `#FFFFFF` | `#FFFFFF` | `#FFFFFF` | `#151D2A` (Card / Panel) |
 | `--color-primary` | `#1A1C1E` | `#0F172A` | `#132E22` | `#291E14` | `#F1F5F9` (Text Utama) |
 | `--color-secondary` | `#6C7278` | `#64748B` | `#536B60` | `#786857` | `#94A3B8` (Text Redup) |
 | `--color-tertiary` | `#B8422E` | `#2563EB` | `#16A34A` | `#D97706` | `#38BDF8` (Aksen Brand) |
 | `--color-border` | `#E8E6E3` | `#E2E8F0` | `#DCFCE7` | `#EFE7DE` | `#1E293B` (Border Lembut) |
 | `--color-border-strong` | `#C8C4C0` | `#CBD5E1` | `#BBF7D0` | `#D8C7B8` | `#334155` (Border Tegas) |
+
+> **Catatan**: Nilai Midnight `bgColor=#0B0F17` dan `surfaceColor=#151D2A` — sesuai `themeStore.ts` aktual.
 
 ### 2. Aturan Mutlak Desain Mode Gelap (Midnight Dark)
 - **Outline Border & Transparent Background (Clean Aesthetics)**:
@@ -142,6 +249,53 @@ Sistem styling mshipping mendukung multi-tema dinamis melalui atribut `[data-the
 
 ---
 
+## 📏 Standar Skala Ukuran Font & Spacing UI (Modal, Toolbar, KPI, & Tabel Data)
+
+Setiap pembuatan atau pembaruan komponen UI (terutama Modal Detail, Tabel ERP, Toolbar Filter, dan Kartu KPI), Agen **WAJIB** mematuhi hierarki skala ukuran font dan padding berikut agar tampilan konsisten, proporsional, kompak, dan nyaman dibaca:
+
+### 1. Header Modal
+- **Judul Modal**: `15px font-bold font-[var(--font-label)] uppercase tracking-wide` (DILARANG menggunakan `20px+` yang terlalu besar).
+- **Subtitle Modal**: `12px text-[var(--color-secondary)]`.
+- **Chip Counter / Badge Header**: `11px` / `text-[11px] font-semibold`.
+
+### 2. Tab Cabang, Toolbar, & Filter
+- **Tombol Tab Cabang / Filter**: `12px font-medium` dengan padding kompak `5px 10px` (`px-2.5 py-1.25`).
+- **Search Input Box**: `12px` (`text-xs`) dengan padding proporsional.
+- **Segmented Buttons / Pill Toggles**: `11.5px` (`text-[11.5px] font-medium`).
+- **Context Bar / Info Banner**: `11.5px` (`text-[11.5px]`).
+
+### 3. Kartu Metrik KPI
+- **Angka KPI Utama**: `18px font-bold tabular-nums` (DILARANG menggunakan `22px+` di dalam modal/tabel kompak).
+- **Label KPI**: `10.5px uppercase tracking-wider font-semibold text-[var(--color-secondary)]`.
+- **Footer / Unit / Sub-line KPI**: `11px` – `11.5px tabular-nums`.
+
+### 4. Tabel Data
+- **Header Kolom (`thead th`)**: `11px uppercase tracking-wider font-semibold` dengan padding kompak `8px 12px` (`py-2 px-3`).
+- **Baris Data (`tbody td`)**: `12px` (`text-xs tabular-nums`).
+  - **Teks Utama (No. Invoice / Resi / Listcode)**: `12px font-medium`.
+  - **Meta Teks / Sub-line (Tanggal, Keterangan Tambahan)**: `11px text-[var(--color-secondary)]`.
+- **Footer Tabel (`tfoot td`)**: `12px font-bold` (`text-xs font-bold tabular-nums`).
+
+### 5. Footer Bar & Modal Actions
+- **Keterangan Ringkasan Footer**: `12px text-[var(--color-secondary)]`.
+- **Tombol Tutup / Aksi Primer**: `12px font-semibold` (`text-xs font-semibold px-3 py-1.5`).
+
+---
+
+## 🏢 Standar Master Data Customer (Single Source of Truth: `tbCustomers.fdCustName`)
+
+Dalam arsitektur database mshipping, terdapat beberapa tabel yang menyimpan salinan/denormalisasi nama customer (`tbCustomersHarga.fdCustName`, `tbEntryList.fdCustName`, view `qr_tbm3_perMarking_rev1`, dll). Agen **WAJIB** mematuhi aturan berikut:
+
+1. **Selalu Prioritaskan `tbCustomers.fdCustName`**:
+   - Master data resmi nama customer HANYA berasal dari tabel master **`tbCustomers`** (`fdCustName`).
+   - DILARANG mengandalkan `fdCustName` dari tabel harga (`tbCustomersHarga`), surat jalan, atau view warisan tanpa melakukan verifikasi/override terhadap `tbCustomers`.
+2. **Override pada Backend Aggregation & Stored Procedure**:
+   - Jika endpoint backend memanggil Stored Procedure legacy (misal `dbo.get_qr_tbm3_perMarking_plus_rasio`) yang melakukan `LEFT JOIN tbCustomersHarga`, backend WAJIB melakukan lookup ke `tbCustomers` dan menimpa (override) nilai `fdCustName` dengan nama resmi dari master `tbCustomers`.
+3. **Frontend Component & Modal Props**:
+   - Setiap komponen modal atau detail (seperti `CustMarkingDetailModal`, `BillingValidationCard`, dll) harus menerima dan memprioritaskan prop `customerName` dari master header invoice/kartu induk.
+
+---
+
 ## 🛡️ Standar Resiliensi & Graceful Fallback Database Backend (WAJIB)
 
 Setiap service backend yang melakukan query database (terutama agregasi, statistik, atau dashboard) **WAJIB** menerapkan prinsip resiliensi jaringan agar hiccup koneksi database sementara (seperti error Prisma `P1001` / `P1002`) tidak melempar **HTTP 500 Server Error**:
@@ -155,51 +309,101 @@ Setiap service backend yang melakukan query database (terutama agregasi, statist
 
 ---
 
-## 📁 Single Source of Truth (Gunakan yang Sudah Ada)
-Sebelum membuat utility baru, pastikan untuk menggunakan yang berikut ini:
+## 📦 Single Source of Truth — UI Components (`src/components/ui/`)
 
-- **Frontend UI Components** (`src/components/ui/`):
-  Gunakan `<Button>`, `<Badge>`, `<Table>`, `<Pagination>`, `<SearchBar>`, `<Modal>`, `<Card>`, `<LoadingSpinner>`, `<EmptyState>`, `<PageHeader>`, `<Breadcrumb>`. Jangan buat komponen redundan.
-- **Frontend Domain Components** (`src/features/<domain>/components/`):
-  Gunakan folder ini untuk komponen spesifik fitur (contoh: `src/features/shipment-batches/components/`). Jangan campur komponen bisnis logic ke dalam `components/ui/`.
-- **Frontend Domain Services** (`src/features/<domain>/services/`):
-  Semua pemanggilan API dilakukan via service domain masing-masing.
-- **Frontend Types** (`src/features/<domain>/types/`):
-  Sentralisasi tipe data TypeScript domain. Jangan mendefinisikan interface yang sama berulang kali.
-- **Frontend Utilities** (`src/lib/utils.ts`):
-  Gunakan fungsi `cn()` untuk classnames, `formatDate()`, `formatCurrency()`.
-- **Backend Auth**: Semua throw error wajib ditangani oleh `errorHandler.ts` middleware.
-- **Notifikasi/Alert**: Gunakan `toastStore`. DILARANG menggunakan `alert()` bawaan browser.
+Selalu gunakan komponen yang sudah ada. **DILARANG** membuat komponen redundan.
+
+| Komponen | File |
+|---|---|
+| `<Button>` | `Button.tsx` |
+| `<Badge>` | `Badge.tsx` |
+| `<Table>` | `Table.tsx` |
+| `<Pagination>` | `Pagination.tsx` |
+| `<SearchBar>` | `SearchBar.tsx` |
+| `<ConfirmModal>` | `ConfirmModal.tsx` |
+| `<Card>` | `Card.tsx` |
+| `<EmptyState>` | `EmptyState.tsx` |
+| `<PageHeader>` | `PageHeader.tsx` |
+| `<Breadcrumb>` | `Breadcrumb.tsx` |
+| `<SegmentedControl>` | `SegmentedControl.tsx` |
+| `<CurrencyValue>` | `CurrencyValue.tsx` |
+| `<FadeIn>` | `FadeIn.tsx` |
+| `<LoadingSpinner>` | `LoadingSpinner.tsx` *(hanya micro-spinner inline, BUKAN page load)* |
+| `<Toast>` / `<ToastContainer>` | `Toast.tsx`, `ToastContainer.tsx` |
+
+- **Frontend Domain Components** (`src/features/<domain>/components/`): komponen spesifik fitur. Jangan campur ke `components/ui/`.
+- **Frontend Domain Services** (`src/features/<domain>/services/`): semua panggilan API via service domain.
+- **Frontend Types** (`src/features/<domain>/types/`): sentralisasi tipe TypeScript domain.
+- **Frontend Utilities** (`src/lib/utils.ts`): lihat daftar fungsi di seksi Anti-Pattern.
+- **Backend Error Handler**: semua throw error ditangani `errorHandler.ts` middleware.
+- **Notifikasi/Alert**: `toastStore` (`src/stores/toastStore.ts`). DILARANG `alert()` bawaan browser.
 
 ---
 
 ## ⏳ Standar Loading State (WAJIB untuk Semua Page Baru)
 
-Setiap page yang melakukan data fetching WAJIB mengimplementasikan loading state dengan aturan berikut:
+Setiap page yang melakukan data fetching WAJIB mengimplementasikan loading state menggunakan **animasi skeleton shimmer**:
 
 ### Pola Wajib — Initial Load (Pertama Kali Masuk Halaman)
-Gunakan `<LoadingSpinner>` dari `src/components/ui/LoadingSpinner.tsx` sebagai early return sebelum konten utama:
+- **WAJIB** menggunakan wireframe skeleton dengan class animasi `.skeleton-shimmer` bawaan proyek (sudah mendukung multi-tema otomatis: Heritage, Ocean, Emerald, Amber, Midnight).
+- **DILARANG** menggunakan fullscreen loading spinner bulat saat initial load halaman utama karena mengurangi estetika dan terkesan lambat.
+- Buat komponen skeleton khusus halaman (misal: `DetailPageSkeleton`, `ListPageSkeleton`) sebagai early return sebelum data siap:
 ```tsx
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-
-// Untuk page dengan useState + async fetch:
-const [isLoading, setIsLoading] = useState(true)
-if (isLoading) return <LoadingSpinner message={t('common.loadingBatch')} />
-
 // Untuk page dengan useQuery:
 const { data, isLoading } = useQuery(...)
-if (isLoading && !data) return <LoadingSpinner message={t('common.loadingBatch')} />
+if (isLoading && !data) return <DetailPageSkeleton />
+
+// Contoh struktur skeleton component:
+function DetailPageSkeleton() {
+  const { t } = useTranslation()
+  return (
+    <div className="space-y-4 sm:space-y-6 animate-fadeIn font-[var(--font-body)]">
+      <PageHeader
+        title={t('billing.detail.title')}
+        breadcrumbs={[...]}
+        actions={<div className="h-9 w-24 rounded-lg skeleton-shimmer" />}
+      />
+
+      {/* KPI Cards / Summary Skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5 sm:p-4 space-y-2.5 shadow-xs">
+            <div className="flex justify-between items-center">
+              <div className="h-3 w-20 rounded skeleton-shimmer" />
+              <div className="h-4 w-12 rounded-full skeleton-shimmer" />
+            </div>
+            <div className="h-5 w-3/4 rounded skeleton-shimmer" />
+            <div className="h-3.5 w-1/2 rounded skeleton-shimmer" />
+          </div>
+        ))}
+      </div>
+
+      {/* Content / Table Skeleton */}
+      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 sm:p-5 space-y-3 shadow-xs">
+        <div className="h-5 w-44 rounded skeleton-shimmer" />
+        <div className="space-y-2 pt-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-10 w-full rounded-lg skeleton-shimmer" />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 ```
 
 ### Pola Wajib — Subsequent Loading (Refresh/Filter/Search)
-- ❌ JANGAN tampilkan fullscreen spinner saat data lama masih ada
-- ✅ Gunakan progress bar tipis di atas tabel atau opacity overlay di konten yang sedang diperbarui
-- ✅ Tampilkan spinner kecil inline di dalam `<SearchBar>` atau toolbar
-- Referensi implementasi: lihat `features/billing/pages/ListPage.tsx` (`isRefreshing` → progress bar + `isInitialLoading` → fullscreen spinner)
+- ❌ JANGAN me-reset tampilan kembali ke full skeleton saat data lama masih ada (menimbulkan efek kedip/jarring).
+- ✅ Gunakan progress bar tipis di atas tabel atau opacity overlay (`opacity-60 pointer-events-none`) di konten yang sedang diperbarui.
+- ✅ Tampilkan indikator status halus inline (icon refresh berputar atau progress bar tipis) di toolbar saat data sedang diperbarui (`isFetching` / `isRefreshing`).
+### Referensi Implementasi
+- Skeleton: `features/billing/pages/DetailPage.tsx` (`DetailPageSkeleton`)
+- Subsequent loading: `features/delivery-orders/pages/ListPage.tsx`
 
 ### Aturan Penamaan State Loading
-- `isLoading` → state utama (true saat data pertama kali dimuat)
-- `isInitialLoading = isLoading && data.length === 0` → untuk page list (bedakan initial vs refresh)
+- `isLoading` → state utama (true saat query pertama kali dimuat tanpa cache)
+- `isInitialLoading = isLoading && (!data || data.length === 0)` → penentu apakah menampilkan skeleton atau konten utama
+- `isRefreshing` / `isFetching` → penentu indikator loading halus saat data lama tetap tampil di layar
 - `isLoadingKpi`, `isLoadingDetail`, dll → untuk query sekunder/tambahan
 
 ---
@@ -221,5 +425,57 @@ Agen WAJIB mematuhi gaya komunikasi yang sangat ringkas dan efisien:
 - **Bahasa**: Gunakan bahasa Indonesia ringkas & teknis.
 
 ---
-*Catatan Sistem: File ini berfungsi sebagai referensi instruksi bagi AI Agent untuk menjaga konsistensi kode sesuai standar proyek.*
 
+## 🧰 Skills Tersedia (`.agents/skills/`)
+
+Agent WAJIB membaca file `SKILL.md` dari skill yang relevan sebelum mengerjakan task yang berkaitan.
+
+| Skill | Path | Kapan Digunakan |
+|---|---|---|
+| `design-taste-frontend` | `.agents/skills/taste-skill/SKILL.md` | Landing page, portfolio, halaman pemasaran baru — saat butuh desain premium non-template |
+| `redesign-existing-projects` | `.agents/skills/redesign-skill/SKILL.md` | Upgrade/redesign UI yang sudah ada — audit dulu, lalu perbaiki tanpa rewrite total |
+
+### Cara Membaca Skill
+```
+Sebelum mulai task desain/UI → baca SKILL.md yang relevan via view_file
+Ikuti instruksi di SKILL.md sebagai standar eksekusi
+```
+
+> **Catatan penting**: Kedua skill di atas berlaku untuk halaman **marketing / landing / portfolio**. Untuk komponen ERP (tabel data, form input, dashboard analytics), gunakan standar desain yang ada di file ini (AGENTS.md), bukan skill frontend.
+
+---
+
+## 📋 Protokol `working.md` — Memori Lintas Sesi (WAJIB)
+
+File `.agents/working.md` adalah **living document** yang menjaga kontinuitas pemahaman antar agent dan antar sesi.
+
+### Kapan WAJIB Dibaca
+- **Awal setiap sesi** — sebelum mengerjakan task apapun, baca `working.md` untuk memahami konteks aktif.
+
+### Kapan WAJIB Diupdate
+Update `working.md` sebelum menutup sesi jika ada salah satu dari kondisi berikut:
+
+| Kondisi | Apa yang Diupdate |
+|---|---|
+| Task baru dimulai | Tambah ke "Task Sedang Berjalan" |
+| Task selesai | Pindah ke "Task Selesai" dengan `[x]` |
+| File penting diubah | Tambah ke "File Yang Baru Diubah" (maks 5 terakhir) |
+| Keputusan desain/arsitektur baru | Tambah ke tabel "Keputusan Desain" |
+| Bug / isu baru ditemukan | Tambah ke "Isu Aktif" |
+| Pergantian agent / model | Update header "Terakhir Diperbarui" |
+
+### Format Header Wajib
+```markdown
+## 🕐 Terakhir Diperbarui
+- **Tanggal**: YYYY-MM-DD
+- **Oleh**: [Nama Agent / Model]
+- **Sesi**: [Deskripsi singkat task sesi ini]
+```
+
+### Lokasi File
+```
+c:\shipping\.agents\working.md
+```
+
+---
+*Catatan Sistem: File ini berfungsi sebagai referensi instruksi bagi AI Agent untuk menjaga konsistensi kode sesuai standar proyek. Terakhir diperbarui: 2026-09-10.*

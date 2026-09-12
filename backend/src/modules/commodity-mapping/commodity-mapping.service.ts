@@ -10,6 +10,7 @@ import type {
   ResolvedCommodityResult,
   ApplyMappingsToUploadInput,
 } from './commodity-mapping.types'
+import { isGenuineLaptop, isGenuineIpad, isGenuineBattery } from '../billing/billing-category.matcher'
 
 export * from './commodity-mapping.types'
 
@@ -406,18 +407,55 @@ export async function resolveMappedCommodity(
   const cleanCust = custCode?.trim() || null
   const targetMode = mode?.trim() || null
 
+  const isAirMode = targetMode ? (targetMode.toUpperCase().includes('AIR') || targetMode.toUpperCase().includes('UDARA')) : false
+  const isValidGadgetMapping = (commodityName: string, targetCommodity: string) => {
+    const cUpper = commodityName.toUpperCase().trim()
+    const tUpper = targetCommodity.toUpperCase().trim()
+    const isTargetLaptop = tUpper.includes('LAPTOP') || tUpper.includes('MACBOOK') || tUpper.includes('NOTEBOOK')
+    const isTargetIpad = tUpper.includes('IPAD') || tUpper.includes('TABLET')
+
+    const isTargetBattery = tUpper.includes('BATTERY') || tUpper.includes('SEMI GARMENT') || tUpper.includes('POWERBANK')
+    const isSourceBattery = ['BATTERY', 'BATTERIES', 'LAPTOP BATTERY', 'POWERBANK', 'ACCU', 'AKI'].includes(cUpper)
+
+    if ((isTargetLaptop || ['LAPTOP', 'NOTEBOOK', 'MACBOOK'].includes(cUpper)) && !isGenuineLaptop(rawTarget)) {
+      return false
+    }
+    if ((isTargetIpad || ['IPAD', 'TABLET'].includes(cUpper)) && !isGenuineIpad(rawTarget)) {
+      return false
+    }
+    if ((isTargetBattery || isSourceBattery) && !isGenuineBattery(rawTarget)) {
+      return false
+    }
+    return true
+  }
+
+  const modeFilter = targetMode
+    ? {
+        OR: [
+          { mode: null },
+          { mode: { contains: isAirMode ? 'AIR' : 'SEA' } },
+          { mode: { contains: isAirMode ? 'UDARA' : 'LAUT' } },
+          { mode: 'ALL' },
+        ],
+      }
+    : null
+
   // 1. Level 1: Customer-specific active mapping
   if (cleanCust) {
-    const custMapping = await prisma.tbCommodityMapping.findFirst({
+    const custMappings = await prisma.tbCommodityMapping.findMany({
       where: {
         fdCustCode: cleanCust,
         commodityName: { equals: rawTarget },
         effectiveDate: { lte: targetDate },
-        OR: [{ endDate: null }, { endDate: { gte: targetDate } }],
-        ...(targetMode ? { OR: [{ mode: null }, { mode: { contains: targetMode } }] } : {}),
+        AND: [
+          { OR: [{ endDate: null }, { endDate: { gte: targetDate } }] },
+          ...(modeFilter ? [modeFilter] : []),
+        ],
       },
       orderBy: [{ effectiveDate: 'desc' }, { createdAt: 'desc' }],
     })
+
+    const custMapping = custMappings.find((m) => isValidGadgetMapping(m.commodityName, m.targetCommodity))
 
     if (custMapping) {
       return {
@@ -434,16 +472,20 @@ export async function resolveMappedCommodity(
   }
 
   // 2. Level 2: Global active mapping
-  const globalMapping = await prisma.tbCommodityMapping.findFirst({
+  const globalMappings = await prisma.tbCommodityMapping.findMany({
     where: {
       fdCustCode: null,
       commodityName: { equals: rawTarget },
       effectiveDate: { lte: targetDate },
-      OR: [{ endDate: null }, { endDate: { gte: targetDate } }],
-      ...(targetMode ? { OR: [{ mode: null }, { mode: { contains: targetMode } }] } : {}),
+      AND: [
+        { OR: [{ endDate: null }, { endDate: { gte: targetDate } }] },
+        ...(modeFilter ? [modeFilter] : []),
+      ],
     },
     orderBy: [{ effectiveDate: 'desc' }, { createdAt: 'desc' }],
   })
+
+  const globalMapping = globalMappings.find((m) => isValidGadgetMapping(m.commodityName, m.targetCommodity))
 
   if (globalMapping) {
     return {
@@ -464,7 +506,7 @@ export async function resolveMappedCommodity(
   if (isSea && isGenuineBattery(rawTarget)) {
     return {
       isMapped: true,
-      sourceScope: 'SYSTEM_RULE',
+      sourceScope: 'STATIC',
       originalCommodity: rawTarget,
       targetCommodity: 'SEMI GARMENT',
       fdTypeComodity: 7,

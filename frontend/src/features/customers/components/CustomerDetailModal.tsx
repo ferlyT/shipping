@@ -167,11 +167,11 @@ export function CustomerDetailModal({
         </div>
 
         {/* Modal Header */}
-        <div className="px-5 sm:px-6 pt-3 sm:pt-5 pb-3 sm:pb-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] shrink-0">
+        <div className="px-5 sm:px-6 pt-3 sm:pt-4 pb-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] shrink-0">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-1">
-                <h2 className="text-lg sm:text-xl font-bold font-[var(--font-display)] text-[var(--color-primary)] tracking-tight truncate">
+                <h2 className="text-[15px] font-bold font-[var(--font-label)] uppercase tracking-wide text-[var(--color-primary)] truncate">
                   {customer.fdCustName || 'Customer Tanpa Nama'}
                 </h2>
                 {canViewTier && activeTier !== 'none' && <CustomerTierBadge tier={activeTier} size="sm" />}
@@ -181,7 +181,7 @@ export function CustomerDetailModal({
 
               <div className="flex items-center gap-2 flex-wrap text-xs">
                 {/* Customer Code with copy */}
-                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--color-neutral)] border border-[var(--color-border)] font-mono font-semibold text-[var(--color-primary)]">
+                <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-[var(--color-neutral)] border border-[var(--color-border)] font-mono font-semibold text-[11px] text-[var(--color-primary)]">
                   <span>{customer.fdCustCode}</span>
                   <button
                     type="button"
@@ -198,7 +198,7 @@ export function CustomerDetailModal({
                 </div>
 
                 {/* Status Badge */}
-                <Badge variant={blockConfig?.badgeVariant || 'default'} className="text-[10px]">
+                <Badge variant={blockConfig?.badgeVariant || 'default'} className="text-[10.5px]">
                   <span className={`w-1.5 h-1.5 rounded-full mr-1 ${blockConfig?.dotClass}`} />
                   {blockConfig?.label || 'NO STATUS'}
                 </Badge>
@@ -216,7 +216,7 @@ export function CustomerDetailModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-xl text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer shrink-0"
+              className="p-1.5 rounded-lg text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer shrink-0"
               title="Tutup Modal"
             >
               <X size={18} />
@@ -224,7 +224,7 @@ export function CustomerDetailModal({
           </div>
 
           {/* Tab Navigation */}
-          <div className="flex items-center gap-1 overflow-x-auto mt-3.5 pt-1 border-t border-[var(--color-border)]/60 scrollbar-none">
+          <div className="flex items-center gap-1 overflow-x-auto mt-3 pt-1 border-t border-[var(--color-border)]/60 scrollbar-none">
             {effectiveTabs.map((tab) => {
               const Icon = tab.icon
               const isActive = activeTab === tab.key
@@ -235,7 +235,7 @@ export function CustomerDetailModal({
                   type="button"
                   onClick={() => setActiveTab(tab.key)}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border',
+                    'flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer border',
                     isActive
                       ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
                       : 'border-transparent text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]/60'
@@ -695,7 +695,7 @@ export function CustomerDetailModal({
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/80 hover:bg-[var(--color-neutral)] text-xs font-semibold text-[var(--color-primary)] transition-colors cursor-pointer"
+            className="px-4 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-neutral)]/80 hover:bg-[var(--color-neutral)] text-xs font-semibold text-[var(--color-primary)] transition-colors cursor-pointer"
           >
             Tutup Modal
           </button>

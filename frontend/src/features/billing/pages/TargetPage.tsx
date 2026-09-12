@@ -41,6 +41,47 @@ const GROUP_OPTIONS: { key: GroupKey; name: string; borderAccent?: string; activ
   { key: 'no_type', name: 'Belum Set Tipe', borderAccent: 'border-amber-500/40 text-amber-600 dark:text-amber-400',   activeClass: 'border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/10' },
 ]
 
+function CategoryTypeBadge({ typeText }: { typeText?: string }) {
+  const trimmed = (typeText || '').trim()
+  if (!trimmed || trimmed === '-' || trimmed === '0') {
+    return (
+      <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide rounded bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400">
+        Belum Set Tipe
+      </span>
+    )
+  }
+
+  // Format digit/angka: jika teks adalah angka (contoh: "1", "2") atau berawalan angka (contoh: "1 (UMUM)", "2 - LARTAS")
+  const numMatch = trimmed.match(/^(\d+)(.*)$/)
+  if (numMatch) {
+    const numPart = numMatch[1]
+    const restPart = numMatch[2].trim()
+
+    return (
+      <div className="inline-flex items-center gap-1.5">
+        <span
+          className="inline-flex items-center justify-center w-5 h-5 rounded-full text-[10px] font-extrabold shadow-2xs shrink-0 transition-colors bg-[var(--color-tertiary)] text-white dark:bg-[var(--color-surface)] dark:border dark:border-[var(--color-tertiary)] dark:text-[var(--color-tertiary)]"
+          title={`Kategori ${trimmed}`}
+        >
+          {numPart}
+        </span>
+        {restPart && (
+          <span className="text-[10px] font-medium text-[var(--color-secondary)] truncate max-w-[120px]">
+            {restPart.replace(/^[-–—:]\s*/, '')}
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  // Format teks non-angka biasa (contoh: "UMUM", "GARMENT", "LEGAL", "GENERAL")
+  return (
+    <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)]">
+      {trimmed}
+    </span>
+  )
+}
+
 function TargetTableSkeleton() {
   return (
     <>
@@ -434,11 +475,7 @@ export default function TargetPage() {
                 >
                   {opt.key === 'aging' && <Clock className="w-3 h-3 shrink-0" />}
                   <span>{opt.name}</span>
-                  <span className={`ml-0.5 text-[9px] font-bold px-1.5 py-0.2 rounded-full min-w-[16px] text-center border ${
-                    isActive
-                      ? 'border-current bg-current/10 text-current'
-                      : 'border-[var(--color-border)] bg-[var(--color-neutral)] text-[var(--color-secondary)]'
-                  }`}>
+                  <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center inline-flex items-center justify-center transition-colors bg-[var(--color-tertiary)] text-white dark:bg-[var(--color-surface)] dark:text-[var(--color-tertiary)] dark:border dark:border-[var(--color-tertiary)] shadow-2xs">
                     {count}
                   </span>
                 </button>
@@ -616,15 +653,7 @@ export default function TargetPage() {
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0 pt-0.5">
-                          {item.type && item.type.trim() !== '' && item.type.trim() !== '-' && item.type.trim() !== '0' ? (
-                            <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)]">
-                              {item.type}
-                            </span>
-                          ) : (
-                            <span className="px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide rounded bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400">
-                              Belum Set Tipe
-                            </span>
-                          )}
+                          <CategoryTypeBadge typeText={item.type} />
                           {Number(item.taxReturn) === 1 && (
                             <span className="px-1.5 py-0.2 text-[9px] font-extrabold tracking-wider uppercase rounded bg-indigo-600 text-white">
                               TAX
@@ -865,15 +894,7 @@ export default function TargetPage() {
                         {/* Type */}
                         <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
-                            {item.type && item.type.trim() !== '' && item.type.trim() !== '-' && item.type.trim() !== '0' ? (
-                              <span className="px-2 py-0.5 text-[10px] font-semibold rounded bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)]">
-                                {item.type}
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide rounded bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400">
-                                Belum Set Tipe
-                              </span>
-                            )}
+                            <CategoryTypeBadge typeText={item.type} />
                             {Number(item.taxReturn) === 1 && (
                               <span
                                 className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider uppercase rounded bg-indigo-600 text-white shadow-2xs cursor-help shrink-0"

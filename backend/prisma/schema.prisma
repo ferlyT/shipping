@@ -40,6 +40,16 @@ model TbRolePermissions {
   @@map("tbRolePermissions")
 }
 
+model TbReportTemplates {
+  id        String   @id @db.VarChar(50)
+  name      String   @db.NVarChar(100)
+  config    String   @db.NVarChar(MAX)
+  updatedBy String?  @db.NVarChar(100)
+  updatedAt DateTime @default(now()) @updatedAt @db.DateTime2
+
+  @@map("tbReportTemplates")
+}
+
 // ─── TABEL EXISTING — KOLOM DI BAWAH INI PLACEHOLDER ─────────────
 // ⚠️ Owner WAJIB konfirmasi kolom asli sebelum agen menulis ini
 

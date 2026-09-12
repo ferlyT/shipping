@@ -50,6 +50,7 @@ export function EditBillingDetailsModal({
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [validationError, setValidationError] = useState<string | null>(null)
   const [sortAsc, setSortAsc] = useState(true)
+  const [saveToPrev, setSaveToPrev] = useState(true)
 
   // Initialize items when modal opens (sorted by ID ascending)
   useEffect(() => {
@@ -243,10 +244,10 @@ export function EditBillingDetailsModal({
 
     setIsSubmitting(true)
     try {
-      await billingApi.updateDetails(invNo, sortedPayload)
+      await billingApi.updateDetails(invNo, sortedPayload, saveToPrev)
       addToast({
         type: 'success',
-        message: `Rincian item tagihan ${invNo} berhasil diperbarui!`,
+        message: `Rincian item tagihan ${invNo} berhasil diperbarui${saveToPrev ? ' (tersinkron ke tbBillingDetailPrev)' : ''}!`,
       })
       onSuccess?.()
       onClose()
@@ -506,25 +507,39 @@ export function EditBillingDetailsModal({
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-end gap-2 pt-1">
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={onClose}
-                disabled={isSubmitting}
-                className="cursor-pointer"
-              >
-                Batal
-              </Button>
-              <Button
-                type="submit"
-                isLoading={isSubmitting}
-                disabled={isSubmitting}
-                className="bg-[var(--color-tertiary)] hover:brightness-110 text-white flex items-center gap-1.5 cursor-pointer shadow-xs"
-              >
-                {!isSubmitting && <Save size={14} />}
-                <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
-              </Button>
+            <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+              <label className="inline-flex items-center gap-2 text-xs text-[var(--color-secondary)] cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={saveToPrev}
+                  onChange={(e) => setSaveToPrev(e.target.checked)}
+                  className="rounded border-[var(--color-border)] text-[var(--color-tertiary)] focus:ring-[var(--color-tertiary)] cursor-pointer"
+                />
+                <span>
+                  Simpan ke tabel <code className="font-mono text-[11px] font-bold text-[var(--color-primary)]">tbBillingDetailPrev</code> juga
+                </span>
+              </label>
+
+              <div className="flex items-center gap-2 ml-auto">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={onClose}
+                  disabled={isSubmitting}
+                  className="cursor-pointer"
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  isLoading={isSubmitting}
+                  disabled={isSubmitting}
+                  className="bg-[var(--color-tertiary)] hover:brightness-110 text-white flex items-center gap-1.5 cursor-pointer shadow-xs"
+                >
+                  {!isSubmitting && <Save size={14} />}
+                  <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+                </Button>
+              </div>
             </div>
           </div>
         </form>

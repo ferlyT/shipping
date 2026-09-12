@@ -3,6 +3,7 @@ import { logger } from '../../config/logger'
 import { safeRunRaw } from '../../utils/db'
 import { lookupPriceList } from '../price-list/price-list-lookup.service'
 import { lookupCustomerPriceList } from '../customer-price-list/customer-price-list.service'
+import { isGenuineLaptop, isGenuineIpad, isGenuineBattery } from '../billing/billing-category.matcher'
 import type {
   UnifiedM3CheckResult,
   ProfileHargaItem,
@@ -31,6 +32,61 @@ export const parseQtyVal = (val: any): number | null => {
   if (val === null || val === undefined || val === '') return null
   const num = typeof val === 'number' ? val : parseInt(String(val), 10)
   return isNaN(num) ? null : num
+}
+
+/**
+ * Ambil informasi histori audit / tanggal update terakhir untuk profil harga customer.
+ * Prioritas 1: tbCustomersHargaAudit (tbAuditHarga) jika ada
+ * Prioritas 2 (Fallback): tbCustomersHarga -> fdUpdate (nama) dan fdLoad (tgl update)
+ */
+export async function getCustomerHargaAuditInfo(custCode?: string | null): Promise<{
+  fdUpdate: string | null
+  fdUpdateDate: Date | null
+  source: 'AUDIT' | 'CUSTOMER_HARGA' | null
+}> {
+  const targetCust = (custCode || '').trim()
+  if (!targetCust) return { fdUpdate: null, fdUpdateDate: null, source: null }
+
+  // 1. Coba dari tbCustomersHargaAudit (tbAuditHarga)
+  const auditRes = await safeRunRaw(async () => {
+    return prisma.$queryRaw<any[]>`
+      SELECT TOP 1 
+        RTRIM(fdUpdatedBy) AS fdUpdate, 
+        fdUpdateDate AS fdUpdateDate
+      FROM tbCustomersHargaAudit WITH (NOLOCK)
+      WHERE fdCustCode = ${targetCust}
+      ORDER BY fdUpdateDate DESC
+    `
+  }, 'get_customer_harga_audit')
+
+  if (auditRes && auditRes.length > 0 && auditRes[0].fdUpdate) {
+    return {
+      fdUpdate: auditRes[0].fdUpdate ? String(auditRes[0].fdUpdate).trim() : null,
+      fdUpdateDate: auditRes[0].fdUpdateDate ? new Date(auditRes[0].fdUpdateDate) : null,
+      source: 'AUDIT',
+    }
+  }
+
+  // 2. Fallback: tbCustomersHarga -> fdUpdate nama yang update dan fdLoad tgl update
+  const custHargaRes = await safeRunRaw(async () => {
+    return prisma.$queryRaw<any[]>`
+      SELECT TOP 1 
+        RTRIM(fdUpdate) AS fdUpdate, 
+        fdLoad AS fdUpdateDate
+      FROM tbCustomersHarga WITH (NOLOCK)
+      WHERE fdCustCode = ${targetCust}
+    `
+  }, 'get_customer_harga_fallback')
+
+  if (custHargaRes && custHargaRes.length > 0) {
+    return {
+      fdUpdate: custHargaRes[0].fdUpdate ? String(custHargaRes[0].fdUpdate).trim() : null,
+      fdUpdateDate: custHargaRes[0].fdUpdateDate ? new Date(custHargaRes[0].fdUpdateDate) : null,
+      source: 'CUSTOMER_HARGA',
+    }
+  }
+
+  return { fdUpdate: null, fdUpdateDate: null, source: null }
 }
 
 /**
@@ -208,6 +264,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
       LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = m.fdBranchCode
       WHERE el.fdListCode = ${resolvedListCode}
          OR el.fdMarkingCode = ${resolvedMarkingCode}
+      ORDER BY CASE WHEN RTRIM(el.fdListCode) = ${resolvedListCode} THEN 0 ELSE 1 END, el.fdListCode ASC
     `
     return res && res.length > 0 ? res[0] : null
   }, 'markingBranch')
@@ -240,7 +297,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
   const cleanBatchCode = resolvedMarkingCode.split(';')[0]?.trim() || resolvedMarkingCode
 
   // 2. Eksekusi query pengecekan M3 & SP secara paralel
-  const [unifiedM3Rows, m3CustRows, profileHargaRows, markingComodityRows, beratGudangRows, freightChargeRows] = await Promise.all([
+  const [unifiedM3Rows, m3CustRows, profileHargaRows, markingComodityRows, beratGudangRows, freightChargeRows, commodityMappingRows, beratSJRows] = await Promise.all([
     // A. Unified M3 SP: exec get_m3_listcode
     safeRunRaw(async () => {
       if (!is7DigitListCode(resolvedListCode)) return []
@@ -281,9 +338,48 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
           AND (${cleanBatchCode ? true : false} = 0 OR RTRIM(fdMarkingCode) = ${cleanBatchCode})
       `
     }, 'get_freight_charge_summary'),
+    // G. Commodity Mapping dari tbCommodityMapping (khusus customer atau global)
+    safeRunRaw(async () => {
+      const now = new Date()
+      return prisma.tbCommodityMapping.findMany({
+        where: {
+          OR: [
+            ...(resolvedCustCode ? [{ fdCustCode: resolvedCustCode }] : []),
+            { fdCustCode: null },
+            { fdCustCode: '' }
+          ],
+          effectiveDate: { lte: now },
+          AND: [
+            {
+              OR: [
+                { endDate: null },
+                { endDate: { gte: now } }
+              ]
+            }
+          ]
+        },
+        orderBy: [
+          { fdCustCode: 'desc' },
+          { createdAt: 'desc' }
+        ]
+      })
+    }, 'get_commodity_mappings'),
+    // H. Berat Surat Jalan dari tbDelivery (khusus listcode ini)
+    safeRunRaw(async () => {
+      if (!resolvedListCode) return null
+      const rows = await prisma.$queryRaw<any[]>`
+        SELECT CAST(COALESCE(SUM(fdJmlBeratSJ), 0) as float) as totalBeratSJ
+        FROM tbDelivery WITH (NOLOCK)
+        WHERE fdListCode = ${resolvedListCode}
+      `
+      return rows && rows.length > 0 ? Number(rows[0].totalBeratSJ || 0) : null
+    }, 'get_berat_delivery_sj'),
   ])
 
   const profileHargaRow = Array.isArray(profileHargaRows) && profileHargaRows.length > 0 ? profileHargaRows[0] : null
+  const custForAudit = (profileHargaRow?.fdCustCode || resolvedCustCode || '').trim()
+  const auditInfo = await getCustomerHargaAuditInfo(custForAudit)
+
   const profileHarga: ProfileHargaItem | null = profileHargaRow
     ? {
         fdListCode: profileHargaRow.fdListCode,
@@ -296,26 +392,73 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
         taxReturnMinCharge: Number(profileHargaRow.fdTaxReturnMinCharge || 0),
         minChargeM3: Number(profileHargaRow.MinChargeM3 ?? profileHargaRow.minChargeM3 ?? 0),
         minChargeKg: Number(profileHargaRow.MinChargeKG ?? profileHargaRow.MinChargeKg ?? profileHargaRow.minChargeKg ?? 0),
+        fdUpdate: auditInfo.fdUpdate,
+        fdUpdateDate: auditInfo.fdUpdateDate,
+        fdUpdateSource: auditInfo.source,
       }
     : null
 
   const unifiedRow = Array.isArray(unifiedM3Rows) && unifiedM3Rows.length > 0 ? unifiedM3Rows[0] : null
   const markingComodityRow = Array.isArray(markingComodityRows) && markingComodityRows.length > 0 ? markingComodityRows[0] : null
   const rawFirstType = markingComodityRow?.fdTypeComodity ?? markingComodityRow?.TypeComodity ?? markingComodityRow?.fdTipe ?? markingComodityRow?.Tipe
-  const markingComodityType: number | null = rawFirstType !== undefined && rawFirstType !== null && !isNaN(Number(rawFirstType)) ? Number(rawFirstType) : null
 
   const markingComodities = Array.isArray(markingComodityRows)
     ? markingComodityRows.map((r) => {
         const rawType = r.fdTypeComodity ?? r.TypeComodity ?? r.fdTipe ?? r.Tipe
         const rawComodity = r.fdComodity ?? r.Comodity ?? r.fdCommodity ?? r.Commodity ?? r.fdDescr ?? r.Descr
         const rawComodityName = r.fdComodityName ?? r.ComodityName ?? r.Tipe ?? r.fdTipe
+
+        let fdComodity = rawComodity ? String(rawComodity).trim() : null
+        let fdTypeComodity = rawType !== null && rawType !== undefined && !isNaN(Number(rawType)) ? Number(rawType) : null
+        let fdComodityName = rawComodityName ? String(rawComodityName).trim() : null
+
+        // Cek override dari tbCommodityMapping jika tersedia
+        if (fdComodity && Array.isArray(commodityMappingRows) && commodityMappingRows.length > 0) {
+          const comUpper = fdComodity.toUpperCase().trim()
+          const matchedMapping = commodityMappingRows.find((m: any) => {
+            if (m.mode && m.mode !== 'ALL') {
+              const mMode = m.mode.toUpperCase()
+              if (resolvedListType === 1 && !mMode.includes('AIR') && !mMode.includes('UDARA')) return false
+              if (resolvedListType === 2 && !mMode.includes('SEA') && !mMode.includes('LAUT')) return false
+            }
+            const mUpper = String(m.commodityName || '').trim().toUpperCase()
+            if (['LAPTOP', 'NOTEBOOK', 'MACBOOK', 'LAPTOPS'].includes(mUpper) && !isGenuineLaptop(comUpper)) {
+              return false
+            }
+            if (['IPAD', 'TABLET'].includes(mUpper) && !isGenuineIpad(comUpper)) {
+              return false
+            }
+            const tUpper = String(m.targetCommodity || '').trim().toUpperCase()
+            if (
+              ['BATTERY', 'BATTERIES', 'LAPTOP BATTERY', 'POWERBANK', 'ACCU', 'AKI'].includes(mUpper) ||
+              tUpper.includes('SEMI GARMENT') ||
+              tUpper.includes('BATTERY') ||
+              tUpper.includes('POWERBANK')
+            ) {
+              if (!isGenuineBattery(comUpper)) return false
+            }
+            return comUpper === mUpper || comUpper.includes(mUpper) || mUpper.includes(comUpper)
+          })
+          if (matchedMapping) {
+            fdComodityName = String(matchedMapping.targetCommodity || '').trim()
+            if (matchedMapping.fdTypeComodity !== null && matchedMapping.fdTypeComodity !== undefined) {
+              fdTypeComodity = Number(matchedMapping.fdTypeComodity)
+            }
+          }
+        }
+
         return {
-          fdTypeComodity: rawType !== null && rawType !== undefined && !isNaN(Number(rawType)) ? Number(rawType) : null,
-          fdComodity: rawComodity ? String(rawComodity).trim() : null,
-          fdComodityName: rawComodityName ? String(rawComodityName).trim() : null,
+          fdTypeComodity,
+          fdComodity,
+          fdComodityName,
         }
       })
     : []
+
+  const firstMappedType = markingComodities.length > 0 ? markingComodities[0].fdTypeComodity : null
+  const markingComodityType: number | null = firstMappedType !== null && firstMappedType !== undefined
+    ? firstMappedType
+    : (rawFirstType !== undefined && rawFirstType !== null && !isNaN(Number(rawFirstType)) ? Number(rawFirstType) : null)
 
   const m3PL = parseM3Val(unifiedRow?.fdM3PL)
   const m3Gudang = parseM3Val(unifiedRow?.fdM3Gudang)
@@ -430,7 +573,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
     ...validNormPlPerMarkingValues,
     ...normHybridValues,
   ]
-  if (!hasPlValue && normM3List !== null && normM3List > 0) {
+  if (allM3Values.length === 0 && normM3List !== null && normM3List > 0) {
     allM3Values.push(normM3List)
   }
   const maxM3 = allM3Values.length > 0 ? parseFloat(Math.max(...allM3Values).toFixed(4)) : 0
@@ -459,11 +602,33 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
   let rawRec: number
   let recommendedM3Source: 'KOMPLAIN' | 'MAX' | 'GUDANG' | 'PL'
   if (hasApprovedKomplain) {
-    rawRec = rawKomplainM3!
-    recommendedM3Source = 'KOMPLAIN'
+    if (isPartialKomplain && m3KomplainPlusGudang !== null && m3KomplainPlusGudang > 0) {
+      rawRec = m3KomplainPlusGudang
+      recommendedM3Source = 'KOMPLAIN'
+    } else {
+      rawRec = rawKomplainM3!
+      recommendedM3Source = 'KOMPLAIN'
+    }
   } else if (isCodOrUrgent) {
-    rawRec = maxM3
-    recommendedM3Source = 'MAX'
+    // Apabila customer COD/Urgent:
+    // Jika ada Packing List (m3PL > 0), ambil ukuran terbesar antara Gudang & Packing List.
+    // Apabila m3packinglist 0 / tidak ada, gunakan ukuran gudang sebagai acuan.
+    if (hasPlValue) {
+      const candidateValues = [
+        ...validNormPlValues,
+        ...validNormPlPerMarkingValues,
+        ...normGudangValues,
+        ...normCustValues,
+      ]
+      rawRec = candidateValues.length > 0 ? Math.max(...candidateValues) : maxM3
+      recommendedM3Source = 'MAX'
+    } else if (normGudangValues.length > 0 || normCustValues.length > 0) {
+      rawRec = normGudangValues[0] ?? normCustValues[0]
+      recommendedM3Source = 'GUDANG'
+    } else {
+      rawRec = maxM3
+      recommendedM3Source = 'MAX'
+    }
   } else if (normGudangValues[0] !== undefined) {
     rawRec = normGudangValues[0]
     recommendedM3Source = 'GUDANG'
@@ -557,6 +722,16 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
     defaultFdTypeComodity: markingBranch?.fdTypeComodity !== null && markingBranch?.fdTypeComodity !== undefined ? Number(markingBranch.fdTypeComodity) : null,
     markingComodityType,
     markingComodities,
+    commodityMappings: Array.isArray(commodityMappingRows)
+      ? commodityMappingRows.map((m: any) => ({
+          id: m.id,
+          commodityName: String(m.commodityName || '').trim(),
+          targetCommodity: String(m.targetCommodity || '').trim(),
+          fdTypeComodity: m.fdTypeComodity !== null && m.fdTypeComodity !== undefined ? Number(m.fdTypeComodity) : null,
+          fdCustCode: m.fdCustCode ? String(m.fdCustCode).trim() : null,
+          mode: m.mode ? String(m.mode).trim().toUpperCase() : null,
+        }))
+      : [],
     fdTglAgent: agentDate ? agentDate.toISOString() : null,
     expectedMode,
     expectedBranch,
@@ -642,6 +817,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
     fdBeratList: parseM3Val(unifiedRow?.fdBeratList),
     fdJmlBeratGudang: parseM3Val(beratGudangRows?.[0]?.fdJmlBerat),
     fdJmlBeratKomplain: parseM3Val(unifiedRow?.fdJmlBeratKomplain),
+    fdBeratSJ: parseM3Val(beratSJRows),
     totalJmlBeratSJ: parseM3Val(unifiedRow?.TotalJmlBeratSJ),
     totalBeratPerMarking,
     markingDetails: Array.isArray(detailRows) ? detailRows.map((r: any) => ({
@@ -697,10 +873,88 @@ export async function getM3CustPerMarkingDetails(custCode: string, markingCode: 
   }
 
   try {
-    const rows = await prisma.$queryRaw<any[]>`
-      EXEC dbo.get_qr_tbm3_perMarking_plus_rasio @fdCustCode = ${cleanCustCode}, @fdMarkingCode = ${cleanMarkingCode}
-    `
-    return rows
+    const [rows, commodityMappings, masterCust] = await Promise.all([
+      prisma.$queryRaw<any[]>`
+        EXEC dbo.get_qr_tbm3_perMarking_plus_rasio @fdCustCode = ${cleanCustCode}, @fdMarkingCode = ${cleanMarkingCode}
+      `,
+      prisma.tbCommodityMapping.findMany({
+        where: {
+          OR: [
+            { fdCustCode: cleanCustCode },
+            { fdCustCode: null },
+            { fdCustCode: '' },
+          ],
+        },
+        orderBy: [
+          { fdCustCode: 'desc' },
+          { createdAt: 'desc' },
+        ],
+      }),
+      prisma.tbCustomers.findFirst({
+        where: { fdCustCode: cleanCustCode },
+        select: { fdCustName: true },
+      }),
+    ])
+
+    if (!Array.isArray(rows)) return []
+
+    const officialCustName = masterCust?.fdCustName ? masterCust.fdCustName.trim() : null
+
+    // Pastikan fdCustName selalu mengutamakan dari master tbCustomers (Single Source of Truth)
+    let processedRows = rows.map((r: any) => ({
+      ...r,
+      fdCustName: officialCustName || (r.fdCustName ? String(r.fdCustName).trim() : null),
+    }))
+
+    // Terapkan override pemetaan komoditas (tbCommodityMapping) ke setiap baris surat jalan
+    if (commodityMappings && commodityMappings.length > 0) {
+      return processedRows.map((r: any) => {
+        const rawComodity = r.fdComodity ?? r.Comodity ?? r.fdCommodity ?? r.Commodity
+        if (!rawComodity) return r
+
+        const comUpper = String(rawComodity).toUpperCase().trim()
+        const isAir = r.fdListType === 1 || r.ListType === 1
+        const isSea = r.fdListType === 2 || r.ListType === 2
+        const matchedMapping = commodityMappings.find((m: any) => {
+          if (m.mode && m.mode !== 'ALL') {
+            const mMode = m.mode.toUpperCase()
+            if (isAir && !mMode.includes('AIR') && !mMode.includes('UDARA')) return false
+            if (isSea && !mMode.includes('SEA') && !mMode.includes('LAUT')) return false
+          }
+          const mUpper = String(m.commodityName || '').trim().toUpperCase()
+          if (['LAPTOP', 'NOTEBOOK', 'MACBOOK', 'LAPTOPS'].includes(mUpper) && !isGenuineLaptop(comUpper)) {
+            return false
+          }
+          if (['IPAD', 'TABLET'].includes(mUpper) && !isGenuineIpad(comUpper)) {
+            return false
+          }
+          const tUpper = String(m.targetCommodity || '').trim().toUpperCase()
+          if (
+            ['BATTERY', 'BATTERIES', 'LAPTOP BATTERY', 'POWERBANK', 'ACCU', 'AKI'].includes(mUpper) ||
+            tUpper.includes('SEMI GARMENT') ||
+            tUpper.includes('BATTERY') ||
+            tUpper.includes('POWERBANK')
+          ) {
+            if (!isGenuineBattery(comUpper)) return false
+          }
+          return comUpper === mUpper || comUpper.includes(mUpper) || mUpper.includes(comUpper)
+        })
+
+        if (matchedMapping) {
+          return {
+            ...r,
+            fdComodityName: String(matchedMapping.targetCommodity || '').trim(),
+            fdTypeComodity:
+              matchedMapping.fdTypeComodity !== null && matchedMapping.fdTypeComodity !== undefined
+                ? Number(matchedMapping.fdTypeComodity)
+                : r.fdTypeComodity,
+          }
+        }
+        return r
+      })
+    }
+
+    return processedRows
   } catch (err) {
     logger.error(`Error executing dbo.get_qr_tbm3_perMarking_plus_rasio for ${cleanCustCode} / ${cleanMarkingCode}:`, err)
     return []

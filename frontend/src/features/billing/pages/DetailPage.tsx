@@ -11,6 +11,7 @@ import { Badge } from '@/components/ui/Badge'
 import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { CustomerBillingHistoryModal } from '../components/CustomerBillingHistoryModal'
 import { BillResiMarkingModal } from '../components/BillResiMarkingModal'
+import { BillingPrintButtons } from '../components/BillingPrintButtons'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { useAuthStore } from '@/stores/authStore'
@@ -175,6 +176,7 @@ export default function DetailPage() {
         ]}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
+            <BillingPrintButtons invNo={data?.fdInvNo || id || ''} size="sm" />
             <Button variant="ghost" size="sm" onClick={() => navigate(ROUTES.BILLING_LIST)}>
               <ArrowLeft className="w-4 h-4 mr-2" /> {t('billing.detail.backToList')}
             </Button>

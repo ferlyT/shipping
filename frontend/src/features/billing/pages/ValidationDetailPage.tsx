@@ -15,6 +15,8 @@ import {
   User,
   Edit3,
   History,
+  Truck,
+  AlertTriangle,
 } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { Button } from '@/components/ui/Button'
@@ -23,18 +25,19 @@ import { formatDate, copyToClipboard, cn } from '@/lib/utils'
 import { BillingValidationCard } from '../components/BillingValidationCard'
 import { ValidationListDrawer } from '../components/ValidationListDrawer'
 import { BillingValidationSummaryModal, type M3CheckResponse } from '../components/BillingValidationSummaryModal'
+import { BillingPrintButtons } from '../components/BillingPrintButtons'
 import { CustomerBillingHistoryModal } from '../components/CustomerBillingHistoryModal'
 import { IssueInvoiceModal } from '../components/IssueInvoiceModal'
 import { BillResiMarkingModal } from '../components/BillResiMarkingModal'
 import { EditBillingDetailsModal } from '../components/EditBillingDetailsModal'
 import { CustomerTariffAuditModal } from '../components/CustomerTariffAuditModal'
-import { BILL_TYPE_CONFIGS, getBillType, isUnitCode } from '../constants/billing.constants'
+import { BILL_TYPE_CONFIGS, BILL_TYPES, getBillType, isUnitCode } from '../constants/billing.constants'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { useToastStore } from '@/stores/toastStore'
 import type { Billing, BillingDetail } from '../types/billing.types'
 import { formatQtyDecimal, isMktCustomer, evaluateItemPrice } from '../utils/billing.utils'
-import { useInvoiceMetrics } from '../hooks/useInvoiceMetrics'
+import { useBillingValidation } from '../hooks/useBillingValidation'
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
 
@@ -95,17 +98,74 @@ function PaymentBadge({ status }: { status?: string | null }) {
 
 // ─── Item price inline badge ──────────────────────────────────────────────────
 
-function ItemPriceBadge({ row, validationData }: {
+function ItemPriceBadge({ row, validationData, expedisiList }: {
   row: BillingDetail
   validationData?: M3CheckResponse | null
+  expedisiList?: any[]
 }) {
-  if (!validationData) return null
+  if (!validationData && (!expedisiList || expedisiList.length === 0)) return null
   const evalRes = evaluateItemPrice(row, {
     res: validationData,
-    isAir: validationData.fdListType === 1 || validationData.expectedMode === 'BY AIR',
-    defaultTypeId: validationData.defaultFdTypeComodity ?? validationData.markingComodityType ?? null,
-    defaultComodityName: validationData.markingComodities?.[0]?.fdComodityName || '—',
+    isAir: validationData?.fdListType === 1 || validationData?.expectedMode === 'BY AIR',
+    defaultTypeId: validationData?.defaultFdTypeComodity ?? validationData?.markingComodityType ?? null,
+    defaultComodityName: validationData?.markingComodities?.[0]?.fdComodityName || '—',
+    expedisiList,
   })
+
+  // Penanganan khusus item Transport terhadap tbExpIndo
+  if (evalRes.isTransportItem) {
+    const exp = evalRes.transportExpedisi
+    if (!evalRes.hasTargetPrice) {
+      return (
+        <span
+          className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap"
+          title="Belum ada data biaya ekspedisi lokal tercatat di tbExpIndo"
+        >
+          Belum Ada tbExpIndo
+        </span>
+      )
+    }
+
+    const paidStatus = exp?.fdPaid === 1 ? 'Harus Tagih' : exp?.fdPaid === 2 ? 'COD' : ''
+    const expTooltip = exp
+      ? `Acuan tbExpIndo${paidStatus ? ` [${paidStatus}]` : ''}: ${exp.fdExpName || 'Ekspedisi'}${exp.fdResiExp ? ` (Resi: ${exp.fdResiExp})` : ''} — ${formatWithCurrency(exp.fdTotalExp, 'Rp.')}`
+      : 'Acuan tbExpIndo'
+
+    if (evalRes.statusType === 'LOWER') {
+      return (
+        <span
+          className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 whitespace-nowrap flex items-center gap-1"
+          title={expTooltip}
+        >
+          <span>Undercharge</span>
+          {exp?.fdExpName && <span className="opacity-75 font-normal">({exp.fdExpName.trim()})</span>}
+        </span>
+      )
+    }
+
+    if (evalRes.statusType === 'HIGHER') {
+      return (
+        <span
+          className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap flex items-center gap-1"
+          title={expTooltip}
+        >
+          <span>Overcharge</span>
+          {exp?.fdExpName && <span className="opacity-75 font-normal">({exp.fdExpName.trim()})</span>}
+        </span>
+      )
+    }
+
+    return (
+      <span
+        className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap flex items-center gap-1"
+        title={expTooltip}
+      >
+        <span>✓ Match tbExpIndo</span>
+        {exp?.fdExpName && <span className="opacity-75 font-normal">({exp.fdExpName.trim()})</span>}
+      </span>
+    )
+  }
+
   if (!evalRes.hasTargetPrice && !evalRes.isTaxReturnItem && !evalRes.isKgOverweightItem) return null
 
   if (evalRes.statusType === 'LOWER')
@@ -140,6 +200,7 @@ export function ValidationDetailPage() {
   const [isListDrawerOpen, setIsListDrawerOpen] = useState(false)
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(true)
   const [isCopied, setIsCopied] = useState(false)
+  const [isCopiedInv, setIsCopiedInv] = useState(false)
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
   const [isIssueModalOpen, setIsIssueModalOpen] = useState(false)
   const [isResiModalOpen, setIsResiModalOpen] = useState(false)
@@ -195,18 +256,106 @@ export function ValidationDetailPage() {
   })
 
   // ── Derived data (Hooks must execute unconditionally before early returns) ──
-  const details = useMemo(
-    () =>
-      [...(data?.details || [])].sort((a, b) =>
-        String(a?.fdID ?? '').trim().localeCompare(String(b?.fdID ?? '').trim(), undefined, { numeric: true })
-      ),
-    [data?.details]
-  )
+  const allBillingListCodes = useMemo(() => {
+    return Array.from(
+      new Set(
+        [
+          data?.fdListCode,
+          validationData?.fdListCode,
+          ...(data?.details || []).map((d) => d.fdListCode),
+        ]
+          .filter((lc): lc is string => typeof lc === 'string' && lc.trim().length >= 4)
+          .map((lc) => lc.trim())
+      )
+    )
+  }, [data?.fdListCode, validationData?.fdListCode, data?.details])
+  const billingListCodeParam = allBillingListCodes.join(',') || (data?.fdListCode ? String(data.fdListCode).trim() : '')
 
-  const { unitTotals, billedM3, billedKg, billedVfc, underchargedItems } = useInvoiceMetrics({
-    details,
-    validationData,
+  const transportDetailItem = useMemo(() => {
+    return (data?.details || []).find((d) => {
+      const name = (d?.fdItemName || '').toUpperCase()
+      return name.includes('TRANSPORT') || name.includes('DELIVERY') || name.includes('ONGKIR') || name.includes('TRUCKING')
+    })
+  }, [data?.details])
+
+  const hasTransportItem = billType === BILL_TYPES.TRANSPORT || !!transportDetailItem
+  const effectiveTransportAmount = transportDetailItem
+    ? (Number(transportDetailItem.fdTotal || 0) > 0 ? Number(transportDetailItem.fdTotal) : Number(transportDetailItem.fdItemPrice || 0))
+    : (Number(data?.fdJumlah2 || 0) > 0 ? Number(data?.fdJumlah2) : Number(data?.fdJumlah1 || 0))
+
+  const { data: transportValidation } = useQuery({
+    queryKey: ['billingTransportCheck', data?.fdInvNo, data?.fdCustCode, data?.fdMarkingCode, data?.fdMarkingNo, billingListCodeParam, effectiveTransportAmount, hasTransportItem],
+    queryFn: async () => {
+      if (!billingListCodeParam && (!data?.fdCustCode || !data?.fdMarkingCode)) return null
+      const response = await billingApi.transportCheck({
+        invNo: data?.fdInvNo,
+        custCode: data?.fdCustCode || '',
+        markingCode: data?.fdMarkingCode || '',
+        markingNo: data?.fdMarkingNo || '',
+        listCode: billingListCodeParam,
+        amount: hasTransportItem ? effectiveTransportAmount : 0,
+      })
+      return response.data?.data as {
+        isValid: boolean
+        hasDuplicate: boolean
+        duplicates: any[]
+        expedisiList: Array<{
+          fdId: number
+          fdListCode: string | null
+          fdExpID: string | null
+          fdExpName: string | null
+          fdResiExp: string | null
+          fdCurrExp: string | null
+          fdTotalExp: number
+          fdPaid: number | null
+          fdCreatedDate: string | null
+          fdCreatedBy: string | null
+          fdJmlBerat: number | null
+          fdMarkingCode: string | null
+          fdMarkingNo: string | null
+        }>
+        matchingExpedisi: {
+          fdId: number
+          fdListCode: string | null
+          fdExpID: string | null
+          fdExpName: string | null
+          fdResiExp: string | null
+          fdCurrExp: string | null
+          fdTotalExp: number
+          fdPaid: number | null
+          fdCreatedDate: string | null
+          fdCreatedBy: string | null
+          fdJmlBerat: number | null
+          fdMarkingCode: string | null
+          fdMarkingNo: string | null
+        } | null
+        checkedAmount: number
+      }
+    },
+    enabled: Boolean(data && (billingListCodeParam || (data.fdCustCode && data.fdMarkingCode))),
+    staleTime: 60_000,
   })
+
+  // ── Single Source of Truth untuk seluruh validasi billing ──
+  const validation = useBillingValidation({
+    billingData: data,
+    validationData,
+    transportValidation,
+  })
+
+  const {
+    details,
+    billedM3,
+    billedKg,
+    billedVfc,
+    unitTotals,
+    validExpedisiList,
+    unbilledExpedisiList,
+    totalUnbilledTransportAmount,
+    hasUnbilledTransport,
+    underchargedItems,
+    evaluatedItems,
+  } = validation
 
   // ── Early returns ──
   if (isLoading) return <ValidationDetailPageSkeleton />
@@ -250,6 +399,19 @@ export function ValidationDetailPage() {
     }
   }
 
+  const handleCopyInvNo = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!data?.fdInvNo) return
+    const success = await copyToClipboard(data.fdInvNo)
+    if (success) {
+      setIsCopiedInv(true)
+      addToast({ type: 'success', message: `No. Invoice ${data.fdInvNo} berhasil disalin ke clipboard!` })
+      setTimeout(() => setIsCopiedInv(false), 2000)
+    } else {
+      addToast({ type: 'error', message: 'Gagal menyalin nomor invoice' })
+    }
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   return (
@@ -272,6 +434,18 @@ export function ValidationDetailPage() {
             <div className="flex items-center gap-1 min-w-0">
               <span className="text-[10px] sm:text-xs uppercase font-bold tracking-wider text-[var(--color-secondary)] shrink-0">Inv:</span>
               <span className="font-mono font-bold text-xs sm:text-sm text-[var(--color-primary)] truncate">{data.fdInvNo}</span>
+              <button
+                type="button"
+                onClick={handleCopyInvNo}
+                className="p-1 rounded text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer shrink-0"
+                title="Salin No. Invoice ke clipboard"
+              >
+                {isCopiedInv ? (
+                  <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
+                ) : (
+                  <Copy className="w-3.5 h-3.5" />
+                )}
+              </button>
               <span className={cn('text-[9px] sm:text-[10px] px-1.5 py-0.2 font-bold rounded border uppercase shrink-0', billTypeConfig.badgeClasses)}>
                 {billTypeConfig.label}
               </span>
@@ -316,6 +490,8 @@ export function ValidationDetailPage() {
               <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
               <span>Inspeksi</span>
             </button>
+
+            <BillingPrintButtons invNo={data.fdInvNo} size="xs" />
 
             <button
               type="button"
@@ -513,6 +689,32 @@ export function ValidationDetailPage() {
               </button>
             </div>
 
+            {/* Warning jika ada ekspedisi Harus Tagih namun item tagihan tidak ada */}
+            {hasUnbilledTransport && (
+              <div className="p-2.5 sm:p-3 bg-amber-500/10 border-b border-amber-500/25 flex items-start justify-between gap-2.5 text-xs shadow-2xs">
+                <div className="flex items-start gap-2 min-w-0">
+                  <div className="w-5 h-5 rounded bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+                    <AlertTriangle size={12} />
+                  </div>
+                  <div className="space-y-0.5 min-w-0">
+                    <span className="font-bold text-amber-900 dark:text-amber-200 block text-[11px] sm:text-xs">
+                      Peringatan tbExpIndo: Biaya Ekspedisi (Harus Tagih) Belum Ditagihkan!
+                    </span>
+                    <span className="text-[10px] sm:text-[11px] text-amber-800/90 dark:text-amber-300 block leading-tight">
+                      Ditemukan {unbilledExpedisiList.length} catatan ekspedisi berstatus Harus Tagih (fdPaid: 1) di <code className="font-mono px-1 rounded bg-amber-500/20">tbExpIndo</code> senilai total <strong className="font-mono font-bold text-amber-950 dark:text-amber-100">{formatWithCurrency(totalUnbilledTransportAmount, 'Rp.')}</strong> ({unbilledExpedisiList[0]?.fdExpName || 'Ekspedisi'}{unbilledExpedisiList[0]?.fdResiExp ? ` Resi: ${unbilledExpedisiList[0].fdResiExp}` : ''}), namun belum ada baris item tagihan Transport / Ongkir pada invoice ini.
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsSummaryModalOpen(true)}
+                  className="px-2 py-1 rounded text-[11px] font-bold border border-amber-500/40 bg-amber-500/15 text-amber-800 dark:text-amber-200 hover:bg-amber-500/25 transition-colors shrink-0 whitespace-nowrap cursor-pointer self-start"
+                >
+                  Detail →
+                </button>
+              </div>
+            )}
+
             {/* Body */}
             <div className="overflow-y-auto min-h-0 max-h-[calc(100vh-20rem)] divide-y divide-[var(--color-border)]/60">
               {details.length > 0 ? (
@@ -522,9 +724,75 @@ export function ValidationDetailPage() {
                     {details.map((row) => (
                       <div key={row.fdID} className="p-3 space-y-2 hover:bg-[var(--color-neutral)]/30 transition-colors">
                         <div className="flex items-start justify-between gap-2">
-                          <p className="font-semibold text-[var(--color-primary)] text-xs leading-snug flex-1" title={row.fdItemName}>
-                            {row.fdItemName}
-                          </p>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-[var(--color-primary)] text-xs leading-snug" title={row.fdItemName}>
+                              {row.fdItemName}
+                            </p>
+                            {/* Baris Rincian tbExpIndo jika item adalah Transport */}
+                            {/(TRANSPORT|DELIVERY|ONGKIR|TRUCKING)/i.test(row.fdItemName || '') && (
+                              <div className="text-[10px] text-[var(--color-secondary)] flex items-center gap-1.5 mt-1 flex-wrap">
+                                <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-0.5">
+                                  <Truck size={10} />
+                                  <span>tbExpIndo:</span>
+                                </span>
+                                {transportValidation?.matchingExpedisi ? (
+                                  <>
+                                    <span className="font-semibold text-[var(--color-primary)]">
+                                      {transportValidation.matchingExpedisi.fdExpName || 'Ekspedisi'}
+                                    </span>
+                                    {transportValidation.matchingExpedisi.fdResiExp && (
+                                      <span className="font-mono text-[9px] text-[var(--color-secondary)]">
+                                        ({transportValidation.matchingExpedisi.fdResiExp.trim()})
+                                      </span>
+                                    )}
+                                    {transportValidation.matchingExpedisi.fdPaid === 1 ? (
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                                        Harus Tagih
+                                      </span>
+                                    ) : transportValidation.matchingExpedisi.fdPaid === 2 ? (
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-sky-500/10 text-sky-600 border border-sky-500/30">
+                                        COD
+                                      </span>
+                                    ) : null}
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                                      • Real: {formatWithCurrency(transportValidation.matchingExpedisi.fdTotalExp, 'Rp.')}
+                                    </span>
+                                  </>
+                                ) : validExpedisiList.length > 0 ? (
+                                  <>
+                                    <span className="font-semibold text-[var(--color-primary)]">
+                                      {validExpedisiList[0].fdExpName || 'Ekspedisi'}
+                                    </span>
+                                    {validExpedisiList[0].fdResiExp && (
+                                      <span className="font-mono text-[9px] text-[var(--color-secondary)]">
+                                        ({validExpedisiList[0].fdResiExp.trim()})
+                                      </span>
+                                    )}
+                                    {validExpedisiList[0].fdPaid === 1 ? (
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                                        Harus Tagih
+                                      </span>
+                                    ) : validExpedisiList[0].fdPaid === 2 ? (
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-sky-500/10 text-sky-600 border border-sky-500/30">
+                                        COD
+                                      </span>
+                                    ) : null}
+                                    <span className="font-mono text-[var(--color-primary)]">
+                                      • tbExpIndo: {formatWithCurrency(validExpedisiList[0].fdTotalExp, 'Rp.')}
+                                    </span>
+                                  </>
+                                ) : transportValidation?.expedisiList && transportValidation.expedisiList.length > 0 ? (
+                                  <span className="italic text-amber-600 dark:text-amber-400">
+                                    tbExpIndo: Biaya Rp 0 (Belum Terisi / Tidak Valid)
+                                  </span>
+                                ) : (
+                                  <span className="italic text-amber-600 dark:text-amber-400">
+                                    Belum ada data di tbExpIndo
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                          </div>
                           <div className="text-right font-mono font-bold text-xs text-[var(--color-primary)] shrink-0">
                             <CurrencyValue value={row.fdTotal} currency={row.fdCurr} />
                           </div>
@@ -546,13 +814,19 @@ export function ValidationDetailPage() {
 
                         <div className="flex items-center justify-between gap-1 pt-1 border-t border-[var(--color-border)]/40 flex-wrap">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {row.fdComodity && (
-                              <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] font-medium truncate max-w-[150px]">
-                                {row.fdComodity}
-                              </span>
-                            )}
+                            {(() => {
+                              const evalItem = evaluatedItems.find((e) => e.item.fdID === row.fdID)?.evaluation
+                              const displayComodity = evalItem?.comodityName && evalItem.comodityName !== '—'
+                                ? evalItem.comodityName
+                                : row.fdComodity
+                              return displayComodity ? (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] font-medium truncate max-w-[150px]">
+                                  {displayComodity}
+                                </span>
+                              ) : null
+                            })()}
                           </div>
-                          <ItemPriceBadge row={row} validationData={validationData} />
+                          <ItemPriceBadge row={row} validationData={validationData} expedisiList={validExpedisiList} />
                         </div>
                       </div>
                     ))}
@@ -579,16 +853,86 @@ export function ValidationDetailPage() {
                             <p className="font-semibold text-[var(--color-primary)] text-xs line-clamp-2" title={row.fdItemName}>
                               {row.fdItemName}
                             </p>
-                            <div className="flex items-center gap-2 mt-1 flex-wrap">
-                              {row.fdComodity && (
-                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] font-medium truncate max-w-[130px]">
-                                  {row.fdComodity}
+                            {/* Baris Rincian tbExpIndo jika item adalah Transport */}
+                            {/(TRANSPORT|DELIVERY|ONGKIR|TRUCKING)/i.test(row.fdItemName || '') && (
+                              <div className="text-[10px] text-[var(--color-secondary)] flex items-center gap-1.5 mt-1 flex-wrap">
+                                <span className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-0.5">
+                                  <Truck size={10} />
+                                  <span>tbExpIndo:</span>
                                 </span>
-                              )}
+                                {transportValidation?.matchingExpedisi ? (
+                                  <>
+                                    <span className="font-semibold text-[var(--color-primary)]">
+                                      {transportValidation.matchingExpedisi.fdExpName || 'Ekspedisi'}
+                                    </span>
+                                    {transportValidation.matchingExpedisi.fdResiExp && (
+                                      <span className="font-mono text-[9px] text-[var(--color-secondary)]">
+                                        ({transportValidation.matchingExpedisi.fdResiExp.trim()})
+                                      </span>
+                                    )}
+                                    {transportValidation.matchingExpedisi.fdPaid === 1 ? (
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                                        Harus Tagih
+                                      </span>
+                                    ) : transportValidation.matchingExpedisi.fdPaid === 2 ? (
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-sky-500/10 text-sky-600 border border-sky-500/30">
+                                        COD
+                                      </span>
+                                    ) : null}
+                                    <span className="text-emerald-600 dark:text-emerald-400 font-mono font-bold">
+                                      • Real: {formatWithCurrency(transportValidation.matchingExpedisi.fdTotalExp, 'Rp.')}
+                                    </span>
+                                  </>
+                                ) : validExpedisiList.length > 0 ? (
+                                  <>
+                                    <span className="font-semibold text-[var(--color-primary)]">
+                                      {validExpedisiList[0].fdExpName || 'Ekspedisi'}
+                                    </span>
+                                    {validExpedisiList[0].fdResiExp && (
+                                      <span className="font-mono text-[9px] text-[var(--color-secondary)]">
+                                        ({validExpedisiList[0].fdResiExp.trim()})
+                                      </span>
+                                    )}
+                                    {validExpedisiList[0].fdPaid === 1 ? (
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-amber-500/10 text-amber-600 border border-amber-500/30">
+                                        Harus Tagih
+                                      </span>
+                                    ) : validExpedisiList[0].fdPaid === 2 ? (
+                                      <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-sky-500/10 text-sky-600 border border-sky-500/30">
+                                        COD
+                                      </span>
+                                    ) : null}
+                                    <span className="font-mono text-[var(--color-primary)]">
+                                      • tbExpIndo: {formatWithCurrency(validExpedisiList[0].fdTotalExp, 'Rp.')}
+                                    </span>
+                                  </>
+                                ) : transportValidation?.expedisiList && transportValidation.expedisiList.length > 0 ? (
+                                  <span className="italic text-amber-600 dark:text-amber-400">
+                                    tbExpIndo: Biaya Rp 0 (Belum Terisi / Tidak Valid)
+                                  </span>
+                                ) : (
+                                  <span className="italic text-amber-600 dark:text-amber-400">
+                                    Belum ada data di tbExpIndo
+                                  </span>
+                                )}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-2 mt-1 flex-wrap">
+                              {(() => {
+                                const evalItem = evaluatedItems.find((e) => e.item.fdID === row.fdID)?.evaluation
+                                const displayComodity = evalItem?.comodityName && evalItem.comodityName !== '—'
+                                  ? evalItem.comodityName
+                                  : row.fdComodity
+                                return displayComodity ? (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] font-medium truncate max-w-[130px]">
+                                    {displayComodity}
+                                  </span>
+                                ) : null
+                              })()}
                               <span className="text-[10px] text-[var(--color-secondary)] font-mono">
                                 @ {formatWithCurrency(row.fdItemPrice, row.fdCurr)}
                               </span>
-                              <ItemPriceBadge row={row} validationData={validationData} />
+                              <ItemPriceBadge row={row} validationData={validationData} expedisiList={validExpedisiList} />
                             </div>
                           </td>
                           <td className="px-3 py-2.5 text-right font-mono font-medium text-[var(--color-primary)]">
@@ -644,12 +988,15 @@ export function ValidationDetailPage() {
           {primaryListCode && (
             <BillingValidationCard
               listCode={primaryListCode}
+              validation={validation}
+              validationData={validationData}
               billedM3={billedM3}
               billedKg={billedKg}
               billedVfc={billedVfc}
               invoiceDetails={details}
               billFdTypeComodity={data.fdTypeComodity}
               billType={billType}
+              billFdListType={data.fdListType}
               markingCode={data.fdMarkingCode}
               markingNo={data.fdMarkingNo}
               invoiceNo={data.fdInvNo}
@@ -686,11 +1033,13 @@ export function ValidationDetailPage() {
         isOpen={isSummaryModalOpen}
         onClose={() => setIsSummaryModalOpen(false)}
         billingData={data}
+        validation={validation}
         validationData={validationData}
         isLoadingValidation={isLoadingValidation}
         billedM3={billedM3}
         billedKg={billedKg}
         billedVfc={billedVfc}
+        unitTotals={unitTotals}
         onOpenIssueModal={() => setIsIssueModalOpen(true)}
       />
 

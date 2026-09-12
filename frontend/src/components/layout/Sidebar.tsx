@@ -4,7 +4,7 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Package, Layers, Truck, FileText,
   ChevronLeft, ChevronDown, UserCog, Shield, BarChart2, Target, Search, Upload, History,
-  Activity, PieChart, LineChart, ListOrdered, Table, ScrollText, ClipboardCheck, Tags, Landmark, FileSearch, FileUp, BookOpen, Tag
+  Activity, PieChart, LineChart, ListOrdered, Table, ScrollText, ClipboardCheck, Tags, Landmark, FileSearch, FileUp, BookOpen, Tag, FileSpreadsheet
 } from 'lucide-react'
 import { useUiStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -93,6 +93,7 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
             { label: t('nav.targetBill'), path: ROUTES.BILLING_TARGET, icon: Target },
             { label: t('nav.billingList'), path: ROUTES.BILLING_LIST, icon: ScrollText },
             { label: t('nav.validationList'), path: ROUTES.BILLING_VALIDATION_LIST, icon: ClipboardCheck },
+            { label: t('nav.pairingLocalCharge'), path: ROUTES.BILLING_PAIRING_LOCAL_CHARGE, icon: FileSpreadsheet },
           ],
         },
         {

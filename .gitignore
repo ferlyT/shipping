@@ -2,11 +2,21 @@
 node_modules/
 backend/node_modules/
 frontend/node_modules/
+mobile/node_modules/
+mobile/.expo/
+mobile/dist/
+mobile/android/
+mobile/ios/
 
 # Build outputs
 frontend/dist/
 backend/dist/
 dist/
+
+# Scratch & temporary
+backend/scratch/
+*.xlsx
+*.pdf
 
 # Environment files
 .env

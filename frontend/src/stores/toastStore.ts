@@ -14,9 +14,20 @@ interface ToastState {
   removeToast: (id: string) => void
 }
 
+let lastToastSig = ''
+let lastToastSigTime = 0
+
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   addToast: (toast) => {
+    const now = Date.now()
+    const sig = `${toast.type}:${toast.message}`
+    if (sig === lastToastSig && now - lastToastSigTime < 1000) {
+      return
+    }
+    lastToastSig = sig
+    lastToastSigTime = now
+
     const id = Math.random().toString(36).substring(2, 9)
     set((state) => ({ toasts: [...state.toasts, { ...toast, id }] }))
     

@@ -11,7 +11,7 @@ import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import type { DeliveryOrder } from '../types/delivery-orders.types'
 
-export default function DeliveryDetailPage() {
+export default function DetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()

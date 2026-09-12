@@ -141,6 +141,43 @@ if (ENV.APP_BASE_PATH && ENV.APP_BASE_PATH !== '/') {
   rootApp.route(`${ENV.APP_BASE_PATH}/api`, apiApp)
 }
 rootApp.route('/mshipping/api', apiApp)
+// Endpoint download APK Android
+const handleApkDownload = async (c: any) => {
+  const apkPath = path.join(process.cwd(), 'public', 'uploads', 'mshipping.apk')
+  const file = Bun.file(apkPath)
+  if (await file.exists()) {
+    return new Response(file, {
+      headers: {
+        'Content-Type': 'application/vnd.android.package-archive',
+        'Content-Disposition': 'attachment; filename="mshipping.apk"',
+      },
+    })
+  }
+  return c.html(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>M-Shipping Mobile APK</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      </head>
+      <body style="font-family: system-ui, -apple-system, sans-serif; background: #0B0F17; color: #F1F5F9; text-align: center; padding: 40px 20px;">
+        <div style="max-width: 480px; margin: 0 auto; background: #151D2A; border: 1px solid #1E293B; border-radius: 16px; padding: 30px;">
+          <h2 style="color: #38BDF8; margin-top: 0;">M-Shipping Mobile App</h2>
+          <p style="color: #94A3B8; font-size: 14px; line-height: 1.6;">
+            File APK siap di-build via EAS Cloud atau ditempatkan di <code>backend/public/uploads/mshipping.apk</code>.
+          </p>
+          <div style="background: rgba(56, 189, 248, 0.1); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 8px; padding: 12px; margin-top: 20px; font-size: 13px; color: #38BDF8;">
+            Jalankan <b>bunx eas-cli build -p android --profile preview</b> untuk menghasilkan link download APK langsung dari cloud.
+          </div>
+        </div>
+      </body>
+    </html>
+  `, 404)
+}
+
+rootApp.get('/download/apk', handleApkDownload)
+rootApp.get('/mshipping/download/apk', handleApkDownload)
+rootApp.get('/api/download/apk', handleApkDownload)
 
 // Root & Sub-path Swagger UI redirects / routes
 rootApp.get('/docs', swaggerUI({ url: '/api/openapi.json' }))

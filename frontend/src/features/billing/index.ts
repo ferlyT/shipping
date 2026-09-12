@@ -3,8 +3,11 @@ export { default as DashboardPage, default as BillingDashboardPage } from './pag
 export { default as TargetPage, default as BillingTargetPage } from './pages/TargetPage'
 export { default as ListPage, default as BillingPage } from './pages/ListPage'
 export { default as DetailPage, default as BillingDetailPage } from './pages/DetailPage'
+export { default as BillingPrintPage } from './pages/PrintPage'
+export { ReportDesignerPage, ReportDesignerPage as BillingReportDesignerPage } from './pages/ReportDesignerPage'
 export { ValidationListPage } from './pages/ValidationListPage'
 export { ValidationDetailPage } from './pages/ValidationDetailPage'
+export { PairingLocalChargePage, default as BillingPairingLocalChargePage } from './pages/PairingLocalChargePage'
 
 // Services
 export { billingApi } from './services/billing.service'
@@ -37,6 +40,7 @@ export { PriceListDetailModal } from './components/PriceListDetailModal'
 export { TargetPriceCheckModal } from './components/TargetPriceCheckModal'
 export { ValidationListDrawer } from './components/ValidationListDrawer'
 export { BillingValidationSummaryModal } from './components/BillingValidationSummaryModal'
+export { Type2ComparisonPanel } from './components/Type2ComparisonPanel'
 
 // Hooks
 export * from './hooks/useBillingPermissions'

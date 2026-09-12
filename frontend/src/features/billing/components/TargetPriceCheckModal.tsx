@@ -162,29 +162,29 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header Modal */}
-        <div className="px-4 py-3.5 sm:px-6 sm:py-4.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex flex-col gap-2 sm:gap-2.5 shrink-0">
+        <div className="px-4 py-3 sm:px-6 sm:py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex flex-col gap-2 shrink-0">
           {/* Top Row: Title + Code/Mode + Action Buttons */}
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <div className="hidden sm:flex p-1.5 sm:p-2.5 rounded-xl bg-transparent border border-[var(--color-tertiary)]/40 text-[var(--color-tertiary)] shrink-0">
-                <Tag className="w-4 h-4 sm:w-5 sm:h-5" />
+              <div className="hidden sm:flex p-1.5 rounded-xl bg-transparent border border-[var(--color-tertiary)]/40 text-[var(--color-tertiary)] shrink-0">
+                <Tag className="w-4 h-4" />
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
-                <h3 className="text-xs sm:text-base lg:text-lg font-bold font-[var(--font-heading)] text-[var(--color-primary)] truncate">
+                <h3 className="text-[15px] font-bold font-[var(--font-label)] text-[var(--color-primary)] uppercase tracking-wide truncate">
                   Cek Kesesuaian Harga
                 </h3>
                 {(data?.listCode || item.listCode || item.listNo) && (
-                  <span className="text-[11px] sm:text-xs px-2 py-0.5 rounded font-mono font-bold bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0" title="Nomor List Entry (Unik)">
+                  <span className="text-[11px] px-2 py-0.5 rounded font-mono font-bold bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0" title="Nomor List Entry (Unik)">
                     #{data?.listCode || item.listCode || item.listNo}
                   </span>
                 )}
-                <span className="text-[11px] sm:text-xs px-2 py-0.5 rounded font-mono font-bold bg-transparent border border-[var(--color-border)] text-[var(--color-primary)] shrink-0">
+                <span className="text-[11px] px-2 py-0.5 rounded font-mono font-bold bg-transparent border border-[var(--color-border)] text-[var(--color-primary)] shrink-0">
                   {item.markingCode}
                 </span>
                 {currentMode && (
                   <span
                     className={cn(
-                      'inline-flex items-center gap-1 text-[10px] sm:text-xs px-2 py-0.5 rounded-full font-bold uppercase shrink-0 border shadow-2xs',
+                      'inline-flex items-center gap-1 text-[10.5px] px-2 py-0.5 rounded-full font-bold uppercase shrink-0 border shadow-2xs',
                       isAir
                         ? 'bg-sky-500/10 border-sky-500/40 text-sky-600 dark:text-sky-400'
                         : 'bg-teal-500/10 border-teal-500/40 text-teal-600 dark:text-teal-400'
@@ -197,41 +197,41 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => refetch()}
                 disabled={isFetching}
-                className="p-1.5 sm:p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
                 title="Refresh Data"
               >
-                <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isFetching ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
               </button>
               <button
                 type="button"
                 onClick={onClose}
-                className="p-1.5 sm:p-2 rounded-lg border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
+                className="p-1.5 rounded-lg border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
               >
-                <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
           {/* Sub Header & Meta Chips Row */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-3 text-xs">
-            <p className="text-[11px] sm:text-xs text-[var(--color-secondary)] truncate">
+            <p className="text-xs text-[var(--color-secondary)] truncate">
               <strong className="text-[var(--color-primary)]">{item.customer || data?.customer || 'Customer'}</strong> · Cabang: <span className="font-semibold text-[var(--color-primary)]">{item.branch || data?.branch || '—'}</span> {item.sales || data?.sales ? <>· Sales: <span className="font-semibold text-[var(--color-primary)]">{item.sales || data?.sales}</span></> : null}
             </p>
 
             <div className="flex items-center gap-1.5 flex-wrap shrink-0">
               {data?.tglAgen && (
-                <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 font-mono">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 font-mono">
                   <Calendar className="hidden sm:inline-block w-3 h-3 text-blue-500" />
                   <span>Tgl Agen: <strong>{formatDate(data.tglAgen)}</strong></span>
                 </span>
               )}
               {data?.effectiveDate && (
-                <span className="inline-flex items-center gap-1 text-[10px] sm:text-[11px] font-semibold px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-400 font-mono">
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded bg-purple-500/10 border border-purple-500/30 text-purple-600 dark:text-purple-400 font-mono">
                   <span>Periode PL: <strong>{formatDate(data.effectiveDate)}</strong></span>
                 </span>
               )}
@@ -308,13 +308,13 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
               </div>
 
               {/* Grid Ringkasan Perbandingan */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {/* Card 1: Harga Saat Ini di Target Bill */}
-                <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/40 space-y-1.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
+                <div className="p-3.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/40 space-y-1 shadow-2xs">
+                  <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-secondary)]">
                     Harga di Target Bill
                   </p>
-                  <p className="text-lg sm:text-xl font-bold text-[var(--color-primary)] tabular-nums whitespace-nowrap">
+                  <p className="text-[18px] font-bold text-[var(--color-primary)] tabular-nums whitespace-nowrap">
                     {data.currentPrice > 0 ? formatCurrency(data.currentPrice) : 'Belum Diisi (Rp 0)'}
                   </p>
                   <div className="text-[11px] text-[var(--color-secondary)] pt-1.5 border-t border-[var(--color-border)]/60 flex items-center justify-between">
@@ -326,7 +326,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                 </div>
 
                 {/* Card 2: Tarif Acuan Database / Price List */}
-                <div className={`p-4 rounded-xl border space-y-1.5 ${
+                <div className={`p-3.5 rounded-xl border space-y-1 shadow-2xs ${
                   data.difference > 0
                     ? 'border-emerald-500/40 bg-emerald-500/5'
                     : data.dbPrice > 0
@@ -334,7 +334,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                       : 'border-[var(--color-border)] bg-[var(--color-neutral)]/40'
                 }`}>
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-secondary)]">
                       Acuan Price List Database
                     </p>
                     {data.difference > 0 ? (
@@ -348,11 +348,11 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                       </span>
                     )}
                   </div>
-                  <p className="text-lg sm:text-xl font-bold text-[var(--color-tertiary)] tabular-nums whitespace-nowrap">
+                  <p className="text-[18px] font-bold text-[var(--color-tertiary)] tabular-nums whitespace-nowrap">
                     {data.dbPrice > 0 ? (
                       <>
                         {formatCurrency(data.dbPrice)}
-                        <span className="text-xs font-normal text-[var(--color-secondary)] ml-1">
+                        <span className="text-[11px] font-normal text-[var(--color-secondary)] ml-1">
                           {isAir ? '/ kg' : '/ m³'}
                         </span>
                       </>
@@ -375,9 +375,9 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                 </div>
 
                 {/* Card 3: Acuan Master Rate CS vs MKT (Berdasarkan Tgl. Agen) */}
-                <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/40 space-y-1.5">
+                <div className="p-3.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/40 space-y-1 shadow-2xs">
                   <div className="flex items-center justify-between">
-                    <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-secondary)]">
                       Master Rate (Tgl. Agen)
                     </p>
                     {data.effectiveDate && (
@@ -386,7 +386,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                       </span>
                     )}
                   </div>
-                  <div className="space-y-1 pt-0.5">
+                  <div className="space-y-0.5 pt-0.5">
                     <div className="flex items-center justify-between text-xs">
                       <span className={`font-semibold ${!data.isBroker && data.matchedWith === 'MASTER_CS' ? 'text-blue-600 dark:text-blue-400 font-bold' : 'text-[var(--color-secondary)]'}`}>
                         Harga CS:
@@ -404,7 +404,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                       </span>
                     </div>
                   </div>
-                  <div className="text-[10px] text-[var(--color-secondary)] pt-1 border-t border-[var(--color-border)]/60 flex items-center justify-between gap-1">
+                  <div className="text-[10.5px] text-[var(--color-secondary)] pt-1 border-t border-[var(--color-border)]/60 flex items-center justify-between gap-1">
                     <span className="truncate">Sales: {data.sales || '—'}</span>
                     <span
                       className={`font-bold px-1.5 py-0.5 rounded text-[9px] uppercase shrink-0 ${
@@ -413,14 +413,14 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                           : 'border border-blue-500/40 text-blue-600 dark:text-blue-400 bg-transparent'
                       }`}
                     >
-                      {data.isBroker ? 'Acuan MKT (Broker / Sales MKT)' : 'Acuan CS (Non-Broker)'}
+                      {data.isBroker ? 'Acuan MKT (Broker)' : 'Acuan CS (Non-Broker)'}
                     </span>
                   </div>
                 </div>
 
                 {/* Card 4: Info Update Terakhir */}
-                <div className="p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/40 space-y-1.5">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
+                <div className="p-3.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/40 space-y-1 shadow-2xs">
+                  <p className="text-[10.5px] font-semibold uppercase tracking-wider text-[var(--color-secondary)]">
                     Update Terakhir
                   </p>
                   <p className="text-xs font-bold text-[var(--color-primary)] truncate">
@@ -435,10 +435,10 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                 </div>
               </div>
 
-              {/* Section 1: Tarif Terdaftar Customer di Database (vwCustomersHarga) - Hanya Tampil Jika Ada yang Cocok */}
+              {/* Section 1: Tarif Terdaftar Customer di Database (vwCustomersHarga) */}
               {matchingCustomerTariffs.length > 0 && (
                 <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden space-y-0">
-                  <div className="px-5 py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between gap-2 flex-wrap">
+                  <div className="px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
                       <Building2 className="hidden sm:inline-block w-4 h-4 text-[var(--color-primary)]" />
                       <h4 className="text-xs sm:text-sm font-bold font-[var(--font-heading)] text-[var(--color-primary)]">
@@ -456,14 +456,14 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                   <div className="overflow-x-auto">
                     <table className="w-full text-left text-xs">
                       <thead>
-                        <tr className="border-b border-[var(--color-border)] bg-[var(--color-neutral)]/40 text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)] whitespace-nowrap">
-                          <th className="px-5 py-3">Kategori Komoditi</th>
-                          <th className="px-5 py-3">Jenis</th>
-                          <th className="px-5 py-3">Cabang</th>
-                          <th className="px-5 py-3 text-right">Tarif DB (Rp)</th>
-                          <th className="px-5 py-3">Diupdate Oleh</th>
-                          <th className="px-5 py-3">Tgl Update</th>
-                          <th className="px-5 py-3 text-center">Kesesuaian Target Bill</th>
+                        <tr className="border-b border-[var(--color-border)] bg-[var(--color-neutral)]/40 text-[11px] font-semibold uppercase tracking-wider text-[var(--color-secondary)] whitespace-nowrap">
+                          <th className="py-2 px-3">Kategori Komoditi</th>
+                          <th className="py-2 px-3">Jenis</th>
+                          <th className="py-2 px-3">Cabang</th>
+                          <th className="py-2 px-3 text-right">Tarif DB (Rp)</th>
+                          <th className="py-2 px-3">Diupdate Oleh</th>
+                          <th className="py-2 px-3">Tgl Update</th>
+                          <th className="py-2 px-3 text-center">Kesesuaian Target Bill</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-[var(--color-border)]">
@@ -472,7 +472,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                             key={idx}
                             className="bg-emerald-500/10 dark:bg-emerald-500/15 font-semibold text-[var(--color-primary)] transition-colors whitespace-nowrap"
                           >
-                            <td className="px-5 py-3 font-medium">
+                            <td className="py-2 px-3 font-medium">
                               <div className="flex items-center gap-2">
                                 <span>{t.comodityName || '—'}</span>
                                 <span className="text-[9px] font-extrabold uppercase px-2 py-0.5 rounded bg-emerald-500 text-white dark:bg-emerald-600">
@@ -480,28 +480,28 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                                 </span>
                               </div>
                             </td>
-                            <td className="px-5 py-3 text-[var(--color-secondary)]">
+                            <td className="py-2 px-3 text-[var(--color-secondary)]">
                               {t.jenis || (t.listType === 1 ? 'UC' : 'LR')}
                             </td>
-                            <td className="px-5 py-3 text-[var(--color-secondary)]">
+                            <td className="py-2 px-3 text-[var(--color-secondary)]">
                               {t.branchName || '—'}
                             </td>
-                            <td className="px-5 py-3 text-right font-bold tabular-nums text-[var(--color-primary)]">
+                            <td className="py-2 px-3 text-right font-bold tabular-nums text-[var(--color-primary)]">
                               {formatCurrency(t.harga)}
                             </td>
-                            <td className="px-5 py-3 text-[var(--color-secondary)]">
+                            <td className="py-2 px-3 text-[var(--color-secondary)]">
                               {t.updateBy || '—'}
                             </td>
-                            <td className="px-5 py-3 text-[var(--color-secondary)]">
+                            <td className="py-2 px-3 text-[var(--color-secondary)]">
                               {t.updateDate ? formatDateTime(t.updateDate) : '—'}
                             </td>
-                            <td className="px-5 py-3 text-center">
+                            <td className="py-2 px-3 text-center">
                               {data.currentPrice === t.harga ? (
-                                <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded font-bold border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-transparent">
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded font-bold border border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-transparent">
                                   <CheckCircle2 className="hidden sm:inline-block w-3 h-3" /> Cocok (Tarif Customer)
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-0.5 rounded font-bold border border-rose-500/50 text-rose-600 dark:text-rose-400 bg-transparent">
+                                <span className="inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded font-bold border border-rose-500/50 text-rose-600 dark:text-rose-400 bg-transparent">
                                   <AlertTriangle className="hidden sm:inline-block w-3 h-3" /> Selisih ({formatCurrency(data.currentPrice - t.harga)})
                                 </span>
                               )}
@@ -514,7 +514,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                 </div>
               )}
 
-              {/* Section 2: Uploaded Customer Price List (tbCustomerPriceListUpload) jika ada */}
+              {/* Section 2: Uploaded Customer Price List */}
               {data.customerPriceList && data.customerPriceList.items.length > 0 && (
                 <div className="rounded-xl border border-purple-500/40 bg-purple-500/5 p-4 space-y-3">
                   <div className="flex items-center justify-between">
@@ -537,7 +537,7 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
                         <p className="text-[10px] font-bold text-[var(--color-secondary)] uppercase truncate">
                           {it.branch} · {it.category}
                         </p>
-                        <p className="text-xs sm:text-sm font-bold text-[var(--color-primary)] tabular-nums">
+                        <p className="text-xs font-bold text-[var(--color-primary)] tabular-nums">
                           {formatCurrency(it.price)}
                         </p>
                       </div>
@@ -550,11 +550,11 @@ export function TargetPriceCheckModal({ item, activeMode, onClose }: TargetPrice
         </div>
 
         {/* Footer Modal */}
-        <div className="px-4 py-3 sm:px-6 sm:py-3.5 border-t border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-end gap-3">
+        <div className="px-4 py-2.5 sm:px-6 sm:py-3 border-t border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-end gap-3">
           <button
             type="button"
             onClick={onClose}
-            className="px-4 py-2 rounded-xl text-xs font-bold font-[var(--font-label)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
+            className="px-4 py-1.5 rounded-xl text-xs font-semibold font-[var(--font-label)] border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
           >
             Tutup
           </button>

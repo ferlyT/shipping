@@ -48,6 +48,46 @@ export function normalizeCommodityString(val: string): string {
   return (val || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
+function isSingleGenuineBattery(rawToken: string): boolean {
+  if (!rawToken) return false
+  const token = rawToken.toUpperCase().trim()
+
+  const hasWord =
+    /\b(BATTERY|BATTERIES|BATERAI|BATRE|POWERBANK|POWER\s*BANK|ACCU|AKI)\b/i.test(token) ||
+    token.includes('BATTERY') ||
+    token.includes('BATTERIES') ||
+    token.includes('BATERAI') ||
+    token.includes('BATRE') ||
+    token.includes('POWERBANK')
+
+  if (!hasWord) return false
+
+  // Cek apakah ini murni aksesoris/alat (misal: "BATTERY CHARGER", "BATTERY CASE", "BATTERY HOLDER", "BATTERY TESTER")
+  // di mana kata BATTERY hanya sebagai penjelas fungsi alat tersebut dan tidak ada baterai fisiknya.
+  const pureAccessoriesPattern =
+    /\b(BATTERY|BATTERIES|BATERAI|BATRE)\s+(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE|FRAME|STAND|MOUNT|HOUSING|SHELL|PROTECTOR|PROTECTIVE|SLOT)\b/i
+
+  if (pureAccessoriesPattern.test(token)) {
+    return false
+  }
+
+  const reverseAccessoriesPattern =
+    /\b(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE|FRAME|STAND|MOUNT|HOUSING|SHELL|PROTECTOR|PROTECTIVE|SLOT)\s+(BATTERY|BATTERIES|BATERAI|BATRE)\b/i
+
+  if (reverseAccessoriesPattern.test(token)) {
+    return false
+  }
+
+  const prepAccessoriesPattern =
+    /\b(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE|FRAME|STAND|MOUNT|HOUSING|SHELL|PROTECTOR|PROTECTIVE|SLOT)\s+(FOR|UNTUK|OF)\s+(BATTERY|BATTERIES|BATERAI|BATRE)\b/i
+
+  if (prepAccessoriesPattern.test(token)) {
+    return false
+  }
+
+  return true
+}
+
 /**
  * Memeriksa apakah teks komoditas adalah barang baterai murni (misal: LAPTOP BATTERY, POWERBANK, LITHIUM BATTERY)
  * dan BUKAN aksesoris non-baterai (misal: BATTERY CHARGER, BATTERY CASE, BATTERY HOLDER, BATTERY TESTER, dll).
@@ -66,33 +106,13 @@ export function isGenuineBattery(text: string): boolean {
 
   if (!hasBatteryWord) return false
 
-  // Jika teks adalah kombinasi barang (misal: "BATTERY, CHARGER", "BATTERY & CHARGER", "BATTERY / CHARGER", "BATTERY AND CHARGER"),
-  // maka barang tersebut mengandung baterai fisik bersama aksesorisnya.
-  const isCombinedItem =
-    /\b(BATTERY|BATTERIES|BATERAI|BATRE|POWERBANK|ACCU|AKI)\b\s*[,/&+]\s*|\s*[,/&+]\s*\b(BATTERY|BATTERIES|BATERAI|BATRE|POWERBANK|ACCU|AKI)\b/i.test(upper) ||
-    /\b(BATTERY|BATTERIES|BATERAI|BATRE)\b\s+(AND|DAN|WITH|SERTA|BESERTA)\b/i.test(upper)
-
-  if (isCombinedItem) {
-    return true
+  // Pisahkan berdasarkan pemisah item (koma, titik koma, garis miring, plus, ampersand, kata hubung)
+  const segments = upper.split(/[,;|/&+]|\b(?:AND|DAN|WITH|SERTA|BESERTA)\b/i)
+  if (segments.length > 1) {
+    return segments.some((segment) => isSingleGenuineBattery(segment.trim()))
   }
 
-  // Cek apakah ini murni aksesoris/alat (misal: "BATTERY CHARGER", "BATTERY CASE", "BATTERY HOLDER", "BATTERY TESTER")
-  // di mana kata BATTERY hanya sebagai penjelas fungsi alat tersebut dan tidak ada baterai fisiknya.
-  const pureAccessoriesPattern =
-    /\b(BATTERY|BATTERIES|BATERAI|BATRE)\s+(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE)\b/i
-
-  if (pureAccessoriesPattern.test(upper)) {
-    return false
-  }
-
-  const reverseAccessoriesPattern =
-    /\b(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE)\s+(BATTERY|BATTERIES|BATERAI|BATRE)\b/i
-
-  if (reverseAccessoriesPattern.test(upper)) {
-    return false
-  }
-
-  return true
+  return isSingleGenuineBattery(upper)
 }
 
 /**
@@ -265,12 +285,17 @@ export function findBestCategoryMatch<T extends { category: string; price?: any 
   }
 
   // 3. Synonym Group Match (Pencocokan relasi nama komoditi tbTypeComodity <-> kategori Excel Price List)
-  const matchingGroup = COMMODITY_SYNONYM_GROUPS.find((group) =>
-    group.some((syn) => {
+  const matchingGroup = COMMODITY_SYNONYM_GROUPS.find((group) => {
+    const isLaptopGroup = group.some((s) => s.includes('LAPTOP') || s.includes('MACBOOK'))
+    const isIpadGroup = group.some((s) => s.includes('IPAD') || s.includes('TABLET'))
+    if (isLaptopGroup && !isGenuineLaptop(target)) return false
+    if (isIpadGroup && !isGenuineIpad(target)) return false
+
+    return group.some((syn) => {
       const sNorm = normalizeCommodityString(syn)
       return sNorm === normTarget || syn.toUpperCase() === target
     })
-  )
+  })
 
   if (matchingGroup) {
     // 3a. Exact match against synonym item
@@ -297,6 +322,12 @@ export function findBestCategoryMatch<T extends { category: string; price?: any 
   // 4. Word-Boundary prefix match (misal: "GENERAL GOODS" vs "GENERAL GOODS NORMAL", tapi BUKAN "GARMENT" mencocokkan "SEMI GARMENT")
   const wordMatch = candidates.find((it) => {
     const cat = it.category.trim().toUpperCase()
+    if (['LAPTOP', 'NOTEBOOK', 'MACBOOK'].some((k) => cat.includes(k)) && !isGenuineLaptop(target)) {
+      return false
+    }
+    if (['IPAD', 'TABLET'].some((k) => cat.includes(k)) && !isGenuineIpad(target)) {
+      return false
+    }
     if (target.startsWith(`${cat} `) || cat.startsWith(`${target} `)) return true
     return false
   })

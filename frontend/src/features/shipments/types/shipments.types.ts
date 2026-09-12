@@ -81,9 +81,65 @@ export interface Shipment {
   shipmentStatus?: ShipmentStatus
 }
 
+export interface ShipmentTypeBreakdown {
+  udara: number
+  laut: number
+}
+
+export interface ShipmentTrendMetric {
+  diff: number
+  percentage: number | null
+  percentageText: string
+  type: 'up' | 'down' | 'neutral'
+}
+
+export interface ShipmentPeriodMetrics {
+  totalResi: number
+  totalPackages: number
+  totalBerat: number
+  totalVolume: number
+  totalCust: number
+  resiByType: ShipmentTypeBreakdown
+  packagesByType: ShipmentTypeBreakdown
+  beratByType: ShipmentTypeBreakdown
+  volumeByType: ShipmentTypeBreakdown
+  custByType: ShipmentTypeBreakdown
+}
+
+export interface ShipmentCommodityMetric {
+  name: string
+  shipments: number
+  packages: number
+  weight: number
+  volume: number
+  percentage?: number
+}
+
+export interface ShipmentCommoditiesData {
+  air: ShipmentCommodityMetric[]
+  sea: ShipmentCommodityMetric[]
+}
+
 export interface ShipmentKpis {
   totalResi: number
   totalPackages: number
   totalBerat: number
   totalVolume: number
+  totalCust: number
+  resiByType?: ShipmentTypeBreakdown
+  packagesByType?: ShipmentTypeBreakdown
+  beratByType?: ShipmentTypeBreakdown
+  volumeByType?: ShipmentTypeBreakdown
+  custByType?: ShipmentTypeBreakdown
+  thisMonth?: ShipmentPeriodMetrics
+  lastMonth?: ShipmentPeriodMetrics
+  comparison?: {
+    resi: ShipmentTrendMetric
+    packages: ShipmentTrendMetric
+    berat: ShipmentTrendMetric
+    volume: ShipmentTrendMetric
+    cust: ShipmentTrendMetric
+  }
+  commodities?: ShipmentCommoditiesData
 }
+

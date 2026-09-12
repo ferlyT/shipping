@@ -516,9 +516,32 @@ export async function getBillingById(id: string) {
     }
   }
 
-  const { fdEmpCode, ...rest } = data
+  // Lookup salesCode from tbSales (tbCustomers join tbSales on fdSalesNM)
+  let fdSalesCode: string | null = null
+  const custSalesNM = data.customer?.fdSalesNM ? data.customer.fdSalesNM.trim() : ''
+  if (custSalesNM) {
+    const salesRow = await safeRunRaw(async () => {
+      return prisma.$queryRaw<any[]>`
+        SELECT TOP 1 RTRIM(fdSalesCode) as fdSalesCode, RTRIM(fdSalesNM) as fdSalesNM
+        FROM tbSales WITH (NOLOCK)
+        WHERE LTRIM(RTRIM(fdSalesNM)) = ${custSalesNM}
+      `
+    }, 'get_sales_code')
+
+    if (salesRow && salesRow.length > 0 && salesRow[0]?.fdSalesCode) {
+      fdSalesCode = String(salesRow[0].fdSalesCode).trim()
+    }
+  }
+
+  const customer = data.customer ? {
+    ...data.customer,
+    fdSalesCode: fdSalesCode || data.customer.fdSalesNM?.trim() || null,
+  } : null
+
+  const { fdEmpCode, customer: _origCust, ...rest } = data
   return {
     ...rest,
+    customer,
     employee,
     giveEmployee,
     resiSummary,
@@ -847,7 +870,8 @@ export async function checkBillResiMarking(invNo: string, searchResi?: string) {
 export async function updateBillingDetails(
   invNo: string,
   items: import('./billing.types').BillingDetailUpdateItem[],
-  userPayload?: { fdEmpCode?: string | null; username?: string; role?: string }
+  userPayload?: { fdEmpCode?: string | null; username?: string; role?: string },
+  saveToPrev: boolean = true
 ) {
   const cleanInvNo = invNo.trim()
   if (!items || !Array.isArray(items) || items.length === 0) {
@@ -928,7 +952,7 @@ export async function updateBillingDetails(
 
   // 3. Jalankan transaksi SQL atomik
   await prisma.$transaction(async (tx) => {
-    // A. Hapus item lama yang tidak ada lagi di daftar item baru
+    // A. Hapus item lama yang tidak ada lagi di daftar item baru dari tbBillingDetail
     const newIdList = preparedItems.map((p) => p.fdID)
     await tx.$executeRaw`
       DELETE FROM tbBillingDetail 
@@ -936,8 +960,18 @@ export async function updateBillingDetails(
         AND RTRIM(fdID) NOT IN (${Prisma.join(newIdList)})
     `
 
+    // Hapus juga dari tbBillingDetailPrev jika saveToPrev aktif
+    if (saveToPrev) {
+      await tx.$executeRaw`
+        DELETE FROM tbBillingDetailPrev 
+        WHERE RTRIM(fdInvNo) = ${cleanInvNo} 
+          AND RTRIM(fdID) NOT IN (${Prisma.join(newIdList)})
+      `
+    }
+
     // B. Upsert setiap baris item
     for (const item of preparedItems) {
+      // 1) Upsert ke tbBillingDetail
       const existingDetail = await tx.$queryRaw<any[]>`
         SELECT TOP 1 RTRIM(fdID) as fdID FROM tbBillingDetail WITH (NOLOCK)
         WHERE RTRIM(fdInvNo) = ${cleanInvNo} AND RTRIM(fdID) = ${item.fdID}
@@ -967,6 +1001,43 @@ export async function updateBillingDetails(
           )
         `
       }
+
+      // 2) Upsert ke tbBillingDetailPrev jika saveToPrev aktif
+      if (saveToPrev) {
+        const existingPrev = await tx.$queryRaw<any[]>`
+          SELECT TOP 1 RTRIM(fdID) as fdID FROM tbBillingDetailPrev WITH (NOLOCK)
+          WHERE RTRIM(fdInvNo) = ${cleanInvNo} AND RTRIM(fdID) = ${item.fdID}
+        `
+
+        const prevTypeComodity =
+          item.fdTypeComodity !== undefined && item.fdTypeComodity !== null
+            ? String(item.fdTypeComodity)
+            : null
+
+        if (existingPrev && existingPrev.length > 0) {
+          await tx.$executeRaw`
+            UPDATE tbBillingDetailPrev
+            SET fdItemName = ${item.fdItemName},
+                fdListCode = ${item.fdListCode},
+                fdItemCode = ${item.fdItemCode},
+                fdCurr = ${item.fdCurr},
+                fdQty = ${item.fdQty},
+                fdItemPrice = ${item.fdItemPrice},
+                fdTotal = ${item.fdTotal},
+                fdSatuan = ${item.fdSatuan},
+                fdTypeComodity = ${prevTypeComodity}
+            WHERE RTRIM(fdInvNo) = ${cleanInvNo} AND RTRIM(fdID) = ${item.fdID}
+          `
+        } else {
+          await tx.$executeRaw`
+            INSERT INTO tbBillingDetailPrev (
+              fdInvNo, fdID, fdListCode, fdItemCode, fdItemName, fdCurr, fdQty, fdItemPrice, fdTotal, fdSatuan, fdTypeComodity
+            ) VALUES (
+              ${item.fdInvNo}, ${item.fdID}, ${item.fdListCode}, ${item.fdItemCode}, ${item.fdItemName}, ${item.fdCurr}, ${item.fdQty}, ${item.fdItemPrice}, ${item.fdTotal}, ${item.fdSatuan}, ${prevTypeComodity}
+            )
+          `
+        }
+      }
     }
 
     // C. Update tbBilling.fdJumlah1
@@ -984,10 +1055,63 @@ export async function updateBillingDetails(
     invNo: cleanInvNo,
     itemCount: preparedItems.length,
     newTotal: totalJumlah1,
+    savedToPrev: saveToPrev,
     user: userPayload?.username || userPayload?.fdEmpCode || 'system',
   })
 
   // 4. Return data billing terbaru lengkap
   return getBillingById(cleanInvNo)
+}
+
+/**
+ * Mengambil data rincian dimensi fisik per coly dari tbEntryListDetail
+ * untuk sekumpulan listCode (batch query)
+ */
+export async function getBatchEntryListDetails(listCodes: string[]) {
+  const cleanListCodes = Array.from(
+    new Set(listCodes.map((c) => String(c || '').trim()).filter((c) => c.length >= 4))
+  )
+  if (cleanListCodes.length === 0) return []
+
+  const details = await safeRunRaw(async () => {
+    return prisma.tbEntryListDetail.findMany({
+      where: {
+        fdListCode: { in: cleanListCodes },
+      },
+      orderBy: [
+        { fdListCode: 'asc' },
+        { fdListDCode: 'asc' },
+      ],
+      select: {
+        fdListCode: true,
+        fdListDCode: true,
+        fdDescr: true,
+        fdPjg: true,
+        fdLbr: true,
+        fdTng: true,
+        fdQty: true,
+        fdLoad: true,
+      },
+    })
+  }, 'getBatchEntryListDetails')
+
+  return (details || []).map((d) => {
+    const pjg = Number(d.fdPjg || 0)
+    const lbr = Number(d.fdLbr || 0)
+    const tng = Number(d.fdTng || 0)
+    const qty = Number(d.fdQty || 1)
+    const m3 = parseFloat(((pjg * lbr * tng * qty) / 1000000).toFixed(4))
+    return {
+      fdListCode: d.fdListCode.trim(),
+      fdListDCode: d.fdListDCode.trim(),
+      fdDescr: d.fdDescr?.trim() || '',
+      fdPjg: pjg,
+      fdLbr: lbr,
+      fdTng: tng,
+      fdQty: qty,
+      fdM3: m3,
+      fdLoad: d.fdLoad,
+    }
+  })
 }
 

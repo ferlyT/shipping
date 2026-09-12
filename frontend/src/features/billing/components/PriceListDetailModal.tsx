@@ -181,15 +181,15 @@ export function PriceListDetailModal({
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="px-6 py-4 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex items-start justify-between gap-3">
+        <div className="px-5 py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex items-start justify-between gap-3">
           <div className="space-y-1">
             <div className="flex items-center gap-2 flex-wrap">
-              <ShieldCheck className="w-5 h-5 text-[var(--color-primary)] shrink-0" />
-              <h3 className="text-base font-bold font-[var(--font-label)] text-[var(--color-primary)]">
+              <ShieldCheck className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
+              <h3 className="text-[15px] font-bold font-[var(--font-label)] text-[var(--color-primary)] uppercase tracking-wide">
                 {t('billing.validation.modalTitle')}
               </h3>
               {(expectedMode || expectedBranch) && (
-                <span className="text-[11px] px-2.5 py-0.5 rounded-full font-semibold bg-transparent text-blue-500 border border-blue-500/40 flex items-center gap-1">
+                <span className="text-[10.5px] px-2.5 py-0.5 rounded-full font-semibold bg-transparent text-blue-500 border border-blue-500/40 flex items-center gap-1">
                   <Filter className="w-3 h-3" />
                   <span>
                     Relevan: {expectedMode === 'BY AIR' ? 'Udara (BY AIR)' : expectedMode === 'BY SEA' ? 'Laut (BY SEA)' : expectedMode || '—'}
@@ -210,24 +210,24 @@ export function PriceListDetailModal({
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-md text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors"
+            className="p-1.5 rounded-lg text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Toolbar & Filters */}
-        <div className="p-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] space-y-3">
+        <div className="p-3.5 border-b border-[var(--color-border)] bg-[var(--color-surface)] space-y-2.5">
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
             {/* Search Input */}
             <div className="relative flex-1">
-              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-secondary)]" />
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-secondary)]" />
               <input
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t('billing.validation.modalSearch')}
-                className="w-full pl-9 pr-4 py-2 text-xs border border-[var(--color-border)] rounded-[var(--radius-md)] bg-[var(--color-neutral)] text-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                className="w-full pl-8 pr-3 py-1.25 text-xs border border-[var(--color-border)] rounded-lg bg-[var(--color-neutral)] text-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
               />
             </div>
 
@@ -235,13 +235,13 @@ export function PriceListDetailModal({
             <button
               type="button"
               onClick={() => setFilterOnlyRelevant((prev) => !prev)}
-              className={`px-3 py-1.5 rounded-[var(--radius-md)] text-xs font-bold transition-all flex items-center justify-center gap-1.5 shrink-0 border ${
+              className={`px-3 py-1.25 rounded-lg text-[11.5px] font-semibold transition-all flex items-center justify-center gap-1.5 shrink-0 border cursor-pointer ${
                 filterOnlyRelevant
                   ? 'bg-transparent border-blue-500 text-blue-500 shadow-xs'
                   : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)]'
               }`}
             >
-              <Filter className="hidden sm:inline-block w-3.5 h-3.5" />
+              <Filter className="hidden sm:inline-block w-3 h-3" />
               <span>{filterOnlyRelevant ? t('billing.validation.filterRelevant') : t('billing.validation.showAll')}</span>
             </button>
           </div>
@@ -422,20 +422,20 @@ export function PriceListDetailModal({
                   <div className="border border-[var(--color-border)] rounded-[var(--radius-lg)] overflow-hidden shadow-xs">
                     <table className="w-full border-collapse text-xs">
                       <thead>
-                        <tr className="bg-[var(--color-neutral)] border-b border-[var(--color-border)]">
-                          <th className="px-3.5 py-2.5 text-left font-bold uppercase font-[var(--font-label)] text-[var(--color-secondary)]">
+                        <tr className="bg-[var(--color-neutral)] border-b border-[var(--color-border)] text-[11px] uppercase font-semibold text-[var(--color-secondary)] tracking-wider">
+                          <th className="px-3 py-2 text-left">
                             {t('billing.validation.colSheetType')}
                           </th>
-                          <th className="px-3.5 py-2.5 text-left font-bold uppercase font-[var(--font-label)] text-[var(--color-secondary)]">
+                          <th className="px-3 py-2 text-left">
                             {t('billing.validation.colMode')}
                           </th>
-                          <th className="px-3.5 py-2.5 text-left font-bold uppercase font-[var(--font-label)] text-[var(--color-secondary)]">
+                          <th className="px-3 py-2 text-left">
                             {t('billing.validation.colBranch')}
                           </th>
-                          <th className="px-3.5 py-2.5 text-left font-bold uppercase font-[var(--font-label)] text-[var(--color-secondary)]">
+                          <th className="px-3 py-2 text-left">
                             {t('billing.validation.colCategory')}
                           </th>
-                          <th className="px-3.5 py-2.5 text-right font-bold uppercase font-[var(--font-label)] text-[var(--color-secondary)]">
+                          <th className="px-3 py-2 text-right">
                             {t('billing.validation.colTariff')}
                           </th>
                         </tr>
@@ -455,15 +455,15 @@ export function PriceListDetailModal({
                                   : 'hover:bg-[var(--color-neutral)]/50'
                               }`}
                             >
-                              <td className="px-3.5 py-2.5 font-bold text-[var(--color-primary)]">{item.sheetType}</td>
-                              <td className="px-3.5 py-2.5 font-medium text-[var(--color-secondary)]">{item.mode}</td>
-                              <td className="px-3.5 py-2.5 font-semibold text-[var(--color-primary)]">
+                              <td className="px-3 py-2 font-bold text-[var(--color-primary)]">{item.sheetType}</td>
+                              <td className="px-3 py-2 font-medium text-[var(--color-secondary)]">{item.mode}</td>
+                              <td className="px-3 py-2 font-semibold text-[var(--color-primary)]">
                                 <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-transparent border border-[var(--color-border)] text-[var(--color-primary)]">
                                   {item.branch || '—'}
                                 </span>
                               </td>
-                              <td className="px-3.5 py-2.5 font-semibold text-[var(--color-primary)]">{item.category}</td>
-                              <td className="px-3.5 py-2.5 text-right font-bold text-[var(--color-tertiary)] tabular-nums">
+                              <td className="px-3 py-2 font-semibold text-[var(--color-primary)]">{item.category}</td>
+                              <td className="px-3 py-2 text-right font-bold text-[var(--color-tertiary)] tabular-nums">
                                 <CurrencyValue value={item.price} currency="Rp." />
                               </td>
                             </tr>
@@ -483,7 +483,7 @@ export function PriceListDetailModal({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 border-t border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between">
+        <div className="px-5 py-2.5 border-t border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between">
           <span className="text-xs text-[var(--color-secondary)] font-medium">
             Total <span className="font-bold text-[var(--color-primary)]">{filteredItems.length}</span> tarif
             {filterOnlyRelevant && items.length !== filteredItems.length && (
@@ -492,7 +492,7 @@ export function PriceListDetailModal({
               </span>
             )}
           </span>
-          <Button variant="secondary" size="sm" onClick={onClose}>
+          <Button variant="secondary" size="sm" onClick={onClose} className="text-xs font-semibold px-4 py-1.5">
             {t('common.close')}
           </Button>
         </div>

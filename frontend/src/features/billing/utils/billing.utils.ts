@@ -1,4 +1,5 @@
 import { formatDecimal, formatCurrency } from '@/lib/utils'
+import { ROUTES } from '@/lib/constants'
 
 export type BillingStatus = 'draft' | 'issued' | 'collected'
 
@@ -57,11 +58,28 @@ export function getBillingStatus(row?: StatusRow | null): BillingStatus {
   return 'draft'
 }
 
+export interface TransportExpedisiRef {
+  fdId?: number
+  fdListCode?: string | null
+  fdExpID?: string | null
+  fdExpName?: string | null
+  fdResiExp?: string | null
+  fdCurrExp?: string | null
+  fdTotalExp: number
+  fdPaid?: number | null
+  fdCreatedDate?: string | null
+  fdCreatedBy?: string | null
+  fdJmlBerat?: number | null
+  fdMarkingCode?: string | null
+  fdMarkingNo?: string | null
+}
+
 export interface PriceEvaluationContext {
   res?: any
   isAir: boolean
   defaultTypeId?: number | null
   defaultComodityName?: string
+  expedisiList?: TransportExpedisiRef[]
 }
 
 export interface ItemPriceEvaluation {
@@ -83,6 +101,47 @@ export interface ItemPriceEvaluation {
   isUndercharge?: boolean
   isOvercharge?: boolean
   tierSource?: string
+  transportExpedisi?: TransportExpedisiRef | null
+}
+
+function isSingleGenuineBattery(rawToken: string): boolean {
+  if (!rawToken) return false
+  const token = rawToken.toUpperCase().trim()
+
+  const hasWord =
+    /\b(BATTERY|BATTERIES|BATERAI|BATRE|POWERBANK|POWER\s*BANK|ACCU|AKI)\b/i.test(token) ||
+    token.includes('BATTERY') ||
+    token.includes('BATTERIES') ||
+    token.includes('BATERAI') ||
+    token.includes('BATRE') ||
+    token.includes('POWERBANK')
+
+  if (!hasWord) return false
+
+  // Cek apakah ini murni aksesoris/alat (misal: "BATTERY CHARGER", "BATTERY CASE", "BATTERY HOLDER", "BATTERY TESTER")
+  // di mana kata BATTERY hanya sebagai penjelas fungsi alat tersebut dan tidak ada baterai fisiknya.
+  const pureAccessoriesPattern =
+    /\b(BATTERY|BATTERIES|BATERAI|BATRE)\s+(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE|FRAME|STAND|MOUNT|HOUSING|SHELL|PROTECTOR|PROTECTIVE|SLOT)\b/i
+
+  if (pureAccessoriesPattern.test(token)) {
+    return false
+  }
+
+  const reverseAccessoriesPattern =
+    /\b(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE|FRAME|STAND|MOUNT|HOUSING|SHELL|PROTECTOR|PROTECTIVE|SLOT)\s+(BATTERY|BATTERIES|BATERAI|BATRE)\b/i
+
+  if (reverseAccessoriesPattern.test(token)) {
+    return false
+  }
+
+  const prepAccessoriesPattern =
+    /\b(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE|FRAME|STAND|MOUNT|HOUSING|SHELL|PROTECTOR|PROTECTIVE|SLOT)\s+(FOR|UNTUK|OF)\s+(BATTERY|BATTERIES|BATERAI|BATRE)\b/i
+
+  if (prepAccessoriesPattern.test(token)) {
+    return false
+  }
+
+  return true
 }
 
 /**
@@ -103,33 +162,13 @@ export function isGenuineBattery(text: string): boolean {
 
   if (!hasBatteryWord) return false
 
-  // Jika teks adalah kombinasi barang (misal: "BATTERY, CHARGER", "BATTERY & CHARGER", "BATTERY / CHARGER", "BATTERY AND CHARGER"),
-  // maka barang tersebut mengandung baterai fisik bersama aksesorisnya.
-  const isCombinedItem =
-    /\b(BATTERY|BATTERIES|BATERAI|BATRE|POWERBANK|ACCU|AKI)\b\s*[,/&+]\s*|\s*[,/&+]\s*\b(BATTERY|BATTERIES|BATERAI|BATRE|POWERBANK|ACCU|AKI)\b/i.test(upper) ||
-    /\b(BATTERY|BATTERIES|BATERAI|BATRE)\b\s+(AND|DAN|WITH|SERTA|BESERTA)\b/i.test(upper)
-
-  if (isCombinedItem) {
-    return true
+  // Pisahkan berdasarkan pemisah item (koma, titik koma, garis miring, plus, ampersand, kata hubung)
+  const segments = upper.split(/[,;|/&+]|\b(?:AND|DAN|WITH|SERTA|BESERTA)\b/i)
+  if (segments.length > 1) {
+    return segments.some((segment) => isSingleGenuineBattery(segment.trim()))
   }
 
-  // Cek apakah ini murni aksesoris/alat (misal: "BATTERY CHARGER", "BATTERY CASE", "BATTERY HOLDER", "BATTERY TESTER")
-  // di mana kata BATTERY hanya sebagai penjelas fungsi alat tersebut dan tidak ada baterai fisiknya.
-  const pureAccessoriesPattern =
-    /\b(BATTERY|BATTERIES|BATERAI|BATRE)\s+(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE)\b/i
-
-  if (pureAccessoriesPattern.test(upper)) {
-    return false
-  }
-
-  const reverseAccessoriesPattern =
-    /\b(CHARGER|CHARGING|CASAN|CASE|CASING|HOLDER|TESTER|COVER|BAG|BOX|STRAP|SPRING|CONNECTOR|CLIP|CLAMP|INSULATOR|WRAP|CABLE|WIRE|BRACKET|INDICATOR|GAUGE)\s+(BATTERY|BATTERIES|BATERAI|BATRE)\b/i
-
-  if (reverseAccessoriesPattern.test(upper)) {
-    return false
-  }
-
-  return true
+  return isSingleGenuineBattery(upper)
 }
 
 /**
@@ -333,8 +372,49 @@ export function evaluateItemPrice(
     itemNameUpper.includes('ONGKIR') ||
     itemNameUpper.includes('TRUCKING')
 
-  // Apabila ada item Transport Charges: tidak perlu dicek karena angkanya tidak dapat divalidasi dengan master tarif
+  // Pengecekan item Transport Charges terhadap data operasional tbExpIndo
   if (isTransportItem) {
+    const billedAmount = Number(item?.fdTotal || 0) > 0 ? Number(item?.fdTotal) : Number(item?.fdItemPrice || 0)
+    // Filter hanya ekspedisi dengan biaya valid > 0 (karena biaya 0 tidak valid)
+    const validExpedisiList = (ctx.expedisiList || []).filter((e) => Number(e.fdTotalExp || 0) > 0)
+
+    if (validExpedisiList.length > 0) {
+      // 1. Cari yang nominalnya persis cocok dengan billedAmount
+      const exactMatch = validExpedisiList.find((e) => Math.abs(Number(e.fdTotalExp || 0) - billedAmount) < 0.01)
+      // 2. Jika tidak ada yang persis cocok, prioritaskan ekspedisi Harus Tagih (fdPaid === 1)
+      const mustBillList = validExpedisiList.filter((e) => e.fdPaid === 1)
+      const refExp = exactMatch || (mustBillList.length > 0 ? mustBillList[0] : validExpedisiList[0])
+      const refTotalExp = Number(refExp.fdTotalExp || 0)
+      const isMatched = Math.abs(refTotalExp - billedAmount) < 0.01
+      const diff = billedAmount - refTotalExp
+
+      const paidLabel = refExp.fdPaid === 1 ? 'Harus Tagih' : refExp.fdPaid === 2 ? 'COD' : ''
+      const expLabel = refExp.fdExpName
+        ? `${refExp.fdExpName}${refExp.fdResiExp ? ` (Resi: ${refExp.fdResiExp})` : ''}${paidLabel ? ` [${paidLabel}]` : ''}`
+        : `tbExpIndo${paidLabel ? ` [${paidLabel}]` : ''}`
+
+      return {
+        comodityName: 'TRANSPORT CHARGES',
+        priceItem: null,
+        minTargetPrice: refTotalExp,
+        maxTargetPrice: refTotalExp,
+        profilePrice: 0,
+        isMatched,
+        hasTargetPrice: true,
+        isTaxReturnItem: false,
+        isKgOverweightItem: false,
+        isTransportItem: true,
+        isFreightChargeItem: false,
+        targetColName: isMatched ? `tbExpIndo (${paidLabel ? `${paidLabel} ` : ''}Cocok)` : `tbExpIndo (${paidLabel || 'Ref'})`,
+        priceListDisplay: `${formatCurrency(refTotalExp)} (${expLabel})`,
+        statusType: isMatched ? 'MATCH' : diff < 0 ? 'LOWER' : 'HIGHER',
+        difference: diff,
+        isUndercharge: !isMatched && diff < 0,
+        isOvercharge: !isMatched && diff > 0,
+        transportExpedisi: refExp,
+      }
+    }
+
     return {
       comodityName: 'TRANSPORT CHARGES',
       priceItem: null,
@@ -347,8 +427,8 @@ export function evaluateItemPrice(
       isKgOverweightItem: false,
       isTransportItem: true,
       isFreightChargeItem: false,
-      targetColName: 'Tidak Dicek',
-      priceListDisplay: '— (Biaya Transport)',
+      targetColName: 'Belum Ada di tbExpIndo',
+      priceListDisplay: 'Belum Ada di tbExpIndo',
       statusType: 'NO_TARGET',
       difference: 0,
     }
@@ -450,12 +530,68 @@ export function evaluateItemPrice(
   let typeId = item?.fdTypeComodity ?? defaultTypeId ?? res?.markingComodityType ?? null
   let directComodityName = ''
 
-  // 1. Scoring & token matching dengan marking commodities
-  if (res?.markingComodities && res.markingComodities.length > 0) {
-    const textAfterDash = itemNameUpper.includes('-')
-      ? itemNameUpper.split('-').slice(1).join('-').trim()
-      : itemNameUpper.replace(/^PARCELS\s+/i, '').trim()
+  // 1. Ekstraksi teks nama barang / komoditas dari item invoice
+  const textAfterDash = itemNameUpper.includes('-')
+    ? itemNameUpper.split('-').slice(1).join('-').trim()
+    : itemNameUpper.replace(/^PARCELS\s+/i, '').trim()
 
+  // 1a. Cek Pemetaan Komoditas Eksplisit (tbCommodityMapping)
+  if (res?.commodityMappings && res.commodityMappings.length > 0) {
+    const custCode = res.customer?.fdCustCode?.trim().toUpperCase()
+    // Prioritaskan mapping khusus customer terlebih dahulu, lalu global
+    const sortedMappings = [...res.commodityMappings].sort((a: any, b: any) => {
+      const aIsCust = Boolean(a.fdCustCode && custCode && a.fdCustCode.trim().toUpperCase() === custCode)
+      const bIsCust = Boolean(b.fdCustCode && custCode && b.fdCustCode.trim().toUpperCase() === custCode)
+      return (bIsCust ? 1 : 0) - (aIsCust ? 1 : 0)
+    })
+
+    const itemTokens = textAfterDash.split(',').map((t: string) => t.trim().toUpperCase()).filter(Boolean)
+
+    const matchedMapping = sortedMappings.find((m: any) => {
+      // Filter mode pengiriman: BY AIR vs BY SEA
+      if (m.mode && m.mode.trim().toUpperCase() !== 'ALL') {
+        const mMode = m.mode.trim().toUpperCase()
+        if (isAir && !mMode.includes('AIR') && !mMode.includes('UDARA')) return false
+        if (!isAir && !mMode.includes('SEA') && !mMode.includes('LAUT')) return false
+      }
+
+      if (m.fdCustCode && custCode && m.fdCustCode.trim().toUpperCase() !== custCode) return false
+      const mUpper = String(m.commodityName || '').trim().toUpperCase()
+
+      // Guard genuine gadget & battery: jangan petakan jika ini aksesoris / sparepart (seperti screen, charger, case)
+      if (['LAPTOP', 'NOTEBOOK', 'MACBOOK', 'LAPTOPS'].includes(mUpper)) {
+        if (!isGenuineLaptop(textAfterDash) && !isGenuineLaptop(itemNameUpper)) return false
+      }
+      if (['IPAD', 'TABLET'].includes(mUpper)) {
+        if (!isGenuineIpad(textAfterDash) && !isGenuineIpad(itemNameUpper)) return false
+      }
+      const tUpper = String(m.targetCommodity || '').trim().toUpperCase()
+      if (
+        ['BATTERY', 'BATTERIES', 'LAPTOP BATTERY', 'POWERBANK', 'ACCU', 'AKI'].includes(mUpper) ||
+        tUpper.includes('SEMI GARMENT') ||
+        tUpper.includes('BATTERY') ||
+        tUpper.includes('POWERBANK')
+      ) {
+        if (!isGenuineBattery(textAfterDash) && !isGenuineBattery(itemNameUpper)) return false
+      }
+
+      return (
+        textAfterDash === mUpper ||
+        itemTokens.some((tok: string) => tok === mUpper) ||
+        (mUpper.length >= 4 && new RegExp(`\\b${mUpper}\\b`, 'i').test(textAfterDash))
+      )
+    })
+
+    if (matchedMapping) {
+      directComodityName = matchedMapping.targetCommodity.trim()
+      if (matchedMapping.fdTypeComodity !== null && matchedMapping.fdTypeComodity !== undefined) {
+        typeId = Number(matchedMapping.fdTypeComodity)
+      }
+    }
+  }
+
+  // 1b. Scoring & token matching dengan marking commodities (jika belum ditentukan via mapping)
+  if (!directComodityName && res?.markingComodities && res.markingComodities.length > 0) {
     const itemTokens = textAfterDash.split(',').map((t: string) => t.trim()).filter(Boolean)
 
     const scoredCandidates = res.markingComodities
@@ -479,18 +615,11 @@ export function evaluateItemPrice(
         const isSubstring = textAfterDash.includes(mComUpper) || mComUpper.includes(textAfterDash)
         if (isSubstring) matchCount += 2
 
-        const catNameUpper = (m.fdComodityName || '').toUpperCase()
-        const isSuperLartas =
-          catNameUpper.includes('LARTAS - S') ||
-          catNameUpper.includes('LARTAS-S') ||
-          catNameUpper.includes('LARTAS S')
-
         return {
           candidate: m,
           mComUpper,
           matchCount,
           isFullExact,
-          isSuperLartas,
           length: mComUpper.length,
         }
       })
@@ -498,7 +627,6 @@ export function evaluateItemPrice(
       .sort((a: any, b: any) => {
         if (a.isFullExact !== b.isFullExact) return a.isFullExact ? -1 : 1
         if (a.matchCount !== b.matchCount) return b.matchCount - a.matchCount
-        if (a.isSuperLartas !== b.isSuperLartas) return a.isSuperLartas ? -1 : 1
         return b.length - a.length
       })
 
@@ -533,7 +661,18 @@ export function evaluateItemPrice(
   } else if (isGenuineLaptop(itemNameUpper)) {
     comodityName = !isAir && isAppleDevice(itemNameUpper) ? 'APPLE LAPTOP' : 'LAPTOP'
   } else {
-    if (typeId) {
+    if (directComodityName) {
+      const dirUpper = directComodityName.toUpperCase()
+      const isDirLaptop = dirUpper.includes('LAPTOP') || dirUpper.includes('MACBOOK') || dirUpper.includes('NOTEBOOK')
+      const isDirIpad = dirUpper.includes('IPAD') || dirUpper.includes('TABLET')
+      if (isDirLaptop && !isGenuineLaptop(itemNameUpper) && !isGenuineLaptop(textAfterDash)) {
+        // Abaikan directComodityName jika barang bukan unit laptop asli (misal spareparts / screen)
+      } else if (isDirIpad && !isGenuineIpad(itemNameUpper) && !isGenuineIpad(textAfterDash)) {
+        // Abaikan directComodityName jika barang bukan unit ipad asli
+      } else {
+        comodityName = directComodityName
+      }
+    } else if (typeId) {
       const matchType = res?.comodityTypes?.find(
         (c: any) => c.fdTypeComodity === typeId && (listType ? c.fdListType === listType : true)
       )
@@ -963,4 +1102,63 @@ export function isFreightChargeItem(name?: string | null, unitCode?: string | nu
     n.includes('FREIGHT CHARGES') ||
     ['HK$', 'Y$', 'RMB', 'USD', 'S$', '$'].includes(u)
   )
+}
+
+/**
+ * Mencetak invoice secara langsung (PDF atau Dot Matrix) via hidden iframe
+ * sehingga dialog print native browser langsung terbuka tanpa perlu berpindah halaman / membuka tab baru.
+ */
+export function printInvoiceDirect(invNo: string, mode: 'pdf' | 'matrix' = 'pdf') {
+  const cleanId = (invNo || '').trim()
+  if (!cleanId) return
+
+  const iframeId = '__billing_direct_print_iframe__'
+  let iframe = document.getElementById(iframeId) as HTMLIFrameElement | null
+  if (!iframe) {
+    iframe = document.createElement('iframe')
+    iframe.id = iframeId
+    iframe.style.position = 'fixed'
+    iframe.style.right = '0'
+    iframe.style.bottom = '0'
+    iframe.style.width = '0'
+    iframe.style.height = '0'
+    iframe.style.border = '0'
+    iframe.style.visibility = 'hidden'
+    document.body.appendChild(iframe)
+  }
+
+  const baseUrl = ROUTES.BILLING_PRINT(cleanId, mode)
+  const printUrl = baseUrl + (baseUrl.includes('?') ? '&direct=1' : '?direct=1')
+  iframe.src = printUrl
+}
+
+/**
+ * Mengunduh file PDF invoice secara instan (1-klik) langsung ke folder Downloads
+ * tanpa membuka dialog browser print.
+ */
+export function downloadInvoicePdf(invNo: string) {
+  const cleanId = (invNo || '').trim()
+  if (!cleanId) return
+
+  const iframeId = '__billing_instant_download_iframe__'
+  let iframe = document.getElementById(iframeId) as HTMLIFrameElement | null
+  if (!iframe) {
+    iframe = document.createElement('iframe')
+    iframe.id = iframeId
+    // Off-screen dengan dimensi nyata agar canvas dapat mengukur dan merender font/tabel secara sempurna
+    iframe.style.position = 'fixed'
+    iframe.style.left = '-9999px'
+    iframe.style.top = '0'
+    iframe.style.width = '1200px'
+    iframe.style.height = '900px'
+    iframe.style.opacity = '0'
+    iframe.style.pointerEvents = 'none'
+    iframe.style.border = '0'
+    iframe.style.zIndex = '-999'
+    document.body.appendChild(iframe)
+  }
+
+  const baseUrl = ROUTES.BILLING_PRINT(cleanId, 'pdf')
+  const downloadUrl = baseUrl + (baseUrl.includes('?') ? '&download=1' : '?download=1')
+  iframe.src = downloadUrl
 }

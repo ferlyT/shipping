@@ -101,15 +101,18 @@ const ShipmentsDashboardPage = lazy(() => import('@/features/shipments').then(m 
 const ShipmentsListPage  = lazy(() => import('@/features/shipments').then(m => ({ default: m.ShipmentsListPage })))
 const ShipmentBatchesDashboardPage = lazy(() => import('@/features/shipment-batches').then(m => ({ default: m.ShipmentBatchesDashboardPage })))
 const ShipmentBatchesListPage = lazy(() => import('@/features/shipment-batches').then(m => ({ default: m.ShipmentBatchesListPage })))
-const DeliveryOrdersPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryOrdersPage })))
-const DeliveryOrdersListPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryOrdersListPage })))
-const DeliveryDetailPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryDetailPage })))
+const DeliveryOrdersDashboardPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DashboardPage })))
+const DeliveryOrdersListPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.ListPage })))
+const DeliveryOrdersDetailPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DetailPage })))
 const BillingDashboardPage = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingDashboardPage })))
 const BillingTargetPage    = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingTargetPage })))
 const BillingPage        = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingPage })))
 const BillingDetailPage  = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingDetailPage })))
 const BillingValidationListPage = lazy(() => import('@/features/billing').then(m => ({ default: m.ValidationListPage })))
 const BillingValidationDetailPage = lazy(() => import('@/features/billing').then(m => ({ default: m.ValidationDetailPage })))
+const BillingPrintPage = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingPrintPage })))
+const BillingReportDesignerPage = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingReportDesignerPage })))
+const BillingPairingLocalChargePage = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingPairingLocalChargePage })))
 const PriceListDashboardPage = lazy(() => import('@/features/price-list').then(m => ({ default: m.PriceListDashboardPage })))
 const PriceListLookupPage    = lazy(() => import('@/features/price-list').then(m => ({ default: m.PriceListLookupPage })))
 const PriceListUploadPage    = lazy(() => import('@/features/price-list').then(m => ({ default: m.PriceListUploadPage })))
@@ -143,15 +146,16 @@ export function AppRouter() {
                 <Route path={ROUTES.SHIPMENTS_LIST}    element={<ShipmentsListPage />} />
                 <Route path={ROUTES.SHIPMENT_BATCHES}  element={<ShipmentBatchesDashboardPage />} />
                 <Route path={ROUTES.SHIPMENT_BATCHES_LIST}  element={<ShipmentBatchesListPage />} />
-                <Route path={ROUTES.DELIVERY_ORDERS}   element={<DeliveryOrdersPage />} />
+                <Route path={ROUTES.DELIVERY_ORDERS}   element={<DeliveryOrdersDashboardPage />} />
                 <Route path={ROUTES.DELIVERY_ORDERS_LIST} element={<DeliveryOrdersListPage />} />
-                <Route path={ROUTES.DELIVERY_DETAIL(':id')} element={<DeliveryDetailPage />} />
+                <Route path={ROUTES.DELIVERY_DETAIL(':id')} element={<DeliveryOrdersDetailPage />} />
                 <Route path={ROUTES.BILLING}           element={<BillingDashboardPage />} />
                 <Route path={ROUTES.BILLING_TARGET}    element={<BillingTargetPage />} />
                 <Route path={ROUTES.BILLING_LIST}      element={<BillingPage />} />
                 <Route path={ROUTES.BILLING_DETAIL(':id')}    element={<BillingDetailPage />} />
                 <Route path={ROUTES.BILLING_VALIDATION_LIST}  element={<BillingValidationListPage />} />
                 <Route path={ROUTES.BILLING_VALIDATION_DETAIL(':id')} element={<BillingValidationDetailPage />} />
+                <Route path={ROUTES.BILLING_PAIRING_LOCAL_CHARGE} element={<BillingPairingLocalChargePage />} />
                 <Route path={ROUTES.PRICE_LIST}               element={<PriceListDashboardPage />} />
                 <Route path={ROUTES.PRICE_LIST_LOOKUP}        element={<PriceListLookupPage />} />
                 <Route path={ROUTES.PRICE_LIST_UPLOAD}        element={<PriceListUploadPage />} />
@@ -173,8 +177,11 @@ export function AppRouter() {
               <Route element={<AdminGuard />}>
                 <Route path={ROUTES.USERS} element={<UserManagementPage />} />
                 <Route path={ROUTES.ROLES} element={<RoleManagementPage />} />
+                <Route path={ROUTES.BILLING_REPORT_DESIGNER} element={<BillingReportDesignerPage />} />
               </Route>
             </Route>
+            {/* Print routes — di luar AppLayout agar tidak ada sidebar/navbar */}
+            <Route path={ROUTES.BILLING_PRINT(':id')} element={<BillingPrintPage />} />
           </Route>
           {/* Catch all */}
           <Route path="*" element={<DefaultRouteRedirect />} />

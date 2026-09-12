@@ -43,6 +43,9 @@ export interface ProfileHargaItem {
   taxReturnMinCharge: number
   minChargeM3: number
   minChargeKg: number
+  fdUpdate?: string | null
+  fdUpdateDate?: string | Date | null
+  fdUpdateSource?: 'AUDIT' | 'CUSTOMER_HARGA' | null
 }
 
 export interface UnifiedM3CheckResult {
@@ -51,6 +54,14 @@ export interface UnifiedM3CheckResult {
   defaultFdTypeComodity: number | null
   markingComodityType: number | null
   markingComodities: MarkingComodityItem[]
+  commodityMappings?: Array<{
+    id: number
+    commodityName: string
+    targetCommodity: string
+    fdTypeComodity: number | null
+    fdCustCode: string | null
+    mode?: string | null
+  }>
   fdTglAgent: string | null
   expectedMode: string | null
   expectedBranch: string | null
@@ -124,6 +135,7 @@ export interface UnifiedM3CheckResult {
   fdBeratList: number | null
   fdJmlBeratGudang: number | null
   fdJmlBeratKomplain: number | null
+  fdBeratSJ: number | null
   totalJmlBeratSJ: number | null
   totalBeratPerMarking: number | null
   markingDetails: MarkingDetailItem[]

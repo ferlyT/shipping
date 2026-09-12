@@ -722,15 +722,15 @@ export function CustomerTariffAuditModal({
             <div className="border border-[var(--color-border)] rounded-2xl overflow-hidden shadow-xs">
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
-                  <thead className="bg-[var(--color-neutral)] border-b border-[var(--color-border)] text-[10px] uppercase font-bold text-[var(--color-secondary)] tracking-wider">
+                  <thead className="bg-[var(--color-neutral)] border-b border-[var(--color-border)] text-[11px] uppercase font-semibold text-[var(--color-secondary)] tracking-wider">
                     <tr>
-                      <th className="px-3 py-2.5">Waktu Perubahan</th>
-                      <th className="px-3 py-2.5">Moda & Cabang</th>
-                      <th className="px-3 py-2.5">Tipe Komoditi</th>
-                      <th className="px-3 py-2.5 text-center">Aksi</th>
-                      <th className="px-3 py-2.5">Perubahan Nilai (Lama → Baru)</th>
-                      <th className="px-3 py-2.5">Diupdate Oleh</th>
-                      <th className="px-3 py-2.5">Info Teknis</th>
+                      <th className="px-3 py-2">Waktu Perubahan</th>
+                      <th className="px-3 py-2">Moda & Cabang</th>
+                      <th className="px-3 py-2">Tipe Komoditi</th>
+                      <th className="px-3 py-2 text-center">Aksi</th>
+                      <th className="px-3 py-2">Perubahan Nilai (Lama → Baru)</th>
+                      <th className="px-3 py-2">Diupdate Oleh</th>
+                      <th className="px-3 py-2">Info Teknis</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-[var(--color-border)] bg-[var(--color-surface)]">

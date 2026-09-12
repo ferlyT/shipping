@@ -1,7 +1,9 @@
 import { useState } from 'react'
-import { CreditCard, CalendarDays, Plane, Ship } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { CreditCard, CalendarDays, Plane, Ship, ShieldCheck, ScrollText } from 'lucide-react'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
+import { Button } from '@/components/ui/Button'
 import { TrendChart } from '../components/TrendChart'
 import { EmployeeChart } from '../components/EmployeeChart'
 import { SjVsBillChart } from '../components/SjVsBillChart'
@@ -23,6 +25,7 @@ const KPI_CARDS = [
 
 export default function DashboardPage() {
   const { t } = useTranslation()
+  const navigate = useNavigate()
   const isMobile = useIsMobile()
   const [activeTab, setActiveTab] = useState<ChartTab>('harian')
   const [trendMetric, setTrendMetric] = useState<MetricMode>('count')
@@ -67,9 +70,31 @@ export default function DashboardPage() {
         subtitle={t('billing.subtitle')}
         breadcrumbs={[
           { label: t('module.finance'), path: ROUTES.BILLING },
-          { label: t('nav.billing') },
+          { label: t('nav.billing'), path: ROUTES.BILLING },
           { label: t('nav.dashboard') },
         ]}
+        actions={
+          <div className="flex items-center gap-2 flex-wrap">
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(ROUTES.BILLING_VALIDATION_LIST)}
+              className="flex items-center gap-1.5 cursor-pointer"
+            >
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+              <span>{t('nav.validationList') || 'Validasi Tagihan'}</span>
+            </Button>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => navigate(ROUTES.BILLING_LIST)}
+              className="flex items-center gap-1.5 cursor-pointer"
+            >
+              <ScrollText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <span>{t('nav.billingList') || 'Daftar Tagihan'}</span>
+            </Button>
+          </div>
+        }
       />
 
       <div
