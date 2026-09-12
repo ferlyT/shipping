@@ -596,5 +596,14 @@
   "priceList.noIncrease": "No tariff increase.",
   "priceList.noDecrease": "No tariff decrease.",
   "priceList.moreRows": "+{count} more rows {variant}",
-  "do.totalSjSinceLastMonth": "Total DOs (Since Last Month)"
+  "do.totalSjSinceLastMonth": "Total DOs (Since Last Month)",
+  "update.title": "Update Available",
+  "update.forceTitle": "Mandatory Update",
+  "update.version": "App Version",
+  "update.check": "Check for Updates",
+  "update.checking": "Checking...",
+  "update.latestVersion": "App is up to date",
+  "update.downloadNow": "Update Now",
+  "update.later": "Later",
+  "update.releaseNotes": "Release Notes:"
 }

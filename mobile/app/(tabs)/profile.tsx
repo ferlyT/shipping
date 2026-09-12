@@ -21,6 +21,8 @@ import {
   Server,
   ChevronRight,
   Info,
+  Sparkles,
+  RefreshCw,
 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { Card } from '../../src/components/ui/Card'
@@ -28,6 +30,7 @@ import { Badge } from '../../src/components/ui/Badge'
 import { useAuthStore } from '../../src/stores/authStore'
 import { useThemeStore } from '../../src/theme/themeStore'
 import { useToastStore } from '../../src/stores/toastStore'
+import { useUpdateStore } from '../../src/stores/updateStore'
 import { useTranslation } from '../../src/hooks/useTranslation'
 import { biometricService } from '../../src/lib/biometrics'
 
@@ -37,10 +40,20 @@ export default function ProfileScreen() {
   const { colors, mode, setMode } = useThemeStore()
   const { showToast } = useToastStore()
   const { language, setLanguage, t } = useTranslation()
+  const { currentVersion, isChecking, hasUpdate, checkUpdate, openModal } = useUpdateStore()
 
   const [biometricEnabled, setBiometricEnabled] = useState(false)
   const [biometricType, setBiometricType] = useState('Biometrik')
   const [biometricAvailable, setBiometricAvailable] = useState(false)
+
+  const handleCheckUpdate = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    if (hasUpdate) {
+      openModal()
+    } else {
+      await checkUpdate(true)
+    }
+  }
 
   useEffect(() => {
     checkBiometricStatus()
@@ -197,7 +210,7 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </Card>
 
-        {/* Informasi Server ERP */}
+        {/* Informasi Server ERP & Versi Aplikasi */}
         <Text style={[styles.sectionTitle, { color: colors.secondary }]}>INFORMASI SISTEM</Text>
         <Card style={styles.settingsCard}>
           <View style={styles.settingItem}>
@@ -210,8 +223,57 @@ export default function ProfileScreen() {
                 <Text style={[styles.settingDesc, { color: colors.success }]}>Online • 36.93.22.142:3010</Text>
               </View>
             </View>
-            <Badge label="v1.0.0" variant="neutral" />
+            <Badge label="ONLINE" variant="success" />
           </View>
+
+          <View style={[styles.divider, { backgroundColor: 'rgba(255,255,255,0.06)' }]} />
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={handleCheckUpdate}
+            style={styles.settingItem}
+            disabled={isChecking}
+          >
+            <View style={styles.settingLeft}>
+              <View
+                style={[
+                  styles.iconCircle,
+                  {
+                    backgroundColor: hasUpdate
+                      ? 'rgba(56, 189, 248, 0.2)'
+                      : 'rgba(56, 189, 248, 0.12)',
+                  },
+                ]}
+              >
+                {hasUpdate ? (
+                  <Sparkles size={18} color="#38BDF8" />
+                ) : (
+                  <RefreshCw size={18} color="#38BDF8" />
+                )}
+              </View>
+              <View>
+                <Text style={[styles.settingLabel, { color: colors.primary }]}>Versi Aplikasi</Text>
+                <Text
+                  style={[
+                    styles.settingDesc,
+                    { color: hasUpdate ? colors.tertiary : colors.secondary },
+                  ]}
+                >
+                  {hasUpdate
+                    ? 'Pembaruan tersedia! Ketuk untuk update'
+                    : `v${currentVersion} • Ketuk untuk cek pembaruan`}
+                </Text>
+              </View>
+            </View>
+            {hasUpdate ? (
+              <Badge label="UPDATE" variant="danger" />
+            ) : (
+              <Badge
+                label={isChecking ? 'MEMERIKSA...' : `v${currentVersion}`}
+                variant="neutral"
+              />
+            )}
+          </TouchableOpacity>
         </Card>
 
         {/* Logout Button */}

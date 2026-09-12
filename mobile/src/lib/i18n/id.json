@@ -595,5 +595,14 @@
   "priceList.noIncrease": "Tidak ada kenaikan tarif.",
   "priceList.noDecrease": "Tidak ada penurunan tarif.",
   "priceList.moreRows": "+{count} baris lainnya {variant}",
-  "do.totalSjSinceLastMonth": "Total SJ (Sejak Bln Lalu)"
+  "do.totalSjSinceLastMonth": "Total SJ (Sejak Bln Lalu)",
+  "update.title": "Pembaruan Tersedia",
+  "update.forceTitle": "Pembaruan Wajib",
+  "update.version": "Versi Aplikasi",
+  "update.check": "Cek Pembaruan",
+  "update.checking": "Memeriksa...",
+  "update.latestVersion": "Aplikasi sudah dalam versi terbaru",
+  "update.downloadNow": "Perbarui Sekarang",
+  "update.later": "Nanti Saja",
+  "update.releaseNotes": "Catatan Rilis:"
 }

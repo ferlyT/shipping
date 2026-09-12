@@ -459,10 +459,16 @@ Manajemen akun pengguna, konfigurasi keamanan biometrik, preferensi antarmuka (t
 4. **Preferensi Bahasa**:
    - Switcher bahasa bilingual antara 🇮🇩 **Bahasa Indonesia** (`id`) dan 🇬🇧 **English** (`en`).
    - Mengubah kamus terjemahan visual via custom hook `useTranslation()`.
-5. **Informasi Sistem & Server ERP**:
+5. **Informasi Sistem & Status ERP**:
    - Menampilkan status live koneksi ke server backend (`Online • 36.93.22.142:3010`).
-   - Menampilkan versi build aplikasi (`v1.0.0`).
-6. **Aksi Keluar (Logout)**:
+   - Menampilkan badge status server `ONLINE`.
+6. **Versi Aplikasi & Fitur Cek Pembaruan (Auto Update)**:
+   - Menampilkan versi aktif aplikasi saat ini (`v1.0.0`).
+   - Tombol interaktif **"Cek Pembaruan"** (`RefreshCw` / `Sparkles`):
+     - Menjalankan pengecekan versi ke backend `GET /api/app-version/latest`.
+     - Jika versi server lebih baru: memicu modal dialog pembaruan (`UpdateModal`) dan mengubah badge menjadi `UPDATE` merah.
+     - Jika sudah versi terbaru: memicu toast konfirmasi sukses *"Aplikasi sudah dalam versi terbaru"*.
+7. **Aksi Keluar (Logout)**:
    - Tombol *"Keluar dari Akun"* memunculkan dialog konfirmasi bawaan.
    - Jika disetujui:
      - Token dan kredensial dihapus secara permanen dari `expo-secure-store`.
@@ -470,6 +476,7 @@ Manajemen akun pengguna, konfigurasi keamanan biometrik, preferensi antarmuka (t
      - Pengguna diarahkan kembali ke layar `/(auth)/login`.
 
 #### B. Endpoint API Terkait
+- `GET /api/app-version/latest`: Pengecekan metadata versi aplikasi, ukuran file APK, dan catatan rilis (*changelog*).
 - Operasional lokal berbasis state session pengguna yang diperoleh dari response `/api/auth/login` dan `/api/auth/me`.
 
 ---
@@ -494,6 +501,22 @@ Komponen pemindai kamera hardware modular yang dapat dipanggil dari berbagai hal
 
 ---
 
+### 3.10. Komponen Dialog Auto Update (`UpdateModal.tsx`)
+
+#### A. Tujuan & Logika
+Menangani alur pembaruan aplikasi mobile secara mandiri (*self-hosted sideload*) tanpa ketergantungan pada Google Play Store:
+1. **Pemeriksaan Versi Latar Belakang (Otomatis)**:
+   - Pada `app/_layout.tsx`, `useUpdateStore.checkUpdate(false)` dieksekusi secara hening saat aplikasi terbuka.
+   - Membandingkan `currentVersion` (dari `Constants.expoConfig?.version`) terhadap `latestVersion` dari endpoint backend.
+   - Jika versi server lebih tinggi, dialog `UpdateModal` otomatis ditampilkan.
+2. **Karakteristik & Kontrol Pembaruan**:
+   - **Informasi Versi**: Menampilkan perbandingan versi lama ➔ versi baru (`v1.0.0 ➔ v1.0.1`), ukuran berkas APK (`121.0 MB`), serta daftar catatan rilis (*release notes*).
+   - **Pembaruan Opsional vs Wajib**: Jika `forceUpdate === true`, tombol "Nanti Saja" dan gestur tutup modal dinonaktifkan sehingga pengguna wajib memperbarui demi menjaga kompatibilitas API.
+   - **Tindakan Unduh**: Tombol *"Perbarui Sekarang"* langsung mengeksekusi `Linking.openURL(downloadUrl)` untuk memicu download APK melalui Android Download Manager.
+   - **Alternatif Web**: Tautan *"Unduh via Halaman Web QR"* mengarahkan ke portal web `/mshipping/download/`.
+
+---
+
 ## 📊 4. Matriks Ringkasan Endpoint API Backend Mobile
 
 | No | Modul / Halaman | Endpoint API | HTTP Method | Parameter / Body Kunci | Tipe Data yang Ditampilkan |
@@ -509,6 +532,7 @@ Komponen pemindai kamera hardware modular yang dapat dipanggil dari berbagai hal
 | **9** | Finance - Invoice | `/api/billing` | `GET` | `limit=20`, `search` | No. inv, nama customer, tanggal, nominal |
 | **10** | Finance - Validasi | `/api/billing/validation/list` | `GET` | `limit=20`, `search` | Status verdict, audit tarif, audit M3 |
 | **11** | Master Customer | `/api/customers` | `GET` | `limit=25`, `search` | Nama customer master, telepon, sales |
+| **12** | Sistem & Auto Update | `/api/app-version/latest` | `GET` | None | Versi terbaru, changelog, URL APK, size |
 
 ---
 

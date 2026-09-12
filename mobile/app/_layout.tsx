@@ -6,6 +6,8 @@ import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { useAuthStore } from '../src/stores/authStore'
 import { useThemeStore } from '../src/theme/themeStore'
 import { ToastContainer } from '../src/components/ui/ToastContainer'
+import { UpdateModal } from '../src/components/update/UpdateModal'
+import { useUpdateStore } from '../src/stores/updateStore'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -19,9 +21,12 @@ const queryClient = new QueryClient({
 export default function RootLayout() {
   const { initializeAuth } = useAuthStore()
   const { mode } = useThemeStore()
+  const { checkUpdate } = useUpdateStore()
 
   useEffect(() => {
     initializeAuth()
+    // Silent background check for app update
+    checkUpdate(false)
   }, [])
 
   const isDark = mode === 'midnight'
@@ -43,6 +48,7 @@ export default function RootLayout() {
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         </Stack>
         <ToastContainer />
+        <UpdateModal />
       </SafeAreaProvider>
     </QueryClientProvider>
   )

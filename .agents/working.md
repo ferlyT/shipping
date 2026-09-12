@@ -6,15 +6,31 @@
 ---
 
 ## 🕐 Terakhir Diperbarui
-- **Tanggal**: 2026-09-12
+- **Tanggal**: 2026-09-13
 - **Oleh**: Antigravity (Gemini 3.8 Flash)
-- **Sesi**: Perbaikan Tuntas 'App Not Installed as Package Appears to Be Invalid' (Target SDK 34 & Keystore SHA256withRSA)
+- **Sesi**: Penambahan Fitur Auto Update Mobile App & Endpoint Versi Aplikasi Backend
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
 ### Task Selesai
+- [x] Implementasi Penuh Fitur Auto Update Mobile App ([app-version.routes.ts](file:///c:/shipping/backend/src/modules/app-version/app-version.routes.ts), [app-version.service.ts](file:///c:/shipping/backend/src/modules/app-version/app-version.service.ts), [app-version.json](file:///c:/shipping/backend/src/config/app-version.json), [updateStore.ts](file:///c:/shipping/mobile/src/stores/updateStore.ts), [UpdateModal.tsx](file:///c:/shipping/mobile/src/components/update/UpdateModal.tsx), [profile.tsx](file:///c:/shipping/mobile/app/%28tabs%29/profile.tsx), [_layout.tsx](file:///c:/shipping/mobile/app/_layout.tsx)):
+  - **Backend (`backend/`)**:
+    - Berkas konfigurasi versi terpusat `backend/src/config/app-version.json` memuat `version`, `versionCode`, `minVersion`, `forceUpdate`, `downloadUrl`, `releaseNotes`, dan timestamp rilis.
+    - `AppVersionService` secara dinamis mendeteksi ukuran berkas fisik APK riil (`mshipping.apk` di `uploads/` atau `frontend/dist/`) dan memformatnya (misal `121.0 MB`).
+    - Endpoint publik `GET /api/app-version/latest` dan alias `/app-version/latest` terdaftar di `rootApp` & `apiApp`.
+    - PM2 `ShippingApi` direload dan terverifikasi mengembalikan HTTP 200 OK via localhost maupun IP publik `36.93.22.142`.
+  - **Mobile App (`mobile/`)**:
+    - `updateService.ts` & `updateStore.ts` (Zustand): komparasi semantik versi (`compareVersions(v1, v2)`) dan manajemen state pembaruan.
+    - `UpdateModal.tsx`: modal dialog ergonomis multi-tema (Midnight Dark / Heritage Light) menampilkan komparasi versi (`v1.0.0 ➔ v1.0.1`), ukuran file APK, daftar catatan rilis (*changelog*), tombol "Perbarui Sekarang" (memicu `Linking.openURL` ke file APK), dan link alternatif ke portal unduh QR.
+    - Background check otomatis di root `_layout.tsx` saat aplikasi dibuka.
+    - Tombol interaktif "Versi Aplikasi & Cek Pembaruan" di `profile.tsx` (Informasi Sistem) dengan haptic feedback dan toast status.
+  - **Build & Deploy**:
+    - Bundle Metro diekspor (3.304 modul, Hermes bytecode `entry-938b725d322b2cf1a4fe780e665a8dfb.hbc`, 5.3 MB).
+    - APK di-patch, di-align 4096-byte zipalign, dan di-re-sign (v2 + v3) menggunakan `release.keystore` via `uber-apk-signer`.
+    - APK terbaru (`126.889.853 bytes`) telah disinkronkan ke seluruh jalur unduhan (`frontend/dist/`, `backend/public/uploads/`, root).
+
 - [x] Perbaikan Menyeluruh 'App Not Installed as Package Appears to Be Invalid' ([app.json](file:///c:/shipping/mobile/app.json), [build-apk.yml](file:///c:/shipping/.github/workflows/build-apk.yml), [release.keystore](file:///c:/shipping/mobile/keystore/release.keystore)):
   - **Akar Masalah Nyata Berdasarkan Uji Decompile**:
     1. **Target SDK 36 (Android 16 Preview / Baklava)**: React Native Gradle Plugin secara otomatis mendeteksi SDK platform tertinggi di runner CI (`android-36` preview). Android OS stabil (Android 14/13/12) menolak instalasi APK yang menargetkan preview SDK dengan error `INSTALL_PARSE_FAILED_BAD_TARGET_SDK` (*App not installed as package appears to be invalid*).

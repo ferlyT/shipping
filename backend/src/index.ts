@@ -21,6 +21,7 @@ import { customerPriceListRoutes } from './modules/customer-price-list/customer-
 import { commodityMappingRoutes } from './modules/commodity-mapping/commodity-mapping.routes'
 import { priceCheckRoutes } from './modules/price-check/price-check.routes'
 import { m3CheckRoutes } from './modules/m3-check/m3-check.routes'
+import { appVersionRoutes } from './modules/app-version/app-version.routes'
 
 
 import path from 'path'
@@ -127,6 +128,7 @@ apiApp.route('/customer-price-list', customerPriceListRoutes)
 apiApp.route('/commodity-mapping', commodityMappingRoutes)
 apiApp.route('/price-check', priceCheckRoutes)
 apiApp.route('/m3-check', m3CheckRoutes)
+apiApp.route('/app-version', appVersionRoutes)
 
 // OpenAPI JSON & Swagger UI
 apiApp.get('/openapi.json', (c) => c.json(openApiSpec))
@@ -141,6 +143,8 @@ if (ENV.APP_BASE_PATH && ENV.APP_BASE_PATH !== '/') {
   rootApp.route(`${ENV.APP_BASE_PATH}/api`, apiApp)
 }
 rootApp.route('/mshipping/api', apiApp)
+rootApp.route('/app-version', appVersionRoutes)
+rootApp.route('/mshipping/app-version', appVersionRoutes)
 // Endpoint download APK Android
 const handleApkDownload = async (c: any) => {
   const apkPath = path.join(process.cwd(), 'public', 'uploads', 'mshipping.apk')
