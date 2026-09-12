@@ -31,6 +31,17 @@
     4. **Pembaruan Pipeline CI**: `.github/workflows/build-apk.yml` diselaraskan agar selalu menggunakan `release.keystore` dengan `apksigner` dual-signing.
 
 
+- [x] Perbaikan Benturan Navigasi Bawah dengan Tombol Navigasi Android ([_layout.tsx](file:///c:/shipping/mobile/app/%28tabs%29/_layout.tsx), [overview.tsx](file:///c:/shipping/mobile/app/%28tabs%29/overview.tsx), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [finance.tsx](file:///c:/shipping/mobile/app/%28tabs%29/finance.tsx), [master.tsx](file:///c:/shipping/mobile/app/%28tabs%29/master.tsx), [profile.tsx](file:///c:/shipping/mobile/app/%28tabs%29/profile.tsx)):
+  - **Akar Masalah**:
+    1. Tinggi tab bar sebelumnya di-hardcode `height: 60` dan `paddingBottom: 8` di `(tabs)/_layout.tsx` tanpa memperhitungkan insets navigasi Android (`useSafeAreaInsets()`).
+    2. Pada HP Android dengan navigasi 3-tombol (Back, Home, Recents) yang memakan ~48dp, tombol sistem menutupi ikon & teks tab bar aplikasi.
+    3. Halaman-halaman tab mengimpor `SafeAreaView` bawaan `'react-native'` yang tidak berfungsi di Android.
+  - **Perbaikan Menyeluruh**:
+    1. **Dynamic Tab Bar Insets**: `(tabs)/_layout.tsx` menggunakan `useSafeAreaInsets()`. Tinggi tab bar dihitung dinamis: `tabBarHeight = 54 + bottomInset`, dengan `paddingBottom: bottomInset` (`Math.max(insets.bottom, 12)` di Android). Latar belakang tab bar menutupi area di belakang tombol sistem, sementara ikon dan label terangkat bersih di atas tombol Android.
+    2. **Cross-Platform SafeAreaView**: Mengganti impor `SafeAreaView` dari `'react-native'` ke `'react-native-safe-area-context'` dengan `edges={['top']}` pada seluruh halaman tab, dan `edges={['top', 'bottom']}` pada halaman login/register.
+    3. **Penyelarasan Padding Scroll & Sheet**: Menambahkan `paddingBottom: 28` pada FlatList dan `paddingBottom: 36` pada Bottom Sheet modal.
+    4. **Rebuild Bundle & Re-sign**: Bundling Metro berhasil (3.301 modul), bundle diinjeksikan ke `C:\shipping\mshipping.apk` dan ditandatangani ulang dengan `release.keystore` (SHA256withRSA) serta deployed ke seluruh path unduhan web server.
+
 - [x] Pembuatan Dokumentasi Arsitektur, Logika, & Integrasi Endpoint Mobile App ([mobile-app.md](file:///c:/shipping/mobile-app.md)):
   - Menyusun dokumentasi komprehensif seluruh halaman mobile app (`app/index.tsx`, `login.tsx`, `register.tsx`, `overview.tsx`, `logistics.tsx`, `finance.tsx`, `master.tsx`, `profile.tsx`, `BarcodeScannerModal.tsx`).
   - Merinci logika interaksi, manajemen state (Zustand + React Query), integrasi hardware (Kamera, Biometrik, Print & Share PDF, Telepon, WhatsApp), mapping struktur data visual, dan tabel matriks 11 endpoint API backend.

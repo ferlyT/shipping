@@ -39,13 +39,20 @@ mobile/app/
 │   ├── login.tsx         # Halaman Masuk (Manual & Biometrik)
 │   └── register.tsx      # Halaman Pendaftaran Akun Baru
 └── (tabs)/               # 5 Modul Utama (Bottom Tab Navigator)
-    ├── _layout.tsx       # Bottom Tabs Navigation Bar & Icons
+    ├── _layout.tsx       # Bottom Tabs Navigation Bar (Dynamic Safe Area Insets)
     ├── overview.tsx      # Tab 1: Dashboard Eksekutif & Ringkasan KPI
     ├── logistics.tsx     # Tab 2: Resi, Batch Marking, & Surat Jalan
     ├── finance.tsx       # Tab 3: Daftar Invoice, Audit Validasi, & Kalkulator Tarif
     ├── master.tsx        # Tab 4: Direktori Pelanggan & Kontak Langsung
     └── profile.tsx       # Tab 5: Akun, Biometrik, Tema, Bahasa, & Status ERP
 ```
+
+> **Catatan Penanganan Safe Area Insets Bawah (Android Navigation Bar)**:
+> Pada `mobile/app/(tabs)/_layout.tsx`, tinggi dan padding bawah TabBar dihitung secara dinamis menggunakan `useSafeAreaInsets()` dari `react-native-safe-area-context`:
+> - `bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 12 : 8)`
+> - `tabBarHeight = 54 + bottomInset`
+> - `paddingBottom: bottomInset`
+> Pengaturan ini mencegah benturan visual antara navigasi aplikasi dengan tombol navigasi sistem Android (3-button navigation bar / gesture navigation bar), sekaligus memberikan latar belakang warna tema yang mulus di bawah tombol sistem.
 
 ---
 

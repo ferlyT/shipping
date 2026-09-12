@@ -4,11 +4,11 @@ import {
   Text,
   FlatList,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Modal,
   ScrollView,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import {
   Package,
@@ -105,7 +105,7 @@ export default function LogisticsScreen() {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
+    <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
       <View style={styles.container}>
         {/* Header Tabs */}
         <View style={styles.topSection}>
@@ -475,6 +475,7 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingTop: 8,
+    paddingBottom: 28,
     gap: 10,
   },
   itemCard: {
@@ -525,7 +526,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     borderWidth: 1,
     maxHeight: '80%',
-    paddingBottom: 24,
+    paddingBottom: 36,
   },
   sheetHeader: {
     flexDirection: 'row',

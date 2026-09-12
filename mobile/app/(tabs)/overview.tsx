@@ -4,10 +4,10 @@ import {
   Text,
   ScrollView,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   RefreshControl,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import {
@@ -91,7 +91,7 @@ export default function OverviewScreen() {
   const metrics = kpiData?.all || {}
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
+    <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
       <ScrollView
         contentContainerStyle={styles.scrollContainer}
         refreshControl={

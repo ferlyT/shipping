@@ -5,11 +5,11 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Package, Lock, User as UserIcon, Eye, EyeOff, Fingerprint } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
@@ -121,6 +121,7 @@ export default function LoginPage() {
 
   return (
     <SafeAreaView
+      edges={['top', 'bottom']}
       style={[
         styles.safeArea,
         {

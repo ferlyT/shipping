@@ -5,11 +5,11 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  SafeAreaView,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Package, Lock, User as UserIcon, ArrowLeft } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
@@ -65,6 +65,7 @@ export default function RegisterPage() {
 
   return (
     <SafeAreaView
+      edges={['top', 'bottom']}
       style={[
         styles.safeArea,
         {

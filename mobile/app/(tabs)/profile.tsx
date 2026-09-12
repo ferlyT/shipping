@@ -3,12 +3,12 @@ import {
   View,
   Text,
   StyleSheet,
-  SafeAreaView,
   ScrollView,
   TouchableOpacity,
   Switch,
   Alert,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import {
   User as UserIcon,
@@ -92,7 +92,7 @@ export default function ProfileScreen() {
   const isDark = mode === 'midnight'
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
+    <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* User Card Header */}
         <Card style={styles.userCard}>
@@ -240,7 +240,7 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     padding: 16,
-    paddingBottom: 40,
+    paddingBottom: 48,
     gap: 12,
   },
   userCard: {

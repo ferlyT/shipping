@@ -4,12 +4,12 @@ import {
   Text,
   FlatList,
   StyleSheet,
-  SafeAreaView,
   TouchableOpacity,
   Modal,
   ScrollView,
   TextInput,
 } from 'react-native'
+import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
@@ -163,7 +163,7 @@ export default function FinanceScreen() {
   const estimatedCost = calcMode === '1' ? wt * ratePerKg : calcVolM3 * ratePerM3
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
+    <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
       <View style={styles.container}>
         {/* Top Section */}
         <View style={styles.topSection}>
@@ -531,6 +531,7 @@ const styles = StyleSheet.create({
   listContent: {
     padding: 16,
     paddingTop: 8,
+    paddingBottom: 28,
     gap: 10,
   },
   invoiceCard: {
@@ -569,6 +570,7 @@ const styles = StyleSheet.create({
   },
   calcContainer: {
     padding: 16,
+    paddingBottom: 36,
   },
   calcCard: {
     padding: 16,
@@ -649,7 +651,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 20,
     borderWidth: 1,
     maxHeight: '80%',
-    paddingBottom: 24,
+    paddingBottom: 36,
   },
   sheetHeader: {
     flexDirection: 'row',
