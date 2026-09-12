@@ -51,7 +51,8 @@
         {
           "faceIDPermission": "Izinkan aplikasi menggunakan FaceID untuk login cepat."
         }
-      ]
+      ],
+      "./plugins/withCleartextTraffic.js"
     ]
   }
 }

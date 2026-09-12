@@ -45,6 +45,9 @@ jobs:
       - name: Configure Keystore and Dual Signing (v1 + v2)
         working-directory: ./mobile
         run: |
+          sed -i 's/<application /<application android:usesCleartextTraffic="true" /g' android/app/src/main/AndroidManifest.xml
+          sed -i 's/compileSdkVersion = 36/compileSdkVersion = 34/g' android/app/build.gradle
+          sed -i 's/targetSdkVersion = 36/targetSdkVersion = 34/g' android/app/build.gradle
           cp keystore/release.keystore android/app/release.keystore
           sed -i 's/storeFile file(.debug.keystore.)/storeFile file("release.keystore")/g' android/app/build.gradle
           sed -i 's/storePassword .android./storePassword "mshipping2026"/g' android/app/build.gradle

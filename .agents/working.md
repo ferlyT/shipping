@@ -31,7 +31,13 @@
     4. **Pembaruan Pipeline CI**: `.github/workflows/build-apk.yml` diselaraskan agar selalu menggunakan `release.keystore` dengan `apksigner` dual-signing.
 
 
-- [x] Perbaikan Koneksi Backend & Izin Jaringan Cleartext HTTP pada Mobile APK ([client.ts](file:///c:/shipping/mobile/src/api/client.ts), [app.json](file:///c:/shipping/mobile/app.json), [login.tsx](file:///c:/shipping/mobile/app/%28auth%29/login.tsx), [profile.tsx](file:///c:/shipping/mobile/app/%28tabs%29/profile.tsx)):
+- [x] Restart PM2 & Penanganan Toast 'Network Error' pada Mobile App:
+  - **Status PM2**: Instance `ShippingApi` (ID 2, PID 17720) telah direstart dan berjalan normal di port 3010 (`Bun 1.3.12`). Uji coba request langsung mengembalikan HTTP 200 OK.
+  - **Inbound Firewall Port 3010**: Dibuat aturan firewall baru `ShippingApi Port 3010` (Allow Inbound TCP 3010 untuk semua profil) pada Windows Defender Firewall.
+  - **Akar Masalah 'Network Error' di Android**:
+    1. **Cleartext HTTP Block**: Android 9+ secara bawaan menolak koneksi `http://` tanpa deklarasi `usesCleartextTraffic: true` di native manifest terkompilasi, memicu Axios `Network Error`.
+    2. **Firewall Port 3010**: Port 3010 sebelumnya belum memiliki Inbound Allow rule di Windows Firewall.
+    3. **Penyelarasan Build APK**: Pipeline GitHub Actions (Run 34690001995) telah selesai mengompilasi APK rilis dengan Target SDK 34, `usesCleartextTraffic: true`, dan sertifikat rilis SHA256withRSA. File APK sedang disinkronisasikan ke server.
   - **Akar Masalah Gagal Login**:
     1. `mobile/src/api/client.ts` menggunakan `Platform.select({ android: 'http://10.0.2.2:3001' })` yang hanya berlaku di emulator Android lokal, sehingga saat diinstall di HP fisik memicu Network Error.
     2. URL tidak menyertakan prefix base path `/api`.
