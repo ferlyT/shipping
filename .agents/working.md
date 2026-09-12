@@ -8,13 +8,26 @@
 ## 🕐 Terakhir Diperbarui
 - **Tanggal**: 2026-09-12
 - **Oleh**: Antigravity (Gemini 3.8 Flash)
-- **Sesi**: Perbaikan Koneksi Backend & Izin Jaringan Cleartext Android APK Mobile (Fix Gagal Login)
+- **Sesi**: Perbaikan Penandatanganan APK (Keystore Permanen & Dual Signing v1 + v2) untuk Mengatasi 'App Not Installed'
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
 ### Task Selesai
+- [x] Perbaikan Penandatanganan APK (Keystore Permanen & Dual Signing v1 + v2) ([build-apk.yml](file:///c:/shipping/.github/workflows/build-apk.yml), [debug.keystore](file:///c:/shipping/mobile/keystore/debug.keystore)):
+  - **Akar Masalah "App not installed as package"**:
+    1. **Konflik Paket Lama**: HP user masih terpasang APK versi sebelumnya yang menggunakan nama package otomatis (`com.anonymous.mshipping`), sedangkan versi baru bernama `com.mshipping.mobile`. Android menolak instalasi/update karena nama paket dan signing certificate berbeda dengan aplikasi yang sudah ada.
+    2. **Ketiadaan Tanda Tangan v1 (JAR Signature)**: APK release sebelumnya hanya ditandatangani dengan skema v2 tanpa file tanda tangan v1 (`META-INF/*.RSA`, `*.SF`, `MANIFEST.MF`). Beberapa installer vendor Android (Xiaomi, Vivo, Oppo, Samsung) memvalidasi skema v1 saat sideloading APK manual dan menolak instalasi jika v1 tidak ditemukan.
+    3. **Keystore Ephemeral CI**: Setiap runner GitHub Actions sebelumnya membuat keystore debug baru dengan fingerprint acak, sehingga pembaruan app di masa depan selalu bentrok.
+  - **Perbaikan**:
+    1. Membuat keystore rilis permanen di `mobile/keystore/debug.keystore` yang dilacak di git repository.
+    2. Memperbarui alur kerja CI `.github/workflows/build-apk.yml`:
+       - Menyalin keystore permanen ke direktori build Android.
+       - Mengaktifkan `v1SigningEnabled true` dan `v2SigningEnabled true` pada konfigurasi Gradle.
+       - Menambahkan langkah penandatanganan dan verifikasi eksplisit menggunakan `apksigner` dengan skema ganda (v1 + v2 + v3).
+    3. Menginstruksikan pengguna untuk mencopot (uninstall) aplikasi lama sebelum memasang APK rilis baru.
+
 - [x] Perbaikan Koneksi Backend & Izin Jaringan Cleartext HTTP pada Mobile APK ([client.ts](file:///c:/shipping/mobile/src/api/client.ts), [app.json](file:///c:/shipping/mobile/app.json), [login.tsx](file:///c:/shipping/mobile/app/%28auth%29/login.tsx), [profile.tsx](file:///c:/shipping/mobile/app/%28tabs%29/profile.tsx)):
   - **Akar Masalah Gagal Login**:
     1. `mobile/src/api/client.ts` menggunakan `Platform.select({ android: 'http://10.0.2.2:3001' })` yang hanya berlaku di emulator Android lokal, sehingga saat diinstall di HP fisik memicu Network Error.
