@@ -14,7 +14,21 @@
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
-### Task Selesai
+- [x] Perbaikan Infinite Scroll Batch Marking & Pembersihan Teks Fallback Kartu ([marking.service.ts](file:///c:/shipping/backend/src/modules/marking/marking.service.ts), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [mobile-app.md](file:///c:/shipping/mobile-app.md)):
+  - **Akar Masalah Infinite Scroll Batch Marking Tidak Jalan**:
+    - Pada `marking.service.ts`, fungsi `getMarkings` mengembalikan objek meta dengan cara `...meta` di mana `meta` dari `buildPagination` adalah sebuah fungsi (`(total: number) => ({ page, limit, total, totalPages })`).
+    - Akibatnya, `...meta` menghasilkan objek kosong `{}` tanpa properti `page` (`meta: { total, totalPages }`).
+    - Di `logistics.tsx`, `getNextPageParam` mengecek `page < totalPages` (`undefined < 702` bernilai `false`), sehingga `hasNextBatches` menjadi `false` sejak halaman 1 dan infinite scroll tidak pernah memicu pemanggilan halaman selanjutnya.
+  - **Solusi & Perbaikan**:
+    1. **Backend**: Mengubah `meta: { ...meta, total, totalPages }` menjadi `meta: meta(total)` di `marking.service.ts`. Terverifikasi respons API kini mengembalikan `page: 1`, `limit: 20`, `total`, dan `totalPages`.
+    2. **Frontend Resiliency**: Menyesuaikan `getNextPageParam` pada `logistics.tsx` agar menggunakan fallback `allPages.length` sehingga kalkulasi halaman berikutnya tetap berjalan robust.
+    3. **Pembersihan Teks Fallback**: Menghapus teks bawaan hardcoded `'Batch Pengiriman Kontainer'` dan `fdMarkingDesc` pada kartu batch marking. Kini hanya menampilkan `fdKet` jika memang ada datanya (`item.fdKet?.trim()`), ditempatkan tepat setelah nomor kontainer (laut) atau AWB (udara).
+    4. **Re-Bundle & Re-Sign APK v1.0.3**:
+       - Bundle Hermes diekspor ulang (`entry-0c5a859978035a65fdbfad86e5ca2466.hbc`, 5.3 MB).
+       - Terverifikasi string `1.0.3` ada dan teks `Batch Pengiriman Kontainer` sudah bersih (hilang).
+       - APK diinjeksi, ditandatangani ulang dengan `release.keystore`, dan disinkronkan ke seluruh direktori distribusi server.
+       - PM2 backend `ShippingApi` direstart dan verifikasi uji multi-page API (halaman 1 & 2) berjalan mulus.
+
 - [x] Rilis Mobile APK v1.0.3 (Force Update) & Penyesuaian Tampilan Nomor Muatan Batch Marking ([version.ts](file:///c:/shipping/mobile/src/config/version.ts), [app-version.json](file:///c:/shipping/backend/src/config/app-version.json), [app.json](file:///c:/shipping/mobile/app.json), [package.json](file:///c:/shipping/mobile/package.json), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [mobile-app.md](file:///c:/shipping/mobile-app.md)):
   - **Tampilan Khusus Nomor Muatan Tab 2 (Batch Marking)**:
     - Menyesuaikan tampilan nomor muatan pada kartu batch marking:

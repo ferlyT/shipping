@@ -114,11 +114,7 @@ export async function getMarkings(query: Record<string, string | undefined>) {
 
     return {
       data,
-      meta: {
-        ...meta,
-        total,
-        totalPages: Math.ceil(total / take),
-      },
+      meta: meta(total),
     }
   } catch (error) {
     logger.error('Error fetching markings:', error)

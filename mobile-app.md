@@ -302,7 +302,7 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
    - **Tampilan Nomor Muatan Khusus**:
      - Jika moda **Udara** (`fdListType === 1`) $\to$ menampilkan nomor AWB (`fdAWB`).
      - Jika moda **Laut** (`fdListType === 2`) $\to$ menampilkan nomor kontainer (`fdContNo`).
-     - *Catatan Desain*: Hanya menampilkan string data mentah secara tegas (warna aksen tersier) tanpa teks label awalan "AWB:" maupun "Kontainer:".
+     - *Catatan Desain*: Hanya menampilkan string data mentah secara tegas (warna aksen tersier) tanpa teks label awalan "AWB:" maupun "Kontainer:". Tepat di bawahnya, hanya menampilkan `fdKet` jika tersedia (tanpa teks default/placeholder).
    - Tautan/tombol interaktif untuk menampilkan **Data Manifest** resi shipment per batch (`/api/marking/:id/manifest`).
 5. **Sub-Tab 3: Surat Jalan (Delivery Orders)**:
    - Menampilkan nomor surat jalan (`fdSJNo`), nama customer (`fdCustNameSJ`), supir (`fdSupir`), plat mobil armada (`fdCarID`), perkiraan tanggal kirim (`fdEstimasi`), tanggal penyerahan ke kantor (`fdGiveDate`), dan status kirim (`Delivered` vs `On Delivery`).

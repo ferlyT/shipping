@@ -94,10 +94,16 @@ export default function LogisticsScreen() {
         meta: res.data.meta,
       }
     },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage.meta) return undefined
-      const { page, totalPages } = lastPage.meta
-      return page < totalPages ? page + 1 : undefined
+    getNextPageParam: (lastPage, allPages) => {
+      const currentPage = lastPage.meta?.page ?? allPages.length
+      const totalPages = lastPage.meta?.totalPages
+      if (totalPages !== undefined && currentPage < totalPages) {
+        return currentPage + 1
+      }
+      if (lastPage.data && lastPage.data.length === 20) {
+        return currentPage + 1
+      }
+      return undefined
     },
     enabled: activeTab === 'shipments',
   })
@@ -128,10 +134,16 @@ export default function LogisticsScreen() {
         meta: res.data.meta,
       }
     },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage.meta) return undefined
-      const { page, totalPages } = lastPage.meta
-      return page < totalPages ? page + 1 : undefined
+    getNextPageParam: (lastPage, allPages) => {
+      const currentPage = lastPage.meta?.page ?? allPages.length
+      const totalPages = lastPage.meta?.totalPages
+      if (totalPages !== undefined && currentPage < totalPages) {
+        return currentPage + 1
+      }
+      if (lastPage.data && lastPage.data.length === 20) {
+        return currentPage + 1
+      }
+      return undefined
     },
     enabled: activeTab === 'batches',
   })
@@ -175,10 +187,16 @@ export default function LogisticsScreen() {
         meta: res.data.meta,
       }
     },
-    getNextPageParam: (lastPage) => {
-      if (!lastPage.meta) return undefined
-      const { page, totalPages } = lastPage.meta
-      return page < totalPages ? page + 1 : undefined
+    getNextPageParam: (lastPage, allPages) => {
+      const currentPage = lastPage.meta?.page ?? allPages.length
+      const totalPages = lastPage.meta?.totalPages
+      if (totalPages !== undefined && currentPage < totalPages) {
+        return currentPage + 1
+      }
+      if (lastPage.data && lastPage.data.length === 20) {
+        return currentPage + 1
+      }
+      return undefined
     },
     enabled: activeTab === 'delivery',
   })
@@ -428,9 +446,11 @@ export default function LogisticsScreen() {
                           {batchNumber}
                         </Text>
                       ) : null}
-                      <Text style={[styles.itemSub, { color: colors.secondary, marginTop: 2 }]}>
-                        {item.fdKet?.trim() || item.fdMarkingDesc?.trim() || 'Batch Pengiriman Kontainer'}
-                      </Text>
+                      {item.fdKet?.trim() ? (
+                        <Text style={[styles.itemSub, { color: colors.secondary, marginTop: 2 }]}>
+                          {item.fdKet.trim()}
+                        </Text>
+                      ) : null}
                     </View>
                     <Badge label={item.fdBranchCode?.trim() || item.fdBranch?.trim() || 'Pusat'} variant="neutral" />
                   </View>
