@@ -295,9 +295,11 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
    - **Modal Rincian Muatan (Bottom Sheet)**:
      - Jika item kartu diklik, muncul modal bawah yang membedah ukuran fisik: Pack / Satuan, Berat (kg), Volume (m³), cabang gudang, dan identifikasi marking.
 4. **Sub-Tab 2: Batch Marking**:
-   - Menampilkan kode batch marking (`fdMarkingCode`), cabang gudang (`fdBranch`), deskripsi batch, tanggal keberangkatan (`fdDate`), dan estimasi kedatangan/ETA (`fdExitDate`).
+   - Filter tambahan moda: `Semua`, `Udara`, `Laut`.
+   - Menampilkan kode batch marking (`fdMarkingCode`), cabang gudang (`fdBranch`), keterangan (`fdKet`), dan tanggal operasional berbasis hirarki (`Exit`, `ETA`, `ETD`, `Load`).
+   - Tautan/tombol interaktif untuk menampilkan **Data Manifest** resi shipment per batch (`/api/marking/:id/manifest`).
 5. **Sub-Tab 3: Surat Jalan (Delivery Orders)**:
-   - Menampilkan nomor surat jalan (`fdDeliveryNo`), status pengiriman (`Delivered` / `Pending`), nama supir (`fdDriverName`), nomor plat kendaraan (`fdPoliceNo`), nama penerima/customer, dan tanggal surat jalan.
+   - Menampilkan nomor surat jalan (`fdSJNo`), nama customer (`fdCustNameSJ`), supir (`fdSupir`), plat mobil armada (`fdCarID`), perkiraan tanggal kirim (`fdEstimasi`), tanggal penyerahan ke kantor (`fdGiveDate`), dan status kirim (`Delivered` vs `On Delivery`).
 
 #### B. Endpoint API Terkait
 
@@ -324,27 +326,44 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
 - **Endpoint**: `/api/marking`
 - **Query Params**:
   - `limit=20`
-  - `search=<keyword>` (kode marking atau deskripsi)
+  - `search=<keyword>` (kode batch marking, BL/AWB, consignee, kontainer)
+  - `listType=ALL|1|2` (**Filter tambahan**: `ALL` / Semua, `1` = Udara, `2` = Laut)
+  - `isClosed=true|false` (opsional: status keluar gudang)
 - **Data Kunci yang Ditampilkan**:
   - `fdMarkingCode`: Kode batch container/marking
   - `fdBranch`: Cabang pelabuhan / gudang asal
-  - `fdMarkingDesc`: Keterangan muatan batch
-  - `fdDate`: Tanggal pembuatan batch
-  - `fdExitDate`: Tanggal keluar / ETA tujuan
+  - `fdKet`: Keterangan muatan batch
+  - **Hirarki Tanggal & Label Status** (tampilkan tanggal pertama yang tidak `null` dengan keterangan):
+    1. `fdExitDate` $\to$ `Exit <DD-MM-YYYY>` (sudah keluar dari gudang)
+    2. `fdETA` $\to$ `ETA <DD-MM-YYYY>` (perkiraan tiba di tujuan)
+    3. `fdETD` $\to$ `ETD <DD-MM-YYYY>` (perkiraan berangkat)
+    4. `fdLoadDate` $\to$ `Load <DD-MM-YYYY>` (tanggal muat/loading kontainer)
+    5. Jika seluruhnya null $\to$ `—`
+  - `fdJmlPack` & `fdJmlBerat`: Akumulasi jumlah pack/koli dan berat (kg) dalam batch
+- **Tautan Menampilkan Data Manifest Per Batch**:
+  - **Endpoint**: `GET /api/marking/:id/manifest` (dimana `:id` adalah `fdMarkingCode`)
+  - **Deskripsi**: Menampilkan seluruh rincian manifest shipment (`vwShipment`) dalam batch terpilih: daftar resi (`fdTerima`), nama customer (`fdCustName`), koli/pack (`fdJmlPack`), satuan (`fdSatuan`), berat (`fdJmlBerat`), dan volume kubikasi (`fdM3`).
 
 ##### 3. Data Surat Jalan (Delivery Order)
 - **Method**: `GET`
 - **Endpoint**: `/api/delivery-orders`
 - **Query Params**:
   - `limit=20`
-  - `search=<keyword>` (nomor surat jalan, supir, plat nomor)
+  - `search=<keyword>` (nomor surat jalan, customer, nama supir, plat mobil)
 - **Data Kunci yang Ditampilkan**:
-  - `fdDeliveryNo`: Nomor surat jalan resmi
-  - `fdStatus`: Status pengantaran (`Delivered` / `On Delivery`)
-  - `fdCustName`: Nama customer tujuan antar
-  - `fdDriverName`: Nama pengemudi armada
-  - `fdPoliceNo`: Nomor plat kendaraan truk/mobil
-  - `fdDeliveryDate`: Tanggal pengantaran surat jalan
+  - `fdSJNo`: Nomor surat jalan resmi
+  - `fdSJDate`: Tanggal pembuatan surat jalan
+  - `fdCustNameSJ`: Nama customer tujuan / penerima barang
+  - `fdSupir`: Nama pengemudi / supir armada
+  - `fdCarID`: Nomor plat mobil armada pengantaran
+  - `fdEstimasi`: Perkiraan tanggal kirim barang
+  - `fdSent`: Indikator status kirim (`1` = sudah terkirim, `0` = belum terkirim)
+  - `fdGiveDate`: Tanggal surat jalan sudah diserahkan ke kantor
+  - `fdJmlPackSJ` & `fdJmlBeratSJ`: Total muatan pack dan berat pada surat jalan
+  - **Logika Penentuan Status Pengantaran (`fdStatus`)**:
+    - **`Delivered`**: Apabila `fdSent === 1` (sudah terkirim)
+    - **`On Delivery`**: Apabila tanggal sekarang $\ge$ `fdEstimasi` dan `fdSent === 0`
+    - **`Scheduled / Pending`**: Apabila tanggal sekarang $<$ `fdEstimasi` dan `fdSent === 0` (atau belum dijadwalkan)
 
 ---
 
@@ -529,12 +548,13 @@ Menangani alur pembaruan aplikasi mobile secara mandiri (*self-hosted sideload*)
 | **4** | Dashboard KPI | `/api/shipments/kpi` | `GET` | `listType` (`all`, `1`, `2`) | Total resi, koli, berat, volume, MoM |
 | **5** | Dashboard Terkini | `/api/shipments` | `GET` | `limit=5` | 5 transaksi resi & shipment terbaru |
 | **6** | Logistik - Resi | `/api/shipments` | `GET` | `limit=20`, `search`, `listType` | Nomor resi, marking code, jml pack, satuan, berat (kg), m³ |
-| **7** | Logistik - Batch | `/api/marking` | `GET` | `limit=20`, `search` | Kode batch marking, cabang, ETA |
-| **8** | Logistik - Surat Jalan | `/api/delivery-orders` | `GET` | `limit=20`, `search` | No. surat jalan, supir, plat, status |
-| **9** | Finance - Invoice | `/api/billing` | `GET` | `limit=20`, `search` | No. inv, nama customer, tanggal, nominal |
-| **10** | Finance - Validasi | `/api/billing/validation/list` | `GET` | `limit=20`, `search` | Status verdict, audit tarif, audit M3 |
-| **11** | Master Customer | `/api/customers` | `GET` | `limit=25`, `search` | Nama customer master, telepon, sales |
-| **12** | Sistem & Auto Update | `/api/app-version/latest` | `GET` | None | Versi terbaru, changelog, URL APK, size |
+| **7** | Logistik - Batch | `/api/marking` | `GET` | `limit=20`, `search`, `listType` (`ALL`, `1`, `2`) | Kode batch marking, cabang, `fdKet`, hirarki tanggal (`Exit`/`ETA`/`ETD`/`Load`) |
+| **8** | Logistik - Manifest Batch | `/api/marking/:id/manifest` | `GET` | Path `id` (`fdMarkingCode`) | Rincian resi manifest (`vwShipment`): resi, customer, pack, satuan, berat, m³ |
+| **9** | Logistik - Surat Jalan | `/api/delivery-orders` | `GET` | `limit=20`, `search` | `fdSJNo`, `fdCustNameSJ`, `fdSupir`, `fdCarID`, `fdEstimasi`, `fdSent`, `fdGiveDate` |
+| **10** | Finance - Invoice | `/api/billing` | `GET` | `limit=20`, `search` | No. inv, nama customer, tanggal, nominal |
+| **11** | Finance - Validasi | `/api/billing/validation/list` | `GET` | `limit=20`, `search` | Status verdict, audit tarif, audit M3 |
+| **12** | Master Customer | `/api/customers` | `GET` | `limit=25`, `search` | Nama customer master, telepon, sales |
+| **13** | Sistem & Auto Update | `/api/app-version/latest` | `GET` | None | Versi terbaru, changelog, URL APK, size |
 
 ---
 

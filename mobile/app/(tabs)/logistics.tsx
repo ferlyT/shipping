@@ -35,6 +35,31 @@ import { useToastStore } from '../../src/stores/toastStore'
 import { formatNumber, formatDecimal, formatDate } from '../../src/lib/utils'
 import apiClient from '../../src/api/client'
 
+function getBatchDateDisplay(item: any): { label: string; date: string | Date } | null {
+  if (item.fdExitDate) return { label: 'Exit', date: item.fdExitDate }
+  if (item.fdETA) return { label: 'ETA', date: item.fdETA }
+  if (item.fdETD) return { label: 'ETD', date: item.fdETD }
+  if (item.fdLoadDate) return { label: 'Load', date: item.fdLoadDate }
+  if (item.fdDate || item.fdSysDate) return { label: 'Tgl', date: item.fdDate || item.fdSysDate }
+  return null
+}
+
+function getDeliveryOrderStatus(item: any): { label: string; variant: 'success' | 'warning' | 'info' } {
+  if (item.fdSent === 1) {
+    return { label: 'Delivered', variant: 'success' }
+  }
+  if (item.fdEstimasi) {
+    const estimasiDate = new Date(item.fdEstimasi)
+    const now = new Date()
+    estimasiDate.setHours(0, 0, 0, 0)
+    now.setHours(0, 0, 0, 0)
+    if (now >= estimasiDate && (item.fdSent === 0 || !item.fdSent)) {
+      return { label: 'On Delivery', variant: 'warning' }
+    }
+  }
+  return { label: 'Scheduled', variant: 'info' }
+}
+
 export default function LogisticsScreen() {
   const { colors, mode } = useThemeStore()
   const { showToast } = useToastStore()
@@ -44,6 +69,7 @@ export default function LogisticsScreen() {
   const [modeFilter, setModeFilter] = useState<'all' | '1' | '2'>('all')
   const [scannerVisible, setScannerVisible] = useState(false)
   const [selectedItem, setSelectedItem] = useState<any | null>(null)
+  const [selectedBatch, setSelectedBatch] = useState<any | null>(null)
 
   // Fetch Shipments
   const {
@@ -70,14 +96,29 @@ export default function LogisticsScreen() {
     refetch: refetchBatches,
     isRefetching: isRefetchingBatches,
   } = useQuery({
-    queryKey: ['logistics-batches', search],
+    queryKey: ['logistics-batches', search, modeFilter],
     queryFn: async () => {
       const params: any = { limit: 20 }
       if (search.trim()) params.search = search.trim()
+      if (modeFilter !== 'all') params.listType = modeFilter
       const res = await apiClient.get('/marking', { params })
       return res.data.data || []
     },
     enabled: activeTab === 'batches',
+  })
+
+  // Fetch Manifest for Selected Batch
+  const {
+    data: manifestData,
+    isLoading: isManifestLoading,
+  } = useQuery({
+    queryKey: ['marking-manifest', selectedBatch?.fdMarkingCode],
+    queryFn: async () => {
+      if (!selectedBatch?.fdMarkingCode) return []
+      const res = await apiClient.get(`/marking/${encodeURIComponent(selectedBatch.fdMarkingCode)}/manifest`)
+      return res.data.data || []
+    },
+    enabled: Boolean(selectedBatch?.fdMarkingCode),
   })
 
   // Fetch Delivery Orders
@@ -139,8 +180,8 @@ export default function LogisticsScreen() {
             style={{ marginTop: 10 }}
           />
 
-          {/* Secondary filter for Shipments */}
-          {activeTab === 'shipments' && (
+          {/* Secondary filter for Shipments & Batches */}
+          {(activeTab === 'shipments' || activeTab === 'batches') && (
             <View style={styles.filterPillRow}>
               {(['all', '1', '2'] as const).map((m) => {
                 const isSelected = modeFilter === m
@@ -262,34 +303,56 @@ export default function LogisticsScreen() {
                 </Card>
               )
             }
-            renderItem={({ item }) => (
-              <Card style={styles.itemCard}>
-                <View style={styles.itemHeader}>
-                  <Text style={[styles.itemTitle, { color: colors.primary }]}>
-                    {item.fdMarkingCode}
-                  </Text>
-                  <Badge label={item.fdBranch || 'Pusat'} variant="neutral" />
-                </View>
-                <Text style={[styles.itemSub, { color: colors.secondary }]}>
-                  {item.fdMarkingDesc || 'Batch Pengiriman Kontainer'}
-                </Text>
-                <View style={styles.metricsRow}>
-                  <Text style={[styles.metricText, { color: colors.secondary }]}>
-                    Tanggal: {formatDate(item.fdDate)}
-                  </Text>
-                  <Text style={[styles.metricText, { color: colors.secondary }]}>
-                    ETA: {formatDate(item.fdExitDate)}
-                  </Text>
-                </View>
-              </Card>
-            )}
+            renderItem={({ item }) => {
+              const dateInfo = getBatchDateDisplay(item)
+              return (
+                <Card
+                  style={styles.itemCard}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    setSelectedBatch(item)
+                  }}
+                >
+                  <View style={styles.itemHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.itemTitle, { color: colors.primary }]}>
+                        {item.fdMarkingCode}
+                      </Text>
+                      <Text style={[styles.itemSub, { color: colors.secondary }]}>
+                        {item.fdKet || item.fdMarkingDesc || 'Batch Pengiriman Kontainer'}
+                      </Text>
+                    </View>
+                    <Badge label={item.fdBranch || 'Pusat'} variant="neutral" />
+                  </View>
+                  <View style={styles.metricsRow}>
+                    <Text style={[styles.metricText, { color: colors.secondary }]}>
+                      📦 {formatNumber(item.fdJmlPack)} Pack • {formatDecimal(item.fdJmlBerat, 1)} kg
+                    </Text>
+                    {dateInfo ? (
+                      <Text style={[styles.metricText, { color: colors.tertiary, fontWeight: '700' }]}>
+                        {dateInfo.label} {formatDate(dateInfo.date)}
+                      </Text>
+                    ) : (
+                      <Text style={[styles.metricText, { color: colors.secondary }]}>
+                        —
+                      </Text>
+                    )}
+                  </View>
+                  <View style={{ marginTop: 6 }}>
+                    <Text style={{ fontSize: 11, color: colors.tertiary, fontWeight: '600' }}>
+                      Lihat Data Manifest ➔
+                    </Text>
+                  </View>
+                </Card>
+              )
+            }}
           />
         )}
 
         {activeTab === 'delivery' && (
           <FlatList
             data={doData}
-            keyExtractor={(item) => item.fdDeliveryNo || item.id || Math.random().toString()}
+            keyExtractor={(item) => item.fdSJNo || item.fdDeliveryNo || item.id || Math.random().toString()}
             refreshing={isRefetchingDo}
             onRefresh={refetchDo}
             contentContainerStyle={styles.listContent}
@@ -305,30 +368,38 @@ export default function LogisticsScreen() {
                 </Card>
               )
             }
-            renderItem={({ item }) => (
-              <Card style={styles.itemCard}>
-                <View style={styles.itemHeader}>
-                  <Text style={[styles.itemTitle, { color: colors.primary }]}>
-                    {item.fdDeliveryNo}
+            renderItem={({ item }) => {
+              const status = getDeliveryOrderStatus(item)
+              return (
+                <Card style={styles.itemCard}>
+                  <View style={styles.itemHeader}>
+                    <Text style={[styles.itemTitle, { color: colors.primary }]}>
+                      {item.fdSJNo || item.fdDeliveryNo}
+                    </Text>
+                    <Badge
+                      label={status.label}
+                      variant={status.variant}
+                    />
+                  </View>
+                  <Text style={[styles.custName, { color: colors.primary }]}>
+                    {item.fdCustNameSJ || item.fdCustName || 'Customer'}
                   </Text>
-                  <Badge
-                    label={item.fdStatus || 'Delivered'}
-                    variant={item.fdStatus === 'Delivered' ? 'success' : 'warning'}
-                  />
-                </View>
-                <Text style={[styles.custName, { color: colors.primary }]}>
-                  {item.fdCustName || 'Customer'}
-                </Text>
-                <View style={styles.metricsRow}>
-                  <Text style={[styles.metricText, { color: colors.secondary }]}>
-                    Supir: {item.fdDriverName || '—'} ({item.fdPoliceNo || '—'})
-                  </Text>
-                  <Text style={[styles.metricText, { color: colors.secondary }]}>
-                    {formatDate(item.fdDeliveryDate)}
-                  </Text>
-                </View>
-              </Card>
-            )}
+                  <View style={styles.metricsRow}>
+                    <Text style={[styles.metricText, { color: colors.secondary }]}>
+                      Supir: {item.fdSupir || item.fdDriverName || '—'} ({item.fdCarID || item.fdPoliceNo || '—'})
+                    </Text>
+                    <Text style={[styles.metricText, { color: colors.secondary }]}>
+                      {item.fdEstimasi ? `Estimasi: ${formatDate(item.fdEstimasi)}` : formatDate(item.fdSJDate || item.fdDeliveryDate)}
+                    </Text>
+                  </View>
+                  {item.fdGiveDate && (
+                    <Text style={[styles.metricText, { color: colors.tertiary, marginTop: 4 }]}>
+                      Serah Kantor: {formatDate(item.fdGiveDate)}
+                    </Text>
+                  )}
+                </Card>
+              )
+            }}
           />
         )}
 
@@ -435,6 +506,102 @@ export default function LogisticsScreen() {
                   </View>
                 </View>
               </ScrollView>
+            </View>
+          </View>
+        </Modal>
+
+        {/* Batch Manifest Modal */}
+        <Modal
+          visible={Boolean(selectedBatch)}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setSelectedBatch(null)}
+        >
+          <View style={styles.modalOverlay}>
+            <View
+              style={[
+                styles.sheetContent,
+                {
+                  backgroundColor: colors.surface,
+                  borderColor: colors.border,
+                  maxHeight: '85%',
+                },
+              ]}
+            >
+              {/* Sheet Header */}
+              <View style={styles.sheetHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.sheetTitle, { color: colors.primary }]}>
+                    MANIFEST BATCH MARKING
+                  </Text>
+                  <Text style={[styles.sheetSubtitle, { color: colors.secondary }]}>
+                    {selectedBatch?.fdMarkingCode} • {selectedBatch?.fdBranch || 'Pusat'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setSelectedBatch(null)}
+                  style={[styles.closeBtn, { borderColor: colors.border }]}
+                >
+                  <X size={18} color={colors.secondary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Batch Summary Info */}
+              <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 }}>
+                <Text style={{ fontSize: 12, color: colors.primary, fontWeight: '700' }}>
+                  {selectedBatch?.fdKet || selectedBatch?.fdMarkingDesc || 'Batch Pengiriman'}
+                </Text>
+                <Text style={{ fontSize: 11, color: colors.secondary, marginTop: 2 }}>
+                  Total: {manifestData?.length || 0} Resi Tergabung
+                </Text>
+              </View>
+
+              {/* Manifest Items List */}
+              {isManifestLoading ? (
+                <View style={{ padding: 16, gap: 10 }}>
+                  <SkeletonShimmer height={60} />
+                  <SkeletonShimmer height={60} />
+                  <SkeletonShimmer height={60} />
+                </View>
+              ) : manifestData && manifestData.length > 0 ? (
+                <FlatList
+                  data={manifestData}
+                  keyExtractor={(item, idx) => item.fdTerima || item.fdListCode || String(idx)}
+                  contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 36 }}
+                  renderItem={({ item, index }) => (
+                    <Card style={{ padding: 12, gap: 4 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                          #{index + 1} {item.fdTerima || item.fdListCode}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.secondary }}>
+                          Marking: {item.fdMarkingNo || '—'}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 12, color: colors.primary }} numberOfLines={1}>
+                        {item.fdCustName || '—'}
+                      </Text>
+                      <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+                        <Text style={{ fontSize: 11, color: colors.secondary }}>
+                          📦 {formatNumber(item.fdJmlPack)} {item.fdSatuan || 'Pack'}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.secondary }}>
+                          ⚖️ {formatDecimal(item.fdJmlBerat, 1)} kg
+                        </Text>
+                        <Text style={{ fontSize: 11, color: colors.secondary }}>
+                          📐 {formatDecimal(item.fdM3, 4)} m³
+                        </Text>
+                      </View>
+                    </Card>
+                  )}
+                />
+              ) : (
+                <View style={{ padding: 32, alignItems: 'center' }}>
+                  <Text style={{ color: colors.secondary, fontSize: 12 }}>
+                    Tidak ada manifest ditemukan dalam batch ini.
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         </Modal>

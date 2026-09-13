@@ -8,13 +8,37 @@
 ## 🕐 Terakhir Diperbarui
 - **Tanggal**: 2026-09-13
 - **Oleh**: Antigravity (Gemini 3.8 Flash)
-- **Sesi**: Penambahan Fitur Auto Update Mobile App & Endpoint Versi Aplikasi Backend
+- **Sesi**: Penyelarasan Modul Logistik Mobile App (Batch Manifest, DO Status Logic, Date Hierarchy) & Pembaruan mobile-app.md
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
 ### Task Selesai
+- [x] Penyelarasan Modul Logistik Mobile App & Manifest Batch Marking ([mobile-app.md](file:///c:/shipping/mobile-app.md), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [deliveryOrders.service.ts](file:///c:/shipping/backend/src/modules/delivery-orders/deliveryOrders.service.ts), [app-version.json](file:///c:/shipping/backend/src/config/app-version.json), [app.json](file:///c:/shipping/mobile/app.json)):
+  - **Filter Moda Batch Marking**: Menambahkan tombol segmented filter moda `[ Semua ] | [ ✈️ Udara ] | [ 🚢 Laut ]` pada tab Batch Marking yang mengirimkan parameter query `listType=ALL|1|2` ke backend.
+  - **Keterangan Batch**: Menggunakan kolom `fdKet` untuk keterangan batch marking.
+  - **Hierarki Tanggal Batch**: Menampilkan tanggal dengan prioritas pertama yang tidak null dengan label prefix: `Exit` (`fdExitDate`), `ETA` (`fdETA`), `ETD` (`fdETD`), `Load` (`fdLoadDate`).
+  - **Manifest Resi per Batch (`GET /api/marking/:id/manifest`)**: Menambahkan tautan "Lihat Data Manifest ➔" pada setiap kartu batch yang membuka Bottom Sheet Modal berisi ringkasan total resi serta daftar resi yang tergabung (no resi/terima, marking, nama customer, koli, berat, volume m³).
+  - **Penyelarasan Kolom & Status Delivery Order (Surat Jalan)**:
+    - Backend Prisma query `getDeliveryOrders` ditambahkan field: `fdEstimasi`, `fdSent`, `fdGiveDate`.
+    - Menggunakan kolom `fdCarID` untuk armada mobil dan `fdSupir` untuk supir.
+    - Logika penentuan status delivery order:
+      - `Delivered` (Hijau): jika `fdSent === 1`.
+      - `On Delivery` (Biru): jika tanggal hari ini $\ge$ `fdEstimasi` dan `fdSent === 0`.
+      - `Scheduled / Pending` (Kuning): jika tanggal hari ini $<$ `fdEstimasi` dan `fdSent === 0` (atau belum ada tanggal estimasi).
+    - Menampilkan informasi "Serah Kantor: DD-MM-YYYY" jika `fdGiveDate` terisi.
+  - **Pembaruan mobile-app.md**:
+    - Bagian 3.5.A (Batch Marking) dan 3.5.B (Delivery Order) diperbarui secara detail mencakup semua logika, field, dan relasi endpoint.
+    - Bagian 4 (Tabel Matriks Endpoint) diperbarui mencakup `/api/marking/:id/manifest` dan parameter `listType`.
+  - **Build, Sign, & Deploy APK v1.0.2**:
+    - Versi dinaikkan ke `v1.0.2` (versionCode: 3) di `mobile/app.json` dan `backend/src/config/app-version.json`.
+    - Bundle Metro diekspor (3.304 modul, Hermes bytecode `entry-6fe4c4a34e0adf12b6ba74a56fa3d54f.hbc`, 5.3 MB).
+    - APK di-patch dan ditandatangani menggunakan `release.keystore` (dual-signing v2 + v3) via `uber-apk-signer`.
+    - File APK rilis aktif (`126.893.949 bytes`) telah disinkronkan ke `frontend/dist/mshipping.apk`, `backend/public/uploads/mshipping.apk`, dan root `mshipping.apk`.
+    - PM2 `ShippingApi` di-restart dan endpoint `/api/app-version/latest` terverifikasi menyajikan versi 1.0.2.
+
+
 - [x] Penyelarasan Nama Field Data Shipment (`fdMarkingCode`, `fdJmlPack`, `fdSatuan`, `fdJmlBerat`) ([mobile-app.md](file:///c:/shipping/mobile-app.md), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [overview.tsx](file:///c:/shipping/mobile/app/%28tabs%29/overview.tsx)):
   - Menyelaraskan seluruh dokumentasi dan data mapping field sesuai skema aktual view SQL `vwShipment`:
     - `fdListCode` $\to$ `fdMarkingCode` (Nomor kode batch marking manifest)
