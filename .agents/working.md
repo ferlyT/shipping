@@ -9,13 +9,18 @@
 - **Tanggal**: 2026-09-13
 - **Tanggal**: 2026-09-13
 - **Oleh**: Antigravity (Gemini 3.8 Flash)
-- **Sesi**: Perbaikan Pencarian Nomor Kontainer/Batch Marking (EGSU9744442), Visualisasi fdContNo di UI, dan Reset Filter Moda Antar-Tab
+- **Sesi**: Penambahan Aturan Operasional Mobile App di AGENTS.md (Wajib Baca mobile-app.md & Wajib Konfirmasi Versi / Force Update ke User)
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
 ### Task Selesai
+- [x] Penambahan Aturan Operasional Mobile App di AGENTS.md ([AGENTS.md](file:///c:/shipping/.agents/AGENTS.md)):
+  - Menambahkan aturan wajib di header: sebelum update aplikasi mobile (`mobile/`), Agen WAJIB membaca `mobile-app.md` terlebih dahulu.
+  - Menambahkan aturan konfirmasi ke user: setelah update mobile selesai, Agen WAJIB BERTANYA kepada User mengenai nomor versi rilis baru dan tipe update (apakah ini Force Update (`forceUpdate: true`) atau Opsional (`forceUpdate: false`)). DILARANG mengasumsikan sendiri.
+  - Menambahkan seksi detail `## 📱 Standar Operasional & Rilis Mobile App` yang merinci siklus baca docs, konfirmasi versi, penyesuaian single source of truth (`version.ts`, `app-version.json`, `app.json`, `package.json`), build/sign APK, dan sinkronisasi `mobile-app.md`.
+
 - [x] Perbaikan Pencarian Nomor Kontainer & Tampilan Batch Marking ([marking.service.ts](file:///c:/shipping/backend/src/modules/marking/marking.service.ts), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [SearchBar.tsx](file:///c:/shipping/mobile/src/components/ui/SearchBar.tsx)):
   - **Akar Masalah**:
     1. Dari log PM2, saat pengguna mencari `EGSU9744442`, query ke server membawa parameter `&listType=1` (`GET /api/marking?limit=20&search=Egsu&listType=1`). Nilai `1` adalah filter **Udara**, sedangkan `EGSU9744442` adalah kontainer **Laut** (`fdListType = 2`). Hal ini terjadi karena state filter moda terbawa dari tab sebelumnya tanpa di-reset saat pindah tab.

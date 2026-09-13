@@ -2,11 +2,15 @@
 
 Dokumen ini berisi panduan, konvensi, dan aturan operasional wajib bagi AI Agent (seperti Antigravity) saat berinteraksi dengan proyek **mshipping**. Aturan ini dirangkum dari spesifikasi arsitektur dan kondisi aktual proyek.
 
-> **⚡ WAJIB**: Setiap sesi dimulai → baca `.agents/working.md`. Sesi selesai → update `.agents/working.md`.
+> **⚡ WAJIB**:
+> 1. Setiap sesi dimulai → baca `.agents/working.md`. Sesi selesai → update `.agents/working.md`.
+> 2. **Sebelum update aplikasi mobile (`mobile/`)** → **WAJIB BACA `mobile-app.md` DULU**.
+> 3. **Setelah update mobile selesai** → **WAJIB TANYAKAN DULU ke user: nomor versi baru dan tipe update (apakah ini Force Update?)**.
 
 ## 🏗️ Arsitektur Proyek
 - **Frontend**: React 19 + Vite + TypeScript (folder `frontend/`)
 - **Backend**: Hono.js + Bun + Prisma ORM + MS SQL Server (folder `backend/`)
+- **Mobile**: Expo SDK 57 + React Native 0.86 + TypeScript (folder `mobile/`, dokumentasi di `mobile-app.md`)
 - **Struktur Folder Frontend**: **Feature-Driven Architecture** (`src/features/<domain>/`)
 - **Komunikasi**: REST API via Axios (client di `src/api/client.ts`, endpoint const di `src/api/endpoints/`)
 
@@ -413,6 +417,51 @@ Agen HARUS BERHENTI dan bertanya kepada user sebelum mengasumsikan:
 1. **Database schema yang tidak diketahui**: Nama kolom tabel yang existing, tipe primary key (INT/UUID/String), atau relasi foreign key yang belum jelas.
 2. **Kebutuhan UI/UX**: Kolom apa saja yang harus ditampilkan di tabel list data, kolom apa saja yang bisa di-search, dan nilai enum/status yang valid.
 3. **Data sensitif**: Membuka endpoint yang mungkin mengekspos data rahasia tanpa filter default.
+4. **Versi & Tipe Update Mobile App**: Sebelum merilis / build APK baru setelah perbaikan atau penambahan fitur:
+   - **Tanyakan nomor versi baru** yang diinginkan (`version` semver & `versionCode`).
+   - **Tanyakan tipe update**: *"Apakah pembaruan ini bersifat **Force Update** (`forceUpdate: true`) yang wajib diinstal pengguna agar dapat terus menggunakan aplikasi, atau **Opsional** (`forceUpdate: false`) yang dapat ditunda ('Nanti Saja')?"*
+   - DILARANG mengasumsikan sendiri status `forceUpdate`.
+
+---
+
+## 📱 Standar Operasional & Rilis Mobile App (`mobile/` & `mobile-app.md`)
+
+Setiap kali berinteraksi dengan proyek aplikasi mobile (`mobile/`), Agen **WAJIB** mematuhi alur kerja berikut:
+
+### 1. Wajib Baca `mobile-app.md` Sebelum Update
+- Sebelum melakukan penambahan fitur, perbaikan bug, atau perubahan tampilan/endpoint pada folder `mobile/`, Agen **WAJIB membaca `mobile-app.md` terlebih dahulu** (`view_file` pada `c:\shipping\mobile-app.md`).
+- Memahami alur state management, routing, integrasi hardware, struktur data tabel, dan kontrak endpoint yang sudah berjalan agar perubahan tidak merusak fungsionalitas yang ada.
+
+### 2. Konfirmasi Versi & Tipe Update ke User (WAJIB TANYAKAN DULU)
+Setelah pekerjaan perbaikan atau fitur pada mobile app selesai dan sebelum melakukan build/rilis APK baru:
+- **Tanyakan ke User**:
+  1. Nomor versi baru yang diinginkan (misal `v1.0.3` / `versionCode: 4`).
+  2. Tipe update: **Apakah pembaruan ini bersifat Force Update (`forceUpdate: true`) atau Opsional (`forceUpdate: false`)?**
+  3. Poin catatan rilis (*release notes*) yang ingin disertakan dalam pop-up dialog.
+- **DILARANG** mengasumsikan sendiri apakah rilis tersebut force update atau bukan.
+
+### 3. Penyelarasan Konfigurasi Versi Terpusat
+Setelah user mengonfirmasi versi dan status force update, selaraskan seluruh berkas konfigurasi berikut:
+1. `mobile/src/config/version.ts` $\to$ `APP_VERSION = 'X.Y.Z'` dan `APP_VERSION_CODE = N` (*Single Source of Truth* yang terkompilasi ke dalam Hermes bytecode).
+2. `backend/src/config/app-version.json` $\to$ `version`, `versionCode`, `forceUpdate`, `releaseNotes`, dan `publishedAt`.
+3. `mobile/app.json` $\to$ `expo.version`.
+4. `mobile/package.json` $\to$ `version`.
+
+### 4. Prosedur Build, Sign, & Distribusi APK
+1. Jalankan `bunx expo export --platform android` di direktori `mobile/`.
+2. Ganti `assets/index.android.bundle` di dalam `mshipping.apk` dengan file `.hbc` yang baru diekspor, lalu hapus folder `META-INF/`.
+3. Sign dan zipalign APK menggunakan `release.keystore` via `uber-apk-signer`:
+   ```powershell
+   & "C:\Program Files\JetBrains\PyCharm Community Edition 2024.3.1.1\jbr\bin\java.exe" -jar "C:\shipping\uber-apk-signer.jar" -a "C:\shipping\mshipping.apk" --ks "mobile/keystore/release.keystore" --ksAlias mshipping --ksPass mshipping2026 --ksKeyPass mshipping2026 --allowResign --overwrite --verbose
+   ```
+4. Salin APK hasil sign ke:
+   - `C:\shipping\frontend\dist\mshipping.apk`
+   - `C:\shipping\backend\public\uploads\mshipping.apk`
+   - `C:\shipping\mshipping.apk`
+5. Restart PM2 `ShippingApi` agar metadata `app-version.json` termuat ulang: `pm2 restart ShippingApi`.
+
+### 5. Sinkronisasi Dokumentasi `mobile-app.md`
+- Setelah update selesai dan terverifikasi, perbarui dokumen [mobile-app.md](file:///c:/shipping/mobile-app.md) agar selalu mencerminkan kondisi riil halaman, logika, dan endpoint yang terpasang.
 
 ---
 
