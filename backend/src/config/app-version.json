@@ -1,15 +1,14 @@
 {
-  "version": "1.0.2",
-  "versionCode": 3,
+  "version": "1.0.3",
+  "versionCode": 4,
   "minVersion": "1.0.0",
-  "forceUpdate": false,
+  "forceUpdate": true,
   "downloadUrl": "http://36.93.22.142/mshipping/mshipping.apk",
   "webDownloadUrl": "http://36.93.22.142/mshipping/download/",
   "releaseNotes": [
-    "Dukungan Manifest Resi per Batch Marking",
-    "Filter moda pengiriman (Semua/Udara/Laut) pada Batch Marking",
-    "Pembaruan detail Surat Jalan: supir, armada kendaraan, status terkirim & serah kantor",
-    "Pembaruan hierarki tanggal keberangkatan/kedatangan batch (Exit/ETA/ETD/Load)"
+    "Fitur Infinite Scroll pada seluruh tab logistik lapangan (Daftar Resi, Batch Marking, Surat Jalan)",
+    "Tampilan nomor muatan Batch Marking bersih: Udara (AWB), Laut (Nomor Kontainer) tanpa teks label awalan",
+    "Peningkatan performa pemuatan data logistik dan stabilitas aplikasi"
   ],
-  "publishedAt": "2026-09-13T07:00:00.000Z"
+  "publishedAt": "2026-09-13T09:20:00.000Z"
 }

@@ -13,7 +13,7 @@ Dokumen ini menjelaskan secara menyeluruh seluruh halaman pada aplikasi mobile *
 - **Server State & Caching**: TanStack React Query v5 (dengan refetching & cache invalidation)
 - **Komunikasi REST**: Axios via `mobile/src/api/client.ts`
 - **Penyimpanan Kredensial**: `expo-secure-store` (Enkripsi KeyStore Android / Keychain iOS)
-- **Versi Rilis Saat Ini**: `v1.0.2` (Build/VersionCode: `3`, Single Source of Truth di `mobile/src/config/version.ts`)
+- **Versi Rilis Saat Ini**: `v1.0.3` (Build/VersionCode: `4`, Single Source of Truth di `mobile/src/config/version.ts`)
 - **Integrasi Perangkat Keras**:
   - `expo-camera`: Pemindai barcode/QR resi fisik
   - `expo-local-authentication`: Autentikasi biometrik FaceID / Fingerprint

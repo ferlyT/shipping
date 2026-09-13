@@ -15,20 +15,35 @@
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
 ### Task Selesai
-- [x] Implementasi Infinite Scroll Halaman Logistik & Penyesuaian Tampilan Batch Marking ([logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [mobile-app.md](file:///c:/shipping/mobile-app.md)):
+- [x] Rilis Mobile APK v1.0.3 (Force Update) & Penyesuaian Tampilan Nomor Muatan Batch Marking ([version.ts](file:///c:/shipping/mobile/src/config/version.ts), [app-version.json](file:///c:/shipping/backend/src/config/app-version.json), [app.json](file:///c:/shipping/mobile/app.json), [package.json](file:///c:/shipping/mobile/package.json), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [mobile-app.md](file:///c:/shipping/mobile-app.md)):
   - **Tampilan Khusus Nomor Muatan Tab 2 (Batch Marking)**:
     - Menyesuaikan tampilan nomor muatan pada kartu batch marking:
       - Untuk moda **Udara** (`fdListType === 1`): menampilkan nilai mentah `item.fdAWB`.
       - Untuk moda **Laut** (`fdListType === 2`): menampilkan nilai mentah `item.fdContNo`.
-      - Menghilangkan teks awalan label `AWB:` dan `Kontainer:` sesuai permintaan pengguna (hanya menampilkan datanya saja secara bersih dan tegas).
+      - Menghilangkan teks awalan label `AWB:` dan `Kontainer:` sesuai instruksi pengguna (hanya menampilkan datanya saja secara bersih dan tegas).
   - **Infinite Scroll Halaman Logistik Lapangan**:
     - Mengonversi pemanggilan data pada 3 tab logistik (`shipments`, `batches`, `delivery`) menggunakan `useInfiniteQuery` TanStack React Query v5 dengan pagination `{ page: pageParam, limit: 20 }`.
     - Menghubungkan props `onEndReached` dan `onEndReachedThreshold={0.4}` pada masing-masing `FlatList`.
     - Menampilkan indikator loading footer (*ActivityIndicator* warna aksen `colors.tertiary`) ketika sedang memuat halaman berikutnya (`isFetchingNextPage`).
-  - **Pembaruan Dokumentasi**:
-    - Menyelaraskan seksi 3.5 pada `mobile-app.md` mencakup mekanisme infinite scroll dan tampilan nomor muatan batch tanpa label.
+  - **Kenaikan Versi & Force Update v1.0.3**:
+    - Versi dinaikkan menjadi `v1.0.3` (versionCode: `4`) dengan status **`forceUpdate: true`** di:
+      - `mobile/src/config/version.ts`
+      - `backend/src/config/app-version.json`
+      - `mobile/app.json`
+      - `mobile/package.json`
+      - `mobile-app.md`
+  - **Build, Sign, & Deploy APK**:
+    - Bundle Metro diekspor: 3.305 modul, Hermes bytecode `entry-f0d0e717942dfc26c5f1338961d57c01.hbc` (5.3 MB), terverifikasi bytecode memuat string `1.0.3`.
+    - Bundle diinjeksikan ke `mshipping.apk` menggantikan `assets/index.android.bundle`.
+    - APK ditandatangani ulang dengan `release.keystore` (dual signing v2 + v3, 4096-byte zipalign) via `uber-apk-signer.jar` (0 errors).
+    - File APK rilis terbaru (`126.893.949 bytes`) telah disinkronkan ke:
+      - `C:\shipping\mshipping.apk`
+      - `C:\shipping\frontend\dist\mshipping.apk`
+      - `C:\shipping\backend\public\uploads\mshipping.apk`
+    - PM2 backend `ShippingApi` direstart dan endpoint `GET /api/app-version/latest` sukses menyajikan `version: "1.0.3"`, `versionCode: 4`, `forceUpdate: true`.
   - **Verifikasi**:
-    - `bun run tsc --noEmit` di direktori `mobile/` berhasil 100% (0 error).
+    - `bun run tsc --noEmit` di `mobile/` lulus 100% (0 errors).
+    - Endpoint download `http://36.93.22.142/mshipping/mshipping.apk` mengembalikan `HTTP 200 OK`.
 
 - [x] Penambahan Aturan Operasional Mobile App di AGENTS.md ([AGENTS.md](file:///c:/shipping/.agents/AGENTS.md)):
   - Menambahkan aturan wajib di header: sebelum update aplikasi mobile (`mobile/`), Agen WAJIB membaca `mobile-app.md` terlebih dahulu.

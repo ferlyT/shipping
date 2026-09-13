@@ -3,7 +3,7 @@
     "name": "M-Shipping",
     "slug": "mshipping",
     "scheme": "mshipping",
-    "version": "1.0.2",
+    "version": "1.0.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -16,6 +16,7 @@
     },
     "android": {
       "package": "com.mshipping.mobile",
+      "versionCode": 4,
       "compileSdkVersion": 34,
       "targetSdkVersion": 34,
       "minSdkVersion": 24,
