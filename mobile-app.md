@@ -9,10 +9,11 @@ Dokumen ini menjelaskan secara menyeluruh seluruh halaman pada aplikasi mobile *
 ### Stack Teknologi
 - **Framework Mobile**: Expo SDK 57 (React Native 0.86, React 19.2, TypeScript 6.0)
 - **Routing**: Expo Router v4 (File-based Routing di folder `mobile/app/`)
-- **State Management**: Zustand v5 (`authStore`, `themeStore`, `toastStore`)
+- **State Management**: Zustand v5 (`authStore`, `themeStore`, `toastStore`, `updateStore`)
 - **Server State & Caching**: TanStack React Query v5 (dengan refetching & cache invalidation)
 - **Komunikasi REST**: Axios via `mobile/src/api/client.ts`
 - **Penyimpanan Kredensial**: `expo-secure-store` (Enkripsi KeyStore Android / Keychain iOS)
+- **Versi Rilis Saat Ini**: `v1.0.2` (Build/VersionCode: `3`, Single Source of Truth di `mobile/src/config/version.ts`)
 - **Integrasi Perangkat Keras**:
   - `expo-camera`: Pemindai barcode/QR resi fisik
   - `expo-local-authentication`: Autentikasi biometrik FaceID / Fingerprint
@@ -22,7 +23,7 @@ Dokumen ini menjelaskan secara menyeluruh seluruh halaman pada aplikasi mobile *
 ### Konfigurasi Jaringan & Keamanan
 - **Base URL API**: `http://36.93.22.142:3010/api`
 - **Cleartext HTTP**: Diaktifkan melalui Expo Config Plugin (`mobile/plugins/withCleartextTraffic.js`) yang menyuntikkan `android:usesCleartextTraffic="true"` ke `AndroidManifest.xml`.
-- **Target Platform**: Android 14 (API 34) Stabil dengan sertifikat rilis SHA256withRSA.
+- **Target Platform**: Android 14 (API 34) Stabil dengan sertifikat rilis SHA256withRSA (`mobile/keystore/release.keystore`, masa berlaku hingga tahun 2054).
 - **Injeksi Token**: Axios request interceptor secara otomatis menyisipkan header:
   `Authorization: Bearer <JWT_TOKEN>` yang dibaca dari `useAuthStore`.
 
@@ -484,11 +485,11 @@ Manajemen akun pengguna, konfigurasi keamanan biometrik, preferensi antarmuka (t
    - Menampilkan status live koneksi ke server backend (`Online • 36.93.22.142:3010`).
    - Menampilkan badge status server `ONLINE`.
 6. **Versi Aplikasi & Fitur Cek Pembaruan (Auto Update)**:
-   - Menampilkan versi aktif aplikasi saat ini (`v1.0.0`).
+   - Menampilkan versi aktif aplikasi saat ini (misal `v1.0.2` yang bersumber dari `mobile/src/config/version.ts`).
    - Tombol interaktif **"Cek Pembaruan"** (`RefreshCw` / `Sparkles`):
      - Menjalankan pengecekan versi ke backend `GET /api/app-version/latest`.
      - Jika versi server lebih baru: memicu modal dialog pembaruan (`UpdateModal`) dan mengubah badge menjadi `UPDATE` merah.
-     - Jika sudah versi terbaru: memicu toast konfirmasi sukses *"Aplikasi sudah dalam versi terbaru"*.
+     - Jika sudah versi terbaru: memicu toast konfirmasi sukses *"Aplikasi sudah dalam versi terbaru (v1.0.2)"*.
 7. **Aksi Keluar (Logout)**:
    - Tombol *"Keluar dari Akun"* memunculkan dialog konfirmasi bawaan.
    - Jika disetujui:
@@ -526,14 +527,18 @@ Komponen pemindai kamera hardware modular yang dapat dipanggil dari berbagai hal
 
 #### A. Tujuan & Logika
 Menangani alur pembaruan aplikasi mobile secara mandiri (*self-hosted sideload*) tanpa ketergantungan pada Google Play Store:
-1. **Pemeriksaan Versi Latar Belakang (Otomatis)**:
+1. **Single Source of Truth Versi (`mobile/src/config/version.ts`)**:
+   - Versi aplikasi didefinisikan secara statis melalui `APP_VERSION = '1.0.2'` dan `APP_VERSION_CODE = 3` di `mobile/src/config/version.ts`.
+   - Hal ini menjamin versi tertanam langsung ke dalam bundle JavaScript/Hermes bytecode (mencegah nilai `null` pada `Constants.expoConfig` di lingkungan production APK mandiri).
+2. **Pemeriksaan Versi Latar Belakang (Otomatis)**:
    - Pada `app/_layout.tsx`, `useUpdateStore.checkUpdate(false)` dieksekusi secara hening saat aplikasi terbuka.
-   - Membandingkan `currentVersion` (dari `Constants.expoConfig?.version`) terhadap `latestVersion` dari endpoint backend.
-   - Jika versi server lebih tinggi, dialog `UpdateModal` otomatis ditampilkan.
-2. **Karakteristik & Kontrol Pembaruan**:
-   - **Informasi Versi**: Menampilkan perbandingan versi lama ➔ versi baru (`v1.0.0 ➔ v1.0.1`), ukuran berkas APK (`121.0 MB`), serta daftar catatan rilis (*release notes*).
+   - Membandingkan `currentVersion` terhadap `latestVersion` dari endpoint backend `/api/app-version/latest`.
+   - **Dismissed Version State**: Jika pengguna pernah menekan tombol "Nanti Saja" untuk versi tersebut, modal tidak akan muncul otomatis lagi saat pembukaan aplikasi berikutnya demi kenyamanan pengguna (kecuali jika disetel `forceUpdate: true` oleh server atau dicek manual via tab Profil).
+3. **Karakteristik & Kontrol Pembaruan**:
+   - **Informasi Versi**: Menampilkan perbandingan versi lama ➔ versi baru (`v1.0.1 ➔ v1.0.2`), ukuran berkas APK (`121.0 MB`), serta daftar catatan rilis (*release notes*).
    - **Pembaruan Opsional vs Wajib**: Jika `forceUpdate === true`, tombol "Nanti Saja" dan gestur tutup modal dinonaktifkan sehingga pengguna wajib memperbarui demi menjaga kompatibilitas API.
-   - **Tindakan Unduh**: Tombol *"Perbarui Sekarang"* langsung mengeksekusi `Linking.openURL(downloadUrl)` untuk memicu download APK melalui Android Download Manager.
+   - **Tindakan Unduh**: Tombol *"Perbarui Sekarang"* mengeksekusi `Linking.openURL(downloadUrl)` untuk memicu download file APK ke folder Download HP.
+   - **Petunjuk Instalasi APK**: Dilengkapi instruksi ramah pengguna: *"💡 Setelah unduh selesai, ketuk file APK di notifikasi HP untuk menginstal."*
    - **Alternatif Web**: Tautan *"Unduh via Halaman Web QR"* mengarahkan ke portal web `/mshipping/download/`.
 
 ---
@@ -574,3 +579,20 @@ Menangani alur pembaruan aplikasi mobile secara mandiri (*self-hosted sideload*)
      - Tanggal: `formatDate(date)` $\to$ `12 Sep 2026`
 4. **Single Source of Truth Customer**:
    - Nama customer yang muncul di seluruh modul (Dashboard, Logistik, Finance, dan Master) selalu terikat dan memprioritaskan data master `tbCustomers.fdCustName`.
+
+---
+
+## 📲 6. Prosedur Distribusi & Pemasangan APK (Sideloading)
+
+Karena aplikasi didistribusikan secara mandiri di server on-premise perusahaan (tanpa Google Play Store):
+1. **Titik Akses Unduhan Resmi**:
+   - **URL Unduh Langsung**: `http://36.93.22.142/mshipping/mshipping.apk`
+   - **URL Mirror Backend API**: `http://36.93.22.142:3010/uploads/mshipping.apk`
+   - **Landing Page QR Scanner**: `http://36.93.22.142/mshipping/download/`
+2. **Langkah Pemasangan di Perangkat Android**:
+   - Ketuk tombol *"Perbarui Sekarang"* di dalam dialog update aplikasi atau buka salah satu URL di atas melalui browser Chrome di HP.
+   - Browser akan mengunduh file `mshipping.apk` ke folder **Download**.
+   - Setelah unduhan selesai, **tarik bilah notifikasi Android ke bawah** atau buka File Manager di folder Download.
+   - Ketuk file `mshipping.apk` dan pilih **Update / Pasang**.
+   - Jika Android meminta izin *"Install unknown apps"* untuk browser/file manager, aktifkan izin tersebut sekali.
+   - Setelah selesai terpasang, buka aplikasi M-Shipping. Cek tab **Profil** $\to$ versi akan terbaca **`v1.0.2`** dan pop-up pembaruan tidak akan muncul lagi.

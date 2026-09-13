@@ -24,8 +24,8 @@
   - **Solusi & Hasil**:
     1. **Single Source of Truth Versi**: Membuat `mobile/src/config/version.ts` yang mengekspor `APP_VERSION = '1.0.2'` dan `APP_VERSION_CODE = 3` yang langsung diimpor oleh `updateStore.ts` dan terkompilasi ke dalam Hermes bytecode (terverifikasi `Contains 1.0.2: True`).
     2. **Dismissed Version State**: Menambahkan logika `dismissedVersion`. Jika pengguna menutup modal dengan tombol "Nanti Saja" atau tombol silang, modal tidak akan muncul otomatis lagi di background kecuali ada versi lebih baru atau jika dicek manual via tab Profil.
-    3. **Petunjuk Pemasangan APK**: Menambahkan pesan informasi di bawah tombol unduh: *"💡 Setelah unduh selesai, ketuk file APK di notifikasi HP untuk menginstal."* serta toast instruksi saat tombol ditekan.
     4. **Re-build & Sign**: Bundle Metro diekspor ulang (Hermes bytecode 5.3 MB), diinjeksikan ke `mshipping.apk`, di-sign dengan `release.keystore` (SHA256withRSA), dan disinkronkan ke seluruh direktori unduhan server.
+    5. **Pembaruan mobile-app.md**: Menyelaraskan seluruh dokumen arsitektur, konfigurasi versi statis `version.ts`, alur `dismissedVersion`, dan prosedur instalasi sideload APK.
 
 
 - [x] Penyelarasan Modul Logistik Mobile App & Manifest Batch Marking ([mobile-app.md](file:///c:/shipping/mobile-app.md), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [deliveryOrders.service.ts](file:///c:/shipping/backend/src/modules/delivery-orders/deliveryOrders.service.ts), [app-version.json](file:///c:/shipping/backend/src/config/app-version.json), [app.json](file:///c:/shipping/mobile/app.json)):
