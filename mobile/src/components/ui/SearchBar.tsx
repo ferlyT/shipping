@@ -65,6 +65,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         onChangeText={setLocalText}
         placeholder={placeholder}
         placeholderTextColor={colors.secondary}
+        returnKeyType="search"
+        onSubmitEditing={() => onChangeText(localText)}
         style={[
           styles.input,
           {

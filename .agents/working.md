@@ -7,14 +7,29 @@
 
 ## 🕐 Terakhir Diperbarui
 - **Tanggal**: 2026-09-13
+- **Tanggal**: 2026-09-13
 - **Oleh**: Antigravity (Gemini 3.8 Flash)
-- **Sesi**: Perbaikan Masalah Modal Pembaruan Selalu Muncul (Constants.expoConfig Null di Production APK) & Panduan Instalasi APK
+- **Sesi**: Perbaikan Pencarian Nomor Kontainer/Batch Marking (EGSU9744442), Visualisasi fdContNo di UI, dan Reset Filter Moda Antar-Tab
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
 ### Task Selesai
+- [x] Perbaikan Pencarian Nomor Kontainer & Tampilan Batch Marking ([marking.service.ts](file:///c:/shipping/backend/src/modules/marking/marking.service.ts), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [SearchBar.tsx](file:///c:/shipping/mobile/src/components/ui/SearchBar.tsx)):
+  - **Akar Masalah**:
+    1. Dari log PM2, saat pengguna mencari `EGSU9744442`, query ke server membawa parameter `&listType=1` (`GET /api/marking?limit=20&search=Egsu&listType=1`). Nilai `1` adalah filter **Udara**, sedangkan `EGSU9744442` adalah kontainer **Laut** (`fdListType = 2`). Hal ini terjadi karena state filter moda terbawa dari tab sebelumnya tanpa di-reset saat pindah tab.
+    2. Pada kartu Batch Marking sebelumnya, nomor kontainer (`fdContNo`) sama sekali tidak ditampilkan di UI kartu (hanya `fdMarkingCode` misal `26GZD78`, keterangan, dan tanggal). Sehingga pengguna tidak melihat nomor kontainer yang dicarinya.
+    3. Backend `where.OR` pada `marking.service.ts` belum mencakup `fdKet`, `fdBranchCode`, dan `fdWilayah`.
+  - **Solusi & Hasil**:
+    1. **Tampilan Nomor Kontainer & Badge Moda**: Kartu batch marking kini menampilkan nomor kontainer tebal warna aksen (`Kontainer: EGSU9744442 (40)`), B/L, AWB, serta badge moda `✈️ Udara` / `🚢 Laut`.
+    2. **Reset Filter Moda Saat Pindah Tab**: Menambahkan `setModeFilter('all')` saat beralih tab di `SegmentedControl`.
+    3. **Empty State Interaktif**: Jika tidak ada data akibat filter moda aktif (misal mencari kontainer laut saat filter Udara aktif), ditampilkan notifikasi ramah dan tombol cepat *"Tampilkan Semua Moda"*.
+    4. **Responsivitas Search**: Menambahkan `returnKeyType="search"` dan `onSubmitEditing` pada `SearchBar.tsx`.
+    5. **Peluasan Search Backend**: Menambahkan `fdKet`, `fdBranchCode`, dan `fdWilayah` pada `where.OR` Prisma.
+    6. **Build & Deploy**: Bundle diekspor ulang (Hermes bytecode 5.3 MB), diinjeksikan ke `mshipping.apk`, di-sign dengan `release.keystore`, dan disalin ke `dist` & `uploads`. PM2 `ShippingApi` di-restart.
+
+
 - [x] Perbaikan Tuntas Modal 'Pembaruan Tersedia' Selalu Muncul di Mobile App ([version.ts](file:///c:/shipping/mobile/src/config/version.ts), [updateStore.ts](file:///c:/shipping/mobile/src/stores/updateStore.ts), [UpdateModal.tsx](file:///c:/shipping/mobile/src/components/update/UpdateModal.tsx), [package.json](file:///c:/shipping/mobile/package.json)):
   - **Akar Masalah**:
     1. `Constants.expoConfig` pada build APK mandiri (*standalone export* tanpa Expo Go / expo-updates service) bernilai `null` saat runtime di perangkat.

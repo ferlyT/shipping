@@ -32,6 +32,9 @@ export async function getMarkings(query: Record<string, string | undefined>) {
         { fdAWB: { contains: search } },
         { fdConsignee: { contains: search } },
         { fdContNo: { contains: search } },
+        { fdKet: { contains: search } },
+        { fdBranchCode: { contains: search } },
+        { fdWilayah: { contains: search } },
       ]
     }
 
@@ -139,6 +142,9 @@ export async function getMarkingGroups(query: Record<string, string | undefined>
         { fdAWB: { contains: search } },
         { fdConsignee: { contains: search } },
         { fdContNo: { contains: search } },
+        { fdKet: { contains: search } },
+        { fdBranchCode: { contains: search } },
+        { fdWilayah: { contains: search } },
       ]
     }
 

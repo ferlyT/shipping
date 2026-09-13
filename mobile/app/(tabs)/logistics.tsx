@@ -161,6 +161,7 @@ export default function LogisticsScreen() {
             onValueChange={(val) => {
               setActiveTab(val as any)
               setSearch('')
+              setModeFilter('all')
             }}
             style={{ marginTop: 10 }}
           />
@@ -299,12 +300,37 @@ export default function LogisticsScreen() {
                 </View>
               ) : (
                 <Card style={styles.emptyCard}>
-                  <Text style={{ color: colors.secondary }}>Tidak ada batch marking</Text>
+                  <Text style={{ color: colors.secondary, textAlign: 'center' }}>
+                    {modeFilter !== 'all'
+                      ? `Tidak ada batch pada filter ${modeFilter === '1' ? 'Udara' : 'Laut'}.`
+                      : 'Tidak ada batch marking'}
+                  </Text>
+                  {modeFilter !== 'all' && (
+                    <TouchableOpacity
+                      onPress={() => setModeFilter('all')}
+                      style={{
+                        marginTop: 8,
+                        paddingVertical: 6,
+                        paddingHorizontal: 12,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: colors.tertiary,
+                        alignSelf: 'center',
+                      }}
+                    >
+                      <Text style={{ fontSize: 11, color: colors.tertiary, fontWeight: '700' }}>
+                        Tampilkan Semua Moda
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </Card>
               )
             }
             renderItem={({ item }) => {
               const dateInfo = getBatchDateDisplay(item)
+              const containerNo = item.fdContNo?.trim()
+              const blNo = item.fdBLNo?.trim()
+              const awbNo = item.fdAWB?.trim()
               return (
                 <Card
                   style={styles.itemCard}
@@ -315,14 +341,33 @@ export default function LogisticsScreen() {
                 >
                   <View style={styles.itemHeader}>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.itemTitle, { color: colors.primary }]}>
-                        {item.fdMarkingCode}
-                      </Text>
-                      <Text style={[styles.itemSub, { color: colors.secondary }]}>
-                        {item.fdKet || item.fdMarkingDesc || 'Batch Pengiriman Kontainer'}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.itemTitle, { color: colors.primary }]}>
+                          {item.fdMarkingCode?.trim()}
+                        </Text>
+                        <Badge
+                          label={item.fdListType === 1 ? '✈️ Udara' : '🚢 Laut'}
+                          variant={item.fdListType === 1 ? 'info' : 'neutral'}
+                        />
+                      </View>
+                      {containerNo ? (
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.tertiary, marginTop: 3 }}>
+                          Kontainer: {containerNo} {item.fdContSize?.trim() ? `(${item.fdContSize.trim()})` : ''}
+                        </Text>
+                      ) : blNo ? (
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.tertiary, marginTop: 3 }}>
+                          B/L: {blNo}
+                        </Text>
+                      ) : awbNo ? (
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.tertiary, marginTop: 3 }}>
+                          AWB: {awbNo}
+                        </Text>
+                      ) : null}
+                      <Text style={[styles.itemSub, { color: colors.secondary, marginTop: 2 }]}>
+                        {item.fdKet?.trim() || item.fdMarkingDesc?.trim() || 'Batch Pengiriman Kontainer'}
                       </Text>
                     </View>
-                    <Badge label={item.fdBranch || 'Pusat'} variant="neutral" />
+                    <Badge label={item.fdBranchCode?.trim() || item.fdBranch?.trim() || 'Pusat'} variant="neutral" />
                   </View>
                   <View style={styles.metricsRow}>
                     <Text style={[styles.metricText, { color: colors.secondary }]}>
@@ -535,7 +580,9 @@ export default function LogisticsScreen() {
                     MANIFEST BATCH MARKING
                   </Text>
                   <Text style={[styles.sheetSubtitle, { color: colors.secondary }]}>
-                    {selectedBatch?.fdMarkingCode} • {selectedBatch?.fdBranch || 'Pusat'}
+                    {selectedBatch?.fdMarkingCode?.trim()}
+                    {selectedBatch?.fdContNo?.trim() ? ` • Kontainer: ${selectedBatch.fdContNo.trim()}` : ''}
+                    {` • ${selectedBatch?.fdBranchCode?.trim() || selectedBatch?.fdBranch?.trim() || 'Pusat'}`}
                   </Text>
                 </View>
                 <TouchableOpacity
