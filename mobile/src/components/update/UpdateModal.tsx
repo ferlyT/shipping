@@ -226,6 +226,10 @@ export function UpdateModal() {
                   <Text style={styles.downloadBtnText}>Perbarui Sekarang</Text>
                 </TouchableOpacity>
 
+                <Text style={[styles.hintText, { color: colors.secondary }]}>
+                  💡 Setelah unduh selesai, ketuk file APK di notifikasi HP untuk menginstal.
+                </Text>
+
                 {!isForceUpdate && (
                   <TouchableOpacity
                     activeOpacity={0.7}
@@ -385,6 +389,13 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 13,
     fontWeight: '700',
+  },
+  hintText: {
+    fontSize: 11,
+    textAlign: 'center',
+    marginTop: 2,
+    marginBottom: 4,
+    lineHeight: 15,
   },
   cancelBtn: {
     alignItems: 'center',

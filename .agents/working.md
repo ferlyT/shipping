@@ -8,13 +8,26 @@
 ## 🕐 Terakhir Diperbarui
 - **Tanggal**: 2026-09-13
 - **Oleh**: Antigravity (Gemini 3.8 Flash)
-- **Sesi**: Penyelarasan Modul Logistik Mobile App (Batch Manifest, DO Status Logic, Date Hierarchy) & Pembaruan mobile-app.md
+- **Sesi**: Perbaikan Masalah Modal Pembaruan Selalu Muncul (Constants.expoConfig Null di Production APK) & Panduan Instalasi APK
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
 ### Task Selesai
+- [x] Perbaikan Tuntas Modal 'Pembaruan Tersedia' Selalu Muncul di Mobile App ([version.ts](file:///c:/shipping/mobile/src/config/version.ts), [updateStore.ts](file:///c:/shipping/mobile/src/stores/updateStore.ts), [UpdateModal.tsx](file:///c:/shipping/mobile/src/components/update/UpdateModal.tsx), [package.json](file:///c:/shipping/mobile/package.json)):
+  - **Akar Masalah**:
+    1. `Constants.expoConfig` pada build APK mandiri (*standalone export* tanpa Expo Go / expo-updates service) bernilai `null` saat runtime di perangkat.
+    2. Akibatnya, `CURRENT_APP_VERSION = Constants.expoConfig?.version || '1.0.0'` secara permanen jatuh ke fallback hardcoded `'1.0.0'`.
+    3. Ketika dicek dengan bytecode inspection, bundle lama tidak memuat teks versi baru sama sekali. Karena versi app selalu terbaca `'1.0.0'`, sementara backend mengembalikan `'1.0.2'` (atau `'1.0.1'`), aplikasi selalu menganggap ada pembaruan (`isNewer = true`) dan memunculkan modal terus-menerus.
+    4. Selain itu, aksi `Linking.openURL` hanya mengunduh file APK ke folder Download HP tanpa otomatis memicu installer Android, sehingga pengguna perlu membuka notifikasi unduhan untuk menginstal.
+  - **Solusi & Hasil**:
+    1. **Single Source of Truth Versi**: Membuat `mobile/src/config/version.ts` yang mengekspor `APP_VERSION = '1.0.2'` dan `APP_VERSION_CODE = 3` yang langsung diimpor oleh `updateStore.ts` dan terkompilasi ke dalam Hermes bytecode (terverifikasi `Contains 1.0.2: True`).
+    2. **Dismissed Version State**: Menambahkan logika `dismissedVersion`. Jika pengguna menutup modal dengan tombol "Nanti Saja" atau tombol silang, modal tidak akan muncul otomatis lagi di background kecuali ada versi lebih baru atau jika dicek manual via tab Profil.
+    3. **Petunjuk Pemasangan APK**: Menambahkan pesan informasi di bawah tombol unduh: *"💡 Setelah unduh selesai, ketuk file APK di notifikasi HP untuk menginstal."* serta toast instruksi saat tombol ditekan.
+    4. **Re-build & Sign**: Bundle Metro diekspor ulang (Hermes bytecode 5.3 MB), diinjeksikan ke `mshipping.apk`, di-sign dengan `release.keystore` (SHA256withRSA), dan disinkronkan ke seluruh direktori unduhan server.
+
+
 - [x] Penyelarasan Modul Logistik Mobile App & Manifest Batch Marking ([mobile-app.md](file:///c:/shipping/mobile-app.md), [logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [deliveryOrders.service.ts](file:///c:/shipping/backend/src/modules/delivery-orders/deliveryOrders.service.ts), [app-version.json](file:///c:/shipping/backend/src/config/app-version.json), [app.json](file:///c:/shipping/mobile/app.json)):
   - **Filter Moda Batch Marking**: Menambahkan tombol segmented filter moda `[ Semua ] | [ ✈️ Udara ] | [ 🚢 Laut ]` pada tab Batch Marking yang mengirimkan parameter query `listType=ALL|1|2` ke backend.
   - **Keterangan Batch**: Menggunakan kolom `fdKet` untuk keterangan batch marking.

@@ -1,11 +1,12 @@
 import { create } from 'zustand'
 import * as Linking from 'expo-linking'
 import Constants from 'expo-constants'
+import { APP_VERSION } from '../config/version'
 import { updateService } from '../services/updateService'
 import type { AppVersionData } from '../types/update'
 import { useToastStore } from './toastStore'
 
-export const CURRENT_APP_VERSION = Constants.expoConfig?.version || '1.0.0'
+export const CURRENT_APP_VERSION = APP_VERSION || Constants.expoConfig?.version || '1.0.2'
 
 interface UpdateState {
   currentVersion: string
@@ -14,6 +15,7 @@ interface UpdateState {
   updateInfo: AppVersionData | null
   hasUpdate: boolean
   lastChecked: Date | null
+  dismissedVersion: string | null
 
   checkUpdate: (isManual?: boolean) => Promise<boolean>
   openModal: () => void
@@ -29,21 +31,26 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
   updateInfo: null,
   hasUpdate: false,
   lastChecked: null,
+  dismissedVersion: null,
 
   checkUpdate: async (isManual = false) => {
     set({ isChecking: true })
-    const { currentVersion } = get()
+    const { currentVersion, dismissedVersion } = get()
     const { showToast } = useToastStore.getState()
 
     try {
       const data = await updateService.getLatestVersion()
       const isNewer = updateService.isNewer(currentVersion, data.version)
+      // Tampilkan modal jika:
+      // 1. Ada versi baru DAN
+      // 2. Jika bukan manual: belum pernah di-dismiss untuk versi ini (kecuali forceUpdate wajib)
+      const shouldShowModal = isNewer && (isManual || data.forceUpdate || dismissedVersion !== data.version)
 
       set({
         updateInfo: data,
         hasUpdate: isNewer,
         lastChecked: new Date(),
-        isModalVisible: isNewer,
+        isModalVisible: shouldShowModal,
       })
 
       if (isManual) {
@@ -76,7 +83,10 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
     if (updateInfo?.forceUpdate) {
       return
     }
-    set({ isModalVisible: false })
+    set({
+      isModalVisible: false,
+      dismissedVersion: updateInfo?.version || null,
+    })
   },
 
   startDownload: async () => {
@@ -85,7 +95,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
     if (!updateInfo?.downloadUrl) return
 
     try {
-      showToast('Membuka unduhan file APK...', 'info')
+      showToast('Mengunduh APK. Buka notifikasi HP untuk instalasi.', 'info')
       await Linking.openURL(updateInfo.downloadUrl)
     } catch (err) {
       showToast('Tidak dapat membuka tautan unduhan.', 'error')
