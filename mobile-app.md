@@ -287,9 +287,10 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
    - **Tab 1: Daftar Resi (`shipments`)**
    - **Tab 2: Batch Marking (`batches`)**
    - **Tab 3: Surat Jalan (`delivery`)**
-2. **Pencarian Universal & Integrasi Barcode Scanner**:
+2. **Pencarian Universal, Integrasi Barcode Scanner, & Infinite Scroll**:
    - Input search bar dilengkapi tombol kamera pemindai barcode/QR.
    - Hasil pemindaian kamera otomatis masuk ke kolom pencarian dan memfilter data list secara *live*.
+   - **Infinite Scroll (Semua Tab)**: Ketiga daftar (`shipments`, `batches`, `delivery`) menerapkan infinite scroll berbasis `useInfiniteQuery` (TanStack React Query v5) dengan parameter `{ page, limit: 20 }`. Saat daftar di-scroll mendekati batas bawah (`onEndReachedThreshold: 0.4`), halaman berikutnya di-fetch secara otomatis dengan indikator loading footer (*ActivityIndicator*).
 3. **Sub-Tab 1: Daftar Resi**:
    - Filter tambahan: `Semua`, `Udara`, `Laut`.
    - Menampilkan nomor resi (`fdTerima`), kode marking (`fdMarkingCode`), nomor marking (`fdMarkingNo`), nama customer, jumlah pack & satuan (`fdJmlPack`, `fdSatuan`), berat (`fdJmlBerat`), dan volume kubikasi (`fdM3`).
@@ -298,6 +299,10 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
 4. **Sub-Tab 2: Batch Marking**:
    - Filter tambahan moda: `Semua`, `Udara`, `Laut`.
    - Menampilkan kode batch marking (`fdMarkingCode`), cabang gudang (`fdBranch`), keterangan (`fdKet`), dan tanggal operasional berbasis hirarki (`Exit`, `ETA`, `ETD`, `Load`).
+   - **Tampilan Nomor Muatan Khusus**:
+     - Jika moda **Udara** (`fdListType === 1`) $\to$ menampilkan nomor AWB (`fdAWB`).
+     - Jika moda **Laut** (`fdListType === 2`) $\to$ menampilkan nomor kontainer (`fdContNo`).
+     - *Catatan Desain*: Hanya menampilkan string data mentah secara tegas (warna aksen tersier) tanpa teks label awalan "AWB:" maupun "Kontainer:".
    - Tautan/tombol interaktif untuk menampilkan **Data Manifest** resi shipment per batch (`/api/marking/:id/manifest`).
 5. **Sub-Tab 3: Surat Jalan (Delivery Orders)**:
    - Menampilkan nomor surat jalan (`fdSJNo`), nama customer (`fdCustNameSJ`), supir (`fdSupir`), plat mobil armada (`fdCarID`), perkiraan tanggal kirim (`fdEstimasi`), tanggal penyerahan ke kantor (`fdGiveDate`), dan status kirim (`Delivered` vs `On Delivery`).

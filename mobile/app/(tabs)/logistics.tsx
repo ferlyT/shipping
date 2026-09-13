@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   View,
   Text,
@@ -7,9 +7,10 @@ import {
   TouchableOpacity,
   Modal,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useInfiniteQuery } from '@tanstack/react-query'
 import {
   Package,
   Layers,
@@ -71,41 +72,73 @@ export default function LogisticsScreen() {
   const [selectedItem, setSelectedItem] = useState<any | null>(null)
   const [selectedBatch, setSelectedBatch] = useState<any | null>(null)
 
-  // Fetch Shipments
+  // Fetch Shipments (Infinite Scroll)
   const {
-    data: shipmentsData,
+    data: shipmentsInfiniteData,
     isLoading: isShipmentsLoading,
+    fetchNextPage: fetchNextShipments,
+    hasNextPage: hasNextShipments,
+    isFetchingNextPage: isFetchingNextShipments,
     refetch: refetchShipments,
     isRefetching: isRefetchingShipments,
-  } = useQuery({
+  } = useInfiniteQuery({
     queryKey: ['logistics-shipments', search, modeFilter],
-    queryFn: async () => {
-      const params: any = { limit: 20 }
+    initialPageParam: 1,
+    queryFn: async ({ pageParam = 1 }) => {
+      const params: any = { page: pageParam, limit: 20 }
       if (search.trim()) params.search = search.trim()
       if (modeFilter !== 'all') params.listType = modeFilter
       const res = await apiClient.get('/shipments', { params })
-      return res.data.data || []
+      return {
+        data: res.data.data || [],
+        meta: res.data.meta,
+      }
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.meta) return undefined
+      const { page, totalPages } = lastPage.meta
+      return page < totalPages ? page + 1 : undefined
     },
     enabled: activeTab === 'shipments',
   })
 
-  // Fetch Batches
+  const shipmentsData = useMemo(() => {
+    return shipmentsInfiniteData?.pages.flatMap((p) => p.data) || []
+  }, [shipmentsInfiniteData])
+
+  // Fetch Batches (Infinite Scroll)
   const {
-    data: batchesData,
+    data: batchesInfiniteData,
     isLoading: isBatchesLoading,
+    fetchNextPage: fetchNextBatches,
+    hasNextPage: hasNextBatches,
+    isFetchingNextPage: isFetchingNextBatches,
     refetch: refetchBatches,
     isRefetching: isRefetchingBatches,
-  } = useQuery({
+  } = useInfiniteQuery({
     queryKey: ['logistics-batches', search, modeFilter],
-    queryFn: async () => {
-      const params: any = { limit: 20 }
+    initialPageParam: 1,
+    queryFn: async ({ pageParam = 1 }) => {
+      const params: any = { page: pageParam, limit: 20 }
       if (search.trim()) params.search = search.trim()
       if (modeFilter !== 'all') params.listType = modeFilter
       const res = await apiClient.get('/marking', { params })
-      return res.data.data || []
+      return {
+        data: res.data.data || [],
+        meta: res.data.meta,
+      }
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.meta) return undefined
+      const { page, totalPages } = lastPage.meta
+      return page < totalPages ? page + 1 : undefined
     },
     enabled: activeTab === 'batches',
   })
+
+  const batchesData = useMemo(() => {
+    return batchesInfiniteData?.pages.flatMap((p) => p.data) || []
+  }, [batchesInfiniteData])
 
   // Fetch Manifest for Selected Batch
   const {
@@ -121,22 +154,38 @@ export default function LogisticsScreen() {
     enabled: Boolean(selectedBatch?.fdMarkingCode),
   })
 
-  // Fetch Delivery Orders
+  // Fetch Delivery Orders (Infinite Scroll)
   const {
-    data: doData,
+    data: doInfiniteData,
     isLoading: isDoLoading,
+    fetchNextPage: fetchNextDo,
+    hasNextPage: hasNextDo,
+    isFetchingNextPage: isFetchingNextDo,
     refetch: refetchDo,
     isRefetching: isRefetchingDo,
-  } = useQuery({
+  } = useInfiniteQuery({
     queryKey: ['logistics-do', search],
-    queryFn: async () => {
-      const params: any = { limit: 20 }
+    initialPageParam: 1,
+    queryFn: async ({ pageParam = 1 }) => {
+      const params: any = { page: pageParam, limit: 20 }
       if (search.trim()) params.search = search.trim()
       const res = await apiClient.get('/delivery-orders', { params })
-      return res.data.data || []
+      return {
+        data: res.data.data || [],
+        meta: res.data.meta,
+      }
+    },
+    getNextPageParam: (lastPage) => {
+      if (!lastPage.meta) return undefined
+      const { page, totalPages } = lastPage.meta
+      return page < totalPages ? page + 1 : undefined
     },
     enabled: activeTab === 'delivery',
   })
+
+  const doData = useMemo(() => {
+    return doInfiniteData?.pages.flatMap((p) => p.data) || []
+  }, [doInfiniteData])
 
   const isDark = mode === 'midnight'
 
@@ -226,9 +275,22 @@ export default function LogisticsScreen() {
         {activeTab === 'shipments' && (
           <FlatList
             data={shipmentsData}
-            keyExtractor={(item) => item.fdListCode || item.fdTerima || Math.random().toString()}
+            keyExtractor={(item, index) => `${item.fdListCode || item.fdTerima || 'ship'}-${index}`}
             refreshing={isRefetchingShipments}
             onRefresh={refetchShipments}
+            onEndReached={() => {
+              if (hasNextShipments && !isFetchingNextShipments) {
+                fetchNextShipments()
+              }
+            }}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              isFetchingNextShipments ? (
+                <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color={colors.tertiary} />
+                </View>
+              ) : null
+            }
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               isShipmentsLoading ? (
@@ -288,9 +350,22 @@ export default function LogisticsScreen() {
         {activeTab === 'batches' && (
           <FlatList
             data={batchesData}
-            keyExtractor={(item) => item.fdMarkingCode || Math.random().toString()}
+            keyExtractor={(item, index) => `${item.fdMarkingCode || 'batch'}-${index}`}
             refreshing={isRefetchingBatches}
             onRefresh={refetchBatches}
+            onEndReached={() => {
+              if (hasNextBatches && !isFetchingNextBatches) {
+                fetchNextBatches()
+              }
+            }}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              isFetchingNextBatches ? (
+                <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color={colors.tertiary} />
+                </View>
+              ) : null
+            }
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               isBatchesLoading ? (
@@ -328,9 +403,7 @@ export default function LogisticsScreen() {
             }
             renderItem={({ item }) => {
               const dateInfo = getBatchDateDisplay(item)
-              const containerNo = item.fdContNo?.trim()
-              const blNo = item.fdBLNo?.trim()
-              const awbNo = item.fdAWB?.trim()
+              const batchNumber = item.fdListType === 1 ? item.fdAWB?.trim() : item.fdContNo?.trim()
               return (
                 <Card
                   style={styles.itemCard}
@@ -350,17 +423,9 @@ export default function LogisticsScreen() {
                           variant={item.fdListType === 1 ? 'info' : 'neutral'}
                         />
                       </View>
-                      {containerNo ? (
+                      {batchNumber ? (
                         <Text style={{ fontSize: 12, fontWeight: '700', color: colors.tertiary, marginTop: 3 }}>
-                          Kontainer: {containerNo} {item.fdContSize?.trim() ? `(${item.fdContSize.trim()})` : ''}
-                        </Text>
-                      ) : blNo ? (
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.tertiary, marginTop: 3 }}>
-                          B/L: {blNo}
-                        </Text>
-                      ) : awbNo ? (
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.tertiary, marginTop: 3 }}>
-                          AWB: {awbNo}
+                          {batchNumber}
                         </Text>
                       ) : null}
                       <Text style={[styles.itemSub, { color: colors.secondary, marginTop: 2 }]}>
@@ -397,9 +462,22 @@ export default function LogisticsScreen() {
         {activeTab === 'delivery' && (
           <FlatList
             data={doData}
-            keyExtractor={(item) => item.fdSJNo || item.fdDeliveryNo || item.id || Math.random().toString()}
+            keyExtractor={(item, index) => `${item.fdSJNo || item.fdDeliveryNo || item.id || 'do'}-${index}`}
             refreshing={isRefetchingDo}
             onRefresh={refetchDo}
+            onEndReached={() => {
+              if (hasNextDo && !isFetchingNextDo) {
+                fetchNextDo()
+              }
+            }}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              isFetchingNextDo ? (
+                <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color={colors.tertiary} />
+                </View>
+              ) : null
+            }
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
               isDoLoading ? (

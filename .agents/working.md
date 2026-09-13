@@ -7,15 +7,29 @@
 
 ## 🕐 Terakhir Diperbarui
 - **Tanggal**: 2026-09-13
-- **Tanggal**: 2026-09-13
 - **Oleh**: Antigravity (Gemini 3.8 Flash)
-- **Sesi**: Penambahan Aturan Operasional Mobile App di AGENTS.md (Wajib Baca mobile-app.md & Wajib Konfirmasi Versi / Force Update ke User)
+- **Sesi**: Implementasi Infinite Scroll Halaman Logistik & Penyesuaian Tampilan Nomor Muatan Batch Marking (Udara: fdAWB, Laut: fdContNo tanpa label)
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
 ### Task Selesai
+- [x] Implementasi Infinite Scroll Halaman Logistik & Penyesuaian Tampilan Batch Marking ([logistics.tsx](file:///c:/shipping/mobile/app/%28tabs%29/logistics.tsx), [mobile-app.md](file:///c:/shipping/mobile-app.md)):
+  - **Tampilan Khusus Nomor Muatan Tab 2 (Batch Marking)**:
+    - Menyesuaikan tampilan nomor muatan pada kartu batch marking:
+      - Untuk moda **Udara** (`fdListType === 1`): menampilkan nilai mentah `item.fdAWB`.
+      - Untuk moda **Laut** (`fdListType === 2`): menampilkan nilai mentah `item.fdContNo`.
+      - Menghilangkan teks awalan label `AWB:` dan `Kontainer:` sesuai permintaan pengguna (hanya menampilkan datanya saja secara bersih dan tegas).
+  - **Infinite Scroll Halaman Logistik Lapangan**:
+    - Mengonversi pemanggilan data pada 3 tab logistik (`shipments`, `batches`, `delivery`) menggunakan `useInfiniteQuery` TanStack React Query v5 dengan pagination `{ page: pageParam, limit: 20 }`.
+    - Menghubungkan props `onEndReached` dan `onEndReachedThreshold={0.4}` pada masing-masing `FlatList`.
+    - Menampilkan indikator loading footer (*ActivityIndicator* warna aksen `colors.tertiary`) ketika sedang memuat halaman berikutnya (`isFetchingNextPage`).
+  - **Pembaruan Dokumentasi**:
+    - Menyelaraskan seksi 3.5 pada `mobile-app.md` mencakup mekanisme infinite scroll dan tampilan nomor muatan batch tanpa label.
+  - **Verifikasi**:
+    - `bun run tsc --noEmit` di direktori `mobile/` berhasil 100% (0 error).
+
 - [x] Penambahan Aturan Operasional Mobile App di AGENTS.md ([AGENTS.md](file:///c:/shipping/.agents/AGENTS.md)):
   - Menambahkan aturan wajib di header: sebelum update aplikasi mobile (`mobile/`), Agen WAJIB membaca `mobile-app.md` terlebih dahulu.
   - Menambahkan aturan konfirmasi ke user: setelah update mobile selesai, Agen WAJIB BERTANYA kepada User mengenai nomor versi rilis baru dan tipe update (apakah ini Force Update (`forceUpdate: true`) atau Opsional (`forceUpdate: false`)). DILARANG mengasumsikan sendiri.
