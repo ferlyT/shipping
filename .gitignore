@@ -45,11 +45,13 @@ backend/public/uploads/*
 !backend/public/uploads/.gitkeep
 !backend/public/uploads/**/.gitkeep
 
-# Ignore all markdown files in root folder only (except README.md, mobile-app.md, and frontend-app.md)
+# Ignore all markdown files in root folder only (except README.md, mobile-app.md, frontend-app.md, pelunasan.md, and pelunasan-plan.md)
 /*.md
 !/README.md
 !/mobile-app.md
 !/frontend-app.md
+!/pelunasan.md
+!/pelunasan-plan.md
 
 # Temporary backend scratch & profiling scripts
 backend/benchmark-draft-list.ts

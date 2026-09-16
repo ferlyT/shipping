@@ -8,11 +8,91 @@
 ## 🕐 Terakhir Diperbarui
 - **Tanggal**: 2026-09-17
 - **Oleh**: AI Assistant
-- **Sesi**: Rilis APK Mobile v1.2.1 (Build 13) Force Update dengan Optimalisasi Autocomplete Suggestions & Perbaikan Tipe Delivery Orders
+- **Sesi**: Analisis Mendalam Form Pembayaran Sementara (fr3_regpayment.scx / TR- Series) & Integrasi Alur Attach Kasir Resmi
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
+
+- [x] **Analisis Lengkap Form Pembayaran Sementara (`fr3_regpayment.scx` / `TR-` Series) & Integrasi Alur Attach**:
+  - **Latar Belakang & Konfirmasi Pengguna**:
+    - *"fr3_regpayment.scx -> ini adalah form input pembayaran sementara"*
+  - **Penyelidikan & Analisis Berkas FoxPro (`c:\sejdb\sejdb2018\forms\`)**:
+    - **`fr3_regpayment.scx` (Register Pembayaran Sementara)**: 70 objek kontrol UI, mengelola transaksi kasir sementara ber-prefix **`TR-XXXXXX-MM-YYYY`** (contoh: `TR-000001-09-2026`).
+    - **Trio Tabel Sementara Terisolasi**:
+      - `tb2Cashier`: Header pembayaran sementara (`fdCashierID`, `fdCashierDate`, `fdCustCode`, `fdDescr`, `fdCreated`, `fdPost`).
+      - `tb2CashierRcv`: Rincian uang masuk sementara kas/bank/giro (`fdID`, `fdType`, `fdCCYCode`, `fdCurrValue`, `fdAmount`, `fdBankID1`, `fdGiroNo`, `fdDate1`, `fdDate2`, `fdBankId2`).
+      - `tb2CashierDetail`: Rincian alokasi faktur/invoice sementara (`fdInvNo`, `fdAmount`, `fdCurValue`, `fdTotal`).
+    - **Counter Khusus Kasir Sementara**:
+      - `tbMasterCounter` menggunakan kode **`fdCode = 'B'`** (sedangkan kasir resmi `RR-` menggunakan `fdCode = 'A'`).
+      - `fdCRCounter`: Auto-increment nomor baris penerimaan uang sementara.
+      - `fdCDCounter`: Auto-increment nomor baris alokasi faktur sementara.
+    - **Ekosistem Form Pendamping `fr3_`**:
+      - `fr3_inputpay2.scx`: Dialog pembuatan kasir sementara (`sp_tb3Cashier`) & lookup data kasir `TR-`.
+      - `fr3_inputrcv.scx` & `fr3_inputrcv2.scx`: Input & edit penerimaan uang sementara dengan sinkronisasi kurs `tbMataUang.fdCCYValue` dan bank `tbBank`.
+      - `fr3_inputdtl.scx` & `fr3_inputdtl2.scx`: Input alokasi faktur sementara manual.
+      - `fr3_checkbilling.scx`: Checklist alokasi faktur piutang belum lunas (`sp_tb2BillingTotalView`).
+    - **Mekanisme Fitur "Attach" (`frm_inputpay_attach.scx` / `sp_tbCashierSearch_attach`)**:
+      - Menjembatani transaksi kasir sementara (`TR-`) ke kasir resmi (`RR-`).
+      - Membuka popup daftar kasir sementara yang belum di-attach (`EXECUTE sp_tbCashierSearch_attach`).
+      - Menyalin data dari `tb2CashierRcv` ke `tbCashierRcv` dan `tb2CashierDetail` ke `tbCashierDetail`.
+      - Mencatat referensi nomor kasir sementara pada header kasir resmi: `tbCashier.fdCashierXX = 'TR-XXXXXX-MM-YYYY'`.
+      - Mengunci kasir sementara (`tb2Cashier.fdPost = 1`) agar tidak dapat di-attach berulang kali.
+  - **Pembaruan Berkas Dokumentasi & Perencanaan**:
+    - [`pelunasan.md`](file:///c:/project-vibe-coding/shipping/pelunasan.md): Ditambahkan Bab 6 (Analisis Lengkap Modul Pembayaran Sementara `fr3_regpayment.scx`), Bab 7 (Mekanisme Proses Attach & Konversi `TR-` ke `RR-` dengan Mermaid Flowchart), serta pembaruan tabel hubungan form dan Stored Procedure.
+    - [`pelunasan-plan.md`](file:///c:/project-vibe-coding/shipping/pelunasan-plan.md): Ditambahkan spesifikasi endpoint REST API untuk kasir sementara (`/api/cashier/temp`, `/api/cashier/attach`), transaksi atomik prisma untuk proses attach, tab navigasi "Kasir Resmi (RR)" vs "Pembayaran Sementara (TR)" di `ListPage.tsx`, modal `AttachTempReceiptModal.tsx`, Bab 3.4 (Matriks Hak Akses & Peran Pengguna / RBAC), Bab 3.5 (Arsitektur Sistem Dual Bahasa i18n ID/EN dengan 36 key terjemahan), serta **Bab 4 (Rancang Bangun Sistem Baru: Customer Wallet / Saldo Deposit Pelanggan)** lengkap dengan skema tabel `tbCustomerWallet`, `tbCustomerWalletLedger`, pessimistic locking, 7 endpoint `/api/wallet`, dan alur integrasi pelunasan kasir & overpayment.
+
+- [x] **Penyusunan Rencana Arsitektur & Peta Jalan Modul Cashier Pelunasan Piutang ([`pelunasan-plan.md`](file:///c:/project-vibe-coding/shipping/pelunasan-plan.md))**:
+  - **Latar Belakang & Permintaan Pengguna**:
+    - *"buatkan pelunasan-plan.md yang berisi plan modul cashier dan endpoint Backend API terkait"*
+  - **Isi Rencana Komprehensif (`pelunasan-plan.md`)**:
+    1. **Spesifikasi Lengkap 17 Endpoint Backend REST API (`/api/cashier`)**:
+       - List, Stats KPI, Master Data (`tbMataUang` -> kurs `fdCCYValue`, `tbBank` -> `fdBankCode`, `tbPayType`), Unpaid Invoices per Customer, Detail Kasir Lengkap.
+
+       - CRUD Header Kasir (`tbCashier`), Penerimaan Uang Kas/Bank/Giro (`tbCashierRcv`), dan Batch Alokasi Faktur Piutang (`tbCashierDetail`).
+       - Fitur Attach Kasir Sementara, Ekspor PDF Bukti Kasir terstandar, dan Ekspor Excel.
+    2. **Logika Bisnis Finansial & Keamanan Database**:
+       - Validasi Zod Schemas lengkap dengan aturan kondisional (CASH vs TRANSFER vs GIRO).
+       - *Zero-Difference Balancing*: Kalkulasi otomatis total penerimaan vs total alokasi (`fdSelisih = 0`).
+       - **Auto-Numbering Reset Bulanan (`RR-XXXXXX-MM-YYYY`)**: Format resmi `RR-000001-01(BULAN)-2011(TAHUN)` dengan 6 digit sequence leading zero yang **otomatis di-reset kembali ke 000001 setiap awal bulan baru** dengan penguncian atomic database (`UPDLOCK, HOLDLOCK`).
+       - Auto-numbering thread-safe dengan atomic increment pada `tbMasterCounter` (`fdCRCounter` & `fdCDCounter`).
+       - Proteksi posting akuntansi (`fdPost = 1`) yang mengunci edit/delete dan mengalihkan ke mode read-only.
+       - Penjaminan Single Source of Truth nama pelanggan via master `tbCustomers.fdCustName`.
+
+    3. **Arsitektur Frontend Web ERP (`src/features/cashier/` / `billing/`)**:
+       - Halaman Daftar (`ListPage.tsx`) dan Meja Kerja Kasir (`DetailPage.tsx`).
+       - Komponen Modal Interaktif: `CashierHeaderModal`, `PaymentReceivedModal` (kondisional dinamis), `InvoiceAllocationModal` (checklist faktur belum lunas), dan `BalanceIndicatorBadge` (visual alert).
+       - Kepatuhan Desain ERP: Midnight Dark Mode (tanpa tombol solid putih), 3-level breadcrumbs ERP, kamus i18n ID/EN berpasangan, dan loading skeleton shimmer.
+    4. **Roadmap 4 Fase Eksekusi & Verification Plan**:
+       - Fase 1: Fondasi Backend & Skema Database.
+       - Fase 2: Logika Bisnis Penerimaan, Alokasi, & Ekspor.
+       - Fase 3: Antarmuka Web Frontend & Modal Interaktif.
+       - Fase 4: Pengujian End-to-End, Benchmark Kecepatan (< 50ms), & Rilis.
+
+
+- [x] **Analisis Mendalam & Pembuatan Dokumentasi Modul Pelunasan Kasir (`pelunasan.md`) dari Form Visual FoxPro (`frm_regpayment.scx`, `frm_inputpay2.scx`, `frm_inputRcv.scx`)**:
+  - **Latar Belakang & Permintaan Pengguna**:
+    - *"buat pelunasan.md dan baca c:\sejdb\sejdb2018\forms\frm_regpayment.scx"*
+    - *"baca juga frm_inputpay2.scx dan frm_inputRcv.scx lalu update pelunasan.md"*
+  - **Penyelidikan & Analisis Berkas FoxPro (`c:\sejdb\sejdb2018\forms\`)**:
+    - **`frm_regpayment.scx` (Orkestrator Sentral)**: 75 record objek UI, 30 procedure/method, Grid 2 (`tbmscashierrcv`), Grid 1 (`tbmscashierdetail`), validasi selisih dengan `Timer8` kedip merah, eksekusi Stored Procedure kalkulasi total.
+    - **`frm_inputpay2.scx` (Dialog Header & Lookup Kasir)**:
+      - Mode Ganda: Create Kasir Baru (`sp_tbCashier`) & Lookup Kasir Existing (`frm_inputpaylist`).
+      - Auto-numbering format `RR-xxxxxx-...` berbasis counter sesi `_CounterReg + 1` dan suffix `_StrKanan`.
+      - Validasi pelanggan (`fdCustCode` & `fdCustName`) dengan helper `PutComma`, tombol popup `cmd4` (`frm_customerslist1_rev1`).
+      - Proteksi posting accounting (`tbCashier.fdPost = 1`), konfirmasi dialihkan ke mode read-only `frm_view_billing`.
+    - **`frm_inputRcv.scx` (Dialog Input Penerimaan Uang Kas/Bank/Giro)**:
+      - Logika kondisional dinamis `fdType.InteractiveChange`:
+        - `CASH`: Auto-reset & disabled seluruh field bank dan giro warkat.
+        - `TRANSFER`: Auto-fill Bank default BCA (`BCB`), auto-fill tanggal kasir ke tanggal giro & tanggal kliring efektif.
+        - `GIRO`: Enable input nomor warkat, bank tertarik (`fdBankID2`), bank penerima (`fdBankID1`), tanggal giro, dan tanggal efektif.
+      - Auto-sync nilai kurs mata uang dari kursor `tbMataUang.fdCCYValue`.
+      - Auto-increment nomor baris penerimaan 7-digit via counter `tbMasterCounter.fdCRCounter + 1` (`fdCode = 'A'`).
+      - Eksekusi Stored Procedure `sp_tbCashierRcv` dengan format tanggal MDY.
+  - **Penyusunan & Pembaruan Dokumentasi Komprehensif ([`pelunasan.md`](file:///c:/project-vibe-coding/shipping/pelunasan.md))**:
+    - Memperbarui berkas dokumentasi dengan diagram urutan interaksi data (Mermaid Sequence Diagram), inventaris kontrol dan properti detail untuk ketiga form, bedah logika kondisional form per form, serta rekomendasi desain modal web ERP mshipping yang mematuhi aturan single source of truth `tbCustomers.fdCustName` dan Midnight Dark Mode.
+
+
 
 - [x] **Optimalisasi & Perbaikan Menyeluruh Autocomplete Search Suggestions (Multi-Platform: Backend, Web Frontend, & Mobile App)**:
   - **Latar Belakang & Keluhan Pengguna**:
