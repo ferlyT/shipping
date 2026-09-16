@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react'
-import { cn, formatDate, formatDecimal } from '@/lib/utils'
+import { cn, formatDate, formatDecimal, displayCustName } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
 import type { Shipment } from '../types/shipments.types'
 
@@ -51,8 +51,8 @@ export function ShipmentMobileCard({ item, isSelected, onClick }: ShipmentMobile
 
       {/* Customer & Branch */}
       <div className="min-w-0">
-        <div className="font-bold text-[var(--color-primary)] text-sm leading-tight truncate" title={item.fdCustName || 'Customer Tidak Dikenal'}>
-          {item.fdCustName || 'Customer Tidak Dikenal'}
+        <div className="font-bold text-[var(--color-primary)] text-sm leading-tight truncate" title={displayCustName(item.fdCustName, 'Customer Tidak Dikenal')}>
+          {displayCustName(item.fdCustName, 'Customer Tidak Dikenal')}
         </div>
         <div className="text-[11px] text-[var(--color-secondary)] mt-0.5 flex items-center gap-1.5 flex-wrap">
           <span>Cabang: {item.fdBranchCode || '-'}</span>

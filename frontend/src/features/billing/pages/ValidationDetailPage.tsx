@@ -17,14 +17,16 @@ import {
   History,
   Truck,
   AlertTriangle,
+  Lock,
 } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { Button } from '@/components/ui/Button'
 import { CurrencyValue, formatWithCurrency } from '@/components/ui/CurrencyValue'
-import { formatDate, copyToClipboard, cn } from '@/lib/utils'
+import { formatDate, copyToClipboard, cn, displayCustName } from '@/lib/utils'
 import { BillingValidationCard } from '../components/BillingValidationCard'
 import { ValidationListDrawer } from '../components/ValidationListDrawer'
-import { BillingValidationSummaryModal, type M3CheckResponse } from '../components/BillingValidationSummaryModal'
+import { BillingValidationSummaryModal } from '../components/BillingValidationSummaryModal'
+import type { M3CheckResponse } from '../types/billing.types'
 import { BillingPrintButtons } from '../components/BillingPrintButtons'
 import { CustomerBillingHistoryModal } from '../components/CustomerBillingHistoryModal'
 import { IssueInvoiceModal } from '../components/IssueInvoiceModal'
@@ -370,9 +372,20 @@ export function ValidationDetailPage() {
     )
   }
 
+  // ── Proteksi Status Terkunci (Read-Only) ──
+  const isIssued = Number(data.fdGive) === 1
+  const isCollected = Number(data.fdGive2) === 1
+  const isPaid = Boolean(data.isPaid) || data.paymentStatus === 'LUNAS'
+  const isLocked = isIssued || isCollected || isPaid
+  const lockReason = isCollected || isPaid
+    ? 'Invoice telah berstatus LUNAS / SELESAI di kasir. Rincian item dikunci demi integritas rekonsiliasi keuangan.'
+    : isIssued
+    ? 'Invoice telah diterbitkan (ISSUED). Rincian item dikunci demi kepatuhan pembukuan dan integritas data.'
+    : undefined
+
   // ── Handlers ──
   const handleCopyMarkingInfo = async () => {
-    const custName = data.customer?.fdCustName || data.fdCustCode || '—'
+    const custName = displayCustName(data.customer?.fdCustName || data.fdCustCode)
     const markingCode = data.fdMarkingCode || '—'
     const markingNo = data.fdMarkingNo || '—'
     const consignee = data.fdConsignee || ''
@@ -462,8 +475,8 @@ export function ValidationDetailPage() {
         <div className="flex items-center justify-between sm:justify-end gap-1.5 sm:gap-2 pt-1.5 sm:pt-0 border-t sm:border-t-0 border-[var(--color-border)]/60 min-w-0">
           <div className="flex items-center gap-1 text-[11px] sm:text-xs px-2 py-0.5 rounded-md bg-[var(--color-neutral)] border border-[var(--color-border)] max-w-[140px] sm:max-w-[200px] truncate">
             <User size={11} className="text-[var(--color-secondary)] shrink-0" />
-            <span className="font-semibold truncate text-[var(--color-primary)]" title={data.customer?.fdCustName || data.fdCustCode || '—'}>
-              {data.customer?.fdCustName || data.fdCustCode || '—'}
+            <span className="font-semibold truncate text-[var(--color-primary)]" title={displayCustName(data.customer?.fdCustName || data.fdCustCode)}>
+              {displayCustName(data.customer?.fdCustName || data.fdCustCode)}
             </span>
           </div>
 
@@ -589,8 +602,8 @@ export function ValidationDetailPage() {
               {/* Customer */}
               <div className="space-y-1">
                 <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] font-[var(--font-label)] tracking-wider block">Customer</span>
-                <p className="font-bold text-sm text-[var(--color-primary)] truncate" title={data.customer?.fdCustName || data.fdCustCode || '—'}>
-                  {data.customer?.fdCustName || data.fdCustCode || '—'}
+                <p className="font-bold text-sm text-[var(--color-primary)] truncate" title={displayCustName(data.customer?.fdCustName || data.fdCustCode)}>
+                  {displayCustName(data.customer?.fdCustName || data.fdCustCode)}
                 </p>
                 {data.customer?.fdSalesNM && (
                   <p className="text-[11px] text-[var(--color-secondary)] truncate">
@@ -681,11 +694,25 @@ export function ValidationDetailPage() {
               <button
                 type="button"
                 onClick={() => setIsEditItemsModalOpen(true)}
-                className="px-2.5 py-1 text-xs font-semibold rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-primary)] hover:border-[var(--color-tertiary)] flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0"
-                title="Edit Kuantitas, Harga, Satuan, atau Tambah/Hapus Baris Item"
+                className={cn(
+                  "px-2.5 py-1 text-xs font-semibold rounded-lg border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0",
+                  isLocked
+                    ? "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
+                    : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-primary)] hover:border-[var(--color-tertiary)]"
+                )}
+                title={isLocked ? "Invoice berstatus ISSUED / LUNAS (Mode Baca)" : "Edit Kuantitas, Harga, Satuan, atau Tambah/Hapus Baris Item"}
               >
-                <Edit3 size={13} className="text-[var(--color-tertiary)]" />
-                <span>Edit Item</span>
+                {isLocked ? (
+                  <>
+                    <Lock size={13} className="text-amber-500" />
+                    <span>Lihat Item</span>
+                  </>
+                ) : (
+                  <>
+                    <Edit3 size={13} className="text-[var(--color-tertiary)]" />
+                    <span>Edit Item</span>
+                  </>
+                )}
               </button>
             </div>
 
@@ -1000,7 +1027,7 @@ export function ValidationDetailPage() {
               markingCode={data.fdMarkingCode}
               markingNo={data.fdMarkingNo}
               invoiceNo={data.fdInvNo}
-              customerName={data.customer?.fdCustName}
+              customerName={displayCustName(data.customer?.fdCustName)}
               custCode={data.fdCustCode}
               onOpenSummaryModal={() => setIsSummaryModalOpen(true)}
               onOpenAuditModal={() => setIsAuditModalOpen(true)}
@@ -1046,7 +1073,9 @@ export function ValidationDetailPage() {
       <CustomerBillingHistoryModal
         isOpen={isHistoryModalOpen}
         custCode={data.fdCustCode}
-        custName={data.customer?.fdCustName}
+        custName={displayCustName(data.customer?.fdCustName)}
+        tglAgent={data.fdTglAgent}
+        typeComodity={data.fdTypeComodityName}
         onClose={() => setIsHistoryModalOpen(false)}
       />
 
@@ -1054,7 +1083,7 @@ export function ValidationDetailPage() {
         isOpen={isIssueModalOpen}
         onClose={() => setIsIssueModalOpen(false)}
         invNo={data.fdInvNo}
-        custName={data.customer?.fdCustName || data.fdCustCode || undefined}
+        custName={displayCustName(data.customer?.fdCustName || data.fdCustCode)}
         custCode={data.fdCustCode || undefined}
         invDate={data.fdInvDate}
         totalAmount={Number(data.fdJumlah2 || data.fdJumlah1 || 0)}
@@ -1065,7 +1094,7 @@ export function ValidationDetailPage() {
         isOpen={isResiModalOpen}
         onClose={() => setIsResiModalOpen(false)}
         invNo={data.fdInvNo}
-        custName={data.customer?.fdCustName || data.fdCustCode || undefined}
+        custName={displayCustName(data.customer?.fdCustName || data.fdCustCode)}
         custCode={data.fdCustCode || undefined}
         markingCode={data.fdMarkingCode || undefined}
         markingNo={data.fdMarkingNo || undefined}
@@ -1074,7 +1103,7 @@ export function ValidationDetailPage() {
       <CustomerTariffAuditModal
         isOpen={isAuditModalOpen}
         custCode={data.fdCustCode || null}
-        custName={data.customer?.fdCustName || data.fdCustCode || undefined}
+        custName={displayCustName(data.customer?.fdCustName || data.fdCustCode)}
         onClose={() => setIsAuditModalOpen(false)}
       />
 
@@ -1082,12 +1111,14 @@ export function ValidationDetailPage() {
         isOpen={isEditItemsModalOpen}
         onClose={() => setIsEditItemsModalOpen(false)}
         invNo={data.fdInvNo}
-        custName={data.customer?.fdCustName || data.fdCustCode || undefined}
+        custName={displayCustName(data.customer?.fdCustName || data.fdCustCode)}
         custCode={data.fdCustCode || undefined}
         markingCode={data.fdMarkingCode || undefined}
         initialDetails={details}
         isPaid={data.isPaid}
         paymentStatus={data.paymentStatus}
+        isLocked={isLocked}
+        lockReason={lockReason}
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['billingDetail', id] })
           queryClient.invalidateQueries({ queryKey: ['m3-check'] })

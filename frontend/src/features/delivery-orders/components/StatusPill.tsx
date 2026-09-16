@@ -1,8 +1,5 @@
-import { Badge } from '@/components/ui/Badge'
+import { StatusBadge } from '@/components/ui/StatusBadge'
 
 export function StatusPill({ isSent }: { isSent: number }) {
-  if (isSent === 1) {
-    return <Badge variant="success">Delivered</Badge>
-  }
-  return <Badge variant="warning">Pending</Badge>
+  return <StatusBadge status={isSent === 1 ? 'DELIVERED' : 'PENDING'} size="sm" />
 }

@@ -6,7 +6,7 @@ import {
   formatCustomerSince, formatCustomerTenure
 } from './CustomerBadges'
 import { CustomerMobileCard } from './CustomerMobileCard'
-import { formatCompactRupiah } from '@/lib/utils'
+import { formatCompactRupiah, displayCustName } from '@/lib/utils'
 import type { Customer } from '../types/customers.types'
 
 interface CustomerTableViewProps {
@@ -120,7 +120,7 @@ export function CustomerTableView({
       render: (row: Customer) => (
         <div className="min-w-0">
           <div className="text-xs sm:text-sm font-semibold flex items-center gap-1.5 min-w-0 text-[var(--color-primary)] flex-wrap">
-            <span className="truncate">{row.fdCustName || '-'}</span>
+            <span className="truncate">{displayCustName(row.fdCustName)}</span>
             {canViewTier && row.tier && row.tier !== 'none' && <CustomerTierBadge tier={row.tier} size="xs" />}
             {row.fdBroker === 1 && <BrokerBadge size="xs" />}
             {row.fdDiscontinued === 1 && <DiscontinuedBadge size="xs" />}

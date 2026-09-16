@@ -3,7 +3,6 @@ import { User, Lock, Palette } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
-import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { cn } from '@/lib/utils'
 import { useProfile } from '../hooks/useProfile'
 import { AvatarUpload } from '../components/AvatarUpload'
@@ -12,6 +11,52 @@ import { ChangePasswordForm } from '../components/ChangePasswordForm'
 import { ThemeSelectorCard } from '../components/ThemeSelectorCard'
 
 type ActiveTab = 'info' | 'security' | 'theme'
+
+function AccountPageSkeleton() {
+  const { t } = useTranslation()
+  return (
+    <div className="p-4 sm:p-6 lg:p-8 w-full min-w-0 space-y-6 bg-[var(--color-surface)] font-[var(--font-body)] animate-fadeIn pb-24">
+      <PageHeader
+        title={t('profile.title')}
+        subtitle={t('profile.subtitle')}
+        breadcrumbs={[
+          { label: t('module.overview'), path: ROUTES.DASHBOARD },
+          { label: t('nav.profile'), path: ROUTES.PROFILE },
+          { label: t('profile.tabInfo') },
+        ]}
+      />
+
+      {/* Tabs Skeleton */}
+      <div className="flex items-center gap-2 border-b border-[var(--color-border)] pb-2">
+        <div className="h-8 w-28 rounded-lg skeleton-shimmer" />
+        <div className="h-8 w-32 rounded-lg skeleton-shimmer" />
+        <div className="h-8 w-28 rounded-lg skeleton-shimmer" />
+      </div>
+
+      {/* Avatar Card Skeleton */}
+      <div className="flex items-center gap-6 p-6 bg-[var(--color-surface)] rounded-[var(--radius-xl)] border border-[var(--color-border)] shadow-xs">
+        <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full skeleton-shimmer shrink-0" />
+        <div className="space-y-3 flex-1">
+          <div className="h-5 w-36 rounded skeleton-shimmer" />
+          <div className="h-3.5 w-64 rounded skeleton-shimmer" />
+          <div className="flex gap-2 pt-1">
+            <div className="h-8 w-28 rounded-lg skeleton-shimmer" />
+            <div className="h-8 w-24 rounded-lg skeleton-shimmer" />
+          </div>
+        </div>
+      </div>
+
+      {/* Form Skeleton */}
+      <div className="bg-[var(--color-surface)] rounded-[var(--radius-xl)] border border-[var(--color-border)] p-6 shadow-xs space-y-5">
+        <div className="h-5 w-44 rounded skeleton-shimmer" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="h-10 rounded-lg skeleton-shimmer" />
+          <div className="h-10 rounded-lg skeleton-shimmer" />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function AccountPage() {
   const { t } = useTranslation()
@@ -31,7 +76,7 @@ export default function AccountPage() {
   } = useProfile()
 
   if (isLoading && !profile) {
-    return <LoadingSpinner message={t('common.loading')} />
+    return <AccountPageSkeleton />
   }
 
   const getBreadcrumbTabLabel = () => {

@@ -1,7 +1,6 @@
 import { useMemo } from 'react'
 import { evaluateItemPrice, isAuxiliaryItem, isVfcItem, isFreightChargeItem } from '../utils/billing.utils'
-import type { BillingDetail } from '../types/billing.types'
-import type { M3CheckResponse } from '../components/BillingValidationSummaryModal'
+import type { BillingDetail, M3CheckResponse } from '../types/billing.types'
 
 interface UseInvoiceMetricsParams {
   details: BillingDetail[]
@@ -49,11 +48,6 @@ export function useInvoiceMetrics({ details, validationData, expedisiList }: Use
       map[unit] = (map[unit] || 0) + Number(row.fdQty || 0)
       return map
     }, {})
-
-    // Min-charge enforcement: M3 < 0.1 → round up to 0.1
-    if (acc['M3'] !== undefined && acc['M3'] > 0 && acc['M3'] < 0.1) {
-      acc['M3'] = 0.1
-    }
     return acc
   }, [details])
 
@@ -84,7 +78,7 @@ export function useInvoiceMetrics({ details, validationData, expedisiList }: Use
   }, [details])
 
   const calcM3 = unitTotals['M3'] ?? rawM3
-  const billedM3 = calcM3 > 0 && calcM3 < 0.1 ? 0.1 : calcM3
+  const billedM3 = calcM3
   const billedKg = unitTotals['KG'] ?? rawKg
   const billedVfc = unitTotals['VOLUME FREIGHT CHARGES (KG)'] ?? rawVfc
 

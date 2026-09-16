@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   X,
   Search,
@@ -14,6 +15,9 @@ import {
   Filter,
   Check,
 } from 'lucide-react'
+import apiClient from '@/api/client'
+import { useDebounce } from '@/hooks/useDebounce'
+import { SearchSuggestionsDropdown } from '@/components/ui/SearchSuggestionsDropdown'
 import { cn } from '@/lib/utils'
 import { useTranslation } from '@/hooks/useTranslation'
 import type { CustomerGroupKey, CustomerGroupCounts, CustomerSalesItem } from '../types/customers.types'
@@ -162,19 +166,52 @@ export function CustomerToolbar({
     search.trim() !== ''
   )
 
+  // Suggestions state & query
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
+  const debouncedSearch = useDebounce(search, 300)
+
+  const { data: suggestions = [], isFetching: isFetchingSuggestions } = useQuery({
+    queryKey: ['customer-toolbar-suggestions', debouncedSearch],
+    queryFn: async () => {
+      if (!debouncedSearch || debouncedSearch.trim().length < 2) return []
+      const res = await apiClient.get('/customers/suggestions', { params: { q: debouncedSearch.trim() } })
+      return res.data?.data || []
+    },
+    enabled: debouncedSearch.trim().length >= 2,
+    staleTime: 30000,
+  })
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   return (
     <div className="bg-[var(--color-surface)] rounded-2xl shadow-xs border border-[var(--color-border)] relative z-30 space-y-0">
       {/* ── SINGLE ROW COMPACT TOOLBAR ON PC ── */}
       <div className="px-4 py-3 bg-[var(--color-surface)] flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
         {/* Left: Search Bar */}
-        <div className="relative flex-1 max-w-lg">
+        <div ref={searchContainerRef} className="relative flex-1 max-w-lg">
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-secondary)] pointer-events-none" />
           <input
             ref={searchInputRef}
             type="text"
             placeholder={t('customers.searchPlaceholder') || 'Cari customer, kode, kontak, telp, kota...'}
             value={search}
-            onChange={(e) => onSearchChange(e.target.value)}
+            onChange={(e) => {
+              onSearchChange(e.target.value)
+              if (e.target.value.trim().length >= 2) setShowSuggestions(true)
+              else setShowSuggestions(false)
+            }}
+            onFocus={() => {
+              if (search.trim().length >= 2) setShowSuggestions(true)
+            }}
             className="w-full pl-9 pr-16 py-2 text-xs bg-[var(--color-neutral)]/40 hover:bg-[var(--color-neutral)]/70 focus:bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] transition-all shadow-2xs font-medium"
           />
           <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
@@ -183,6 +220,7 @@ export function CustomerToolbar({
                 type="button"
                 onClick={() => {
                   onSearchChange('')
+                  setShowSuggestions(false)
                   searchInputRef.current?.focus()
                 }}
                 className="p-1 rounded-md text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] cursor-pointer"
@@ -196,6 +234,19 @@ export function CustomerToolbar({
               </kbd>
             )}
           </div>
+
+          {/* Suggestions dropdown */}
+          <SearchSuggestionsDropdown
+            visible={showSuggestions && search.trim().length >= 2}
+            suggestions={suggestions}
+            isLoading={isFetchingSuggestions}
+            title="Saran Pencarian (Customer / Kode / Kontak)"
+            onSelect={(item) => {
+              onSearchChange(item.value)
+              setShowSuggestions(false)
+            }}
+            onClose={() => setShowSuggestions(false)}
+          />
         </div>
 
         {/* Right: Status Segmented + Sales Combobox + Kategori Combobox + View Switcher */}

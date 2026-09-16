@@ -6,7 +6,6 @@ import { useThemeStore } from '../../theme/themeStore'
 export interface SegmentOption<T = string> {
   label: string
   value: T
-  icon?: React.ReactNode
 }
 
 interface SegmentedControlProps<T = string> {
@@ -57,8 +56,9 @@ export function SegmentedControl<T = string>({
               },
             ]}
           >
-            {opt.icon ? <View style={styles.icon}>{opt.icon}</View> : null}
             <Text
+              numberOfLines={1}
+              adjustsFontSizeToFit
               style={[
                 styles.label,
                 {
@@ -86,19 +86,17 @@ const styles = StyleSheet.create({
   },
   segment: {
     flex: 1,
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 7,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'transparent',
   },
-  icon: {
-    marginRight: 5,
-  },
   label: {
-    fontSize: 12,
+    fontSize: 11.5,
+    textAlign: 'center',
+    letterSpacing: -0.1,
   },
 })

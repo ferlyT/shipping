@@ -24,16 +24,34 @@ export const useLanguageStore = create<LanguageState>((set) => ({
 export function useTranslation() {
   const { language, setLanguage, toggleLanguage } = useLanguageStore()
 
-  const t = (key: string, fallback?: string): string => {
+  const t = (
+    key: string,
+    fallbackOrParams?: string | Record<string, any>,
+    params?: Record<string, any>
+  ): string => {
+    let fallback: string | undefined
+    let interpolations: Record<string, any> | undefined
+
+    if (typeof fallbackOrParams === 'object') {
+      interpolations = fallbackOrParams
+    } else {
+      fallback = fallbackOrParams
+      interpolations = params
+    }
+
     const currentDict = translations[language]
-    if (currentDict && currentDict[key]) {
-      return currentDict[key]
+    let text =
+      currentDict?.[key] ||
+      (language !== 'id' ? translations.id[key] : undefined) ||
+      fallback ||
+      key
+
+    if (interpolations) {
+      Object.entries(interpolations).forEach(([k, v]) => {
+        text = text.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v))
+      })
     }
-    // Fallback to Indonesian if not found in current
-    if (language !== 'id' && translations.id[key]) {
-      return translations.id[key]
-    }
-    return fallback ?? key
+    return text
   }
 
   return { t, language, setLanguage, toggleLanguage }

@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { useTranslation } from '@/hooks/useTranslation'
 import { customerPriceListApi } from '../services/customerPriceList.service'
 import { customersApi } from '@/features/customers/services/customers.service'
+import { displayCustName } from '@/lib/utils'
 import type { CustomerUploadHistory } from '../types'
 
 interface UploadGroup {
@@ -29,7 +30,7 @@ export function useCustomerPriceHistory() {
     // Fetch customer info
     customersApi
       .detail(custCode)
-      .then((res: any) => setCustName(res.data?.data?.fdCustName || res.data?.fdCustName || ''))
+      .then((res: any) => setCustName(displayCustName(res.data?.data?.fdCustName || res.data?.fdCustName || '', '')))
       .catch(() => setCustName('Unknown Customer'))
 
     // Fetch history

@@ -9,6 +9,7 @@ interface SearchBarProps {
   onChangeText: (text: string) => void
   placeholder?: string
   onScanPress?: () => void
+  onFocus?: () => void
   debounceMs?: number
   style?: ViewStyle
 }
@@ -18,6 +19,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   onChangeText,
   placeholder = 'Cari...',
   onScanPress,
+  onFocus,
   debounceMs = 400,
   style,
 }) => {
@@ -66,6 +68,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
         placeholder={placeholder}
         placeholderTextColor={colors.secondary}
         returnKeyType="search"
+        onFocus={onFocus}
         onSubmitEditing={() => onChangeText(localText)}
         style={[
           styles.input,

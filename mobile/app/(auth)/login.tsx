@@ -19,6 +19,7 @@ import { useToastStore } from '../../src/stores/toastStore'
 import { useThemeStore } from '../../src/theme/themeStore'
 import { biometricService } from '../../src/lib/biometrics'
 import apiClient from '../../src/api/client'
+import { APP_VERSION, APP_VERSION_CODE } from '../../src/config/version'
 
 export default function LoginPage() {
   const router = useRouter()
@@ -257,6 +258,13 @@ export default function LoginPage() {
             <TouchableOpacity onPress={() => router.push('/(auth)/register')}>
               <Text style={[styles.registerLink, { color: colors.tertiary }]}>Daftar di sini</Text>
             </TouchableOpacity>
+          </View>
+
+          {/* App Version Tag */}
+          <View style={{ alignItems: 'center', marginTop: 24 }}>
+            <Text style={{ fontSize: 11, fontWeight: '600', color: colors.secondary }}>
+              v{APP_VERSION} (Build {APP_VERSION_CODE})
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  Image,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
@@ -23,6 +24,8 @@ import {
   Info,
   Sparkles,
   RefreshCw,
+  Camera,
+  KeyRound,
 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { Card } from '../../src/components/ui/Card'
@@ -33,6 +36,10 @@ import { useToastStore } from '../../src/stores/toastStore'
 import { useUpdateStore } from '../../src/stores/updateStore'
 import { useTranslation } from '../../src/hooks/useTranslation'
 import { biometricService } from '../../src/lib/biometrics'
+import { resolveAvatarUrl, getInitials } from '../../src/lib/utils'
+import { AvatarModal } from '../../src/components/profile/AvatarModal'
+import { ChangePasswordModal } from '../../src/components/profile/ChangePasswordModal'
+import { APP_VERSION_CODE } from '../../src/config/version'
 
 export default function ProfileScreen() {
   const router = useRouter()
@@ -40,11 +47,14 @@ export default function ProfileScreen() {
   const { colors, mode, setMode } = useThemeStore()
   const { showToast } = useToastStore()
   const { language, setLanguage, t } = useTranslation()
-  const { currentVersion, isChecking, hasUpdate, checkUpdate, openModal } = useUpdateStore()
+  const { currentVersion, isChecking, hasUpdate, checkUpdate, openModal, updateInfo } = useUpdateStore()
 
   const [biometricEnabled, setBiometricEnabled] = useState(false)
   const [biometricType, setBiometricType] = useState('Biometrik')
   const [biometricAvailable, setBiometricAvailable] = useState(false)
+
+  const [avatarModalVisible, setAvatarModalVisible] = useState(false)
+  const [passwordModalVisible, setPasswordModalVisible] = useState(false)
 
   const handleCheckUpdate = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
@@ -88,30 +98,70 @@ export default function ProfileScreen() {
 
   const handleLogout = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
-    Alert.alert('Konfirmasi Keluar', 'Apakah Anda yakin ingin keluar dari akun ini?', [
-      { text: 'Batal', style: 'cancel' },
-      {
-        text: 'Keluar',
-        style: 'destructive',
-        onPress: async () => {
-          await logout()
-          showToast('Anda telah keluar dari aplikasi', 'info')
-          router.replace('/(auth)/login')
+    Alert.alert(
+      t('profile.logoutConfirmTitle', 'Konfirmasi Keluar'),
+      t('profile.logoutConfirmDesc', 'Apakah Anda yakin ingin keluar dari akun ini?'),
+      [
+        { text: t('common.cancel', 'Batal'), style: 'cancel' },
+        {
+          text: t('common.delete', 'Keluar'),
+          style: 'destructive',
+          onPress: async () => {
+            await logout()
+            showToast('Anda telah keluar dari aplikasi', 'info')
+            router.replace('/(auth)/login')
+          },
         },
-      },
-    ])
+      ]
+    )
   }
 
   const isDark = mode === 'midnight'
+  const resolvedAvatar = resolveAvatarUrl(user?.avatarUrl)
 
   return (
     <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* User Card Header */}
         <Card style={styles.userCard}>
-          <View style={[styles.avatarBox, { backgroundColor: isDark ? '#1C2638' : '#E2E8F0' }]}>
-            <UserIcon size={32} color={colors.tertiary} />
-          </View>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              setAvatarModalVisible(true)
+            }}
+            style={styles.avatarTouchable}
+          >
+            <View
+              style={[
+                styles.avatarBox,
+                {
+                  backgroundColor: isDark ? '#1C2638' : '#E2E8F0',
+                  borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : 'rgba(0,0,0,0.1)',
+                },
+              ]}
+            >
+              {resolvedAvatar ? (
+                <Image source={{ uri: resolvedAvatar }} style={styles.avatarImage} />
+              ) : (
+                <Text style={[styles.initialsText, { color: colors.tertiary }]}>
+                  {getInitials(user?.fullName || user?.username)}
+                </Text>
+              )}
+            </View>
+            <View
+              style={[
+                styles.cameraBadge,
+                {
+                  backgroundColor: colors.tertiary,
+                  borderColor: isDark ? '#151D2A' : '#FFFFFF',
+                },
+              ]}
+            >
+              <Camera size={11} color="#FFFFFF" />
+            </View>
+          </TouchableOpacity>
+
           <View style={{ flex: 1 }}>
             <Text style={[styles.fullName, { color: colors.primary }]}>
               {user?.fullName || user?.username || 'User'}
@@ -127,9 +177,37 @@ export default function ProfileScreen() {
 
         {/* Keamanan & Biometrik Section */}
         <Text style={[styles.sectionTitle, { color: colors.secondary }]}>
-          KEAMANAN & AUTENTIKASI
+          {t('profile.securitySection', 'KEAMANAN & AUTENTIKASI')}
         </Text>
         <Card style={styles.settingsCard}>
+          {/* Ganti Kata Sandi */}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              setPasswordModalVisible(true)
+            }}
+            style={styles.settingItem}
+          >
+            <View style={styles.settingLeft}>
+              <View style={[styles.iconCircle, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+                <KeyRound size={18} color="#38BDF8" />
+              </View>
+              <View>
+                <Text style={[styles.settingLabel, { color: colors.primary }]}>
+                  {t('profile.changePassword')}
+                </Text>
+                <Text style={[styles.settingDesc, { color: colors.secondary }]}>
+                  {t('profile.changePasswordDesc')}
+                </Text>
+              </View>
+            </View>
+            <ChevronRight size={16} color={colors.secondary} />
+          </TouchableOpacity>
+
+          <View style={[styles.divider, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)' }]} />
+
+          {/* Biometrik */}
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
               <View style={[styles.iconCircle, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
@@ -137,7 +215,7 @@ export default function ProfileScreen() {
               </View>
               <View>
                 <Text style={[styles.settingLabel, { color: colors.primary }]}>
-                  Login {biometricType}
+                  {t('profile.biometricLogin', 'Login Biometrik')} ({biometricType})
                 </Text>
                 <Text style={[styles.settingDesc, { color: colors.secondary }]}>
                   {biometricAvailable
@@ -158,7 +236,7 @@ export default function ProfileScreen() {
 
         {/* Pengaturan Tampilan & Bahasa */}
         <Text style={[styles.sectionTitle, { color: colors.secondary }]}>
-          PREFERENSI APLIKASI
+          {t('profile.systemSection', 'PREFERENSI APLIKASI')}
         </Text>
         <Card style={styles.settingsCard}>
           {/* Theme Mode */}
@@ -175,7 +253,7 @@ export default function ProfileScreen() {
                 {isDark ? <Sun size={18} color="#FBBF24" /> : <Moon size={18} color="#D97706" />}
               </View>
               <View>
-                <Text style={[styles.settingLabel, { color: colors.primary }]}>Mode Tampilan</Text>
+                <Text style={[styles.settingLabel, { color: colors.primary }]}>{t('profile.darkMode', 'Mode Tampilan')}</Text>
                 <Text style={[styles.settingDesc, { color: colors.secondary }]}>
                   {isDark ? 'Midnight (Dark Mode)' : 'Heritage (Light Mode)'}
                 </Text>
@@ -200,7 +278,7 @@ export default function ProfileScreen() {
                 <Globe size={18} color="#10B981" />
               </View>
               <View>
-                <Text style={[styles.settingLabel, { color: colors.primary }]}>Bahasa (Language)</Text>
+                <Text style={[styles.settingLabel, { color: colors.primary }]}>{t('profile.language', 'Bahasa (Language)')}</Text>
                 <Text style={[styles.settingDesc, { color: colors.secondary }]}>
                   {language === 'id' ? '🇮🇩 Bahasa Indonesia' : '🇬🇧 English'}
                 </Text>
@@ -211,7 +289,9 @@ export default function ProfileScreen() {
         </Card>
 
         {/* Informasi Server ERP & Versi Aplikasi */}
-        <Text style={[styles.sectionTitle, { color: colors.secondary }]}>INFORMASI SISTEM</Text>
+        <Text style={[styles.sectionTitle, { color: colors.secondary }]}>
+          {t('profile.infoSection', 'INFORMASI SISTEM')}
+        </Text>
         <Card style={styles.settingsCard}>
           <View style={styles.settingItem}>
             <View style={styles.settingLeft}>
@@ -219,8 +299,8 @@ export default function ProfileScreen() {
                 <Server size={18} color="#8B5CF6" />
               </View>
               <View>
-                <Text style={[styles.settingLabel, { color: colors.primary }]}>Status Server ERP</Text>
-                <Text style={[styles.settingDesc, { color: colors.success }]}>Online • 36.93.22.142:3010</Text>
+                <Text style={[styles.settingLabel, { color: colors.primary }]}>{t('profile.backendServer', 'Status Sistem ERP')}</Text>
+                <Text style={[styles.settingDesc, { color: colors.success }]}>Terhubung • Operasional Normal</Text>
               </View>
             </View>
             <Badge label="ONLINE" variant="success" />
@@ -251,8 +331,10 @@ export default function ProfileScreen() {
                   <RefreshCw size={18} color="#38BDF8" />
                 )}
               </View>
-              <View>
-                <Text style={[styles.settingLabel, { color: colors.primary }]}>Versi Aplikasi</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.settingLabel, { color: colors.primary }]}>
+                  {t('profile.appVersion', 'Versi Aplikasi')}: v{currentVersion} (Build {APP_VERSION_CODE})
+                </Text>
                 <Text
                   style={[
                     styles.settingDesc,
@@ -260,19 +342,18 @@ export default function ProfileScreen() {
                   ]}
                 >
                   {hasUpdate
-                    ? 'Pembaruan tersedia! Ketuk untuk update'
-                    : `v${currentVersion} • Ketuk untuk cek pembaruan`}
+                    ? `Pembaruan tersedia (${updateInfo?.version ? 'v' + updateInfo.version : 'baru'}) • Ketuk untuk update`
+                    : `Versi terkini • Ketuk untuk cek`}
                 </Text>
               </View>
             </View>
-            {hasUpdate ? (
-              <Badge label="UPDATE" variant="danger" />
-            ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              {hasUpdate && <Badge label="UPDATE" variant="danger" />}
               <Badge
-                label={isChecking ? 'MEMERIKSA...' : `v${currentVersion}`}
+                label={isChecking ? t('profile.checkingUpdate', 'MEMERIKSA...') : `v${currentVersion}`}
                 variant="neutral"
               />
-            )}
+            </View>
           </TouchableOpacity>
         </Card>
 
@@ -289,9 +370,29 @@ export default function ProfileScreen() {
           ]}
         >
           <LogOut size={18} color="#EF4444" style={{ marginRight: 8 }} />
-          <Text style={styles.logoutText}>Keluar dari Akun</Text>
+          <Text style={styles.logoutText}>{t('profile.logout', 'Keluar dari Akun')}</Text>
         </TouchableOpacity>
+
+        {/* App Version Info Footer */}
+        <View style={styles.versionFooterBox}>
+          <Text style={[styles.versionFooterText, { color: colors.secondary }]}>
+            M-Shipping Mobile v{currentVersion} • Build {APP_VERSION_CODE}
+          </Text>
+          <Text style={[styles.versionFooterSub, { color: isDark ? '#64748B' : '#94A3B8' }]}>
+            Enterprise Logistics & Finance System • Production
+          </Text>
+        </View>
       </ScrollView>
+
+      {/* Modals */}
+      <AvatarModal
+        visible={avatarModalVisible}
+        onClose={() => setAvatarModalVisible(false)}
+      />
+      <ChangePasswordModal
+        visible={passwordModalVisible}
+        onClose={() => setPasswordModalVisible(false)}
+      />
     </SafeAreaView>
   )
 }
@@ -311,10 +412,34 @@ const styles = StyleSheet.create({
     padding: 16,
     gap: 14,
   },
+  avatarTouchable: {
+    position: 'relative',
+  },
   avatarBox: {
-    width: 60,
-    height: 60,
-    borderRadius: 16,
+    width: 62,
+    height: 62,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
+  },
+  initialsText: {
+    fontSize: 22,
+    fontWeight: '800',
+  },
+  cameraBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -380,5 +505,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#EF4444',
+  },
+  versionFooterBox: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    gap: 4,
+  },
+  versionFooterText: {
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  versionFooterSub: {
+    fontSize: 10.5,
   },
 })

@@ -2,7 +2,7 @@ import { Fragment } from 'react'
 import { ChevronRight, Eye } from 'lucide-react'
 import { DeliveryOrderDetails } from './DeliveryOrderDetails'
 import { StatusPill } from './StatusPill'
-import { cn } from '@/lib/utils'
+import { cn, displayCustName } from '@/lib/utils'
 import type { GroupedDataRow } from '../types/delivery-orders.types'
 
 export function BatchRow({
@@ -46,8 +46,8 @@ export function BatchRow({
         </td>
         <td className="py-4 px-4">
           <div className="flex flex-col gap-0.5">
-            <p className="max-w-[180px] truncate text-sm font-medium text-[var(--color-primary)] leading-tight" title={row.customerName || '-'}>
-              {row.customerName || '-'}
+            <p className="max-w-[180px] truncate text-sm font-medium text-[var(--color-primary)] leading-tight" title={displayCustName(row.customerName, '-')}>
+              {displayCustName(row.customerName, '-')}
             </p>
             <p className="max-w-[180px] truncate text-xs text-[var(--color-secondary)]" title={row.resiNo || '-'}>
               {row.resiNo || '-'}

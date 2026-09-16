@@ -58,6 +58,53 @@ export interface ShipmentStatus {
   fdGudang: string | null
   statusLabel: string
   statusStep: number
+  isBlocked?: boolean
+  blockedBy?: string | null
+  blockedReason?: string | null
+}
+
+export interface ShipmentInvoiceDetailItem {
+  fdID: string
+  fdItemName: string
+  fdQty: number
+  fdSatuan: string
+  fdListCode?: string | null
+  fdItemPrice: number
+  fdTotal: number
+  fdCurr: string
+}
+
+export interface ShipmentInvoiceTotal {
+  fdID: string
+  fdCCYCode: string
+  fdJumlah: number
+  fdBayar: number
+  fdSLunas?: number | null
+  fdFinish?: string | null
+}
+
+export interface ShipmentInvoice {
+  fdInvNo: string
+  fdInvDate: string | null
+  fdCustCode?: string | null
+  fdCustName?: string | null
+  fdBillTo?: string | null
+  fdGive?: number | null
+  fdGiveDate?: string | null
+  fdGive2?: number | null
+  fdGiveDate2?: string | null
+  fdCekDate?: string | null
+  fdCekBy?: string | null
+  fdDescr?: string | null
+  totalAmount: number
+  totalPaid: number
+  balance: number
+  paymentStatus: 'LUNAS' | 'PARTIAL' | 'OVERDUE' | 'ISSUED' | 'UNPAID' | 'DRAFT'
+  isIssued: boolean
+  isCollected: boolean
+  isPaid: boolean
+  totals: ShipmentInvoiceTotal[]
+  details: ShipmentInvoiceDetailItem[]
 }
 
 export interface Shipment {
@@ -79,6 +126,7 @@ export interface Shipment {
   fdCancel?: number | null
   fdLocalTrackingNo?: string | null
   shipmentStatus?: ShipmentStatus
+  invoice?: ShipmentInvoice | null
 }
 
 export interface ShipmentTypeBreakdown {
@@ -106,8 +154,14 @@ export interface ShipmentPeriodMetrics {
   custByType: ShipmentTypeBreakdown
 }
 
-export interface ShipmentCommodityMetric {
+export interface BranchInfo {
+  code: string
   name: string
+}
+
+export interface CommodityBranchMetric {
+  branchCode: string
+  branchName?: string
   shipments: number
   packages: number
   weight: number
@@ -115,12 +169,24 @@ export interface ShipmentCommodityMetric {
   percentage?: number
 }
 
+export interface ShipmentCommodityMetric {
+  name: string
+  shipments: number
+  packages: number
+  weight: number
+  volume: number
+  percentage?: number
+  branches?: CommodityBranchMetric[]
+}
+
 export interface ShipmentCommoditiesData {
   air: ShipmentCommodityMetric[]
   sea: ShipmentCommodityMetric[]
+  availableBranches?: (BranchInfo | string)[]
 }
 
 export interface ShipmentKpis {
+  year?: number
   totalResi: number
   totalPackages: number
   totalBerat: number

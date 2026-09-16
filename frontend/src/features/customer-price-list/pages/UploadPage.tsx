@@ -15,6 +15,7 @@ import { useTranslation } from '@/hooks/useTranslation'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ROUTES } from '@/lib/constants'
 import { Button } from '@/components/ui/Button'
+import { displayCustName } from '@/lib/utils'
 import { useDebounce } from '@/hooks/useDebounce'
 import { customerPriceListApi } from '../services/customerPriceList.service'
 import { customersApi } from '@/features/customers/services/customers.service'
@@ -89,7 +90,7 @@ export function UploadPage() {
 
   const handleSelectCustomer = (c: CustomerResult) => {
     setCustCode(c.fdCustCode)
-    setCustName(c.fdCustName || '-')
+    setCustName(displayCustName(c.fdCustName, '-'))
     setSearch('')
     setShowDropdown(false)
   }
@@ -212,7 +213,7 @@ export function UploadPage() {
                         className="w-full text-left px-4 py-2 hover:bg-slate-50 text-sm focus:outline-none focus:bg-slate-50"
                       >
                         <span className="font-semibold text-slate-700">{c.fdCustCode}</span>
-                        <span className="text-slate-500 ml-2">— {c.fdCustName || 'No Name'}</span>
+                        <span className="text-slate-500 ml-2">— {displayCustName(c.fdCustName, 'No Name')}</span>
                       </button>
                     ))
                   ) : search ? (

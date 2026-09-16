@@ -8,7 +8,18 @@ import {
   searchManifestSuggestions,
   getMarkingKPIs,
   getMarkingExitHistory,
+  getMarkingSuggestions,
 } from './marking.service'
+
+export async function getMarkingSuggestionsController(c: Context) {
+  try {
+    const q = c.req.query('q') || ''
+    const suggestions = await getMarkingSuggestions(q)
+    return successResponse(c, suggestions)
+  } catch (error: any) {
+    return errorResponse(c, error.message || 'Terjadi kesalahan pada server', 500)
+  }
+}
 
 export async function listMarkings(c: Context) {
   try {

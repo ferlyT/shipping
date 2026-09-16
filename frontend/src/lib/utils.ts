@@ -82,6 +82,47 @@ export function truncate(str: string, maxLength: number): string {
   return str.length > maxLength ? str.slice(0, maxLength) + '…' : str
 }
 
+/**
+ * Mengganti karakter '^' warisan FoxPro menjadi petik tunggal "'" (single quote).
+ * Pada database/sistem legacy FoxPro, karakter petik tunggal sengaja disimpan sebagai '^'
+ * untuk menghindari SQL injection / syntax error string.
+ *
+ * Contoh: "MULTI TOY^S" -> "MULTI TOY'S"
+ */
+export function cleanFoxProString(str: string | null | undefined): string {
+  if (str == null) return ''
+  return String(str).replace(/\^/g, "'")
+}
+
+// Alias pemanggilan untuk kenyamanan di berbagai komponen
+export const normalizeFoxProText = cleanFoxProString
+export const unmaskFoxProQuotes = cleanFoxProString
+
+/**
+ * Helper terstandarisasi untuk menampilkan nama customer di seluruh antarmuka frontend.
+ * - Mengonversi karakter '^' warisan FoxPro menjadi petik tunggal "'" (misal: "MULTI TOY^S" -> "MULTI TOY'S")
+ * - Mendukung input bertipe string maupun objek { fdCustName, fdCustCode }
+ * - Mengembalikan fallback default ('—') jika data kosong.
+ *
+ * Contoh:
+ *   displayCustName("MULTI TOY^S") -> "MULTI TOY'S"
+ *   displayCustName(row.fdCustName) -> "MULTI TOY'S"
+ *   displayCustName(row.customer) -> "MULTI TOY'S"
+ *   displayCustName(null) -> "—"
+ */
+export function displayCustName(
+  input?: string | { fdCustName?: string | null; fdCustCode?: string | null } | null,
+  fallback = '—'
+): string {
+  if (!input) return fallback
+  if (typeof input === 'object') {
+    const val = input.fdCustName?.trim() || input.fdCustCode?.trim() || fallback
+    return cleanFoxProString(val) || fallback
+  }
+  const trimmed = String(input).trim()
+  return trimmed ? cleanFoxProString(trimmed) : fallback
+}
+
 // Format tanggal singkat ke "12 Jan 2024" (en-GB) — dipakai di komponen marking
 // Terpisah dari formatDate() agar mendukung fitur dual bahasa
 export function formatDateShort(value: string | Date | null | undefined): string {
@@ -239,6 +280,7 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     document.body.appendChild(textArea)
     textArea.focus()
     textArea.select()
+    textArea.setSelectionRange(0, 99999)
 
     const successful = document.execCommand('copy')
     document.body.removeChild(textArea)

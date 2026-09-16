@@ -6,7 +6,7 @@ import { updateService } from '../services/updateService'
 import type { AppVersionData } from '../types/update'
 import { useToastStore } from './toastStore'
 
-export const CURRENT_APP_VERSION = APP_VERSION || Constants.expoConfig?.version || '1.0.2'
+export const CURRENT_APP_VERSION = APP_VERSION || Constants.expoConfig?.version || '1.0.5'
 
 interface UpdateState {
   currentVersion: string
@@ -41,9 +41,6 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
     try {
       const data = await updateService.getLatestVersion()
       const isNewer = updateService.isNewer(currentVersion, data.version)
-      // Tampilkan modal jika:
-      // 1. Ada versi baru DAN
-      // 2. Jika bukan manual: belum pernah di-dismiss untuk versi ini (kecuali forceUpdate wajib)
       const shouldShowModal = isNewer && (isManual || data.forceUpdate || dismissedVersion !== data.version)
 
       set({
@@ -60,7 +57,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
       }
 
       return isNewer
-    } catch (error: any) {
+    } catch {
       if (isManual) {
         showToast('Gagal memeriksa pembaruan. Pastikan server terhubung.', 'error')
       }
@@ -79,7 +76,6 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
 
   dismissModal: () => {
     const { updateInfo } = get()
-    // Jika update wajib (forceUpdate), cegah penutupan dialog
     if (updateInfo?.forceUpdate) {
       return
     }
@@ -95,9 +91,9 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
     if (!updateInfo?.downloadUrl) return
 
     try {
-      showToast('Mengunduh APK. Buka notifikasi HP untuk instalasi.', 'info')
+      showToast('Mengunduh pembaruan APK... Cek notifikasi HP Anda.', 'info')
       await Linking.openURL(updateInfo.downloadUrl)
-    } catch (err) {
+    } catch {
       showToast('Tidak dapat membuka tautan unduhan.', 'error')
     }
   },
@@ -109,7 +105,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
 
     try {
       await Linking.openURL(targetUrl)
-    } catch (err) {
+    } catch {
       showToast('Tidak dapat membuka tautan web.', 'error')
     }
   },

@@ -595,6 +595,8 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
           fdUpdate: auditInfo.fdUpdate,
           fdUpdateDate: auditInfo.fdUpdateDate,
           fdUpdateSource: auditInfo.source,
+          fdNoteAir: auditInfo.fdNoteAir,
+          fdNote1Sea: auditInfo.fdNote1Sea,
         }
       }
     } catch (err) {

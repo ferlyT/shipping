@@ -1,7 +1,7 @@
 import { Eye } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { statusConfig, BrokerBadge, DiscontinuedBadge, CustomerTierBadge } from './CustomerBadges'
-import { formatCompactRupiah } from '@/lib/utils'
+import { formatCompactRupiah, displayCustName } from '@/lib/utils'
 import type { Customer } from '../types/customers.types'
 
 interface CustomerGridViewProps {
@@ -27,7 +27,7 @@ export function CustomerGridView({
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <h4 className="text-sm font-bold text-[var(--color-primary)] truncate group-hover:text-[var(--color-tertiary)] transition-colors">
-                  {cust.fdCustName || '—'}
+                  {displayCustName(cust.fdCustName)}
                 </h4>
                 <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                   <span className="font-mono text-xs text-[var(--color-secondary)]">

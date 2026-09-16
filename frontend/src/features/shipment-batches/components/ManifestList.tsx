@@ -3,11 +3,85 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Rows3, LayoutGrid, List, X, Loader2 } from 'lucide-react'
+import { Search, Rows3, LayoutGrid, List, X, Loader2, ShieldAlert } from 'lucide-react'
 import { markingApi, type MarkingManifest } from '../services/marking.service'
 import { useDebounce } from '@/hooks/useDebounce'
 import { getCommodityIcon } from '../types/marking.types'
-import { cn } from '@/lib/utils'
+import { cn, displayCustName } from '@/lib/utils'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FinancialStatusBadge — Status finansial & override blocked dari finance
+// ─────────────────────────────────────────────────────────────────────────────
+
+function FinancialStatusBadge({ manifest }: { manifest: MarkingManifest }) {
+  const isBlocked = Number(manifest.isBlocked) === 1 || manifest.financialStatus === 'BLOCKED'
+
+  if (isBlocked) {
+    return (
+      <div className="flex flex-col items-start gap-1">
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-red-500/10 border border-red-500/30 text-red-600 dark:text-red-400 whitespace-nowrap">
+          <ShieldAlert size={12} className="shrink-0" />
+          BLOCKED
+        </span>
+        <div className="flex flex-col text-[10.5px] leading-tight text-[var(--color-secondary)]">
+          {manifest.blockedBy && (
+            <span>
+              by: <strong className="text-[var(--color-primary)] font-semibold">{manifest.blockedBy.trim()}</strong>
+            </span>
+          )}
+          {manifest.blockedReason && manifest.blockedReason.trim() ? (
+            <span className="italic text-red-600/90 dark:text-red-400 mt-0.5 line-clamp-2 max-w-[200px]" title={manifest.blockedReason.trim()}>
+              "{manifest.blockedReason.trim()}"
+            </span>
+          ) : null}
+        </div>
+      </div>
+    )
+  }
+
+  const status = (manifest.financialStatus || 'NO STATUS').toUpperCase()
+  if (status === 'OK') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-sky-500/10 border border-sky-500/30 text-sky-600 dark:text-sky-400 whitespace-nowrap">
+        OK
+      </span>
+    )
+  }
+  if (status === 'COD') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+        COD
+      </span>
+    )
+  }
+  if (status === 'WARNING') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 whitespace-nowrap">
+        WARNING
+      </span>
+    )
+  }
+  if (status === 'URGENT') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-blue-500/10 border border-blue-500/30 text-blue-600 dark:text-blue-400 whitespace-nowrap">
+        URGENT
+      </span>
+    )
+  }
+  if (status === 'PAID' || status === 'LUNAS') {
+    return (
+      <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 whitespace-nowrap">
+        LUNAS
+      </span>
+    )
+  }
+
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-neutral-500/10 border border-neutral-500/20 text-[var(--color-secondary)] whitespace-nowrap">
+      {status || 'NO STATUS'}
+    </span>
+  )
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // AutocompleteInput — SearchBar dengan dropdown suggestions
@@ -266,7 +340,7 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
                       </div>
                       <div className="flex flex-col">
                         <div className="font-bold font-[var(--font-display)] text-[var(--color-primary)] text-[13px] sm:text-[14px] leading-none line-clamp-1">
-                          {m.fdCustName || 'Unknown Customer'}
+                          {displayCustName(m.fdCustName, 'Unknown Customer')}
                         </div>
                         <div className="text-[10px] sm:text-[11px] text-[var(--color-secondary)] mt-0.5 line-clamp-1">
                           {m.fdTerima || m.fdListCode}
@@ -274,6 +348,7 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
+                      <FinancialStatusBadge manifest={m} />
                       <div className="font-semibold text-[10px] sm:text-[11px] text-[var(--color-tertiary)] bg-[var(--color-neutral)] px-2 py-0.5 rounded">
                         {m.fdJmlPack || 0} {m.fdSatuan?.trim().toUpperCase()}
                       </div>
@@ -296,14 +371,14 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
           </div>
         ) : viewMode === 'table' ? (
           <div className="p-4 sm:p-6 overflow-x-auto">
-            <div className="min-w-[800px] border border-[var(--color-border)] rounded-[var(--radius-lg)] overflow-hidden shadow-sm">
+            <div className="min-w-[880px] border border-[var(--color-border)] rounded-[var(--radius-lg)] overflow-hidden shadow-sm">
               <table className="w-full border-collapse bg-[var(--color-surface)]">
                 <thead>
                   <tr>
-                    {['Customer', 'Marking / Receiver', 'Commodity', 'Description', 'Summary'].map((h, i) => (
+                    {['Customer', 'Marking / Receiver', 'Status Finansial', 'Commodity', 'Description', 'Summary'].map((h, i) => (
                       <th key={h} className={cn(
                         'bg-[var(--color-neutral)] font-[var(--font-label)] text-[0.65rem] sm:text-[0.7rem] tracking-[0.08em] uppercase text-[var(--color-secondary)] py-3 px-4 border-b border-[var(--color-border)] font-medium',
-                        i === 4 ? 'text-right' : 'text-left'
+                        i === 5 ? 'text-right' : 'text-left'
                       )}>
                         {h}
                       </th>
@@ -317,7 +392,7 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
                     return (
                       <tr key={m.fdListCode} className="hover:bg-[var(--color-neutral)]/50 border-b border-[var(--color-border)] last:border-0">
                         <td className="py-3 px-4 text-[0.85rem] sm:text-[0.9rem] align-top">
-                          <span className="font-semibold text-[var(--color-primary)]">{m.fdCustName || '—'}</span>
+                          <span className="font-semibold text-[var(--color-primary)]">{displayCustName(m.fdCustName)}</span>
                         </td>
                         <td className="py-3 px-4 text-[0.85rem] sm:text-[0.9rem] align-top">
                           <div className="flex flex-col gap-0.5">
@@ -329,6 +404,9 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
                             {m.fdTerima && <span className="font-semibold text-[var(--color-primary)] mt-1 leading-snug">{m.fdTerima}</span>}
                             {m.fdListCode && <span className="text-[13px] sm:text-[14px] text-[var(--color-tertiary)] font-medium leading-snug">{m.fdListCode}</span>}
                           </div>
+                        </td>
+                        <td className="py-3 px-4 text-[0.85rem] sm:text-[0.9rem] align-top">
+                          <FinancialStatusBadge manifest={m} />
                         </td>
                         <td className="py-3 px-4 text-[0.85rem] sm:text-[0.9rem] align-top">
                           <div className="flex flex-col gap-1.5">
@@ -368,12 +446,13 @@ export function ManifestList({ markingCode, onClose }: ManifestListProps) {
                       <div className="font-[var(--font-label)] text-[10px] sm:text-[11px] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-[3px]">List No.</div>
                       <div className="font-[var(--font-display)] font-semibold text-lg tracking-[-0.01em] text-[var(--color-primary)]">{m.fdListCode}</div>
                     </div>
+                    <FinancialStatusBadge manifest={m} />
                   </div>
                   <div className="px-5 py-4 flex flex-col gap-4">
                     <div className="flex justify-between items-start gap-4">
                       <div>
                         <div className="font-[var(--font-label)] text-[10px] sm:text-[11px] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-1">Customer</div>
-                        <div className="font-semibold text-xs sm:text-sm text-[var(--color-primary)]">{m.fdCustName || '—'}</div>
+                        <div className="font-semibold text-xs sm:text-sm text-[var(--color-primary)]">{displayCustName(m.fdCustName)}</div>
                       </div>
                       <div className="text-right">
                         <div className="font-[var(--font-label)] text-[10px] sm:text-[11px] tracking-[0.08em] uppercase text-[var(--color-secondary)] mb-1">Resi</div>

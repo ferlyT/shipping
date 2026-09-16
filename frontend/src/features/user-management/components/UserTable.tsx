@@ -3,7 +3,7 @@ import { Table } from '@/components/ui/Table'
 import { Badge } from '@/components/ui/Badge'
 import { Button } from '@/components/ui/Button'
 import { useTranslation } from '@/hooks/useTranslation'
-import { formatDate } from '@/lib/utils'
+import { formatDate, resolveMediaUrl } from '@/lib/utils'
 import type { User, DeleteModalState, RestoreModalState } from '../types'
 
 interface UserTableProps {
@@ -38,17 +38,31 @@ export function UserTable({
       key: 'username',
       header: 'Pengguna',
       fixed: true,
-      render: (user: User) => (
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-[var(--color-primary)] text-[var(--color-on-primary)] font-bold flex items-center justify-center text-xs shrink-0 font-[var(--font-display)] uppercase">
-            {user.username.slice(0, 2)}
+      render: (user: User) => {
+        const resolvedAvatar = resolveMediaUrl(user.avatarUrl)
+        return (
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-[var(--color-primary)] text-[var(--color-on-primary)] font-bold flex items-center justify-center text-xs shrink-0 font-[var(--font-display)] uppercase overflow-hidden border border-[var(--color-border)]">
+              {resolvedAvatar ? (
+                <img
+                  src={resolvedAvatar}
+                  alt={user.username}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    (e.target as HTMLElement).style.display = 'none'
+                  }}
+                />
+              ) : (
+                user.username.slice(0, 2)
+              )}
+            </div>
+            <div className="min-w-0">
+              <div className="font-semibold text-[var(--color-primary)] text-sm">{user.username}</div>
+              <div className="text-xs text-[var(--color-secondary)] truncate">{user.fullName || '—'}</div>
+            </div>
           </div>
-          <div className="min-w-0">
-            <div className="font-semibold text-[var(--color-primary)] text-sm">{user.username}</div>
-            <div className="text-xs text-[var(--color-secondary)] truncate">{user.fullName || '—'}</div>
-          </div>
-        </div>
-      ),
+        )
+      },
     },
     {
       key: 'role',

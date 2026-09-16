@@ -5,7 +5,7 @@ import { deliveryOrdersApi } from '../services/delivery-orders.service'
 import { Button } from '@/components/ui/Button'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
-import { formatDate } from '@/lib/utils'
+import { formatDate, displayCustName } from '@/lib/utils'
 import { useToastStore } from '@/stores/toastStore'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
@@ -48,7 +48,7 @@ export default function DetailPage() {
     <div className="p-4 sm:p-6 lg:p-8 w-full min-w-0 space-y-6 bg-[var(--color-surface)] font-[var(--font-body)] animate-fadeIn pb-24">
       <PageHeader
         title={`Surat Jalan: ${data.fdSJNo}`}
-        subtitle={`Detail informasi surat jalan untuk ${data.fdCustNameSJ || data.fdCustCode || 'Customer'}`}
+        subtitle={`Detail informasi surat jalan untuk ${displayCustName(data.fdCustNameSJ || data.fdCustCode, 'Customer')}`}
         breadcrumbs={[
           { label: t('module.logistics'), path: ROUTES.DELIVERY_ORDERS },
           { label: t('nav.deliveryOrder'), path: ROUTES.DELIVERY_ORDERS },
@@ -83,7 +83,7 @@ export default function DetailPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 shadow-xs">
               <p className="text-[10px] uppercase tracking-wider font-semibold text-[var(--color-secondary)]">Customer</p>
-              <p className="mt-1.5 text-sm font-semibold text-[var(--color-primary)]">{data.fdCustNameSJ || data.fdCustCode || '—'}</p>
+              <p className="mt-1.5 text-sm font-semibold text-[var(--color-primary)]">{displayCustName(data.fdCustNameSJ || data.fdCustCode)}</p>
               {(data.fdAddr || data.fdCity) && (
                 <p className="mt-1 text-xs text-[var(--color-secondary)] leading-snug">
                   {data.fdAddr || ''} {data.fdCity && `(${data.fdCity})`}

@@ -126,3 +126,55 @@ export async function uploadAvatar(userId: string, file: File) {
     user: updatedUser
   }
 }
+
+export async function uploadAvatarBase64(userId: string, base64String: string) {
+  const matches = base64String.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/)
+  let mimeType = 'image/jpeg'
+  let base64Content = base64String
+
+  if (matches && matches.length === 3 && matches[1] && matches[2]) {
+    mimeType = matches[1]
+    base64Content = matches[2]
+  }
+
+  const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  if (!allowedMimeTypes.includes(mimeType)) {
+    throw new Error('Format gambar tidak didukung. Harap gunakan JPEG, PNG, WEBP, atau GIF')
+  }
+
+  const buffer = Buffer.from(base64Content, 'base64')
+  if (buffer.length > 5 * 1024 * 1024) {
+    throw new Error('Ukuran gambar maksimal adalah 5MB')
+  }
+
+  const uploadsDir = path.join(process.cwd(), 'public', 'uploads', 'avatars')
+  await fs.mkdir(uploadsDir, { recursive: true })
+
+  const ext = mimeType === 'image/png' ? '.png' : mimeType === 'image/webp' ? '.webp' : '.jpg'
+  const fileName = `avatar-${userId}-${Date.now()}${ext}`
+  const filePath = path.join(uploadsDir, fileName)
+
+  await fs.writeFile(filePath, buffer)
+  const avatarUrl = `/uploads/avatars/${fileName}`
+
+  const updatedUser = await prisma.tbUsers.update({
+    where: { id: userId },
+    data: { avatarUrl },
+    select: {
+      id: true,
+      username: true,
+      fullName: true,
+      role: true,
+      avatarUrl: true,
+      createdAt: true,
+      lastLoginAt: true,
+    }
+  })
+
+  logger.info('Foto profil user (base64) berhasil diunggah', { userId, avatarUrl })
+
+  return {
+    avatarUrl,
+    user: updatedUser
+  }
+}

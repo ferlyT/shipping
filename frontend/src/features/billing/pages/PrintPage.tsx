@@ -6,6 +6,7 @@ import { terbilang } from '@/lib/terbilang'
 import { useAuthStore } from '@/stores/authStore'
 import { useReportDesignerStore } from '../stores/reportDesignerStore'
 import { ROUTES } from '@/lib/constants'
+import { displayCustName, cleanFoxProString } from '@/lib/utils'
 import { exportBillToPdf } from '../utils/pdf-export.utils'
 import type { Billing } from '../types/billing.types'
 
@@ -31,7 +32,7 @@ function formatBillDate(d: string | Date | null | undefined): string {
 }
 
 function getBillPdfFileName(data: Billing): string {
-  const custName = (data.customer?.fdCustName || data.fdCustCode || 'Customer').trim()
+  const custName = displayCustName(data.customer?.fdCustName || data.fdCustCode, 'Customer').trim()
   const marking = (data.fdMarkingCode || '').trim()
   const invNo = (data.fdInvNo || '').trim()
 
@@ -182,7 +183,7 @@ export default function PrintPage() {
   const total = data.fdJumlah1 ?? details.reduce((s, d) => s + Number(d.fdTotal || 0), 0)
 
   // Header info: nama customer diambil dari fdBillTo pada tbCustomers tanpa kode customer
-  const rawBillTo = (data.customer?.fdBillTo || data.customer?.fdCustName || '').trim()
+  const rawBillTo = cleanFoxProString(data.customer?.fdBillTo || data.customer?.fdCustName || '').trim()
   const displayTo = (data.fdCustCode
     ? rawBillTo.replace(new RegExp(`^${data.fdCustCode}\\s*-\\s*`, 'i'), '')
     : rawBillTo
@@ -956,7 +957,7 @@ export default function PrintPage() {
                   const amount = Number(row.fdTotal || qty * unitPrice)
                   const unit = (row.fdListCode || '').trim().toUpperCase()
                   const curr = (row.fdCurr || '').trim().toUpperCase()
-                  const comodity = (row.fdComodity || '').trim()
+                  const comodity = cleanFoxProString(row.fdComodity).trim()
 
                   // Unit / Mata uang tampilan kolom QTY
                   const unitStr = unit || curr || ''
@@ -976,7 +977,7 @@ export default function PrintPage() {
                   }
 
                   // Description item (uppercase persis format dokumen resmi)
-                  let desc = (row.fdItemName || '').trim()
+                  let desc = cleanFoxProString(row.fdItemName).trim()
                   if (comodity && !desc.toLowerCase().includes(comodity.toLowerCase())) {
                     desc += ` - ${comodity}`
                   }

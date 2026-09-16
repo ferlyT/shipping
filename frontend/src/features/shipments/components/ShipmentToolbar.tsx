@@ -1,8 +1,12 @@
 import { useState, useRef, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import {
   X, Search, Rows3, LayoutGrid, List, ChevronDown,
   Layers, HelpCircle, Sparkles, Tag, User, Receipt, Info
 } from 'lucide-react'
+import apiClient from '@/api/client'
+import { useDebounce } from '@/hooks/useDebounce'
+import { SearchSuggestionsDropdown } from '@/components/ui/SearchSuggestionsDropdown'
 import { cn } from '@/lib/utils'
 import type { SearchFieldType } from '../services/shipments.service'
 
@@ -54,6 +58,33 @@ export function ShipmentToolbar({
   const tooltipRef = useRef<HTMLDivElement>(null)
   const currentScope = SEARCH_SCOPES.find((s) => s.value === searchField) || SEARCH_SCOPES[0]
 
+  // Suggestion State & Query
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
+  const debouncedSearch = useDebounce(search, 300)
+
+  const { data: suggestions = [], isFetching: isFetchingSuggestions } = useQuery({
+    queryKey: ['shipment-toolbar-suggestions', debouncedSearch],
+    queryFn: async () => {
+      if (!debouncedSearch || debouncedSearch.trim().length < 2) return []
+      const res = await apiClient.get('/shipments/suggestions', { params: { q: debouncedSearch.trim() } })
+      return res.data?.data || []
+    },
+    enabled: debouncedSearch.trim().length >= 2,
+    staleTime: 30000,
+  })
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   // Close tooltip on click outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -85,53 +116,87 @@ export function ShipmentToolbar({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
         {/* Left: Scoped multi-value search bar + Info Tooltip */}
         <div className="flex items-center gap-2 flex-1 sm:max-w-[560px]">
-          <div className="relative flex-1 flex items-center rounded-xl border border-[var(--color-border)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/20 transition-all bg-[var(--color-surface)] shadow-2xs overflow-hidden">
-            {/* Scope selector */}
-            <div className="relative shrink-0 border-r border-[var(--color-border)] bg-[var(--color-neutral)] hover:opacity-90 transition-colors max-w-[110px] sm:max-w-none">
-              <select
-                value={searchField}
-                onChange={(e) => onSearchFieldChange(e.target.value as SearchFieldType)}
-                className="appearance-none bg-transparent pl-2.5 sm:pl-3 pr-6 sm:pr-7 py-2 text-xs font-semibold text-[var(--color-text)] cursor-pointer outline-none w-full truncate"
-              >
-                {SEARCH_SCOPES.map((sc) => (
-                  <option key={sc.value} value={sc.value}>{sc.label}</option>
-                ))}
-              </select>
-              <ChevronDown size={12} className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none" />
+          <div ref={searchContainerRef} className="relative flex-1">
+            <div className="relative flex items-center rounded-xl border border-[var(--color-border)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/20 transition-all bg-[var(--color-surface)] shadow-2xs overflow-hidden">
+              {/* Scope selector */}
+              <div className="relative shrink-0 border-r border-[var(--color-border)] bg-[var(--color-neutral)] hover:opacity-90 transition-colors max-w-[110px] sm:max-w-none">
+                <select
+                  value={searchField}
+                  onChange={(e) => onSearchFieldChange(e.target.value as SearchFieldType)}
+                  className="appearance-none bg-transparent pl-2.5 sm:pl-3 pr-6 sm:pr-7 py-2 text-xs font-semibold text-[var(--color-text)] cursor-pointer outline-none w-full truncate"
+                >
+                  {SEARCH_SCOPES.map((sc) => (
+                    <option key={sc.value} value={sc.value}>{sc.label}</option>
+                  ))}
+                </select>
+                <ChevronDown size={12} className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none" />
+              </div>
+
+              {/* Search Input */}
+              <div className="relative flex-1 flex items-center min-w-0">
+                <Search size={14} className="absolute left-2.5 sm:left-3 text-[var(--color-secondary)] pointer-events-none" />
+                <input
+                  value={search}
+                  onChange={(e) => {
+                    onSearchChange(e.target.value)
+                    if (e.target.value.trim().length >= 2) setShowSuggestions(true)
+                    else setShowSuggestions(false)
+                  }}
+                  onFocus={() => {
+                    if (search.trim().length >= 2) setShowSuggestions(true)
+                  }}
+                  placeholder={currentScope.placeholder}
+                  className="w-full pl-8 sm:pl-9 pr-12 sm:pr-14 py-2 text-xs sm:text-sm text-[var(--color-text)] outline-none bg-transparent placeholder:text-[var(--color-secondary)]"
+                />
+
+                {/* Multi-item badge count */}
+                {isMultiSearch && (
+                  <span
+                    className="absolute right-7 sm:right-8 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 text-[10px] font-bold"
+                    title={`${tokens.length} keyword pencarian terdeteksi`}
+                  >
+                    <Layers size={10} />
+                    {tokens.length}
+                  </span>
+                )}
+
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSearchChange('')
+                      setShowSuggestions(false)
+                    }}
+                    className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-text)] p-0.5 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer transition-colors"
+                    title="Hapus pencarian"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Search Input */}
-            <div className="relative flex-1 flex items-center min-w-0">
-              <Search size={14} className="absolute left-2.5 sm:left-3 text-[var(--color-secondary)] pointer-events-none" />
-              <input
-                value={search}
-                onChange={(e) => onSearchChange(e.target.value)}
-                placeholder={currentScope.placeholder}
-                className="w-full pl-8 sm:pl-9 pr-12 sm:pr-14 py-2 text-xs sm:text-sm text-[var(--color-text)] outline-none bg-transparent placeholder:text-[var(--color-secondary)]"
-              />
-
-              {/* Multi-item badge count */}
-              {isMultiSearch && (
-                <span
-                  className="absolute right-7 sm:right-8 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 text-[10px] font-bold"
-                  title={`${tokens.length} keyword pencarian terdeteksi`}
-                >
-                  <Layers size={10} />
-                  {tokens.length}
-                </span>
-              )}
-
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => onSearchChange('')}
-                  className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-text)] p-0.5 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer transition-colors"
-                  title="Hapus pencarian"
-                >
-                  <X size={13} />
-                </button>
-              )}
-            </div>
+            {/* Dropdown Suggestions */}
+            <SearchSuggestionsDropdown
+              visible={showSuggestions && search.trim().length >= 2}
+              suggestions={suggestions}
+              isLoading={isFetchingSuggestions}
+              title="Saran Pencarian (Resi / Customer / Marking)"
+              onSelect={(item) => {
+                if (item.type === 'customer') {
+                  onSearchFieldChange('customer')
+                } else if (item.type === 'marking') {
+                  onSearchFieldChange('marking')
+                } else if (item.type === 'resi') {
+                  onSearchFieldChange('resi')
+                } else {
+                  onSearchFieldChange('ALL')
+                }
+                onSearchChange(item.value)
+                setShowSuggestions(false)
+              }}
+              onClose={() => setShowSuggestions(false)}
+            />
           </div>
 
           {/* Interactive Search Guide Tooltip Trigger */}

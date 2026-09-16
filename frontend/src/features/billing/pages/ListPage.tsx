@@ -13,7 +13,7 @@ import { CurrencyValue } from '@/components/ui/CurrencyValue'
 import { BillingStatusTag } from '../components/BillingStatusTag'
 import { BillingFilterBar, type BillingModeFilter, type BillingStatusFilter } from '../components/BillingFilterBar'
 import { BillingToolbar, type BillingSearchScope } from '../components/BillingToolbar'
-import { formatDate, cn } from '@/lib/utils'
+import { formatDate, cn, displayCustName } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -179,8 +179,8 @@ export default function ListPage() {
         const config = statusConfig[statusVal as keyof typeof statusConfig] || statusConfig[0]
         return (
           <div className="flex items-center gap-1.5 min-w-0">
-            <span className="font-semibold text-[var(--color-primary)] truncate" title={row.customer?.fdCustName || row.fdCustCode || '—'}>
-              {row.customer?.fdCustName || row.fdCustCode || '—'}
+            <span className="font-semibold text-[var(--color-primary)] truncate" title={displayCustName(row.customer?.fdCustName || row.fdCustCode)}>
+              {displayCustName(row.customer?.fdCustName || row.fdCustCode)}
             </span>
             {row.customer && (
               <Badge variant={config.badgeVariant} className="text-[10px] px-1.5 py-0 shrink-0">
@@ -363,7 +363,7 @@ export default function ListPage() {
                         {/* Line 2: Customer name + Badge */}
                         <div className="flex items-center gap-1.5 min-w-0">
                           <span className="text-xs font-medium text-[var(--color-primary)] truncate">
-                            {row.customer?.fdCustName || row.fdCustCode || '—'}
+                            {displayCustName(row.customer?.fdCustName || row.fdCustCode)}
                           </span>
                           {row.customer && (
                             <Badge

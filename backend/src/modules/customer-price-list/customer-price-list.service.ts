@@ -340,9 +340,10 @@ export async function softDeleteCustomerUpload(id: number) {
     ],
   })
 
-  if (activeUploads.length > 0) {
+  const firstUpload = activeUploads[0]
+  if (firstUpload) {
     await prisma.tbCustomerPriceListUpload.update({
-      where: { id: activeUploads[0].id },
+      where: { id: firstUpload.id },
       data: { isSuperseded: false },
     })
   }

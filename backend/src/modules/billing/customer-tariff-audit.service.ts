@@ -1,4 +1,5 @@
 import { prisma } from '../../config/database'
+import { logger } from '../../config/logger'
 
 export interface ColumnMappingInfo {
   branchCode: string | null
@@ -262,7 +263,7 @@ export async function getCustomerTariffAuditList(custCode: string) {
       }
     })
   } catch (err) {
-    console.error(`Error fetching tbCustomersHargaAudit for ${cleanCustCode}:`, err)
+    logger.error(`Error fetching tbCustomersHargaAudit for ${cleanCustCode}:`, { error: err })
     return []
   }
 }

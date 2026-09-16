@@ -1,4 +1,3 @@
-import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
@@ -37,7 +36,7 @@ interface ModuleGroup {
 const toPermissionPath = (item: LeafItem) => item.permissionPath ?? item.path
 
 const hasPermission = (permissions: string[] | undefined, path: string) =>
-  !permissions || permissions.includes('/*') || permissions.includes(path)
+  path === ROUTES.PROFILE || !permissions || permissions.includes('/*') || permissions.includes(path)
 
 const getERPNavModules = (t: (key: string) => string, role?: string, permissions?: string[]): ModuleGroup[] => {
   const allModules: ModuleGroup[] = [
@@ -182,8 +181,6 @@ export function Sidebar({ isOpen, onClose }: SidebarProps = {}) {
   const { user } = useAuthStore()
   const { t } = useTranslation()
   const location = useLocation()
-
-  useModalEscape(isSidebarOpen, handleClose)
 
   // Track expanded groups per module-item combination
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({

@@ -2,6 +2,7 @@ import { prisma } from '../../config/database'
 import { Prisma } from '@prisma/client'
 import { buildPagination, parsePagination } from '../../utils/pagination'
 import { logger } from '../../config/logger'
+import { suggestionCache } from '../../utils/cache'
 import { calculateTier, getAnnualTierMap } from './customers-tier.service'
 import { type CustomerTierKey, TIER_CONFIG } from './customers.types'
 
@@ -148,12 +149,12 @@ export async function getCustomers(query: Record<string, string | undefined>) {
       salesStats = results[3]
       statsCache[cacheKey] = { timestamp: now, groupStats, salesStats }
     } else {
-      groupStats = statsCache[cacheKey].groupStats
-      salesStats = statsCache[cacheKey].salesStats
+      groupStats = statsCache[cacheKey]?.groupStats ?? []
+      salesStats = statsCache[cacheKey]?.salesStats ?? []
     }
 
     // 5. Batch fetch annual revenue stats for the current page customers
-    const custCodes = rawCustomers.map((c) => c.fdCustCode.trim())
+    const custCodes = rawCustomers.map((c: any) => c.fdCustCode.trim()).filter(Boolean)
     const revenueMap: Record<string, { totalRevenue: number; totalInvoices: number }> = {}
 
     if (custCodes.length > 0) {
@@ -161,43 +162,23 @@ export async function getCustomers(query: Record<string, string | undefined>) {
         const startDate = new Date(`${targetYear}-01-01T00:00:00.000Z`)
         const endDate = new Date(`${targetYear}-12-31T23:59:59.999Z`)
 
-        const billings = await prisma.$queryRaw<any[]>`
+        const revenueRows = await prisma.$queryRaw<any[]>`
           SELECT 
             RTRIM(b.fdCustCode) AS fdCustCode,
-            RTRIM(b.fdInvNo) AS fdInvNo,
-            b.fdJumlah1
+            COUNT(b.fdInvNo) AS totalInvoices,
+            SUM(CASE WHEN ISNULL(b.fdJumlah1, 0) > 0 THEN b.fdJumlah1 ELSE ISNULL(p.fdJumlah1, 0) END) AS totalRevenue
           FROM tbBilling b WITH (NOLOCK)
-          WHERE RTRIM(b.fdCustCode) IN (${Prisma.join(custCodes)})
+          LEFT JOIN tbBillingPrev p WITH (NOLOCK) ON b.fdInvNo = p.fdInvNo
+          WHERE b.fdCustCode IN (${Prisma.join(custCodes)})
             AND b.fdInvDate >= ${startDate} AND b.fdInvDate <= ${endDate}
+          GROUP BY b.fdCustCode
         `
 
-        const zeroInvoices = billings
-          .filter((b) => !b.fdJumlah1 || Number(b.fdJumlah1) === 0)
-          .map((b) => String(b.fdInvNo).trim())
-          .filter(Boolean)
-
-        let prevMap: Record<string, number> = {}
-        if (zeroInvoices.length > 0) {
-          const prevs = await prisma.$queryRaw<any[]>`
-            SELECT RTRIM(fdInvNo) AS fdInvNo, fdJumlah1 
-            FROM tbBillingPrev WITH (NOLOCK) 
-            WHERE RTRIM(fdInvNo) IN (${Prisma.join(zeroInvoices)})
-          `
-          for (const p of prevs) {
-            prevMap[String(p.fdInvNo).trim()] = Number(p.fdJumlah1) || 0
-          }
-        }
-
-        for (const b of billings) {
-          const code = String(b.fdCustCode).trim()
-          if (!revenueMap[code]) revenueMap[code] = { totalRevenue: 0, totalInvoices: 0 }
-          revenueMap[code].totalInvoices++
-          const amt = Number(b.fdJumlah1) || 0
-          if (amt > 0) {
-            revenueMap[code].totalRevenue += amt
-          } else {
-            const prevAmt = prevMap[String(b.fdInvNo).trim()] || 0
-            revenueMap[code].totalRevenue += prevAmt
+        for (const row of revenueRows) {
+          const code = String(row.fdCustCode || '').trim()
+          revenueMap[code] = {
+            totalRevenue: Number(row.totalRevenue) || 0,
+            totalInvoices: Number(row.totalInvoices) || 0,
           }
         }
       } catch (err: any) {
@@ -206,7 +187,7 @@ export async function getCustomers(query: Record<string, string | undefined>) {
     }
 
     // Attach Tier & Financial Stats to customers
-    const data = rawCustomers.map((cust) => {
+    const data = rawCustomers.map((cust: any) => {
       const code = cust.fdCustCode.trim()
       const revInfo = revenueMap[code] || { totalRevenue: 0, totalInvoices: 0 }
       const tier = calculateTier(revInfo.totalRevenue)
@@ -275,84 +256,213 @@ export async function getCustomerById(id: string) {
 
     try {
       const minDate = new Date('2024-01-01T00:00:00.000Z')
-      const billings = await prisma.$queryRaw<any[]>`
+      const yearlyRows = await prisma.$queryRaw<any[]>`
         SELECT 
-          RTRIM(b.fdInvNo) AS fdInvNo,
-          b.fdInvDate,
-          YEAR(b.fdInvDate) as invYear,
-          b.fdJumlah1
+          YEAR(b.fdInvDate) AS invYear,
+          COUNT(b.fdInvNo) AS totalInvoices,
+          SUM(CASE WHEN ISNULL(b.fdJumlah1, 0) > 0 THEN b.fdJumlah1 ELSE ISNULL(p.fdJumlah1, 0) END) AS totalRevenue,
+          SUM(CASE WHEN ISNULL(b.fdJumlah1, 0) = 0 AND ISNULL(p.fdJumlah1, 0) > 0 THEN 1 ELSE 0 END) AS adjustedInvoices
         FROM tbBilling b WITH (NOLOCK)
-        WHERE RTRIM(b.fdCustCode) = ${id.trim()}
+        LEFT JOIN tbBillingPrev p WITH (NOLOCK) ON b.fdInvNo = p.fdInvNo
+        WHERE b.fdCustCode = ${id.trim()}
           AND b.fdInvDate >= ${minDate}
-        ORDER BY b.fdInvDate DESC
+        GROUP BY YEAR(b.fdInvDate)
+        ORDER BY invYear DESC
       `
 
-      const zeroInvoices = billings
-        .filter((b) => !b.fdJumlah1 || Number(b.fdJumlah1) === 0)
-        .map((b) => String(b.fdInvNo).trim())
-        .filter(Boolean)
+      financialStats = yearlyRows.map((row) => {
+        const year = Number(row.invYear)
+        const totalRevenue = Number(row.totalRevenue) || 0
+        const totalInvoices = Number(row.totalInvoices) || 0
+        const adjustedInvoices = Number(row.adjustedInvoices) || 0
 
-      let prevMap: Record<string, number> = {}
-      if (zeroInvoices.length > 0) {
-        const prevs = await prisma.$queryRaw<any[]>`
-          SELECT RTRIM(fdInvNo) AS fdInvNo, fdJumlah1 
-          FROM tbBillingPrev WITH (NOLOCK) 
-          WHERE RTRIM(fdInvNo) IN (${Prisma.join(zeroInvoices)})
-        `
-        for (const p of prevs) {
-          prevMap[String(p.fdInvNo).trim()] = Number(p.fdJumlah1) || 0
+        const tier = calculateTier(totalRevenue)
+        const tierCfg = TIER_CONFIG[tier]
+        const nextTier = tierCfg.nextTier
+        const nextMin = tierCfg.nextMin || 0
+        const remainingForNextTier = nextMin > totalRevenue ? nextMin - totalRevenue : 0
+        const progressToNextTier = nextMin > 0 ? Math.min(100, Math.round((totalRevenue / nextMin) * 100)) : 100
+
+        return {
+          year,
+          totalRevenue,
+          totalInvoices,
+          adjustedInvoices,
+          tier,
+          nextTier,
+          nextMin,
+          remainingForNextTier,
+          progressToNextTier,
         }
-      }
+      })
 
-      const yearlyMap: Record<number, { year: number; totalRevenue: number; totalInvoices: number; adjustedInvoices: number; tier: CustomerTierKey }> = {}
-      for (const b of billings) {
-        const y = Number(b.invYear)
-        if (!yearlyMap[y]) yearlyMap[y] = { year: y, totalRevenue: 0, totalInvoices: 0, adjustedInvoices: 0, tier: 'none' }
-        yearlyMap[y].totalInvoices++
-        const amt = Number(b.fdJumlah1) || 0
-        if (amt > 0) {
-          yearlyMap[y].totalRevenue += amt
-        } else {
-          const prevAmt = prevMap[String(b.fdInvNo).trim()] || 0
-          yearlyMap[y].totalRevenue += prevAmt
-          if (prevAmt > 0) yearlyMap[y].adjustedInvoices++
-        }
-      }
-
-      financialStats = Object.values(yearlyMap)
-        .map((stat) => {
-          const tier = calculateTier(stat.totalRevenue)
-          const tierCfg = TIER_CONFIG[tier]
-          const nextTier = tierCfg.nextTier
-          const nextMin = tierCfg.nextMin || 0
-          const remainingForNextTier = nextMin > stat.totalRevenue ? nextMin - stat.totalRevenue : 0
-          const progressToNextTier = nextMin > 0 ? Math.min(100, Math.round((stat.totalRevenue / nextMin) * 100)) : 100
-
-          return {
-            ...stat,
-            tier,
-            nextTier,
-            nextMin,
-            remainingForNextTier,
-            progressToNextTier,
-          }
-        })
-        .sort((a, b) => b.year - a.year)
-
-      const currentYearStat = financialStats.find((s) => s.year === new Date().getFullYear())
-      const prevYearStat = financialStats.find((s) => s.year === new Date().getFullYear() - 1)
-      currentTier = currentYearStat?.tier !== 'none' ? (currentYearStat?.tier || 'none') : (prevYearStat?.tier || 'none')
+      const currentYear = new Date().getFullYear()
+      const currentYearStat = financialStats.find((s) => s.year === currentYear)
+      const prevYearStat = financialStats.find((s) => s.year === currentYear - 1)
+      currentTier = currentYearStat?.tier && currentYearStat.tier !== 'none'
+        ? currentYearStat.tier
+        : (prevYearStat?.tier || 'none')
     } catch (finErr: any) {
       logger.warn('Failed to query financial stats for customer:', { id, error: finErr.message })
+    }
+
+    // Query tbCustomerPenagihan & extra customer billing fields (fdFinCode, fdKodePenagih)
+    let penagihanDetail: any = null
+    try {
+      const extraCustRows = await prisma.$queryRaw<any[]>`
+        SELECT 
+          RTRIM(ISNULL(fdFinCode, '')) AS fdFinCode,
+          RTRIM(ISNULL(fdKodePenagih, '')) AS fdKodePenagih
+        FROM tbCustomers WITH (NOLOCK)
+        WHERE fdCustCode = ${id.trim()}
+      `
+      const finCode = extraCustRows[0]?.fdFinCode || ''
+      const kodePenagih = extraCustRows[0]?.fdKodePenagih || ''
+
+      const penagihanRows = await prisma.$queryRaw<any[]>`
+        SELECT TOP 1 
+          RTRIM(ISNULL(fdContact, '')) AS fdContact,
+          RTRIM(ISNULL(fdHP, '')) AS fdHP,
+          RTRIM(ISNULL(fdTelp, '')) AS fdTelp,
+          RTRIM(ISNULL(fdEmail, '')) AS fdEmail,
+          RTRIM(ISNULL(fdAddr, '')) AS fdAddr,
+          RTRIM(ISNULL(fdCity, '')) AS fdCity,
+          ISNULL(fdAktif, 1) AS fdAktif
+        FROM tbCustomerPenagihan WITH (NOLOCK)
+        WHERE fdCustCode = ${id.trim()}
+        ORDER BY fdAktif DESC, fdID ASC
+      `
+      const pRow = penagihanRows[0] || null
+
+      let finName = ''
+      let kolektorName = ''
+      const empCodes = [finCode, kodePenagih].filter(Boolean)
+      if (empCodes.length > 0) {
+        const empRows = await prisma.tbEmployees.findMany({
+          where: { fdEmpCode: { in: empCodes } },
+          select: { fdEmpCode: true, fdEmpName: true }
+        })
+        const empMap = new Map(empRows.map(e => [e.fdEmpCode.trim(), e.fdEmpName.trim()]))
+        if (finCode) finName = empMap.get(finCode) || ''
+        if (kodePenagih) kolektorName = empMap.get(kodePenagih) || ''
+      }
+
+      const emailVal = (pRow?.fdEmail && pRow.fdEmail !== '0' ? pRow.fdEmail : (customer.fdEmailPenagihan && customer.fdEmailPenagihan !== '0' ? customer.fdEmailPenagihan : '')).trim()
+
+      penagihanDetail = {
+        nama: (customer.fdBillTo || customer.fdCustName || '').trim(),
+        pic: (pRow?.fdContact || customer.fdContact || '').trim(),
+        alamat: (pRow?.fdAddr || customer.fdBillAddr1 || customer.fdAddr1 || '').trim(),
+        kota: (pRow?.fdCity || customer.fdBillCityName || customer.fdCityName || '').trim(),
+        hp: (pRow?.fdHP || customer.fdHpPenagihan || customer.fdHP || '').trim(),
+        email: emailVal,
+        finCode,
+        finName,
+        kolektorCode: kodePenagih,
+        kolektorName,
+        notif: customer.fdNotifPenagihan ?? 0,
+        keterangan: (customer.fdKeteranganPenagihan || '').trim(),
+      }
+    } catch (penagihanErr: any) {
+      logger.warn('Failed to query penagihan detail for customer:', { id, error: penagihanErr.message })
     }
 
     return {
       ...customer,
       currentTier,
       financialStats,
+      penagihanDetail,
     }
   } catch (err: any) {
     logger.error('Database error on getCustomerById', { id, error: err.message })
     throw new Error('Gagal mengambil detail pelanggan')
+  }
+}
+
+export interface CustomerSuggestion {
+  type: 'customer' | 'code' | 'contact'
+  title: string
+  subtitle: string
+  value: string
+  custCode: string
+}
+
+export async function getCustomerSuggestions(keyword: string): Promise<CustomerSuggestion[]> {
+  const cleanQ = (keyword || '').trim()
+  if (!cleanQ || cleanQ.length < 2) return []
+
+  const cacheKey = `customer:${cleanQ.toLowerCase()}`
+  const cached = suggestionCache.get<CustomerSuggestion[]>(cacheKey)
+  if (cached) return cached
+
+  const searchLike = `%${cleanQ}%`
+
+  try {
+    const rows = await prisma.$queryRaw<any[]>`
+      SELECT TOP 12 
+        RTRIM(ISNULL(fdCustCode, '')) AS fdCustCode,
+        RTRIM(ISNULL(fdCustName, '')) AS fdCustName,
+        RTRIM(ISNULL(fdContact, '')) AS fdContact,
+        RTRIM(ISNULL(fdHP, '')) AS fdHP,
+        RTRIM(ISNULL(fdTelp, '')) AS fdTelp,
+        RTRIM(ISNULL(fdCityName, '')) AS fdCityName
+      FROM tbCustomers WITH (NOLOCK)
+      WHERE ISNULL(fdDiscontinued, 0) <> 1
+        AND (
+          fdCustName LIKE ${searchLike}
+          OR fdCustCode LIKE ${searchLike}
+          OR fdContact LIKE ${searchLike}
+          OR fdHP LIKE ${searchLike}
+          OR fdTelp LIKE ${searchLike}
+        )
+      ORDER BY fdCustName ASC
+    `.catch(() => [])
+
+    const suggestions: CustomerSuggestion[] = []
+    const seen = new Set<string>()
+    const qLower = cleanQ.toLowerCase()
+
+    for (const row of rows) {
+      const custCode = (row.fdCustCode || '').trim()
+
+      if (row.fdCustName && row.fdCustName.toLowerCase().includes(qLower) && !seen.has(`c:${row.fdCustName}`)) {
+        seen.add(`c:${row.fdCustName}`)
+        suggestions.push({
+          type: 'customer',
+          title: row.fdCustName,
+          subtitle: `Kode: ${custCode}${row.fdCityName ? ` • ${row.fdCityName}` : ''}`,
+          value: row.fdCustName,
+          custCode,
+        })
+      }
+      if (row.fdCustCode && row.fdCustCode.toLowerCase().includes(qLower) && !seen.has(`code:${row.fdCustCode}`)) {
+        seen.add(`code:${row.fdCustCode}`)
+        suggestions.push({
+          type: 'code',
+          title: row.fdCustCode,
+          subtitle: `Pelanggan: ${row.fdCustName}`,
+          value: row.fdCustCode,
+          custCode,
+        })
+      }
+      const contactVal = (row.fdContact || row.fdHP || row.fdTelp || '').trim()
+      if (contactVal && contactVal.toLowerCase().includes(qLower) && !seen.has(`cnt:${contactVal}`)) {
+        seen.add(`cnt:${contactVal}`)
+        suggestions.push({
+          type: 'contact',
+          title: contactVal,
+          subtitle: `Kontak: ${row.fdCustName}`,
+          value: contactVal,
+          custCode,
+        })
+      }
+      if (suggestions.length >= 10) break
+    }
+
+    const result = suggestions.slice(0, 10)
+    suggestionCache.set(cacheKey, result)
+    return result
+  } catch {
+    return []
   }
 }

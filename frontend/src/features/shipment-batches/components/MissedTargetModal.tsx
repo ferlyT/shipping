@@ -1,7 +1,7 @@
 import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { X, AlertTriangle, Search, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, AlertTriangle, Search, ChevronDown, ChevronUp, Calendar } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface MissedTargetItem {
@@ -16,6 +16,14 @@ interface MissedTargetModalProps {
   data: MissedTargetItem[];
 }
 
+export function extractYearFromCode(code: string): string {
+  const match = code.trim().match(/^(\d{2})/);
+  if (match) {
+    return `20${match[1]}`;
+  }
+  return 'Lainnya';
+}
+
 export function MissedTargetModal({ isOpen, onClose, data }: MissedTargetModalProps) {
   useModalEscape(isOpen, onClose)
   const [search, setSearch] = useState('');
@@ -25,12 +33,62 @@ export function MissedTargetModal({ isOpen, onClose, data }: MissedTargetModalPr
     typeof window === 'undefined' ? true : window.innerWidth >= 640
   );
 
+  // Extract unique available years from batch codes
+  const availableYears = useMemo(() => {
+    const years = new Set<string>();
+    data.forEach(group => {
+      group.codes.forEach(c => {
+        years.add(extractYearFromCode(c.code));
+      });
+    });
+    return Array.from(years).sort().reverse();
+  }, [data]);
+
+  const currentYear = new Date().getFullYear().toString();
+  const [selectedYear, setSelectedYear] = useState<string>(currentYear);
+
+  // Fallback to active year or first available year if currentYear has no data
+  const effectiveYear = useMemo(() => {
+    if (selectedYear === 'ALL') return 'ALL';
+    if (availableYears.includes(selectedYear)) return selectedYear;
+    if (availableYears.includes(currentYear)) return currentYear;
+    return availableYears[0] || 'ALL';
+  }, [selectedYear, availableYears, currentYear]);
+
+  // Year badge counters
+  const yearCounts = useMemo(() => {
+    const counts: Record<string, number> = { ALL: 0 };
+    data.forEach(group => {
+      group.codes.forEach(c => {
+        counts.ALL++;
+        const y = extractYearFromCode(c.code);
+        counts[y] = (counts[y] || 0) + 1;
+      });
+    });
+    return counts;
+  }, [data]);
+
+  // Filter data by selected year
+  const yearFilteredData = useMemo(() => {
+    if (effectiveYear === 'ALL') return data;
+    return data
+      .map(group => {
+        const filteredCodes = group.codes.filter(c => extractYearFromCode(c.code) === effectiveYear);
+        return {
+          ...group,
+          count: filteredCodes.length,
+          codes: filteredCodes,
+        };
+      })
+      .filter(group => group.codes.length > 0);
+  }, [data, effectiveYear]);
+
   const stats = useMemo(() => {
     let totalBatches = 0;
     let maxDeviation = 0;
     let criticalCount = 0;
 
-    data.forEach(group => {
+    yearFilteredData.forEach(group => {
       totalBatches += group.count;
       group.codes.forEach(c => {
         const deviation = c.transit - c.target;
@@ -41,14 +99,14 @@ export function MissedTargetModal({ isOpen, onClose, data }: MissedTargetModalPr
 
     return {
       totalBatches,
-      groupCount: data.length,
+      groupCount: yearFilteredData.length,
       maxDeviation,
       criticalCount
     };
-  }, [data]);
+  }, [yearFilteredData]);
 
   const filteredAndSortedData = useMemo(() => {
-    let result = data;
+    let result = yearFilteredData;
 
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -69,7 +127,7 @@ export function MissedTargetModal({ isOpen, onClose, data }: MissedTargetModalPr
     });
 
     return result;
-  }, [data, search, sortBy]);
+  }, [yearFilteredData, search, sortBy]);
 
   const toggleExpand = (name: string) => {
     setExpandedGroups(prev => ({ ...prev, [name]: !prev[name] }));
@@ -191,11 +249,74 @@ export function MissedTargetModal({ isOpen, onClose, data }: MissedTargetModalPr
           </div>
         </div>
 
+        {/* Year Filter Tabs */}
+        {availableYears.length > 0 && (
+          <div className="flex-shrink-0 px-4 sm:px-6 py-2 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/40 flex items-center justify-between gap-2 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Calendar className="w-3.5 h-3.5 text-[var(--color-secondary)]" />
+              <span className="text-[11px] uppercase font-bold text-[var(--color-secondary)] tracking-wider">
+                Tahun:
+              </span>
+            </div>
+            <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+              {availableYears.map(yr => {
+                const isCurrentYear = yr === currentYear;
+                const isSelected = effectiveYear === yr;
+                const count = yearCounts[yr] || 0;
+                return (
+                  <button
+                    key={yr}
+                    type="button"
+                    onClick={() => setSelectedYear(yr)}
+                    className={cn(
+                      "px-2.5 py-1 rounded-lg text-xs font-semibold tracking-tight transition-all shrink-0 flex items-center gap-1.5 cursor-pointer border",
+                      isSelected
+                        ? "bg-[var(--color-surface)] border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs font-bold"
+                        : "bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-border-strong)]"
+                    )}
+                  >
+                    <span>{yr}</span>
+                    {isCurrentYear && (
+                      <span className="text-[9px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-600 dark:text-amber-400 font-bold border border-amber-500/20">
+                        Aktif
+                      </span>
+                    )}
+                    <span className={cn(
+                      "text-[10px] tabular-nums font-bold px-1.5 py-0.2 rounded-full",
+                      isSelected ? "bg-[var(--color-tertiary)]/10 text-[var(--color-tertiary)]" : "bg-[var(--color-neutral)] text-[var(--color-secondary)]"
+                    )}>
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+              <button
+                type="button"
+                onClick={() => setSelectedYear('ALL')}
+                className={cn(
+                  "px-2.5 py-1 rounded-lg text-xs font-semibold tracking-tight transition-all shrink-0 flex items-center gap-1.5 cursor-pointer border",
+                  effectiveYear === 'ALL'
+                    ? "bg-[var(--color-surface)] border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs font-bold"
+                    : "bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-border-strong)]"
+                )}
+              >
+                <span>Semua</span>
+                <span className={cn(
+                  "text-[10px] tabular-nums font-bold px-1.5 py-0.2 rounded-full",
+                  effectiveYear === 'ALL' ? "bg-[var(--color-tertiary)]/10 text-[var(--color-tertiary)]" : "bg-[var(--color-neutral)] text-[var(--color-secondary)]"
+                )}>
+                  {yearCounts.ALL || 0}
+                </span>
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* List */}
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6 space-y-5 sm:space-y-6 bg-[var(--color-surface)]">
           {filteredAndSortedData.length === 0 ? (
             <div className="text-center text-[var(--color-secondary)] py-8 text-sm font-medium">
-              Tidak ada data yang cocok.
+              Tidak ada data yang cocok untuk tahun {effectiveYear === 'ALL' ? 'terpilih' : effectiveYear}.
             </div>
           ) : (
             filteredAndSortedData.map((group, idx) => {
@@ -208,9 +329,20 @@ export function MissedTargetModal({ isOpen, onClose, data }: MissedTargetModalPr
               const normal = group.codes.filter(c => (c.transit - c.target) <= 3).length;
               const total = group.codes.length;
 
-              const pctCrit = (critical / total) * 100;
-              const pctWarn = (warning / total) * 100;
-              const pctNorm = (normal / total) * 100;
+              const pctCrit = total > 0 ? (critical / total) * 100 : 0;
+              const pctWarn = total > 0 ? (warning / total) * 100 : 0;
+              const pctNorm = total > 0 ? (normal / total) * 100 : 0;
+
+              // Group displayCodes by year if effectiveYear === 'ALL'
+              const codesByYear: Record<string, typeof displayCodes> = {};
+              if (effectiveYear === 'ALL') {
+                displayCodes.forEach(c => {
+                  const y = extractYearFromCode(c.code);
+                  if (!codesByYear[y]) codesByYear[y] = [];
+                  codesByYear[y].push(c);
+                });
+              }
+              const yearGroups = Object.entries(codesByYear).sort((a, b) => b[0].localeCompare(a[0]));
 
               return (
                 <div key={idx} className="border-b border-[var(--color-border)] pb-5 sm:pb-6 last:border-0 last:pb-0">
@@ -227,33 +359,75 @@ export function MissedTargetModal({ isOpen, onClose, data }: MissedTargetModalPr
                     <span className="text-xs sm:text-sm font-semibold text-[var(--color-secondary)] shrink-0">{group.count} batch</span>
                   </div>
 
-                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                    {displayCodes.map((c, cIdx) => {
-                      const dev = c.transit - c.target;
-                      return (
-                        <div
-                          key={cIdx}
-                          className={cn(
-                            "px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] font-mono rounded-lg flex items-center gap-1.5 border shadow-2xs",
-                            dev >= 10 
-                              ? "bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold" 
-                              : dev >= 4
-                                ? "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 font-semibold"
-                                : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)]"
-                          )}
-                          title={`Transit: ${c.transit} hari, Target: ${c.target} hari`}
-                        >
-                          {c.code}
-                          <span className={cn(
-                            "px-1 rounded text-[8px] sm:text-[9px] font-bold",
-                            dev >= 10 ? "bg-rose-500/20 text-rose-700 dark:text-rose-300" : dev >= 4 ? "bg-amber-500/20 text-amber-700 dark:text-amber-300" : "bg-[var(--color-neutral)] text-[var(--color-secondary)]"
-                          )}>
-                            +{dev}d
-                          </span>
+                  {effectiveYear === 'ALL' && yearGroups.length > 1 ? (
+                    <div className="space-y-3">
+                      {yearGroups.map(([yr, yrCodes]) => (
+                        <div key={yr} className="space-y-1.5">
+                          <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
+                            <span>Tahun {yr}</span>
+                            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-[var(--color-neutral)] border border-[var(--color-border)] tabular-nums">
+                              {yrCodes.length} batch
+                            </span>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                            {yrCodes.map((c, cIdx) => {
+                              const dev = c.transit - c.target;
+                              return (
+                                <div
+                                  key={cIdx}
+                                  className={cn(
+                                    "px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] font-mono rounded-lg flex items-center gap-1.5 border shadow-2xs",
+                                    dev >= 10 
+                                      ? "bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold" 
+                                      : dev >= 4
+                                        ? "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 font-semibold"
+                                        : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)]"
+                                  )}
+                                  title={`Transit: ${c.transit} hari, Target: ${c.target} hari`}
+                                >
+                                  {c.code}
+                                  <span className={cn(
+                                    "px-1 rounded text-[8px] sm:text-[9px] font-bold",
+                                    dev >= 10 ? "bg-rose-500/20 text-rose-700 dark:text-rose-300" : dev >= 4 ? "bg-amber-500/20 text-amber-700 dark:text-amber-300" : "bg-[var(--color-neutral)] text-[var(--color-secondary)]"
+                                  )}>
+                                    +{dev}d
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      )
-                    })}
-                  </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
+                      {displayCodes.map((c, cIdx) => {
+                        const dev = c.transit - c.target;
+                        return (
+                          <div
+                            key={cIdx}
+                            className={cn(
+                              "px-2 sm:px-2.5 py-1 text-[10px] sm:text-[11px] font-mono rounded-lg flex items-center gap-1.5 border shadow-2xs",
+                              dev >= 10 
+                                ? "bg-rose-500/10 border-rose-500/30 text-rose-600 dark:text-rose-400 font-bold" 
+                                : dev >= 4
+                                  ? "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400 font-semibold"
+                                  : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)]"
+                            )}
+                            title={`Transit: ${c.transit} hari, Target: ${c.target} hari`}
+                          >
+                            {c.code}
+                            <span className={cn(
+                              "px-1 rounded text-[8px] sm:text-[9px] font-bold",
+                              dev >= 10 ? "bg-rose-500/20 text-rose-700 dark:text-rose-300" : dev >= 4 ? "bg-amber-500/20 text-amber-700 dark:text-amber-300" : "bg-[var(--color-neutral)] text-[var(--color-secondary)]"
+                            )}>
+                              +{dev}d
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {hiddenCount > 0 && (
                     <button

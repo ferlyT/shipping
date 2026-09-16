@@ -6,7 +6,7 @@ import { billingApi } from '../services/billing.service'
 import { Button } from '@/components/ui/Button'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { CurrencyValue, formatWithCurrency } from '@/components/ui/CurrencyValue'
-import { formatDate, formatDateTime, copyToClipboard } from '@/lib/utils'
+import { formatDate, formatDateTime, copyToClipboard, displayCustName } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { CustomerBillingHistoryModal } from '../components/CustomerBillingHistoryModal'
@@ -83,7 +83,6 @@ export default function DetailPage() {
     Boolean(user?.permissions?.includes('billing.view_consignee'))
 
   const handleCopyMarkingInfo = async () => {
-    const custName = data?.customer?.fdCustName || data?.fdCustCode || '—'
     const markingCode = data?.fdMarkingCode || '—'
     const markingNo = data?.fdMarkingNo || '—'
     const comodity = data?.fdComodity || ''
@@ -122,6 +121,8 @@ export default function DetailPage() {
     enabled: !!id,
     staleTime: 60000,
   })
+
+  const custName = displayCustName(data?.customer?.fdCustName || data?.fdCustCode)
 
   if (isLoading) return <DetailPageSkeleton />
 
@@ -168,7 +169,7 @@ export default function DetailPage() {
     <div className="p-3 sm:p-6 lg:p-8 w-full space-y-6 animate-fadeIn pb-24 font-[var(--font-body)]">
       <PageHeader
         title={`Invoice: ${data.fdInvNo}`}
-        subtitle={`${t('billing.detail.subtitle')} (${data.customer?.fdCustName || data.fdCustCode})`}
+        subtitle={`${t('billing.detail.subtitle')} (${displayCustName(data.customer?.fdCustName || data.fdCustCode)})`}
         breadcrumbs={[
           { label: t('module.finance'), path: ROUTES.BILLING },
           { label: t('nav.billing'), path: ROUTES.BILLING_LIST },
@@ -202,12 +203,12 @@ export default function DetailPage() {
                     title="Buka riwayat seluruh invoice customer ini"
                   >
                     <FileText className="w-3 h-3 text-blue-600 dark:text-blue-400" />
-                    <span>Riwayat Invoice</span>
+                    <span>{t('billing.detail.invoiceHistory')}</span>
                   </button>
                 </div>
                 <div className="mt-1 sm:mt-1.5 flex items-center gap-1.5 flex-wrap">
                   <span className="text-sm font-semibold text-[var(--color-primary)]">
-                    {data.customer?.fdCustName || data.fdCustCode || '—'}
+                    {displayCustName(data.customer?.fdCustName || data.fdCustCode)}
                   </span>
                   {data.customer && (
                     <Badge
@@ -266,7 +267,7 @@ export default function DetailPage() {
                 {data.giveEmployee && (
                   <div className="flex items-center justify-between text-xs">
                     <span className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">
-                      Diserahkan Oleh
+                      {t('billing.detail.givenBy')}
                     </span>
                     <span className="font-semibold text-emerald-600 dark:text-emerald-400 truncate max-w-[140px]" title={data.giveEmployee.fdEmpName || data.giveEmployee.fdEmpId || undefined}>
                       {data.giveEmployee.fdEmpName || data.giveEmployee.fdEmpId}
@@ -290,19 +291,19 @@ export default function DetailPage() {
               <div>
                 <div className="flex items-center justify-between gap-1 flex-wrap">
                   <p className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">
-                    Status Pembayaran
+                    {t('billing.detail.paymentStatus')}
                   </p>
                   {data.paymentStatus === 'LUNAS' ? (
                     <Badge variant="success" className="text-[10px] px-2 py-0.5 font-bold">
-                      ✓ LUNAS
+                      ✓ {t('billing.detail.paid')}
                     </Badge>
                   ) : data.paymentStatus === 'SEBAGIAN' ? (
                     <Badge variant="warning" className="text-[10px] px-2 py-0.5 font-bold">
-                      SEBAGIAN
+                      {t('billing.detail.partial')}
                     </Badge>
                   ) : (
                     <Badge variant="default" className="text-[10px] px-2 py-0.5 font-bold text-amber-600 dark:text-amber-400 border-amber-500/40">
-                      BELUM LUNAS
+                      {t('billing.detail.unpaid')}
                     </Badge>
                   )}
                 </div>
@@ -310,14 +311,14 @@ export default function DetailPage() {
                 {data.isPaid ? (
                   <div className="mt-2 space-y-1 text-xs">
                     <div className="flex items-center justify-between">
-                      <span className="text-[var(--color-secondary)] text-[11px]">No. Kasir:</span>
+                      <span className="text-[var(--color-secondary)] text-[11px]">{t('billing.detail.cashierNo')}:</span>
                       <span className="font-mono font-bold text-[var(--color-primary)]">
                         {data.cashierID || '—'}
                       </span>
                     </div>
                     {data.cashierDate && (
                       <div className="flex items-center justify-between">
-                        <span className="text-[var(--color-secondary)] text-[11px]">Tgl Bayar:</span>
+                        <span className="text-[var(--color-secondary)] text-[11px]">{t('billing.detail.paymentDate')}:</span>
                         <span className="font-medium text-[var(--color-primary)]">
                           {formatDate(data.cashierDate)}
                         </span>
@@ -326,7 +327,7 @@ export default function DetailPage() {
                   </div>
                 ) : (
                   <p className="mt-2 text-xs text-[var(--color-secondary)]">
-                    Belum ada catatan pembayaran kasir
+                    {t('billing.detail.noPaymentNote')}
                   </p>
                 )}
               </div>
@@ -334,7 +335,7 @@ export default function DetailPage() {
               {data.isPaid && data.totalPaid !== undefined && data.totalPaid > 0 && (
                 <div className="pt-1.5 border-t border-[var(--color-border)]/60 flex items-center justify-between text-xs">
                   <span className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)] font-semibold">
-                    Total Bayar:
+                    {t('billing.detail.totalPaid')}:
                   </span>
                   <span className="font-bold text-emerald-600 dark:text-emerald-400 font-mono">
                     {formatWithCurrency(data.totalPaid, data.fdCurr1 || 'Rp.')}
@@ -380,7 +381,7 @@ export default function DetailPage() {
                       title="Cek persebaran nomor resi (fdTerima) di marking code apa saja"
                     >
                       <ScanBarcode className="w-3 h-3" />
-                      <span>Cek Resi</span>
+                      <span>{t('billing.detail.checkReceipt')}</span>
                     </button>
                     <button
                       type="button"
@@ -407,7 +408,7 @@ export default function DetailPage() {
                 {/* Nomor Resi (fdTerima) */}
                 <div className="flex items-center justify-between gap-1.5 pt-1.5 text-xs">
                   <span className="text-[10px] uppercase tracking-wider text-[var(--color-secondary)] font-semibold shrink-0">
-                    No. Resi (fdTerima):
+                    {t('billing.detail.receiptNo')}:
                   </span>
                   <div className="flex items-center gap-1 flex-wrap justify-end font-mono">
                     {data.resiSummary?.resiList && data.resiSummary.resiList.length > 0 ? (
@@ -423,7 +424,7 @@ export default function DetailPage() {
                       ))
                     ) : (
                       <span className="text-[var(--color-secondary)] text-[11px] italic">
-                        Tidak ada resi
+                        {t('billing.detail.noReceipt')}
                       </span>
                     )}
                   </div>
@@ -434,7 +435,7 @@ export default function DetailPage() {
                 {(data.fdComodity || data.fdTypeComodityName) && (
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <span className="text-[10px] uppercase tracking-wider text-[var(--color-secondary)] font-semibold shrink-0">
-                      Komoditi:
+                      {t('billing.detail.commodity')}:
                     </span>
                     <div className="flex items-center gap-1 flex-wrap justify-end">
                       {data.fdComodity && (
@@ -586,7 +587,9 @@ export default function DetailPage() {
         <CustomerBillingHistoryModal
           isOpen={isHistoryModalOpen}
           custCode={data.fdCustCode}
-          custName={data.customer?.fdCustName}
+          custName={custName}
+          tglAgent={data.fdTglAgent}
+          typeComodity={data.fdTypeComodityName}
           onClose={() => setIsHistoryModalOpen(false)}
         />
       )}
@@ -596,7 +599,7 @@ export default function DetailPage() {
         isOpen={isResiModalOpen}
         onClose={() => setIsResiModalOpen(false)}
         invNo={data.fdInvNo}
-        custName={data.customer?.fdCustName || undefined}
+        custName={custName}
         custCode={data.fdCustCode || undefined}
         markingCode={data.fdMarkingCode || undefined}
         markingNo={data.fdMarkingNo || undefined}

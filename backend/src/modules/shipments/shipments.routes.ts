@@ -3,6 +3,7 @@ import { authMiddleware, requirePermission } from '../../middleware/auth'
 import {
   getShipments, getShipmentById, getShipmentDimensions, getShipmentsKPIs, getShipmentBranches,
   getDimensionsGudang, getDimensionsPackingList, getDimensionsKomplain,
+  getShipmentSuggestions,
 } from './shipments.service'
 import { successResponse, errorResponse } from '../../utils/response'
 
@@ -15,6 +16,12 @@ shipmentsRoutes.get('/', async (c) => {
   const query = c.req.query()
   const result = await getShipments(query)
   return successResponse(c, result.data, result.meta)
+})
+
+shipmentsRoutes.get('/suggestions', async (c) => {
+  const q = c.req.query('q') || ''
+  const suggestions = await getShipmentSuggestions(q)
+  return successResponse(c, suggestions)
 })
 
 shipmentsRoutes.get('/kpi', async (c) => {

@@ -10,13 +10,13 @@ export const deliveryOrdersApi = {
   getKPIs: (params: { search?: string }) => {
     return apiClient.get('/delivery-orders/kpi', { params })
   },
-  getGrouped: (params?: Record<string, string | number>) => {
+  getGrouped: (params?: Record<string, string | number | undefined>) => {
     return apiClient.get('/delivery-orders/grouped', { params })
   },
-  getMarkingGroups: (params?: Record<string, string | number>) => {
+  getMarkingGroups: (params?: Record<string, string | number | undefined>) => {
     return apiClient.get('/delivery-orders/marking-groups', { params })
   },
-  getBranchGroups: (params?: Record<string, string | number>) => {
+  getBranchGroups: (params?: Record<string, string | number | undefined>) => {
     return apiClient.get('/delivery-orders/branch-groups', { params })
   }
 }

@@ -1,5 +1,5 @@
 import { Eye, Receipt, Tag, Barcode, MapPin, PackageSearch } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, displayCustName } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
 import type { Shipment } from '../types/shipments.types'
 
@@ -131,8 +131,8 @@ export function ShipmentGridView({ data, isLoading, selectedCode, onRowClick }: 
             <div className="p-4 flex-1 flex flex-col justify-between gap-3">
               {/* Customer & Commodity */}
               <div>
-                <h4 className="font-bold text-sm text-[var(--color-text)] leading-snug line-clamp-1" title={row.fdCustName || ''}>
-                  {row.fdCustName || 'Customer Tidak Dikenal'}
+                <h4 className="font-bold text-sm text-[var(--color-text)] leading-snug line-clamp-1" title={displayCustName(row.fdCustName)}>
+                  {displayCustName(row.fdCustName, 'Customer Tidak Dikenal')}
                 </h4>
                 <p className="text-xs text-[var(--color-secondary)] mt-1 line-clamp-1">
                   {row.fdComodity || row.fdDesc || '—'}

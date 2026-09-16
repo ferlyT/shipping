@@ -11,7 +11,7 @@ import {
   Car,
 } from 'lucide-react'
 import { ROUTES } from '@/lib/constants'
-import { formatDate, cn } from '@/lib/utils'
+import { formatDate, cn, displayCustName } from '@/lib/utils'
 import type { DeliveryOrder } from '../types/delivery-orders.types'
 import type { DeliveryViewMode } from './DeliveryOrderToolbar'
 
@@ -159,8 +159,8 @@ export function DeliveryOrderTable({
 
                 {/* Customer */}
                 <td className="py-3 px-4 max-w-[200px]">
-                  <div className="font-semibold text-[var(--color-text)] truncate" title={item.fdCustNameSJ || item.fdCustCode || '—'}>
-                    {item.fdCustNameSJ || item.fdCustCode || '—'}
+                  <div className="font-semibold text-[var(--color-text)] truncate" title={displayCustName(item.fdCustNameSJ || item.fdCustCode)}>
+                    {displayCustName(item.fdCustNameSJ || item.fdCustCode)}
                   </div>
                   {item.fdCustCode && item.fdCustNameSJ && (
                     <div className="text-[10px] text-[var(--color-secondary)] font-mono">
@@ -252,7 +252,7 @@ export function DeliveryOrderTable({
             {/* Customer & Description */}
             <div className="space-y-0.5">
               <div className="font-semibold text-xs text-[var(--color-text)]">
-                {item.fdCustNameSJ || item.fdCustCode || '—'}
+                {displayCustName(item.fdCustNameSJ || item.fdCustCode)}
               </div>
               {item.fdDescr && (
                 <p className="text-[11px] text-[var(--color-secondary)] line-clamp-2 leading-relaxed">

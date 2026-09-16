@@ -1,7 +1,7 @@
 import { Building2, Phone, User, Eye } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
 import { statusConfig, BrokerBadge, DiscontinuedBadge, CustomerTierBadge, formatCustomerTenure, formatCustomerSince } from './CustomerBadges'
-import { formatCompactRupiah } from '@/lib/utils'
+import { formatCompactRupiah, displayCustName } from '@/lib/utils'
 import type { Customer } from '../types/customers.types'
 
 interface CustomerMobileCardProps {
@@ -52,7 +52,7 @@ export function CustomerMobileCard({ cust, onClick, canViewTier = true }: Custom
       {/* Customer Name & City / Address & Revenue */}
       <div className="min-w-0">
         <div className="font-bold text-[var(--color-primary)] text-sm leading-snug break-words flex items-center justify-between gap-2">
-          <span>{cust.fdCustName || 'Customer Tidak Dikenal'}</span>
+          <span>{displayCustName(cust.fdCustName, 'Customer Tidak Dikenal')}</span>
           {canViewTier && cust.annualRevenue !== undefined && cust.annualRevenue > 0 && (
             <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20 shrink-0">
               {formatCompactRupiah(cust.annualRevenue)}

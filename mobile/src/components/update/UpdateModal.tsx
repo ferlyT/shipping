@@ -7,11 +7,9 @@ import {
   TouchableOpacity,
   ScrollView,
   TouchableWithoutFeedback,
+  ActivityIndicator,
 } from 'react-native'
 import {
-  Sparkles,
-  ArrowDownCircle,
-  CheckCircle2,
   ExternalLink,
   ShieldAlert,
   X,
@@ -107,7 +105,9 @@ export function UpdateModal() {
                   {isForceUpdate ? (
                     <ShieldAlert size={28} color="#EF4444" />
                   ) : (
-                    <Sparkles size={28} color={colors.tertiary} />
+                    <Text style={{ fontSize: 24, fontWeight: '800', color: colors.tertiary }}>
+                      M
+                    </Text>
                   )}
                 </View>
 
@@ -191,7 +191,7 @@ export function UpdateModal() {
                   {updateInfo.releaseNotes && updateInfo.releaseNotes.length > 0 ? (
                     updateInfo.releaseNotes.map((note, index) => (
                       <View key={index} style={styles.noteItem}>
-                        <CheckCircle2 size={13} color={colors.tertiary} style={{ marginTop: 2 }} />
+                        <Text style={[styles.bulletPoint, { color: colors.tertiary }]}>•</Text>
                         <Text
                           style={[
                             styles.noteText,
@@ -222,12 +222,11 @@ export function UpdateModal() {
                     },
                   ]}
                 >
-                  <ArrowDownCircle size={18} color="#FFFFFF" />
                   <Text style={styles.downloadBtnText}>Perbarui Sekarang</Text>
                 </TouchableOpacity>
 
                 <Text style={[styles.hintText, { color: colors.secondary }]}>
-                  💡 Setelah unduh selesai, ketuk file APK di notifikasi HP untuk menginstal.
+                  💡 Berkas APK akan langsung diunduh ke HP Anda melalui download manager.
                 </Text>
 
                 {!isForceUpdate && (
@@ -366,8 +365,13 @@ const styles = StyleSheet.create({
   noteItem: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    gap: 8,
     marginBottom: 6,
+  },
+  bulletPoint: {
+    fontSize: 14,
+    fontWeight: '800',
+    marginRight: 6,
+    lineHeight: 16,
   },
   noteText: {
     fontSize: 11.5,
@@ -378,12 +382,10 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   downloadBtn: {
-    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 12,
     borderRadius: 12,
-    gap: 8,
   },
   downloadBtnText: {
     color: '#FFFFFF',

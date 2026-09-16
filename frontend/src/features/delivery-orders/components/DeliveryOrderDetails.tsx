@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
 import { deliveryOrdersApi } from '../services/delivery-orders.service'
 import { ROUTES } from '@/lib/constants'
-import { formatDate } from '@/lib/utils'
+import { formatDate, displayCustName } from '@/lib/utils'
 
 export function DeliveryOrderDetails({ listCode }: { listCode: string }) {
   const navigate = useNavigate()
@@ -55,8 +55,8 @@ export function DeliveryOrderDetails({ listCode }: { listCode: string }) {
                 {sj.fdJmlPackSJ ?? 0} qty
               </span>
             </div>
-            <p className="truncate text-xs text-[var(--color-secondary)] mb-3" title={sj.fdCustNameSJ || sj.fdCustCode || ''}>
-              {sj.fdCustNameSJ || sj.fdCustCode || 'No Customer'}
+            <p className="truncate text-xs text-[var(--color-secondary)] mb-3" title={displayCustName(sj.fdCustNameSJ || sj.fdCustCode)}>
+              {displayCustName(sj.fdCustNameSJ || sj.fdCustCode, 'No Customer')}
             </p>
             <div className="flex items-center justify-between gap-2 border-t border-[var(--color-border)] pt-2.5 text-xs text-[var(--color-secondary)]">
               <span className="truncate font-medium text-[var(--color-primary)]" title={sj.fdSupir || undefined}>

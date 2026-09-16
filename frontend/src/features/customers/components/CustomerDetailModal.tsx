@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom'
 import {
   X, Check, Copy, User, Phone, Mail, MapPin,
   Truck, Receipt, MapPinned, FileText, ExternalLink, Calendar,
-  Loader2, ChevronLeft, ChevronRight, TrendingUp, CheckCircle2
+  ChevronLeft, ChevronRight, TrendingUp, CheckCircle2
 } from 'lucide-react'
-import { cn, formatCurrency, formatCompactRupiah } from '@/lib/utils'
+import { cn, formatCurrency, formatCompactRupiah, displayCustName, copyToClipboard as copyTextToClipboard } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
 import {
@@ -13,6 +13,141 @@ import {
   formatCustomerSince, formatCustomerTenure, tierBadgeConfig
 } from './CustomerBadges'
 import type { Customer } from '../types/customers.types'
+
+export function CustomerDetailBodySkeleton() {
+  return (
+    <div className="space-y-4 animate-in fade-in-50 duration-200">
+      {/* Top Grid: Contact Person & Sales Representative Skeleton */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {/* Card 1 */}
+        <div className="p-3.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs flex flex-col justify-between space-y-3">
+          <div className="space-y-2">
+            <div className="h-2.5 w-24 rounded skeleton-shimmer" />
+            <div className="h-4 w-40 rounded skeleton-shimmer" />
+          </div>
+          <div className="pt-2.5 border-t border-[var(--color-border)] flex items-center justify-between">
+            <div className="h-3 w-28 rounded skeleton-shimmer" />
+            <div className="h-3 w-16 rounded skeleton-shimmer" />
+          </div>
+        </div>
+
+        {/* Card 2 */}
+        <div className="p-3.5 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs flex flex-col justify-between space-y-3">
+          <div className="space-y-2">
+            <div className="h-2.5 w-24 rounded skeleton-shimmer" />
+            <div className="h-4 w-36 rounded skeleton-shimmer" />
+          </div>
+          <div className="pt-2.5 border-t border-[var(--color-border)] flex items-center justify-between">
+            <div className="h-3 w-24 rounded skeleton-shimmer" />
+            <div className="h-3 w-20 rounded skeleton-shimmer" />
+          </div>
+        </div>
+      </div>
+
+      {/* Middle: Detail Info Key-Value Table Skeleton */}
+      <div className="p-4 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs divide-y divide-[var(--color-border)]">
+        {[
+          { labelW: 'w-24', valW: 'w-44' },
+          { labelW: 'w-20', valW: 'w-28' },
+          { labelW: 'w-28', valW: 'w-36' },
+          { labelW: 'w-24', valW: 'w-64' },
+          { labelW: 'w-20', valW: 'w-52' },
+        ].map((item, idx) => (
+          <div key={idx} className="py-2.5 flex items-center justify-between first:pt-0 last:pb-0">
+            <div className={cn("h-3 rounded skeleton-shimmer", item.labelW)} />
+            <div className={cn("h-3 rounded skeleton-shimmer", item.valW)} />
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom: Additional Quick Stats / Tier Bar Skeleton */}
+      <div className="p-4 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="h-3 w-32 rounded skeleton-shimmer" />
+          <div className="h-4 w-20 rounded-full skeleton-shimmer" />
+        </div>
+        <div className="h-2 w-full rounded-full skeleton-shimmer" />
+        <div className="flex items-center justify-between pt-1">
+          <div className="h-2.5 w-40 rounded skeleton-shimmer" />
+          <div className="h-2.5 w-24 rounded skeleton-shimmer" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function CustomerDetailFullSkeleton({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
+      {/* Backdrop */}
+      <div
+        className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity duration-200"
+        onClick={onClose}
+      />
+
+      {/* Modal Card */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        className="relative w-full sm:max-w-2xl md:max-w-3xl bg-[var(--color-surface)] border border-[var(--color-border)] rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden z-10 flex flex-col h-[88vh] sm:h-[640px] max-h-[94vh] animate-in fade-in zoom-in-95 duration-200"
+      >
+        {/* Mobile Drag Indicator */}
+        <div className="sm:hidden flex justify-center pt-2.5 pb-1 bg-[var(--color-surface)]">
+          <div className="w-10 h-1 rounded-full bg-[var(--color-border)]" />
+        </div>
+
+        {/* Modal Header Skeleton */}
+        <div className="px-5 sm:px-6 pt-3 sm:pt-4 pb-3 border-b border-[var(--color-border)] bg-[var(--color-surface)] shrink-0 space-y-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 space-y-2">
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-48 sm:w-64 rounded-md skeleton-shimmer" />
+                <div className="h-4 w-16 rounded-full skeleton-shimmer" />
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-5 w-24 rounded-md skeleton-shimmer" />
+                <div className="h-5 w-20 rounded-md skeleton-shimmer" />
+                <div className="h-5 w-28 rounded-md skeleton-shimmer hidden sm:block" />
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 rounded-lg text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer shrink-0"
+              title="Tutup Modal"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {/* Tab Navigation Skeleton */}
+          <div className="flex items-center gap-2 overflow-x-auto pt-2 border-t border-[var(--color-border)]/60 scrollbar-none">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <div key={i} className="h-7 w-24 sm:w-28 rounded-lg skeleton-shimmer shrink-0" />
+            ))}
+          </div>
+        </div>
+
+        {/* Modal Body Skeleton */}
+        <div className="p-4 sm:p-6 overflow-y-auto flex-1 bg-[var(--color-neutral)]/40 min-h-0 space-y-4">
+          <CustomerDetailBodySkeleton />
+        </div>
+
+        {/* Modal Footer Skeleton */}
+        <div className="px-5 sm:px-6 py-3 border-t border-[var(--color-border)] bg-[var(--color-surface)] shrink-0 flex items-center justify-between gap-2">
+          <div className="h-3 w-40 rounded skeleton-shimmer" />
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-neutral)]/80 hover:bg-[var(--color-neutral)] text-xs font-semibold text-[var(--color-primary)] transition-colors cursor-pointer"
+          >
+            Tutup Modal
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 interface CustomerDetailModalProps {
   customer: Customer | null
@@ -76,14 +211,21 @@ export function CustomerDetailModal({
     }
   }, [activeTab])
 
-  if (!customer) return null
+  if (!customer) {
+    if (isLoading) {
+      if (typeof document === 'undefined') return null
+      return createPortal(<CustomerDetailFullSkeleton onClose={onClose} />, document.body)
+    }
+    return null
+  }
 
-  const copyToClipboard = (text?: string | null, key?: string) => {
+  const copyToClipboard = async (text?: string | null, key?: string) => {
     if (!text || !key) return
-    navigator.clipboard.writeText(text).then(() => {
+    const ok = await copyTextToClipboard(text)
+    if (ok) {
       setCopiedKey(key)
       setTimeout(() => setCopiedKey(null), 1500)
-    })
+    }
   }
 
   const blockConfig = statusConfig[(customer.fdBlocked || 0) as keyof typeof statusConfig]
@@ -172,7 +314,7 @@ export function CustomerDetailModal({
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap mb-1">
                 <h2 className="text-[15px] font-bold font-[var(--font-label)] uppercase tracking-wide text-[var(--color-primary)] truncate">
-                  {customer.fdCustName || 'Customer Tanpa Nama'}
+                  {displayCustName(customer.fdCustName, 'Customer Tanpa Nama')}
                 </h2>
                 {canViewTier && activeTier !== 'none' && <CustomerTierBadge tier={activeTier} size="sm" />}
                 {customer.fdBroker === 1 && <BrokerBadge size="sm" />}
@@ -267,10 +409,7 @@ export function CustomerDetailModal({
           className="p-4 sm:p-6 overflow-y-auto flex-1 bg-[var(--color-neutral)]/40 min-h-0 space-y-4 touch-pan-y select-none sm:select-auto"
         >
           {isLoading ? (
-            <div className="py-16 flex flex-col items-center justify-center gap-2.5 text-[var(--color-secondary)]">
-              <Loader2 className="w-8 h-8 animate-spin text-[var(--color-tertiary)]" />
-              <p className="text-xs font-medium">Memuat rincian customer...</p>
-            </div>
+            <CustomerDetailBodySkeleton />
           ) : (
             <div key={activeTab} className="animate-in fade-in-50 duration-200">
               {/* TAB 1: RINGKASAN & KONTAK */}

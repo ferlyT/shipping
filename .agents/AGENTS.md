@@ -6,6 +6,7 @@ Dokumen ini berisi panduan, konvensi, dan aturan operasional wajib bagi AI Agent
 > 1. Setiap sesi dimulai → baca `.agents/working.md`. Sesi selesai → update `.agents/working.md`.
 > 2. **Sebelum update aplikasi mobile (`mobile/`)** → **WAJIB BACA `mobile-app.md` DULU**.
 > 3. **Setelah update mobile selesai** → **WAJIB TANYAKAN DULU ke user: nomor versi baru dan tipe update (apakah ini Force Update?)**.
+> 4. **Setiap ada update / perubahan pada Frontend Web (`frontend/`)** → **WAJIB UPDATE `frontend-app.md`** agar arsitektur, hierarki komponen, modul, dan endpoint selalu sinkron dengan kondisi aktual kode.
 
 ## 🏗️ Arsitektur Proyek
 - **Frontend**: React 19 + Vite + TypeScript (folder `frontend/`)
@@ -432,13 +433,14 @@ Setiap kali berinteraksi dengan proyek aplikasi mobile (`mobile/`), Agen **WAJIB
 - Sebelum melakukan penambahan fitur, perbaikan bug, atau perubahan tampilan/endpoint pada folder `mobile/`, Agen **WAJIB membaca `mobile-app.md` terlebih dahulu** (`view_file` pada `c:\shipping\mobile-app.md`).
 - Memahami alur state management, routing, integrasi hardware, struktur data tabel, dan kontrak endpoint yang sudah berjalan agar perubahan tidak merusak fungsionalitas yang ada.
 
-### 2. Konfirmasi Versi & Tipe Update ke User (WAJIB TANYAKAN DULU)
-Setelah pekerjaan perbaikan atau fitur pada mobile app selesai dan sebelum melakukan build/rilis APK baru:
-- **Tanyakan ke User**:
-  1. Nomor versi baru yang diinginkan (misal `v1.0.3` / `versionCode: 4`).
-  2. Tipe update: **Apakah pembaruan ini bersifat Force Update (`forceUpdate: true`) atau Opsional (`forceUpdate: false`)?**
-  3. Poin catatan rilis (*release notes*) yang ingin disertakan dalam pop-up dialog.
-- **DILARANG** mengasumsikan sendiri apakah rilis tersebut force update atau bukan.
+### 2. Aturan Naik Versi & Force Update (Ambang Batas > 5 Item)
+Sesuai instruksi langsung dari Pemilik Sistem:
+- **Ambang Batas Rilis**: Kenaikan nomor versi (`version` / `versionCode`) dan rilis **Force Update (`forceUpdate: true`)** pada aplikasi mobile **HANYA dilakukan apabila telah terjadi akumulasi perubahan lebih dari 5 item / fitur / perbaikan bug**.
+- Jika akumulasi perubahan masih $\le$ 5 item:
+  - Perubahan kode mobile tetap disimpan dan diuji lokal, namun tidak langsung memicu rilis kenaikan versi atau force update ke seluruh pengguna kecuali diminta secara eksplisit oleh user.
+- Ketika akumulasi perubahan telah melebihi 5 item:
+  - Tanyakan kepada user konfirmasi rilis versi baru.
+  - Tipe update disetel sesuai kebutuhan (default `forceUpdate: true` jika perubahan signifikan).
 
 ### 3. Penyelarasan Konfigurasi Versi Terpusat
 Setelah user mengonfirmasi versi dan status force update, selaraskan seluruh berkas konfigurasi berikut:
@@ -447,21 +449,48 @@ Setelah user mengonfirmasi versi dan status force update, selaraskan seluruh ber
 3. `mobile/app.json` $\to$ `expo.version`.
 4. `mobile/package.json` $\to$ `version`.
 
-### 4. Prosedur Build, Sign, & Distribusi APK
-1. Jalankan `bunx expo export --platform android` di direktori `mobile/`.
-2. Ganti `assets/index.android.bundle` di dalam `mshipping.apk` dengan file `.hbc` yang baru diekspor, lalu hapus folder `META-INF/`.
+### 4. Prosedur Build, Patch Manifest, Sign, & Distribusi APK
+1. Ekspor bundle Hermes: Jalankan `bunx expo export --platform android` di direktori `mobile/`.
+2. Patch APK (`AndroidManifest.xml` & `assets/index.android.bundle`):
+   - Ambil berkas `.hbc` terbaru dari `mobile/dist/_expo/static/js/android/`.
+   - Modifikasi binary `AndroidManifest.xml` pada APK agar `versionCode` (offset 9008) dan `versionName` (offset 1664:1674, format UTF-16LE) sinkron dengan versi baru.
+   - Ganti `assets/index.android.bundle` dan buang folder tanda tangan lama `META-INF/`.
 3. Sign dan zipalign APK menggunakan `release.keystore` via `uber-apk-signer`:
    ```powershell
    & "C:\Program Files\JetBrains\PyCharm Community Edition 2024.3.1.1\jbr\bin\java.exe" -jar "C:\shipping\uber-apk-signer.jar" -a "C:\shipping\mshipping.apk" --ks "mobile/keystore/release.keystore" --ksAlias mshipping --ksPass mshipping2026 --ksKeyPass mshipping2026 --allowResign --overwrite --verbose
    ```
-4. Salin APK hasil sign ke:
-   - `C:\shipping\frontend\dist\mshipping.apk`
-   - `C:\shipping\backend\public\uploads\mshipping.apk`
+4. Salin APK hasil sign ke seluruh jalur distribusi server:
    - `C:\shipping\mshipping.apk`
+   - `C:\shipping\frontend\dist\mshipping.apk`
+   - `C:\shipping\frontend\public\mshipping.apk`
+   - `C:\shipping\backend\public\uploads\mshipping.apk`
 5. Restart PM2 `ShippingApi` agar metadata `app-version.json` termuat ulang: `pm2 restart ShippingApi`.
 
 ### 5. Sinkronisasi Dokumentasi `mobile-app.md`
 - Setelah update selesai dan terverifikasi, perbarui dokumen [mobile-app.md](file:///c:/shipping/mobile-app.md) agar selalu mencerminkan kondisi riil halaman, logika, dan endpoint yang terpasang.
+
+---
+
+## 💻 Standar Operasional & Sinkronisasi Dokumentasi Web Frontend (`frontend/` & `frontend-app.md`)
+
+Setiap kali Agen melakukan pembaruan, penambahan fitur, perbaikan bug, atau refaktorisasi pada aplikasi web frontend (`frontend/`), Agen **WAJIB** mematuhi alur kerja berikut:
+
+### 1. Wajib Update `frontend-app.md` Setiap Selesai Pekerjaan Frontend
+- **Single Source of Truth Dokumentasi Frontend**: Berkas [frontend-app.md](file:///c:/shipping/frontend-app.md) adalah referensi utama arsitektur teknis, routing, komponen, state, dan integrasi API web frontend.
+- **Apa yang Harus Diperbarui**:
+  - Jika membuat atau mengubah komponen UI terpusat (`src/components/ui/`), daftarkan dan jelaskan perubahannya di seksi Komponen & Desain Sistem.
+  - Jika membuat atau merefaktor fitur/submodul (`src/features/<domain>/`), perbarui struktur dekomposisi komponen dan alur logikanya.
+  - Jika menambah atau memperbarui tipe data TypeScript terpusat (`types/`), dokumentasikan single source of truth-nya.
+  - Jika menambah konsumsi endpoint API backend baru, tambahkan barisnya ke **Matriks Ringkasan Seluruh Endpoint API Backend Web Frontend**.
+  - Jika mengubah konfigurasi routing atau route guards (`src/app/router.tsx`), sesuaikan pohon direktori routing di Bab 2.
+
+### 2. Standar Kualitas & Verifikasi Wajib
+- Selalu jalankan uji build kompilasi di direktori `frontend/`:
+  ```bash
+  cd c:\shipping\frontend
+  bun run build
+  ```
+- Kompilasi Vite + TypeScript (`tsc -b && vite build`) **WAJIB LULUS 100% dengan 0 errors** sebelum task dinyatakan tuntas.
 
 ---
 

@@ -50,7 +50,7 @@ billingRoutes.post('/pairing-local-charge', async (c) => {
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
     const result = await processPairingLocalCharge(buffer, file.name)
-    return successResponse(c, result, 'Pairing Local Charge berhasil diproses')
+    return successResponse(c, result)
   } catch (err: any) {
     return errorResponse(c, err?.message || 'Gagal memproses Pairing Local Charge', 500)
   }
@@ -65,7 +65,7 @@ billingRoutes.post('/pairing-local-charge/by-receipts', async (c) => {
     }
 
     const result = await processPairingByReceiptNos(receiptNos)
-    return successResponse(c, result, 'Pairing Resi berhasil diproses')
+    return successResponse(c, result)
   } catch (err: any) {
     return errorResponse(c, err?.message || 'Gagal memproses Pairing Resi', 500)
   }
@@ -106,7 +106,7 @@ billingRoutes.put('/report-template', isAdmin, async (c) => {
     const user = c.get('user')
     const username = user?.username || 'admin'
     const result = await saveReportTemplate(body.config || body, username, 'BILL_INVOICE')
-    return successResponse(c, result, 'Template report berhasil disimpan dan berlaku serentak')
+    return successResponse(c, result)
   } catch (err: any) {
     return errorResponse(c, err.message || 'Gagal menyimpan template report', 400)
   }
@@ -173,6 +173,14 @@ billingRoutes.get('/entry-list-details', async (c) => {
   const listCodes = rawListCodes.split(',').map((s) => s.trim()).filter(Boolean)
   const result = await getBatchEntryListDetails(listCodes)
   return successResponse(c, result)
+})
+
+billingRoutes.get('/suggestions', async (c) => {
+  const q = c.req.query('q') || ''
+  const draftOnly = c.req.query('draftOnly') === 'true' || c.req.query('draftOnly') === '1'
+  const { getBillingSuggestions } = await import('./billing.service')
+  const suggestions = await getBillingSuggestions(q, draftOnly)
+  return successResponse(c, suggestions)
 })
 
 billingRoutes.get('/', async (c) => {
@@ -253,6 +261,7 @@ billingRoutes.get('/customer-history/:custCode?', async (c) => {
     diffStatus: query.diffStatus as any,
     moda: query.moda as any,
     status: query.status as any,
+    page: query.page ? parseInt(query.page, 10) : undefined,
     limit: query.limit ? parseInt(query.limit, 10) : undefined,
   })
   return successResponse(c, result)

@@ -1,13 +1,14 @@
 import { useState, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Search, Plane, Ship, Download, Users, Layers, Clock, X, FileSpreadsheet, AlertTriangle, CheckCircle2, Tag, Info, Sparkles, TrendingUp } from 'lucide-react'
+import { Search, Plane, Ship, Download, Users, Layers, Clock, X, FileSpreadsheet, AlertTriangle, CheckCircle2, Tag, Info, Sparkles, TrendingUp, Copy, Check } from 'lucide-react'
 import * as XLSX from 'xlsx'
 import { billingApi } from '../services/billing.service'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { useTranslation } from '@/hooks/useTranslation'
-import { formatDateTime, formatCurrency, formatDecimal, cn } from '@/lib/utils'
+import { formatDateTime, formatCurrency, formatDecimal, cn, copyToClipboard } from '@/lib/utils'
+import { useToastStore } from '@/stores/toastStore'
 import { AgingBadge } from '../components/AgingBadge'
 import { StatusBadge } from '../components/StatusBadge'
 import { StatusKirimBadge } from '../components/StatusKirimBadge'
@@ -131,6 +132,7 @@ function TargetTableSkeleton() {
               <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
               <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
               <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
+              <th className="px-3 py-3 border-b border-[var(--color-border)] text-center w-14">Salin</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
@@ -150,6 +152,7 @@ function TargetTableSkeleton() {
                 <td className="px-4 py-3.5"><div className="h-4 w-14 rounded skeleton-shimmer" /></td>
                 <td className="px-4 py-3.5 text-right"><div className="h-6 w-24 rounded-lg skeleton-shimmer ml-auto" /></td>
                 <td className="px-4 py-3.5"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                <td className="px-3 py-3.5 text-center"><div className="h-6 w-6 rounded-lg skeleton-shimmer mx-auto" /></td>
               </tr>
             ))}
           </tbody>
@@ -174,6 +177,42 @@ export default function TargetPage() {
   const [mismatchItem,     setMismatchItem]     = useState<TargetBillingItem | null>(null)
   const [partialModalItem, setPartialModalItem] = useState<TargetBillingItem | null>(null)
   const [priceCheckItem,   setPriceCheckItem]   = useState<TargetBillingItem | null>(null)
+  const [copiedKey,        setCopiedKey]        = useState<string | null>(null)
+
+  const { addToast } = useToastStore()
+
+  const handleCopyTargetItem = async (item: TargetBillingItem) => {
+    const markingFull = [item.markingCode, item.markingNo ? `#${item.markingNo.trim()}` : ''].filter(Boolean).join(' ')
+    const packStr = `${item.jmlPack || 0} ${item.satuan || 'COLY'}`
+    const beratStr = item.berat > 0 ? `${formatDecimal(item.berat, 2)} kg` : '-'
+
+    const textToCopy = [
+      `Customer : ${item.customer || '-'}`,
+      `Cabang   : ${item.branch || '-'}`,
+      `Marking  : ${markingFull || '-'}`,
+      `Komoditi : ${item.comodity || '-'}`,
+      `Jml Pack : ${packStr}`,
+      `Berat    : ${beratStr}`,
+      `Tipe     : ${item.type || '-'}`,
+    ].join('\n')
+
+    const success = await copyToClipboard(textToCopy)
+    const key = item.listCode || item.listNo || `${item.markingCode}`
+
+    if (success) {
+      setCopiedKey(key)
+      setTimeout(() => setCopiedKey(null), 2000)
+      addToast({
+        type: 'success',
+        message: `Data kargo ${item.customer || item.markingCode} berhasil disalin`,
+      })
+    } else {
+      addToast({
+        type: 'error',
+        message: 'Gagal menyalin data kargo ke clipboard',
+      })
+    }
+  }
 
   const picOptions = useMemo(() => PIC_OPTIONS_BY_TYPE[activeType] || [], [activeType])
 
@@ -604,7 +643,25 @@ export default function TargetPage() {
                           <BrokerBadge size="xs" />
                         )}
                       </div>
-                      <StatusKirimBadge status={item.statusKirim} />
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <StatusKirimBadge status={item.statusKirim} />
+                        <button
+                          type="button"
+                          onClick={() => handleCopyTargetItem(item)}
+                          className={cn(
+                            "p-1.5 rounded-lg border transition-all cursor-pointer inline-flex items-center justify-center shadow-2xs",
+                            (copiedKey === (item.listCode || item.listNo || `${item.markingCode}`))
+                              ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                              : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-tertiary)]"
+                          )}
+                          title="Salin Data Kargo (Customer, Cabang, Marking, Komoditi, Jml Pack, Berat, Tipe)"
+                        >
+                          {(copiedKey === (item.listCode || item.listNo || `${item.markingCode}`))
+                            ? <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                            : <Copy className="w-3.5 h-3.5" />
+                          }
+                        </button>
+                      </div>
                     </div>
 
                     {/* Customer & Branch */}
@@ -785,6 +842,7 @@ export default function TargetPage() {
                     <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
                     <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
                     <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
+                    <th className="px-3 py-3 border-b border-[var(--color-border)] text-center w-14">Salin</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1031,6 +1089,26 @@ export default function TargetPage() {
                         {/* Status Kirim */}
                         <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
                           <StatusKirimBadge status={item.statusKirim} />
+                        </td>
+
+                        {/* Salin Data Kargo */}
+                        <td className="px-3 py-3 border-b border-[var(--color-border)] text-center whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyTargetItem(item)}
+                            className={cn(
+                              "p-1.5 rounded-lg border transition-all cursor-pointer inline-flex items-center justify-center shadow-2xs",
+                              (copiedKey === (item.listCode || item.listNo || `${item.markingCode}`))
+                                ? "border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                : "border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-tertiary)]"
+                            )}
+                            title="Salin Data Kargo (Customer, Cabang, Marking, Komoditi, Jml Pack, Berat, Tipe)"
+                          >
+                            {(copiedKey === (item.listCode || item.listNo || `${item.markingCode}`))
+                              ? <Check className="w-3.5 h-3.5 stroke-[2.5]" />
+                              : <Copy className="w-3.5 h-3.5" />
+                            }
+                          </button>
                         </td>
                       </tr>
                     )

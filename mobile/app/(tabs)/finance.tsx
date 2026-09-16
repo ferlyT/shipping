@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import {
   View,
   Text,
@@ -8,136 +8,202 @@ import {
   Modal,
   ScrollView,
   TextInput,
+  ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import * as Haptics from 'expo-haptics'
-import {
-  FileText,
-  ShieldCheck,
-  Calculator,
-  Share2,
-  Copy,
-  Printer,
-  X,
-  Check,
-  Plane,
-  Ship,
-  Sparkles,
-  AlertTriangle,
-} from 'lucide-react-native'
+import { X, User, Search } from 'lucide-react-native'
 import { Card } from '../../src/components/ui/Card'
 import { Badge } from '../../src/components/ui/Badge'
-import { Button } from '../../src/components/ui/Button'
 import { SearchBar } from '../../src/components/ui/SearchBar'
 import { SegmentedControl } from '../../src/components/ui/SegmentedControl'
 import { SkeletonShimmer } from '../../src/components/ui/SkeletonShimmer'
+import { SearchSuggestionsDropdown } from '../../src/components/ui/SearchSuggestionsDropdown'
+import { useAuthStore } from '../../src/stores/authStore'
 import { useThemeStore } from '../../src/theme/themeStore'
 import { useToastStore } from '../../src/stores/toastStore'
-import { formatCurrency, formatNumber, formatDecimal, formatDate } from '../../src/lib/utils'
+import { useTranslation } from '../../src/hooks/useTranslation'
+import { canViewBillingValidation } from '../../src/lib/permissions'
+import { formatCurrency, formatNumber, formatDecimal, formatDate, displayCustName } from '../../src/lib/utils'
+import { BillingListItem } from '../../src/features/finance/components/BillingListItem'
+import { ValidationListItem } from '../../src/features/finance/components/ValidationListItem'
+import { InvoiceDetailSheet } from '../../src/features/finance/components/InvoiceDetailSheet'
+import { useDebounce } from '../../src/hooks/useDebounce'
 import apiClient from '../../src/api/client'
 
 export default function FinanceScreen() {
+  const { user } = useAuthStore()
   const { colors, mode } = useThemeStore()
   const { showToast } = useToastStore()
+  const { t } = useTranslation()
+  const isDark = mode === 'midnight'
+  const canAuditValidation = canViewBillingValidation(user)
 
-  const [activeTab, setActiveTab] = useState<'billing' | 'validation' | 'calculator'>('billing')
+  const [activeTab, setActiveTab] = useState<'billing' | 'validation' | 'priceLookup'>('billing')
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounce(search, 300)
+  const [showSuggestions, setShowSuggestions] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null)
   const [isPrinting, setIsPrinting] = useState(false)
 
-  // Calculator State
-  const [origin, setOrigin] = useState('GZ')
-  const [dest, setDest] = useState('JKT')
-  const [calcMode, setCalcMode] = useState<'1' | '2'>('1')
-  const [calcWeight, setCalcWeight] = useState('10')
-  const [calcP, setCalcP] = useState('40')
-  const [calcL, setCalcL] = useState('30')
-  const [calcT, setCalcT] = useState('30')
+  // Price Lookup states
+  const [lookupSubTab, setLookupSubTab] = useState<'master' | 'customer'>('master')
+  const [lookupMode, setLookupMode] = useState<'all' | 'BY AIR' | 'BY SEA'>('all')
+  const [lookupBranch, setLookupBranch] = useState<string>('ALL')
+  const [entryLookupQuery, setEntryLookupQuery] = useState('')
+  const [entryLookupResult, setEntryLookupResult] = useState<any | null>(null)
+  const [isEntryLoading, setIsEntryLoading] = useState(false)
+  const [selectedCustCode, setSelectedCustCode] = useState('')
+  const [selectedCustName, setSelectedCustName] = useState('')
+  const [custSearchQuery, setCustSearchQuery] = useState('')
+  const debouncedCustSearchQuery = useDebounce(custSearchQuery, 300)
+  const [showCustDropdown, setShowCustDropdown] = useState(false)
 
-  // Fetch Billings
-  const {
-    data: billingData,
-    isLoading: isBillingLoading,
-    refetch: refetchBilling,
-    isRefetching: isRefetchingBilling,
-  } = useQuery({
-    queryKey: ['finance-billing', search],
+  // Suggestions
+  const { data: suggestions = [], isFetching: isFetchingSuggestions } = useQuery({
+    queryKey: ['finance-suggestions', activeTab, debouncedSearch],
+    queryFn: async () => {
+      if (!debouncedSearch || debouncedSearch.trim().length < 2) return []
+      const params: Record<string, string> = { q: debouncedSearch.trim() }
+      if (activeTab === 'validation') {
+        params.draftOnly = 'true'
+      }
+      const res = await apiClient.get('/billing/suggestions', { params })
+      return res.data.data || []
+    },
+    enabled: activeTab !== 'priceLookup' && debouncedSearch.trim().length >= 2,
+    staleTime: 30000,
+  })
+
+  // Customer autocomplete
+  const { data: custSuggestions = [] } = useQuery({
+    queryKey: ['finance-cust-suggestions', debouncedCustSearchQuery],
+    queryFn: async () => {
+      if (!debouncedCustSearchQuery || debouncedCustSearchQuery.trim().length < 2) return []
+      const res = await apiClient.get('/customers/suggestions', { params: { q: debouncedCustSearchQuery.trim() } })
+      return res.data.data || []
+    },
+    enabled: activeTab === 'priceLookup' && lookupSubTab === 'customer' && debouncedCustSearchQuery.trim().length >= 2,
+    staleTime: 30000,
+  })
+
+  // Billing data
+  const { data: billingData, isLoading: isBillingLoading, refetch: refetchBilling, isRefetching: isRefetchingBilling } = useQuery({
+    queryKey: ['finance-billing', debouncedSearch],
     queryFn: async () => {
       const params: any = { limit: 20 }
-      if (search.trim()) params.search = search.trim()
+      if (debouncedSearch.trim()) params.search = debouncedSearch.trim()
       const res = await apiClient.get('/billing', { params })
       return res.data.data || []
     },
     enabled: activeTab === 'billing',
   })
 
-  // Fetch Validation Data
-  const {
-    data: validationData,
-    isLoading: isValLoading,
-    refetch: refetchVal,
-    isRefetching: isRefetchingVal,
-  } = useQuery({
-    queryKey: ['finance-validation', search],
+  // Validation data
+  const { data: rawValidationData, isLoading: isValLoading, refetch: refetchVal, isRefetching: isRefetchingVal } = useQuery({
+    queryKey: ['finance-validation', debouncedSearch],
     queryFn: async () => {
-      const params: any = { limit: 20 }
-      if (search.trim()) params.search = search.trim()
-      const res = await apiClient.get('/billing/validation/list', { params })
+      const params: any = { hasAmount: 'true', draftOnly: 'true', noPagination: 'true', minYear: '2023' }
+      if (debouncedSearch.trim()) params.search = debouncedSearch.trim()
+      const res = await apiClient.get('/billing', { params })
       return res.data.data || []
     },
     enabled: activeTab === 'validation',
   })
 
-  const isDark = mode === 'midnight'
+  const validationData = useMemo(() => {
+    return (rawValidationData || []).filter((b: any) => {
+      if (b.fdInvDate) {
+        const year = new Date(b.fdInvDate).getFullYear()
+        if (!isNaN(year) && year <= 2022) return false
+      }
+      const amt1 = Number(b.fdJumlah1 || 0)
+      const amt2 = Number(b.fdJumlah2 || 0)
+      if (amt1 <= 0 && amt2 <= 0) return false
+      const isDraft = (b.fdGive ?? 0) !== 1 && (b.fdGive2 ?? 0) !== 1 && !b.fdCekDate
+      return isDraft
+    })
+  }, [rawValidationData])
 
-  // Copy Invoice Number
+  // Master Price List
+  const { data: masterPriceList = [], isLoading: isMasterLoading } = useQuery({
+    queryKey: ['finance-master-price-list', lookupMode, lookupBranch],
+    queryFn: async () => {
+      const params: any = {}
+      if (lookupMode !== 'all') params.mode = lookupMode
+      if (lookupBranch !== 'ALL') params.branch = lookupBranch
+      const res = await apiClient.get('/price-list/lookup', { params })
+      return res.data.data?.items || []
+    },
+    enabled: activeTab === 'priceLookup' && lookupSubTab === 'master',
+  })
+
+  // Customer Price List
+  const { data: customerPriceList = [], isLoading: isCustPriceLoading } = useQuery({
+    queryKey: ['finance-cust-price-list', selectedCustCode, lookupMode],
+    queryFn: async () => {
+      if (!selectedCustCode) return []
+      const params: any = { custCode: selectedCustCode }
+      if (lookupMode !== 'all') params.mode = lookupMode
+      const res = await apiClient.get('/customer-price-list/lookup', { params })
+      return res.data.data?.items || []
+    },
+    enabled: activeTab === 'priceLookup' && lookupSubTab === 'customer' && Boolean(selectedCustCode),
+  })
+
+  const handleEntryLookup = async () => {
+    const q = entryLookupQuery.trim()
+    if (!q) { showToast('Masukkan nomor resi / list code', 'warning'); return }
+    try {
+      setIsEntryLoading(true)
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+      const res = await apiClient.get('/price-list/lookup-by-entry', { params: { listCode: q } })
+      setEntryLookupResult(res.data.data || null)
+      if (!res.data.data?.found) showToast('Tarif master untuk data ini tidak ditemukan', 'info')
+    } catch {
+      showToast('Gagal mencari tarif data pengiriman', 'error')
+    } finally {
+      setIsEntryLoading(false)
+    }
+  }
+
   const copyInvoiceNo = (invNo: string) => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     showToast(`No. Invoice ${invNo} berhasil disalin`, 'success')
   }
 
-  // Print & Share PDF Invoice
   const handlePrintShare = async (inv: any) => {
     try {
       setIsPrinting(true)
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-
-      const html = `
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no" />
-          <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 24px; color: #111; }
-            .header { border-bottom: 2px solid #333; padding-bottom: 12px; margin-bottom: 20px; }
-            .title { font-size: 20px; font-weight: bold; margin: 0; }
-            .sub { font-size: 12px; color: #666; margin-top: 4px; }
-            .row { display: flex; justify-content: space-between; margin-bottom: 6px; font-size: 13px; }
-            .total-box { margin-top: 24px; border-top: 2px solid #333; padding-top: 12px; font-size: 16px; font-weight: bold; display: flex; justify-content: space-between; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <h1 class="title">M-SHIPPING INVOICE</h1>
-            <div class="sub">PT. Global Shipping Enterprise</div>
-          </div>
-          <div class="row"><strong>No. Invoice:</strong> <span>${inv.fdInvNo}</span></div>
-          <div class="row"><strong>Customer:</strong> <span>${inv.customer?.fdCustName || inv.fdCustName || '—'}</span></div>
-          <div class="row"><strong>Tanggal:</strong> <span>${formatDate(inv.fdInvDate)}</span></div>
-          <div class="row"><strong>Total Koli:</strong> <span>${formatNumber(inv.fdTotalColy)}</span></div>
-          <div class="row"><strong>Total Berat:</strong> <span>${formatDecimal(inv.fdTotalWeight, 1)} kg</span></div>
-          <div class="row"><strong>Total Volume:</strong> <span>${formatDecimal(inv.fdTotalM3, 4)} m³</span></div>
-          <div class="total-box">
-            <span>TOTAL TAGIHAN:</span>
-            <span>${formatCurrency(inv.fdTotalAmount)}</span>
-          </div>
-        </body>
-        </html>
-      `
-
+      const invCust = displayCustName(inv.customer?.fdCustName || inv.fdCustName || inv.fdBillTo || '—')
+      const totalAmount = Number(inv.fdJumlah2 || 0) > 0 ? inv.fdJumlah2 : (inv.totalJumlah ?? inv.fdTotalAmount ?? inv.fdJumlah1 ?? 0)
+      const itemsHtml = Array.isArray(inv.details) && inv.details.length > 0
+        ? `<table style="width:100%;border-collapse:collapse;margin-top:16px;font-size:12px;">
+            <thead>
+              <tr style="border-bottom:1.5px solid #333;text-align:left;background:#f5f5f5;">
+                <th style="padding:6px 8px;">Deskripsi Item</th>
+                <th style="padding:6px 8px;text-align:right;">Qty</th>
+                <th style="padding:6px 8px;text-align:right;">Harga Satuan</th>
+                <th style="padding:6px 8px;text-align:right;">Jumlah</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${inv.details.map((d: any) => `
+                <tr style="border-bottom:1px solid #e5e5e5;">
+                  <td style="padding:6px 8px;font-weight:600;">${d.fdItemName || '—'}</td>
+                  <td style="padding:6px 8px;text-align:right;">${d.fdQty || 0} ${d.fdListCode || ''}</td>
+                  <td style="padding:6px 8px;text-align:right;">${formatCurrency(d.fdItemPrice)}</td>
+                  <td style="padding:6px 8px;text-align:right;font-weight:bold;">${formatCurrency(d.fdTotal)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>`
+        : ''
+      const html = `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"/><style>body{font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;padding:24px;color:#111}.header{border-bottom:2px solid #333;padding-bottom:12px;margin-bottom:20px}.title{font-size:20px;font-weight:bold;margin:0}.sub{font-size:12px;color:#666;margin-top:4px}.row{display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px}.total-box{margin-top:24px;border-top:2px solid #333;padding-top:12px;font-size:16px;font-weight:bold;display:flex;justify-content:space-between}</style></head><body><div class="header"><h1 class="title">M-SHIPPING INVOICE</h1><div class="sub">PT. Global Shipping Enterprise</div></div><div class="row"><strong>No. Invoice:</strong><span>${inv.fdInvNo}</span></div><div class="row"><strong>Customer:</strong><span>${invCust}</span></div>${inv.fdMarkingCode ? `<div class="row"><strong>Marking:</strong><span>${inv.fdMarkingCode}</span></div>` : ''}${inv.fdMarkingNo ? `<div class="row"><strong>No. Marking:</strong><span>${inv.fdMarkingNo}</span></div>` : ''}<div class="row"><strong>Tanggal:</strong><span>${formatDate(inv.fdInvDate)}</span></div>${inv.fdTotalColy != null ? `<div class="row"><strong>Total Koli:</strong><span>${formatNumber(inv.fdTotalColy)}</span></div>` : ''}${inv.fdTotalWeight != null ? `<div class="row"><strong>Total Berat:</strong><span>${formatDecimal(inv.fdTotalWeight, 1)} kg</span></div>` : ''}${inv.fdTotalM3 != null ? `<div class="row"><strong>Total Volume:</strong><span>${formatDecimal(inv.fdTotalM3, 4)} m³</span></div>` : ''}${itemsHtml}<div class="total-box"><span>TOTAL TAGIHAN:</span><span>${formatCurrency(totalAmount)}</span></div></body></html>`
       const { uri } = await Print.printToFileAsync({ html })
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' })
@@ -145,53 +211,55 @@ export default function FinanceScreen() {
         await Print.printAsync({ uri })
       }
       showToast('Invoice siap dibagikan / dicetak', 'success')
-    } catch (e) {
+    } catch {
       showToast('Gagal memproses dokumen invoice', 'error')
     } finally {
       setIsPrinting(false)
     }
   }
 
-  // Calculator Result
-  const p = parseFloat(calcP) || 0
-  const l = parseFloat(calcL) || 0
-  const t = parseFloat(calcT) || 0
-  const wt = parseFloat(calcWeight) || 0
-  const calcVolM3 = (p * l * t) / 1000000
-  const ratePerKg = calcMode === '1' ? 145000 : 85000
-  const ratePerM3 = 5500000
-  const estimatedCost = calcMode === '1' ? wt * ratePerKg : calcVolM3 * ratePerM3
-
   return (
     <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
       <View style={styles.container}>
-        {/* Top Section */}
+        {/* Header */}
         <View style={styles.topSection}>
-          <Text style={[styles.pageTitle, { color: colors.primary }]}>Keuangan & Billing</Text>
+          <Text style={[styles.pageTitle, { color: colors.primary }]}>
+            {t('finance.title', 'Keuangan & Billing')}
+          </Text>
           <SegmentedControl
             options={[
-              { label: 'Daftar Invoice', value: 'billing', icon: <FileText size={14} color={colors.tertiary} /> },
-              { label: 'Audit Validasi', value: 'validation', icon: <ShieldCheck size={14} color="#10B981" /> },
-              { label: 'Kalkulator Tarif', value: 'calculator', icon: <Calculator size={14} color="#F59E0B" /> },
+              { label: t('finance.billing', 'Daftar Invoice'), value: 'billing' },
+              ...(canAuditValidation ? [{ label: t('finance.validation', 'Audit Validasi'), value: 'validation' }] : []),
+              { label: t('finance.priceLookup', 'Cek Tarif'), value: 'priceLookup' },
             ]}
             selectedValue={activeTab}
-            onValueChange={setActiveTab}
+            onValueChange={(val) => { setActiveTab(val as any); setSearch('') }}
             style={{ marginTop: 10 }}
           />
 
-          {activeTab !== 'calculator' && (
-            <SearchBar
-              value={search}
-              onChangeText={setSearch}
-              placeholder={
-                activeTab === 'billing' ? 'Cari no. invoice, customer...' : 'Cari invoice validasi...'
-              }
-              style={{ marginTop: 10 }}
-            />
+          {activeTab !== 'priceLookup' && (
+            <>
+              <SearchBar
+                value={search}
+                debounceMs={0}
+                onChangeText={(txt) => { setSearch(txt); setShowSuggestions(txt.trim().length >= 2) }}
+                onFocus={() => { if (search.trim().length >= 2) setShowSuggestions(true) }}
+                placeholder={activeTab === 'billing' ? t('finance.searchBillingPlaceholder', 'Cari no. invoice atau customer...') : t('finance.searchValidationPlaceholder', 'Cari invoice draf validasi...')}
+                style={{ marginTop: 10 }}
+              />
+              <SearchSuggestionsDropdown
+                visible={showSuggestions && search.trim().length >= 2}
+                suggestions={suggestions}
+                isLoading={isFetchingSuggestions}
+                title={t('finance.searchBillingPlaceholder', 'Saran Pencarian (Invoice / Customer)')}
+                onSelect={(sug) => { setSearch(sug.value); setShowSuggestions(false) }}
+                onClose={() => setShowSuggestions(false)}
+              />
+            </>
           )}
         </View>
 
-        {/* Tab 1: Billing Invoices */}
+        {/* Billing List */}
         {activeTab === 'billing' && (
           <FlatList
             data={billingData}
@@ -208,49 +276,15 @@ export default function FinanceScreen() {
                 </View>
               ) : (
                 <Card style={styles.emptyCard}>
-                  <Text style={{ color: colors.secondary }}>Tidak ada invoice ditemukan</Text>
+                  <Text style={{ color: colors.secondary }}>{t('finance.noBilling', 'Tidak ada invoice ditemukan')}</Text>
                 </Card>
               )
             }
-            renderItem={({ item }) => (
-              <Card
-                style={styles.invoiceCard}
-                onPress={() => {
-                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                  setSelectedInvoice(item)
-                }}
-              >
-                <View style={styles.invHeader}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={[styles.invNo, { color: colors.primary }]}>{item.fdInvNo}</Text>
-                    <TouchableOpacity onPress={() => copyInvoiceNo(item.fdInvNo)}>
-                      <Copy size={13} color={colors.tertiary} />
-                    </TouchableOpacity>
-                  </View>
-                  <Badge
-                    label={item.fdStatus || 'ISSUED'}
-                    variant={item.fdStatus === 'PAID' ? 'success' : 'warning'}
-                  />
-                </View>
-
-                <Text style={[styles.custName, { color: colors.primary }]} numberOfLines={1}>
-                  {item.customer?.fdCustName || item.fdCustName || 'Customer'}
-                </Text>
-
-                <View style={styles.invMetaRow}>
-                  <Text style={[styles.invDate, { color: colors.secondary }]}>
-                    {formatDate(item.fdInvDate)}
-                  </Text>
-                  <Text style={[styles.invAmount, { color: colors.tertiary }]}>
-                    {formatCurrency(item.fdTotalAmount)}
-                  </Text>
-                </View>
-              </Card>
-            )}
+            renderItem={({ item }) => <BillingListItem item={item} onPress={setSelectedInvoice} />}
           />
         )}
 
-        {/* Tab 2: Validation List */}
+        {/* Validation List */}
         {activeTab === 'validation' && (
           <FlatList
             data={validationData}
@@ -261,430 +295,289 @@ export default function FinanceScreen() {
             ListEmptyComponent={
               isValLoading ? (
                 <View style={{ gap: 10 }}>
-                  <SkeletonShimmer height={90} />
-                  <SkeletonShimmer height={90} />
+                  <SkeletonShimmer height={105} />
+                  <SkeletonShimmer height={105} />
+                  <SkeletonShimmer height={105} />
                 </View>
               ) : (
                 <Card style={styles.emptyCard}>
-                  <Text style={{ color: colors.secondary }}>Tidak ada antrean validasi</Text>
+                  <Text style={{ color: colors.secondary, fontSize: 12 }}>{t('finance.noValidation', 'Tidak ada antrean validasi')}</Text>
                 </Card>
               )
             }
-            renderItem={({ item }) => (
-              <Card style={styles.invoiceCard}>
-                <View style={styles.invHeader}>
-                  <Text style={[styles.invNo, { color: colors.primary }]}>{item.fdInvNo}</Text>
-                  <Badge
-                    label={item.verdict || 'SESUAI'}
-                    variant={
-                      item.verdict === 'EQUAL' || item.verdict === 'SESUAI'
-                        ? 'success'
-                        : item.verdict === 'OVERWEIGHT'
-                        ? 'danger'
-                        : 'warning'
-                    }
-                  />
-                </View>
-                <Text style={[styles.custName, { color: colors.primary }]} numberOfLines={1}>
-                  {item.customer?.fdCustName || item.fdCustName || '—'}
-                </Text>
-                <View style={styles.invMetaRow}>
-                  <Text style={[styles.invDate, { color: colors.secondary }]}>
-                    Harga: {item.priceCheckOk ? '✓ Valid' : '⚠ Selisih'} • M3 vs KG: {item.m3CheckOk ? '✓ Valid' : '⚠ Periksa'}
-                  </Text>
-                </View>
-              </Card>
-            )}
+            renderItem={({ item }) => <ValidationListItem item={item} onPress={setSelectedInvoice} />}
           />
         )}
 
-        {/* Tab 3: Interactive Live Tariff Calculator */}
-        {activeTab === 'calculator' && (
+        {/* Price Lookup Tab */}
+        {activeTab === 'priceLookup' && (
           <ScrollView contentContainerStyle={styles.calcContainer}>
-            <Card style={styles.calcCard}>
-              <View style={styles.calcHeader}>
-                <Sparkles size={18} color={colors.tertiary} style={{ marginRight: 6 }} />
-                <Text style={[styles.calcTitle, { color: colors.primary }]}>
-                  Kalkulator Tarif Lapangan
-                </Text>
-              </View>
+            <SegmentedControl
+              options={[
+                { label: t('finance.masterTariff', 'Tarif Umum (Master)'), value: 'master' },
+                { label: t('finance.customerTariff', 'Tarif Khusus Pelanggan'), value: 'customer' },
+              ]}
+              selectedValue={lookupSubTab}
+              onValueChange={(val) => { setLookupSubTab(val as any); setEntryLookupResult(null) }}
+              style={{ marginBottom: 12 }}
+            />
 
-              {/* Moda Switcher */}
-              <SegmentedControl
-                options={[
-                  { label: '✈️ Moda Udara', value: '1' },
-                  { label: '🚢 Moda Laut', value: '2' },
-                ]}
-                selectedValue={calcMode}
-                onValueChange={setCalcMode}
-                style={{ marginVertical: 12 }}
-              />
+            {/* Moda Filter Pills */}
+            <View style={styles.filterPillRow}>
+              {(['all', 'BY AIR', 'BY SEA'] as const).map((m) => {
+                const isSelected = lookupMode === m
+                const label = m === 'all' ? t('common.all', 'Semua') : m === 'BY AIR' ? t('common.air', 'Udara') : t('common.sea', 'Laut')
+                return (
+                  <TouchableOpacity key={m} activeOpacity={0.7}
+                    onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setLookupMode(m) }}
+                    style={[styles.pillBtn, {
+                      backgroundColor: isSelected ? (isDark ? 'rgba(56, 189, 248, 0.15)' : '#E0F2FE') : colors.surface,
+                      borderColor: isSelected ? colors.tertiary : colors.border,
+                    }]}
+                  >
+                    <Text style={[styles.pillText, { color: isSelected ? colors.tertiary : colors.secondary, fontWeight: isSelected ? '700' : '500' }]}>
+                      {label}
+                    </Text>
+                  </TouchableOpacity>
+                )
+              })}
+            </View>
 
-              {/* Berat Input */}
-              <View style={styles.calcField}>
-                <Text style={[styles.calcLabel, { color: colors.secondary }]}>Berat Muatan (Kg)</Text>
-                <TextInput
-                  value={calcWeight}
-                  onChangeText={setCalcWeight}
-                  keyboardType="numeric"
-                  placeholder="10"
-                  placeholderTextColor={colors.secondary}
-                  style={[
-                    styles.calcInput,
-                    {
-                      backgroundColor: isDark ? '#0B0F17' : '#F8FAFC',
-                      borderColor: colors.border,
-                      color: colors.primary,
-                    },
-                  ]}
-                />
-              </View>
-
-              {/* Dimensi P x L x T */}
-              <Text style={[styles.calcLabel, { color: colors.secondary, marginTop: 10 }]}>
-                Dimensi Fisik (P x L x T dalam cm)
-              </Text>
-              <View style={styles.dimensionInputsRow}>
-                <TextInput
-                  value={calcP}
-                  onChangeText={setCalcP}
-                  keyboardType="numeric"
-                  placeholder="P"
-                  placeholderTextColor={colors.secondary}
-                  style={[
-                    styles.dimInput,
-                    {
-                      backgroundColor: isDark ? '#0B0F17' : '#F8FAFC',
-                      borderColor: colors.border,
-                      color: colors.primary,
-                    },
-                  ]}
-                />
-                <Text style={{ color: colors.secondary }}>×</Text>
-                <TextInput
-                  value={calcL}
-                  onChangeText={setCalcL}
-                  keyboardType="numeric"
-                  placeholder="L"
-                  placeholderTextColor={colors.secondary}
-                  style={[
-                    styles.dimInput,
-                    {
-                      backgroundColor: isDark ? '#0B0F17' : '#F8FAFC',
-                      borderColor: colors.border,
-                      color: colors.primary,
-                    },
-                  ]}
-                />
-                <Text style={{ color: colors.secondary }}>×</Text>
-                <TextInput
-                  value={calcT}
-                  onChangeText={setCalcT}
-                  keyboardType="numeric"
-                  placeholder="T"
-                  placeholderTextColor={colors.secondary}
-                  style={[
-                    styles.dimInput,
-                    {
-                      backgroundColor: isDark ? '#0B0F17' : '#F8FAFC',
-                      borderColor: colors.border,
-                      color: colors.primary,
-                    },
-                  ]}
-                />
-              </View>
-
-              {/* Live Quotation Result Box */}
-              <View
-                style={[
-                  styles.resultBox,
-                  {
-                    backgroundColor: isDark ? 'rgba(56, 189, 248, 0.08)' : '#E0F2FE',
-                    borderColor: colors.tertiary,
-                  },
-                ]}
-              >
-                <View style={styles.resultRow}>
-                  <Text style={[styles.resultLabel, { color: colors.secondary }]}>Volume Kubikasi:</Text>
-                  <Text style={[styles.resultVal, { color: colors.primary }]}>
-                    {formatDecimal(calcVolM3, 4)} m³
-                  </Text>
+            {/* Master Price Lookup */}
+            {lookupSubTab === 'master' && (
+              <View style={{ gap: 14 }}>
+                <View style={{ gap: 6 }}>
+                  <Text style={[styles.sectionSubLabel, { color: colors.secondary }]}>PILIH CABANG ASAL</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {['ALL', 'GZ', 'HK', 'SG', 'YW', 'SH'].map((br) => {
+                      const isSelected = lookupBranch === br
+                      return (
+                        <TouchableOpacity key={br}
+                          onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setLookupBranch(br) }}
+                          style={[styles.branchPill, {
+                            backgroundColor: isSelected ? (isDark ? 'rgba(56, 189, 248, 0.15)' : '#E0F2FE') : colors.surface,
+                            borderColor: isSelected ? colors.tertiary : colors.border,
+                          }]}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: isSelected ? '700' : '500', color: isSelected ? colors.tertiary : colors.secondary }}>
+                            {br === 'ALL' ? 'Semua Cabang' : br}
+                          </Text>
+                        </TouchableOpacity>
+                      )
+                    })}
+                  </ScrollView>
                 </View>
-                <View style={styles.resultRow}>
-                  <Text style={[styles.resultLabel, { color: colors.secondary }]}>Rasio Muatan:</Text>
-                  <Text style={[styles.resultVal, { color: colors.primary }]}>
-                    {calcVolM3 > 0 ? formatDecimal(wt / calcVolM3, 1) : '0'} kg/m³
+
+                {/* Quick Resi Lookup */}
+                <Card style={{ padding: 12, gap: 8 }}>
+                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.secondary, textTransform: 'uppercase' }}>
+                    Cek Tarif by Resi / List Code
                   </Text>
-                </View>
-                <View style={[styles.resultRow, { marginTop: 8, borderTopWidth: 1, borderTopColor: 'rgba(56, 189, 248, 0.2)', paddingTop: 8 }]}>
-                  <Text style={[styles.resultTotalLabel, { color: colors.primary }]}>
-                    Estimasi Biaya:
-                  </Text>
-                  <Text style={[styles.resultTotalVal, { color: colors.tertiary }]}>
-                    {formatCurrency(estimatedCost)}
-                  </Text>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TextInput
+                      value={entryLookupQuery}
+                      onChangeText={setEntryLookupQuery}
+                      placeholder="Contoh: 2603001..."
+                      placeholderTextColor={colors.secondary}
+                      style={[styles.entryInput, { backgroundColor: isDark ? '#0B0F17' : '#F8FAFC', borderColor: colors.border, color: colors.primary }]}
+                    />
+                    <TouchableOpacity onPress={handleEntryLookup} disabled={isEntryLoading}
+                      style={[styles.entrySearchBtn, { backgroundColor: colors.tertiary }]}>
+                      {isEntryLoading ? <ActivityIndicator size="small" color="#fff" /> : <Search size={16} color="#fff" />}
+                    </TouchableOpacity>
+                  </View>
+                  {entryLookupResult && (
+                    <View style={{
+                      padding: 10, borderRadius: 8, borderWidth: 1, gap: 4,
+                      borderColor: entryLookupResult.found ? 'rgba(16, 185, 129, 0.4)' : colors.border,
+                      backgroundColor: entryLookupResult.found ? (isDark ? 'rgba(16, 185, 129, 0.08)' : '#ECFDF5') : (isDark ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.02)'),
+                    }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary }}>
+                          {entryLookupResult.entry?.fdTerima || entryLookupResult.entry?.fdListCode || 'Data Pengiriman'}
+                        </Text>
+                        <Badge label={entryLookupResult.found ? 'Ditemukan' : 'Tidak Ditemukan'} variant={entryLookupResult.found ? 'success' : 'neutral'} />
+                      </View>
+                      {entryLookupResult.found && (
+                        <>
+                          <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.tertiary, marginTop: 2 }}>
+                            {formatCurrency(entryLookupResult.rate)} / {entryLookupResult.entry?.fdListType === 2 ? 'm³' : 'kg'}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: colors.secondary }}>
+                            Kategori: {entryLookupResult.category || 'Standard'} • Sumber: {entryLookupResult.source}
+                          </Text>
+                        </>
+                      )}
+                    </View>
+                  )}
+                </Card>
+
+                {/* Master Rate List */}
+                <View style={{ gap: 8 }}>
+                  <Text style={[styles.sectionSubLabel, { color: colors.secondary }]}>DAFTAR TARIF MASTER ({masterPriceList.length})</Text>
+                  {isMasterLoading ? (
+                    <View style={{ gap: 8 }}><SkeletonShimmer height={75} /><SkeletonShimmer height={75} /><SkeletonShimmer height={75} /></View>
+                  ) : masterPriceList.length > 0 ? (
+                    masterPriceList.map((item: any, idx: number) => {
+                      const isSea = (item.mode || '').toUpperCase().includes('SEA')
+                      return (
+                        <Card key={item.id || String(idx)} style={{ padding: 12, gap: 6 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>{item.category || 'General Goods'}</Text>
+                            <Badge label={isSea ? 'Laut' : 'Udara'} variant={isSea ? 'sea' : 'air'} />
+                          </View>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 2 }}>
+                            <View>
+                              <Text style={{ fontSize: 11, color: colors.secondary }}>
+                                Cabang: <Text style={{ fontWeight: '700', color: colors.primary }}>{item.branch || 'ALL'}</Text>
+                              </Text>
+                              {item.transitTime ? <Text style={{ fontSize: 11, color: colors.secondary, marginTop: 2 }}>Transit: {item.transitTime} hari</Text> : null}
+                            </View>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: colors.tertiary }}>
+                              {formatCurrency(item.price)} <Text style={{ fontSize: 11, fontWeight: '500', color: colors.secondary }}>/ {isSea ? 'm³' : 'kg'}</Text>
+                            </Text>
+                          </View>
+                        </Card>
+                      )
+                    })
+                  ) : (
+                    <Card style={styles.emptyCard}>
+                      <Text style={{ color: colors.secondary, fontSize: 12 }}>Tidak ada tarif master untuk kriteria ini</Text>
+                    </Card>
+                  )}
                 </View>
               </View>
-            </Card>
+            )}
+
+            {/* Customer Price Lookup */}
+            {lookupSubTab === 'customer' && (
+              <View style={{ gap: 14 }}>
+                <Card style={{ padding: 12, gap: 8 }}>
+                  <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.secondary, textTransform: 'uppercase' }}>Pilih Pelanggan</Text>
+                  <View>
+                    <TextInput
+                      value={custSearchQuery}
+                      onChangeText={(txt) => { setCustSearchQuery(txt); setShowCustDropdown(txt.trim().length >= 2) }}
+                      onFocus={() => { if (custSearchQuery.trim().length >= 2) setShowCustDropdown(true) }}
+                      placeholder="Ketik nama atau kode customer..."
+                      placeholderTextColor={colors.secondary}
+                      style={[styles.calcInput, { backgroundColor: isDark ? '#0B0F17' : '#F8FAFC', borderColor: colors.border, color: colors.primary }]}
+                    />
+                    {showCustDropdown && custSuggestions.length > 0 && (
+                      <View style={[styles.custDropdown, { backgroundColor: colors.surface, borderColor: colors.border }]}>
+                        {custSuggestions.map((sug: any) => (
+                          <TouchableOpacity key={sug.custCode || sug.value || sug.title}
+                            onPress={() => {
+                              const custCode = sug.custCode || (sug.type === 'code' ? sug.value : sug.value)
+                              setSelectedCustCode(custCode)
+                              setSelectedCustName(sug.title)
+                              setCustSearchQuery(sug.title)
+                              setShowCustDropdown(false)
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                            }}
+                            style={[styles.custDropdownItem, { borderBottomColor: colors.border }]}
+                          >
+                            <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }}>{sug.title}</Text>
+                            <Text style={{ fontSize: 11, color: colors.secondary, marginTop: 1 }}>
+                              {sug.subtitle ? (sug.subtitle.includes('Kode:') ? sug.subtitle : `Kode: ${sug.custCode || sug.value} • ${sug.subtitle}`) : `Kode: ${sug.custCode || sug.value}`}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                  {selectedCustCode ? (
+                    <View style={{
+                      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                      padding: 10, borderRadius: 8, borderWidth: 1, borderColor: colors.tertiary,
+                      backgroundColor: isDark ? 'rgba(56, 189, 248, 0.08)' : '#E0F2FE',
+                    }}>
+                      <View style={{ flex: 1, marginRight: 8 }}>
+                        <Text style={{ fontSize: 12.5, fontWeight: '800', color: colors.primary }} numberOfLines={1}>{selectedCustName}</Text>
+                        <Text style={{ fontSize: 11, color: colors.secondary }}>Kode: {selectedCustCode}</Text>
+                      </View>
+                      <TouchableOpacity onPress={() => { setSelectedCustCode(''); setSelectedCustName(''); setCustSearchQuery('') }} style={{ padding: 4 }}>
+                        <X size={16} color={colors.secondary} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+                </Card>
+
+                <View style={{ gap: 8 }}>
+                  <Text style={[styles.sectionSubLabel, { color: colors.secondary }]}>
+                    TARIF KHUSUS PELANGGAN {selectedCustCode ? `(${customerPriceList.length})` : ''}
+                  </Text>
+                  {!selectedCustCode ? (
+                    <Card style={styles.emptyCard}>
+                      <User size={24} color={colors.secondary} style={{ marginBottom: 6, opacity: 0.6 }} />
+                      <Text style={{ color: colors.secondary, fontSize: 12, textAlign: 'center' }}>
+                        Silakan pilih pelanggan terlebih dahulu untuk melihat daftar tarif khusus
+                      </Text>
+                    </Card>
+                  ) : isCustPriceLoading ? (
+                    <View style={{ gap: 8 }}><SkeletonShimmer height={75} /><SkeletonShimmer height={75} /></View>
+                  ) : customerPriceList.length > 0 ? (
+                    customerPriceList.map((item: any, idx: number) => {
+                      const isSea = (item.mode || '').toUpperCase().includes('SEA')
+                      return (
+                        <Card key={item.id || String(idx)} style={{ padding: 12, gap: 6 }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>{item.category || 'Semua Kategori'}</Text>
+                            <Badge label={isSea ? 'Laut' : 'Udara'} variant={isSea ? 'sea' : 'air'} />
+                          </View>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginTop: 2 }}>
+                            <View>
+                              <Text style={{ fontSize: 11, color: colors.secondary }}>
+                                Cabang: <Text style={{ fontWeight: '700', color: colors.primary }}>{item.branch || 'ALL'}</Text>
+                              </Text>
+                              {item.effectiveDate ? <Text style={{ fontSize: 10.5, color: colors.secondary, marginTop: 2 }}>Berlaku: {formatDate(item.effectiveDate)}</Text> : null}
+                            </View>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: colors.tertiary }}>
+                              {formatCurrency(item.price)} <Text style={{ fontSize: 11, fontWeight: '500', color: colors.secondary }}>/ {isSea ? 'm³' : 'kg'}</Text>
+                            </Text>
+                          </View>
+                          {item.notes ? <Text style={{ fontSize: 11, color: colors.secondary, fontStyle: 'italic', marginTop: 2 }}>Ket: {item.notes}</Text> : null}
+                        </Card>
+                      )
+                    })
+                  ) : (
+                    <Card style={styles.emptyCard}>
+                      <Text style={{ color: colors.secondary, fontSize: 12 }}>Pelanggan ini tidak memiliki tarif khusus (mengikuti tarif master umum)</Text>
+                    </Card>
+                  )}
+                </View>
+              </View>
+            )}
           </ScrollView>
         )}
 
-        {/* Invoice Detail Bottom Sheet */}
-        <Modal
-          visible={Boolean(selectedInvoice)}
-          animationType="slide"
-          transparent
-          onRequestClose={() => setSelectedInvoice(null)}
-        >
-          <View style={styles.modalOverlay}>
-            <View
-              style={[
-                styles.sheetContent,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View style={styles.sheetHeader}>
-                <View>
-                  <Text style={[styles.sheetTitle, { color: colors.primary }]}>RINCIAN INVOICE</Text>
-                  <Text style={[styles.sheetSubtitle, { color: colors.secondary }]}>
-                    {selectedInvoice?.fdInvNo}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => setSelectedInvoice(null)}
-                  style={[styles.closeBtn, { borderColor: colors.border }]}
-                >
-                  <X size={18} color={colors.secondary} />
-                </TouchableOpacity>
-              </View>
-
-              <ScrollView contentContainerStyle={{ padding: 16, gap: 14 }}>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, { color: colors.secondary }]}>Customer</Text>
-                  <Text style={[styles.infoVal, { color: colors.primary }]}>
-                    {selectedInvoice?.customer?.fdCustName || selectedInvoice?.fdCustName || '—'}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, { color: colors.secondary }]}>Tanggal Tagihan</Text>
-                  <Text style={[styles.infoVal, { color: colors.primary }]}>
-                    {formatDate(selectedInvoice?.fdInvDate)}
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, { color: colors.secondary }]}>Total Coly / Berat</Text>
-                  <Text style={[styles.infoVal, { color: colors.primary }]}>
-                    {formatNumber(selectedInvoice?.fdTotalColy)} Koli • {formatDecimal(selectedInvoice?.fdTotalWeight, 1)} kg
-                  </Text>
-                </View>
-                <View style={styles.infoRow}>
-                  <Text style={[styles.infoLabel, { color: colors.secondary }]}>Total Nilai Tagihan</Text>
-                  <Text style={[styles.infoVal, { color: colors.tertiary, fontSize: 16, fontWeight: '800' }]}>
-                    {formatCurrency(selectedInvoice?.fdTotalAmount)}
-                  </Text>
-                </View>
-
-                {/* Print & Share Action Buttons */}
-                <View style={{ flexDirection: 'row', gap: 10, marginTop: 12 }}>
-                  <Button
-                    title="Bagikan / Cetak PDF"
-                    onPress={() => handlePrintShare(selectedInvoice)}
-                    loading={isPrinting}
-                    icon={<Share2 size={16} color="#FFFFFF" />}
-                    style={{ flex: 1 }}
-                  />
-                  <Button
-                    title="Salin No. Inv"
-                    variant="secondary"
-                    onPress={() => copyInvoiceNo(selectedInvoice.fdInvNo)}
-                    icon={<Copy size={16} color={colors.primary} />}
-                  />
-                </View>
-              </ScrollView>
-            </View>
-          </View>
-        </Modal>
+        {/* Invoice Detail Sheet */}
+        <InvoiceDetailSheet
+          selectedInvoice={selectedInvoice}
+          onClose={() => setSelectedInvoice(null)}
+          onCopyInvoiceNo={copyInvoiceNo}
+        />
       </View>
     </SafeAreaView>
   )
 }
 
 const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  container: {
-    flex: 1,
-  },
-  topSection: {
-    padding: 16,
-    paddingBottom: 8,
-  },
-  pageTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.4,
-  },
-  listContent: {
-    padding: 16,
-    paddingTop: 8,
-    paddingBottom: 28,
-    gap: 10,
-  },
-  invoiceCard: {
-    padding: 14,
-  },
-  invHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 6,
-  },
-  invNo: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  custName: {
-    fontSize: 13,
-    fontWeight: '600',
-    marginBottom: 8,
-  },
-  invMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  invDate: {
-    fontSize: 11,
-  },
-  invAmount: {
-    fontSize: 14,
-    fontWeight: '800',
-  },
-  emptyCard: {
-    alignItems: 'center',
-    padding: 30,
-  },
-  calcContainer: {
-    padding: 16,
-    paddingBottom: 36,
-  },
-  calcCard: {
-    padding: 16,
-  },
-  calcHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  calcTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  calcField: {
-    gap: 6,
-    marginTop: 10,
-  },
-  calcLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  calcInput: {
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    height: 44,
-    fontSize: 14,
-  },
-  dimensionInputsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 6,
-    gap: 6,
-  },
-  dimInput: {
-    flex: 1,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    height: 44,
-    textAlign: 'center',
-    fontSize: 14,
-  },
-  resultBox: {
-    marginTop: 18,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 6,
-  },
-  resultRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  resultLabel: {
-    fontSize: 12,
-  },
-  resultVal: {
-    fontSize: 13,
-    fontWeight: '600',
-  },
-  resultTotalLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  resultTotalVal: {
-    fontSize: 16,
-    fontWeight: '800',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
-  },
-  sheetContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    maxHeight: '80%',
-    paddingBottom: 36,
-  },
-  sheetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
-  },
-  sheetTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    letterSpacing: 0.5,
-  },
-  sheetSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  closeBtn: {
-    padding: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 4,
-  },
-  infoLabel: {
-    fontSize: 12,
-  },
-  infoVal: {
-    fontSize: 13,
-  },
+  safeArea: { flex: 1 },
+  container: { flex: 1 },
+  topSection: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
+  pageTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
+  listContent: { padding: 16, gap: 10, paddingBottom: 36 },
+  emptyCard: { alignItems: 'center', padding: 30 },
+  calcContainer: { padding: 16, paddingBottom: 36 },
+  calcInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 42, fontSize: 13 },
+  filterPillRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  pillBtn: { flex: 1, paddingVertical: 7, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
+  pillText: { fontSize: 11.5 },
+  branchPill: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8, borderWidth: 1, alignItems: 'center' },
+  sectionSubLabel: { fontSize: 11, fontWeight: '700', letterSpacing: 0.5, textTransform: 'uppercase' },
+  entryInput: { flex: 1, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 42, fontSize: 13 },
+  entrySearchBtn: { width: 42, height: 42, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  custDropdown: { borderWidth: 1, borderRadius: 10, marginTop: 4, maxHeight: 180, overflow: 'hidden' },
+  custDropdownItem: { paddingHorizontal: 12, paddingVertical: 8, borderBottomWidth: 1 },
 })

@@ -3,7 +3,7 @@ import {
   Eye, Receipt, ChevronDown, ChevronRight,
   Barcode, Tag, PackageSearch,
 } from 'lucide-react'
-import { cn, formatNumber } from '@/lib/utils'
+import { cn, formatNumber, displayCustName } from '@/lib/utils'
 import { StatusBadge } from './StatusBadge'
 import { ShipmentMobileCard } from './ShipmentMobileCard'
 import { getCommodityIcon } from '../utils/commodity'
@@ -38,7 +38,7 @@ function groupByTerima(rows: Shipment[]): TerimaGroup[] {
   for (const [key, items] of groupsMap.entries()) {
     const hasTerima = key !== '__EMPTY_TERIMA__'
     const terimaCode = hasTerima ? key : 'Tanpa No. Resi'
-    const customerName = items.find((it) => it.fdCustName)?.fdCustName || 'Customer Tidak Dikenal'
+    const customerName = displayCustName(items.find((it) => it.fdCustName)?.fdCustName, 'Customer Tidak Dikenal')
 
     const totalPack = items.reduce((sum, it) => sum + Number(it.fdJmlPack || 0), 0)
     const totalBerat = items.reduce((sum, it) => sum + Number(it.fdJmlBerat || 0), 0)
@@ -104,8 +104,8 @@ function buildColumns({ onDetail, isGrouped }: BuildColumnsOptions) {
         // Flat Mode: Tampilkan Customer & No. List
         return (
           <div className="flex flex-col gap-2 py-1">
-            <span className="font-semibold text-[var(--color-text)] text-sm leading-tight truncate max-w-[280px]" title={row.fdCustName || ''}>
-              {row.fdCustName || '—'}
+            <span className="font-semibold text-[var(--color-text)] text-sm leading-tight truncate max-w-[280px]" title={displayCustName(row.fdCustName)}>
+              {displayCustName(row.fdCustName)}
             </span>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-mono text-xs font-bold text-[var(--color-text)] bg-[var(--color-neutral)] px-1.5 py-0.5 rounded border border-[var(--color-border)]">

@@ -10,6 +10,7 @@ export const STATUS_STYLES: Record<number, { label: string; bg: string; text: st
   7:    { label: 'Billed',        bg: 'bg-purple-50',  text: 'text-purple-700',                      dot: 'bg-purple-700' },
   8:    { label: 'Partially Paid', bg: 'bg-yellow-50', text: 'text-yellow-700',                    dot: 'bg-yellow-700' },
   9:    { label: 'Paid',          bg: 'bg-teal-50',    text: 'text-teal-700',                        dot: 'bg-teal-700' },
+  10:   { label: 'Blocked',       bg: 'bg-red-500/10 border border-red-500/30', text: 'text-red-600 dark:text-red-400', dot: 'bg-red-500' },
 }
 
-export const STATUS_ORDER = [-1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+export const STATUS_ORDER = [-1, 10, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]

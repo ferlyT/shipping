@@ -1,6 +1,14 @@
 import { Hono } from 'hono'
 import { authMiddleware, requirePermission } from '../../middleware/auth'
-import { getDeliveryOrders, getDeliveryOrderById, getDeliveryOrdersKPIs, getDeliveryGroupedByListCode, getDeliveryMarkingCodeGroups, getDeliveryBranchGroups } from './deliveryOrders.service'
+import {
+  getDeliveryOrders,
+  getDeliveryOrderById,
+  getDeliveryOrdersKPIs,
+  getDeliveryGroupedByListCode,
+  getDeliveryMarkingCodeGroups,
+  getDeliveryBranchGroups,
+  getDeliveryOrderSuggestions,
+} from './deliveryOrders.service'
 import { successResponse, errorResponse } from '../../utils/response'
 
 const deliveryOrdersRoutes = new Hono()
@@ -12,6 +20,12 @@ deliveryOrdersRoutes.get('/', async (c) => {
   const query = c.req.query()
   const result = await getDeliveryOrders(query)
   return successResponse(c, result.data, result.meta)
+})
+
+deliveryOrdersRoutes.get('/suggestions', async (c) => {
+  const q = c.req.query('q') || ''
+  const suggestions = await getDeliveryOrderSuggestions(q)
+  return successResponse(c, suggestions)
 })
 
 deliveryOrdersRoutes.get('/kpi', async (c) => {

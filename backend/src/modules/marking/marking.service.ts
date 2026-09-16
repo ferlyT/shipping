@@ -1,6 +1,9 @@
 import { prisma } from '../../config/database'
 import { buildPagination, parsePagination } from '../../utils/pagination'
 import { logger } from '../../config/logger'
+import { suggestionCache } from '../../utils/cache'
+
+import { computeExitPrediction } from './marking-analytics.service'
 
 // Re-export types & analytics
 export * from './marking.types'
@@ -18,9 +21,15 @@ export async function getMarkings(query: Record<string, string | undefined>) {
   const sortBy = query.sortBy || 'fdSysDate'
   const sortDir = query.sortDir === 'asc' ? 'asc' : 'desc'
   const listType = query.listType // 1 for AIR, 2 for SEA
+  const exitScope = query.exitScope // 'today' | 'yesterday' | 'tomorrow' | 'recent'
   const isClosed = query.isClosed
   const groupMode = query.groupMode
   const groupValue = query.groupValue
+  const year = query.year?.trim()
+
+  let effectiveSortBy = sortBy
+  let effectiveSortDir = sortDir
+  let tomorrowItems: any[] = []
 
   try {
     const where: any = {}
@@ -42,10 +51,148 @@ export async function getMarkings(query: Record<string, string | undefined>) {
       where.fdListType = parseInt(listType, 10)
     }
 
-    if (isClosed === 'true') {
-      where.fdExitDate = { not: null }
-    } else if (isClosed === 'false') {
-      where.fdExitDate = null
+    if (year && year !== 'ALL') {
+      const yearNum = parseInt(year, 10)
+      if (!isNaN(yearNum)) {
+        const startYear = new Date(`${yearNum}-01-01T00:00:00.000Z`)
+        const endYear = new Date(`${yearNum + 1}-01-01T00:00:00.000Z`)
+        const twoDigitYear = String(yearNum).slice(-2)
+
+        where.AND = [
+          ...(where.AND || []),
+          {
+            OR: [
+              { fdETA: { gte: startYear, lt: endYear } },
+              { fdLoadDate: { gte: startYear, lt: endYear } },
+              { fdETD: { gte: startYear, lt: endYear } },
+              { fdSysDate: { gte: startYear, lt: endYear } },
+              { fdMarkingCode: { startsWith: twoDigitYear } },
+            ],
+          },
+        ]
+      }
+    }
+
+    if (exitScope) {
+      const today = new Date()
+      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate())
+      const tomorrowStart = new Date(todayStart)
+      tomorrowStart.setDate(tomorrowStart.getDate() + 1)
+      const yesterdayStart = new Date(todayStart)
+      yesterdayStart.setDate(yesterdayStart.getDate() - 1)
+      const dayAfterTomorrowStart = new Date(tomorrowStart)
+      dayAfterTomorrowStart.setDate(dayAfterTomorrowStart.getDate() + 1)
+      const sevenDaysAgoStart = new Date(todayStart)
+      sevenDaysAgoStart.setDate(sevenDaysAgoStart.getDate() - 7)
+
+      if (exitScope === 'today') {
+        where.fdExitDate = {
+          gte: todayStart,
+          lt: tomorrowStart,
+        }
+        if (!query.sortBy) {
+          effectiveSortBy = 'fdExitDate'
+          effectiveSortDir = 'desc'
+        }
+      } else if (exitScope === 'yesterday') {
+        where.fdExitDate = {
+          gte: yesterdayStart,
+          lt: todayStart,
+        }
+        if (!query.sortBy) {
+          effectiveSortBy = 'fdExitDate'
+          effectiveSortDir = 'desc'
+        }
+      } else if (exitScope === 'recent') {
+        where.fdExitDate = {
+          gte: sevenDaysAgoStart,
+          lt: tomorrowStart,
+        }
+        if (!query.sortBy) {
+          effectiveSortBy = 'fdExitDate'
+          effectiveSortDir = 'desc'
+        }
+      } else if (exitScope === 'tomorrow') {
+        const prediction = await computeExitPrediction(where)
+        const expectedTomorrow = prediction.prediksiExitList.filter((p: any) => {
+          const pDate = new Date(p.predictedExitDate)
+          return pDate >= tomorrowStart && pDate < dayAfterTomorrowStart
+        })
+        const codes = expectedTomorrow.map((p: any) => p.fdMarkingCode.trim())
+        if (codes.length === 0) {
+          return {
+            data: [],
+            meta: meta(0),
+          }
+        }
+        where.fdMarkingCode = { in: codes }
+        tomorrowItems = expectedTomorrow
+        if (!query.sortBy) {
+          effectiveSortBy = 'fdETA'
+          effectiveSortDir = 'asc'
+        }
+      } else if (exitScope === 'eta_not_exit' || exitScope === 'etaNotExit') {
+        where.fdExitDate = null
+        where.fdETA = { lt: today }
+        if (!query.sortBy) {
+          effectiveSortBy = 'fdETA'
+          effectiveSortDir = 'asc'
+        }
+      } else if (exitScope === 'missed_sla' || exitScope === 'missedSla') {
+        const batchesWithETD = await prisma.tbMarking.findMany({
+          where: {
+            ...where,
+            fdETD: { not: null },
+            fdETA: { not: null },
+          },
+          select: {
+            fdMarkingCode: true,
+            fdListType: true,
+            fdETD: true,
+            fdETA: true,
+          },
+        })
+
+        const missedCodes: string[] = []
+        for (const batch of batchesWithETD) {
+          if (batch.fdETD && batch.fdETA) {
+            const diffTime = Math.abs(batch.fdETA.getTime() - batch.fdETD.getTime())
+            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+            let maxTarget = 0
+            const code = batch.fdMarkingCode.trim().toUpperCase()
+            if (batch.fdListType === 1) { // AIR
+              if (code.includes('SG')) maxTarget = 5
+              else if (code.includes('HK')) maxTarget = 7
+              else if (code.includes('GZ')) maxTarget = 10
+            } else { // SEA
+              if (code.includes('SG')) maxTarget = 20
+              else if (code.includes('HK') || code.includes('GZ') || code.includes('SH')) maxTarget = 30
+              else if (code.includes('YW')) maxTarget = 40
+            }
+            if (maxTarget > 0 && diffDays > maxTarget) {
+              missedCodes.push(batch.fdMarkingCode.trim())
+            }
+          }
+        }
+
+        if (missedCodes.length === 0) {
+          return {
+            data: [],
+            meta: meta(0),
+          }
+        }
+        where.fdMarkingCode = { in: missedCodes }
+        if (!query.sortBy) {
+          effectiveSortBy = 'fdETA'
+          effectiveSortDir = 'desc'
+        }
+      }
+    } else {
+      if (isClosed === 'true') {
+        where.fdExitDate = { not: null }
+      } else if (isClosed === 'false') {
+        where.fdExitDate = null
+      }
     }
 
     if (groupMode && groupValue && groupValue !== 'Tidak diketahui') {
@@ -100,17 +247,27 @@ export async function getMarkings(query: Record<string, string | undefined>) {
       }
     }
 
-    const [data, total] = await Promise.all([
+    let [data, total] = await Promise.all([
       prisma.tbMarking.findMany({
         where,
         skip,
         take,
         orderBy: {
-          [sortBy]: sortDir,
+          [effectiveSortBy]: effectiveSortDir,
         },
       }),
       prisma.tbMarking.count({ where }),
     ])
+
+    if (tomorrowItems.length > 0) {
+      data = data.map((item: any) => {
+        const match = tomorrowItems.find((p: any) => p.fdMarkingCode.trim() === item.fdMarkingCode.trim())
+        return {
+          ...item,
+          predictedExitDate: match?.predictedExitDate || null,
+        }
+      })
+    }
 
     return {
       data,
@@ -242,14 +399,71 @@ export async function getMarkingDetail(fdMarkingCode: string) {
 
 export async function getManifestByMarkingCode(fdMarkingCode: string) {
   try {
-    const manifest = await prisma.vwShipment.findMany({
-      where: { fdMarkingCode },
-      orderBy: { fdListCode: 'asc' }
-    })
+    const cleanCode = fdMarkingCode.trim()
+    const manifest = await prisma.$queryRaw<any[]>`
+      SELECT 
+        COALESCE(NULLIF(RTRIM(c.fdCustName), ''), RTRIM(s.fdCustName)) as fdCustName,
+        RTRIM(s.fdListCode) as fdListCode,
+        RTRIM(s.fdTerima) as fdTerima,
+        s.fdTglAgent,
+        RTRIM(s.fdMarkingCode) as fdMarkingCode,
+        RTRIM(s.fdMarkingNo) as fdMarkingNo,
+        RTRIM(s.fdBranchCode) as fdBranchCode,
+        s.fdJmlPack,
+        RTRIM(s.fdSatuan) as fdSatuan,
+        s.fdJmlBerat,
+        s.fdListType,
+        RTRIM(s.fdDesc) as fdDesc,
+        RTRIM(s.fdComodity) as fdComodity,
+        RTRIM(tc.fdComodityName) as fdComodityName,
+        RTRIM(tc.fdComodityName) as typeComodityName,
+        s.fdTypeComodity,
+        s.fdM3,
+        s.fdCancel,
+        RTRIM(s.fdMarkingCodeAsal) as fdMarkingCodeAsal,
+        RTRIM(el.fdTrackingNo) as fdLocalTrackingNo,
+        RTRIM(c.fdSalesNM) as fdSalesNM,
+        -- Blocked Finance Info
+        ISNULL(bf.isBlocked, 0) as isBlocked,
+        bf.fdCreated as blockedBy,
+        bf.fdKeterangan as blockedReason,
+        ISNULL(c.fdBlocked, 0) as custBlocked,
+        -- Financial status: ambil dari status customer tbCustomers.fdBlocked, override ke BLOCKED jika diblokir finance
+        CASE 
+          WHEN ISNULL(bf.isBlocked, 0) = 1 THEN 'BLOCKED'
+          WHEN c.fdBlocked = 1 THEN 'OK'
+          WHEN c.fdBlocked = 2 THEN 'COD'
+          WHEN c.fdBlocked = 3 THEN 'WARNING'
+          WHEN c.fdBlocked = 4 THEN 'BLOCKED'
+          WHEN c.fdBlocked = 5 THEN 'URGENT'
+          ELSE 'NO STATUS'
+        END as financialStatus
+      FROM vwShipment s WITH (NOLOCK)
+      LEFT JOIN tbEntryList el WITH (NOLOCK) ON s.fdListCode = el.fdListCode
+      LEFT JOIN tbCustomers c WITH (NOLOCK) ON el.fdCustCode = c.fdCustCode
+      LEFT JOIN tbTypeComodity tc WITH (NOLOCK) ON tc.fdTypeComodity = s.fdTypeComodity AND tc.fdListType = s.fdListType
+      LEFT JOIN (
+        SELECT fdListCode, 
+               fdBlocked as isBlocked,
+               RTRIM(fdCreated) as fdCreated, 
+               RTRIM(fdKeterangan) as fdKeterangan,
+               ROW_NUMBER() OVER (PARTITION BY fdListCode ORDER BY fdID DESC) as rn
+        FROM tbEntryList_Bloked_Finance WITH (NOLOCK)
+      ) bf ON s.fdListCode = bf.fdListCode AND bf.rn = 1
+      WHERE s.fdMarkingCode = ${cleanCode}
+      ORDER BY s.fdListCode ASC
+    `
     return manifest
   } catch (error) {
     logger.error(`Error fetching manifest for ${fdMarkingCode}:`, error)
-    throw new Error('Gagal mengambil data manifest')
+    try {
+      return await prisma.vwShipment.findMany({
+        where: { fdMarkingCode },
+        orderBy: { fdListCode: 'asc' }
+      })
+    } catch {
+      throw new Error('Gagal mengambil data manifest')
+    }
   }
 }
 
@@ -296,5 +510,100 @@ export async function searchManifestSuggestions(fdMarkingCode: string, query: st
   } catch (error) {
     logger.error(`Error searching manifest suggestions for ${fdMarkingCode}:`, error)
     throw new Error('Gagal mengambil suggestions manifest')
+  }
+}
+
+export interface MarkingSuggestion {
+  type: 'marking' | 'container' | 'bl_awb' | 'consignee'
+  title: string
+  subtitle: string
+  value: string
+}
+
+export async function getMarkingSuggestions(keyword: string): Promise<MarkingSuggestion[]> {
+  const cleanQ = (keyword || '').trim()
+  if (!cleanQ || cleanQ.length < 2) return []
+
+  const cacheKey = `marking:${cleanQ.toLowerCase()}`
+  const cached = suggestionCache.get<MarkingSuggestion[]>(cacheKey)
+  if (cached) return cached
+
+  const searchLike = `%${cleanQ}%`
+
+  try {
+    const rows = await prisma.$queryRaw<any[]>`
+      SELECT TOP 15 
+        RTRIM(ISNULL(fdMarkingCode, '')) AS fdMarkingCode,
+        RTRIM(ISNULL(fdContNo, '')) AS fdContNo,
+        RTRIM(ISNULL(fdBLNo, '')) AS fdBLNo,
+        RTRIM(ISNULL(fdAWB, '')) AS fdAWB,
+        RTRIM(ISNULL(fdConsignee, '')) AS fdConsignee
+      FROM tbMarking WITH (NOLOCK)
+      WHERE fdMarkingCode LIKE ${searchLike} 
+         OR fdContNo LIKE ${searchLike} 
+         OR fdBLNo LIKE ${searchLike} 
+         OR fdAWB LIKE ${searchLike} 
+         OR fdConsignee LIKE ${searchLike}
+      ORDER BY fdSysDate DESC
+    `
+
+    const suggestions: MarkingSuggestion[] = []
+    const seen = new Set<string>()
+    const qLower = cleanQ.toLowerCase()
+
+    for (const row of rows) {
+      if (row.fdMarkingCode && row.fdMarkingCode.toLowerCase().includes(qLower) && !seen.has(`m:${row.fdMarkingCode}`)) {
+        seen.add(`m:${row.fdMarkingCode}`)
+        suggestions.push({
+          type: 'marking',
+          title: row.fdMarkingCode,
+          subtitle: row.fdContNo ? `Kontainer: ${row.fdContNo}` : 'Batch Marking',
+          value: row.fdMarkingCode,
+        })
+      }
+      if (row.fdContNo && row.fdContNo.toLowerCase().includes(qLower) && !seen.has(`c:${row.fdContNo}`)) {
+        seen.add(`c:${row.fdContNo}`)
+        suggestions.push({
+          type: 'container',
+          title: row.fdContNo,
+          subtitle: `No. Kontainer (${row.fdMarkingCode})`,
+          value: row.fdContNo,
+        })
+      }
+      if (row.fdBLNo && row.fdBLNo.toLowerCase().includes(qLower) && !seen.has(`bl:${row.fdBLNo}`)) {
+        seen.add(`bl:${row.fdBLNo}`)
+        suggestions.push({
+          type: 'bl_awb',
+          title: row.fdBLNo,
+          subtitle: `B/L (${row.fdMarkingCode})`,
+          value: row.fdBLNo,
+        })
+      }
+      if (row.fdAWB && row.fdAWB.toLowerCase().includes(qLower) && !seen.has(`awb:${row.fdAWB}`)) {
+        seen.add(`awb:${row.fdAWB}`)
+        suggestions.push({
+          type: 'bl_awb',
+          title: row.fdAWB,
+          subtitle: `AWB Udara (${row.fdMarkingCode})`,
+          value: row.fdAWB,
+        })
+      }
+      if (row.fdConsignee && row.fdConsignee.toLowerCase().includes(qLower) && !seen.has(`cs:${row.fdConsignee}`)) {
+        seen.add(`cs:${row.fdConsignee}`)
+        suggestions.push({
+          type: 'consignee',
+          title: row.fdConsignee,
+          subtitle: `Consignee (${row.fdMarkingCode})`,
+          value: row.fdConsignee,
+        })
+      }
+      if (suggestions.length >= 10) break
+    }
+
+    suggestionCache.set(cacheKey, suggestions)
+    return suggestions
+  } catch (error) {
+    logger.error('Error in getMarkingSuggestions:', error)
+    return []
   }
 }

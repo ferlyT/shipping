@@ -54,13 +54,18 @@ export interface MarkingKPIResponse {
   etaNotExitBatchesAir: number
   etaNotExitBatchesSea: number
   etaNotExitSummary: Array<{ name: string; count: number; codes: Array<{ code: string; aging: number }> }>
+  etaNotExitSummaryArray?: Array<{ name: string; count: number; codes: Array<{ code: string; aging: number }> }>
   averageTransitDays: number | null
   averageTransitDaysAir: number | null
   averageTransitDaysSea: number | null
   missedTargetCount: number
   missedTargetCountAir: number
   missedTargetCountSea: number
+  missedTargetBatches?: number
+  missedTargetBatchesAir?: number
+  missedTargetBatchesSea?: number
   missedTargetSummary: Array<{ name: string; count: number; codes: Array<{ code: string; transit: number; target: number }> }>
+  missedTargetSummaryArray?: Array<{ name: string; count: number; codes: Array<{ code: string; transit: number; target: number }> }>
   prediksiTerlambatCount: number
   prediksiSegeraCount: number
   prediksiDekatCount: number

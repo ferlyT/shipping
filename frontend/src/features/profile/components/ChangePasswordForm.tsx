@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { KeyRound, Eye, EyeOff, CheckCircle2, AlertCircle } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { toast } from '@/stores/toastStore'
+import { Button } from '@/components/ui/Button'
 import type { ChangePasswordInput } from '../types/profile.types'
 
 interface ChangePasswordFormProps {
@@ -156,18 +157,16 @@ export function ChangePasswordForm({ onChangePassword, isChanging }: ChangePassw
 
       {/* Submit Button */}
       <div className="flex justify-end pt-2">
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="md"
           disabled={isChanging || !currentPassword || !newPassword || !confirmPassword || isMismatch || newPassword.length < 6}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-[var(--color-on-primary)] hover:opacity-90 text-xs font-semibold shadow-xs transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          isLoading={isChanging}
         >
-          {isChanging ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <KeyRound className="w-4 h-4" />
-          )}
+          <KeyRound className="w-4 h-4" />
           <span>{t('profile.changePassword')}</span>
-        </button>
+        </Button>
       </div>
     </form>
   )

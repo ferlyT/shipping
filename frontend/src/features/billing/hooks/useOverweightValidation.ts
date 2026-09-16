@@ -51,6 +51,8 @@ export interface OverweightValidationResult {
   maxAllowedWeight: number
   /** Kelebihan berat yang harus ditagih (kg) */
   overweightKg: number
+  /** True jika batas M3 dinaikkan ke 0.1 m³ untuk validasi KG laut */
+  isMinM3EnforcedForKg: boolean
   /** True jika ada overweight */
   isOverweight: boolean
   /** True jika tagihan KG persis cocok dengan overweight (< 0.01 kg) */
@@ -128,7 +130,11 @@ export function useOverweightValidation({
   }, [res, isGabungan])
 
   const rasio = res?.profileHarga?.rasio ?? 0
-  const refM3 = billedM3 > 0 ? billedM3 : refM3Fallback
+  const rawRefM3 = billedM3 > 0 ? billedM3 : refM3Fallback
+  // Semua tagihan laut yang di bawah 0.1 m³ wajib dinaikkan menjadi 0.1 m³ untuk validasi kg
+  const isMinM3EnforcedForKg = !isAir && rawRefM3 > 0 && rawRefM3 < 0.1
+  const refM3 = isMinM3EnforcedForKg ? 0.1 : rawRefM3
+
   const maxAllowedWeight = !isAir && rasio > 0 && refM3 > 0 ? refM3 * rasio : 0
   const overweightKg = !isAir && rasio > 0 && refM3 > 0 && actualWeightKg > 0
     ? calculateOverweight(actualWeightKg, refM3, rasio)
@@ -151,6 +157,7 @@ export function useOverweightValidation({
     refM3,
     maxAllowedWeight,
     overweightKg,
+    isMinM3EnforcedForKg,
     isOverweight,
     isBilledOverweightExactMatch,
     isBilledOverweightTolerated,

@@ -19,15 +19,34 @@ export const EMPTY_MARKING: MarkingDates = {
   fdGudang: null,
 }
 
+export interface BlockedFinanceInfo {
+  isBlocked: boolean
+  blockedBy: string | null
+  blockedReason: string | null
+}
+
 export function resolveShipmentStatus(
   marking: MarkingDates | null | undefined,
   delivery: DeliveryInfo | null | undefined,
   billing: BillingInfo | null | undefined,
-  fdCancel?: number | null
+  fdCancel?: number | null,
+  blockedInfo?: BlockedFinanceInfo | null
 ): ShipmentStatus {
   // fdCancel = 1 override semua status menjadi Canceled
   if (Number(fdCancel) === 1) {
     return { ...(marking || EMPTY_MARKING), statusLabel: 'Canceled', statusStep: -1 }
+  }
+
+  // Jika diblokir oleh Finance (fdBlocked = 1), kunci status pengiriman menjadi Blocked
+  if (blockedInfo?.isBlocked) {
+    return {
+      ...(marking || EMPTY_MARKING),
+      statusLabel: 'Blocked',
+      statusStep: 10,
+      isBlocked: true,
+      blockedBy: blockedInfo.blockedBy,
+      blockedReason: blockedInfo.blockedReason,
+    }
   }
 
   if (!marking) {
@@ -148,8 +167,49 @@ export async function getBillingStatusMap(listCodes: string[]) {
   return map
 }
 
+export async function getBlockedFinanceStatusMap(listCodes: string[]): Promise<Map<string, BlockedFinanceInfo>> {
+  const normalizedCodes = listCodes.map((c) => c.trim()).filter(Boolean)
+  const uniqueCodes = [...new Set(normalizedCodes)]
+  if (uniqueCodes.length === 0) return new Map()
+
+  try {
+    const rows = await prisma.$queryRaw<any[]>`
+      WITH Ranked AS (
+        SELECT fdListCode, fdBlocked, RTRIM(fdCreated) as fdCreated, RTRIM(fdKeterangan) as fdKeterangan,
+               ROW_NUMBER() OVER (PARTITION BY fdListCode ORDER BY fdID DESC) as rn
+        FROM tbEntryList_Bloked_Finance WITH (NOLOCK)
+        WHERE fdListCode IN (${Prisma.join(uniqueCodes)})
+      )
+      SELECT fdListCode, fdBlocked, fdCreated, fdKeterangan
+      FROM Ranked
+      WHERE rn = 1 AND fdBlocked = 1
+    `
+
+    const map = new Map<string, BlockedFinanceInfo>()
+    for (const r of rows) {
+      const code = (r.fdListCode ?? '').trim()
+      if (!code) continue
+      map.set(code, {
+        isBlocked: Number(r.fdBlocked) === 1,
+        blockedBy: r.fdCreated ? r.fdCreated.trim() : null,
+        blockedReason: r.fdKeterangan ? r.fdKeterangan.trim() : null,
+      })
+    }
+    return map
+  } catch (err) {
+    return new Map()
+  }
+}
+
 export function buildSingleStatusCondition(status: number): Prisma.Sql {
-  if (status === 0) {
+  if (status === 10) {
+    return Prisma.sql`fdListCode IN (
+      SELECT fdListCode FROM (
+        SELECT fdListCode, fdBlocked, ROW_NUMBER() OVER (PARTITION BY fdListCode ORDER BY fdID DESC) as rn
+        FROM tbEntryList_Bloked_Finance WITH (NOLOCK)
+      ) b WHERE b.rn = 1 AND b.fdBlocked = 1
+    )`
+  } else if (status === 0) {
     return Prisma.sql`(fdMarkingCode IS NULL OR fdMarkingCode = '' OR fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdLoadDate IS NULL AND fdETD IS NULL AND fdETA IS NULL AND fdExitDate IS NULL))`
   } else if (status === 1) {
     return Prisma.sql`fdMarkingCode IN (SELECT fdMarkingCode FROM tbMarking WHERE fdLoadDate IS NOT NULL AND fdETD IS NULL AND fdETA IS NULL AND fdExitDate IS NULL)`
@@ -173,10 +233,14 @@ export function buildSingleStatusCondition(status: number): Prisma.Sql {
   return Prisma.sql`1=1`
 }
 
-export function buildSingleWordCondition(word: string, field: string): Prisma.Sql {
+export function buildSingleWordCondition(word: string, field: string, matchedCustCodes?: string[]): Prisma.Sql {
   const searchLike = `%${word}%`
 
   if (field === 'customer') {
+    if (matchedCustCodes && matchedCustCodes.length > 0) {
+      const inList = Prisma.join(matchedCustCodes.map((c) => Prisma.sql`${c}`), ', ')
+      return Prisma.sql`(fdCustCode IN (${inList}) OR fdCustName LIKE ${searchLike})`
+    }
     return Prisma.sql`fdCustName LIKE ${searchLike}`
   } else if (field === 'resi') {
     return Prisma.sql`fdTerima LIKE ${searchLike}`
@@ -194,41 +258,76 @@ export function buildSingleWordCondition(word: string, field: string): Prisma.Sq
   } else if (field === 'listCode') {
     return Prisma.sql`fdListCode LIKE ${searchLike}`
   } else if (field === 'customer_marking') {
+    if (matchedCustCodes && matchedCustCodes.length > 0) {
+      const inList = Prisma.join(matchedCustCodes.map((c) => Prisma.sql`${c}`), ', ')
+      return Prisma.sql`(
+        fdCustCode IN (${inList}) OR 
+        fdCustName LIKE ${searchLike} OR 
+        fdMarkingCode LIKE ${searchLike} OR 
+        fdMarkingNo LIKE ${searchLike}
+      )`
+    }
     return Prisma.sql`(
       fdCustName LIKE ${searchLike} OR 
       fdMarkingCode LIKE ${searchLike} OR 
       fdMarkingNo LIKE ${searchLike}
     )`
   } else {
+    // Sesuai instruksi: Pencarian resi dibatasi hanya pada resi (fdTerima), customer name, marking code, dan marking no
+    // Jika ada matched customer codes dari tbCustomers, gunakan index fdCustCode pada tbEntryList untuk percepatan drastis
+    if (matchedCustCodes && matchedCustCodes.length > 0) {
+      const inList = Prisma.join(matchedCustCodes.map((c) => Prisma.sql`${c}`), ', ')
+      return Prisma.sql`(
+        fdCustCode IN (${inList}) OR
+        fdTerima LIKE ${searchLike} OR 
+        fdMarkingCode LIKE ${searchLike} OR 
+        fdMarkingNo LIKE ${searchLike}
+      )`
+    }
     return Prisma.sql`(
+      fdTerima LIKE ${searchLike} OR 
       fdCustName LIKE ${searchLike} OR 
       fdMarkingCode LIKE ${searchLike} OR 
-      fdMarkingNo LIKE ${searchLike} OR 
-      fdListCode LIKE ${searchLike} OR 
-      fdTerima LIKE ${searchLike} OR 
-      fdLocalTrackingNo LIKE ${searchLike} OR 
-      fdComodity LIKE ${searchLike}
+      fdMarkingNo LIKE ${searchLike}
     )`
   }
 }
 
-export function buildTermCondition(term: string, field: string): Prisma.Sql {
+export function buildTermCondition(term: string, field: string, matchedCustCodes?: string[]): Prisma.Sql {
   const words = term.split(/\s+/).map((w) => w.trim()).filter(Boolean)
 
   if (words.length <= 1) {
-    return buildSingleWordCondition(term, field)
+    return buildSingleWordCondition(term, field, matchedCustCodes)
   }
 
-  const wordConditions = words.map((w) => buildSingleWordCondition(w, field))
+  const wordConditions = words.map((w) => buildSingleWordCondition(w, field, matchedCustCodes))
   return Prisma.sql`(${Prisma.join(wordConditions, ' AND ')})`
 }
 
-export function buildShipmentConditions(query: Record<string, string | undefined>): Prisma.Sql[] {
+export async function buildShipmentConditions(query: Record<string, string | undefined>): Promise<Prisma.Sql[]> {
   const conditions: Prisma.Sql[] = []
 
   // 1. Multi-token Search
   const search = query.search?.trim()
   const searchField = query.searchField?.trim() || 'ALL'
+
+  let matchedCustCodes: string[] = []
+  if (search && (searchField === 'ALL' || searchField === 'customer' || searchField === 'customer_marking')) {
+    try {
+      const searchTerms = search.split(/[,\n;\r\t\s]+/).map((s) => s.trim()).filter(Boolean)
+      const orClauses = searchTerms.map((t) => Prisma.sql`fdCustName LIKE ${'%' + t + '%'}`)
+      if (orClauses.length > 0) {
+        const custs = await prisma.$queryRaw<any[]>`
+          SELECT TOP 50 RTRIM(fdCustCode) AS fdCustCode 
+          FROM tbCustomers WITH (NOLOCK) 
+          WHERE ${Prisma.join(orClauses, ' OR ')}
+        `
+        matchedCustCodes = custs.map((c) => c.fdCustCode).filter(Boolean)
+      }
+    } catch {
+      // safe fallback jika koneksi sempat terputus
+    }
+  }
 
   if (search) {
     const terms = search
@@ -237,7 +336,7 @@ export function buildShipmentConditions(query: Record<string, string | undefined
       .filter(Boolean)
 
     if (terms.length > 0) {
-      const termConditions = terms.map((t) => buildTermCondition(t, searchField))
+      const termConditions = terms.map((t) => buildTermCondition(t, searchField, matchedCustCodes))
       conditions.push(Prisma.sql`(${Prisma.join(termConditions, ' OR ')})`)
     }
   }
@@ -275,7 +374,7 @@ export function buildShipmentConditions(query: Record<string, string | undefined
     }
   }
 
-  // 5. Multi-variable Branch
+  // 5. Multi-variable Branch (-- dan SG adalah sama)
   const branch = query.branch?.trim()
   if (branch && branch !== 'ALL') {
     const branches = branch
@@ -283,10 +382,21 @@ export function buildShipmentConditions(query: Record<string, string | undefined
       .map((b) => b.trim())
       .filter((b) => b && b !== 'ALL')
 
-    if (branches.length === 1) {
-      conditions.push(Prisma.sql`fdBranchCode = ${branches[0]}`)
-    } else if (branches.length > 1) {
-      conditions.push(Prisma.sql`fdBranchCode IN (${Prisma.join(branches)})`)
+    const hasSg = branches.includes('SG') || branches.includes('--')
+    const otherBranches = branches.filter((b) => b !== 'SG' && b !== '--')
+
+    if (hasSg && otherBranches.length > 0) {
+      conditions.push(
+        Prisma.sql`(fdBranchCode IN (${Prisma.join(otherBranches)}) OR fdBranchCode IN ('SG', '--', '-') OR fdBranchCode IS NULL OR LTRIM(RTRIM(fdBranchCode)) = '')`
+      )
+    } else if (hasSg) {
+      conditions.push(
+        Prisma.sql`(fdBranchCode IN ('SG', '--', '-') OR fdBranchCode IS NULL OR LTRIM(RTRIM(fdBranchCode)) = '')`
+      )
+    } else if (otherBranches.length === 1) {
+      conditions.push(Prisma.sql`fdBranchCode = ${otherBranches[0]}`)
+    } else if (otherBranches.length > 1) {
+      conditions.push(Prisma.sql`fdBranchCode IN (${Prisma.join(otherBranches)})`)
     }
   }
 
@@ -315,6 +425,23 @@ export function buildShipmentConditions(query: Record<string, string | undefined
           Prisma.sql`(ISNULL(fdCancel, 0) = 0 AND (${Prisma.join(normalSqlList, ' OR ')}))`
         )
       }
+    }
+  }
+
+  // 7. Filter Tahun Berdasarkan fdLoadDate -> tbMarking
+  const yearParam = query.year?.toString().trim()
+  if (yearParam && yearParam !== 'ALL' && yearParam !== 'all') {
+    const targetYear = parseInt(yearParam, 10)
+    if (!isNaN(targetYear)) {
+      const startOfYear = new Date(targetYear, 0, 1)
+      const startOfNextYear = new Date(targetYear + 1, 0, 1)
+      conditions.push(
+        Prisma.sql`fdMarkingCode IN (
+          SELECT fdMarkingCode 
+          FROM tbMarking WITH (NOLOCK) 
+          WHERE fdLoadDate >= ${startOfYear} AND fdLoadDate < ${startOfNextYear}
+        )`
+      )
     }
   }
 

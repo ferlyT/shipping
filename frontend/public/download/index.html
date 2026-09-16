@@ -1,0 +1,243 @@
+﻿<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unduh M-Shipping Mobile App</title>
+  <link rel="icon" type="image/svg+xml" href="/mshipping/favicon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0B0F17;
+      --surface: #151D2A;
+      --border: #1E293B;
+      --border-strong: #334155;
+      --text-main: #F1F5F9;
+      --text-muted: #94A3B8;
+      --accent: #38BDF8;
+      --accent-glow: rgba(56, 189, 248, 0.15);
+      --success: #10B981;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: 'Public Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      background-color: var(--bg);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px 16px;
+      line-height: 1.5;
+    }
+    .card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 32px 24px;
+      max-width: 440px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+    .badge-ver {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--accent-glow);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 16px;
+      letter-spacing: 0.5px;
+    }
+    .badge-ver::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background-color: var(--success);
+    }
+    h1 {
+      font-family: 'Space Grotesk', sans-serif;
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text-main);
+      letter-spacing: -0.5px;
+      margin-bottom: 6px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+    }
+    .qr-container {
+      background: #FFFFFF;
+      padding: 12px;
+      border-radius: 14px;
+      display: inline-block;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+    }
+    .qr-container img {
+      width: 150px;
+      height: 150px;
+      display: block;
+    }
+    .btn-download {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      background: var(--accent);
+      color: #0B0F17;
+      text-decoration: none;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 14px 20px;
+      border-radius: 12px;
+      margin-bottom: 12px;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .btn-download:active {
+      transform: scale(0.98);
+      opacity: 0.9;
+    }
+    .btn-mirror {
+      display: inline-block;
+      color: var(--text-muted);
+      font-size: 12px;
+      text-decoration: none;
+      padding: 6px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 24px;
+      transition: all 0.2s;
+    }
+    .btn-mirror:hover {
+      color: var(--text-main);
+      border-color: var(--border-strong);
+    }
+    .specs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 24px;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 0;
+    }
+    .spec-item {
+      text-align: center;
+    }
+    .spec-label {
+      font-size: 10px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      letter-spacing: 0.5px;
+      font-weight: 600;
+    }
+    .spec-val {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-top: 2px;
+    }
+    .guide {
+      text-align: left;
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+    }
+    .guide-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 8px;
+    }
+    .guide ol {
+      padding-left: 18px;
+      font-size: 11.5px;
+      color: var(--text-muted);
+    }
+    .guide li {
+      margin-bottom: 4px;
+    }
+    .footer-note {
+      margin-top: 20px;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge-ver">Versi 1.0.5 Aktif</div>
+    <h1>M-Shipping Mobile</h1>
+    <p class="subtitle">Aplikasi Operasional Logistik, Resi & Billing Lapangan</p>
+
+    <!-- QR Code Scan -->
+    <div class="qr-container">
+      <img src="https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=http://36.93.22.142/mshipping/mshipping.apk" alt="QR Code Unduh APK">
+    </div>
+
+    <!-- Main Download Button -->
+    <a href="/mshipping/mshipping.apk" class="btn-download" download="mshipping.apk">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+        <polyline points="7 10 12 15 17 10"></polyline>
+        <line x1="12" y1="15" x2="12" y2="3"></line>
+      </svg>
+      Unduh APK Sekarang
+    </a>
+
+    <div>
+      <a href="http://36.93.22.142:3010/download/apk" class="btn-mirror">
+        Link Alternatif (Port 3010) ➔
+      </a>
+    </div>
+
+    <!-- App Specs -->
+    <div class="specs">
+      <div class="spec-item">
+        <div class="spec-label">Ukuran</div>
+        <div class="spec-val">121 MB</div>
+      </div>
+      <div class="spec-item">
+        <div class="spec-label">Sistem</div>
+        <div class="spec-val">Android 7.0+</div>
+      </div>
+      <div class="spec-item">
+        <div class="spec-label">Tipe</div>
+        <div class="spec-val">APK Rilis</div>
+      </div>
+    </div>
+
+    <!-- Install Guide -->
+    <div class="guide">
+      <div class="guide-title">💡 Petunjuk Instalasi:</div>
+      <ol>
+        <li>Ketuk tombol <b>Unduh APK Sekarang</b> di atas.</li>
+        <li>Buka file dari panel notifikasi atau folder <i>Download</i>.</li>
+        <li>Jika muncul peringatan keamanan, pilih <b>Tetap Install</b> atau izinkan <i>"Install aplikasi tidak dikenal"</i>.</li>
+        <li>Buka aplikasi <b>M-Shipping</b> dan masuk menggunakan akun Anda.</li>
+      </ol>
+    </div>
+
+    <div class="footer-note">
+      Portal Unduh Publik & Tanpa Login • © 2026 M-Shipping ERP
+    </div>
+  </div>
+</body>
+</html>

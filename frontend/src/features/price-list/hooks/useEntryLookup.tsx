@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react'
 import { Anchor, Plane, CheckCircle2 } from 'lucide-react'
 import { Badge } from '@/components/ui/Badge'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, displayCustName } from '@/lib/utils'
 import { priceListApi } from '../services/priceList.service'
 import { isCommodityMatch } from '../utils/commodityMatcher'
 import type {
@@ -155,7 +155,7 @@ export function useEntryLookup(isActive: boolean) {
   const handleSelectEntry = (entry: EntrySearchResult) => {
     setSelectedListCode(entry.fdListCode)
     setSelectedEntryInfo(entry)
-    const formatted = `${entry.fdListCode}${entry.customer?.fdCustName ? ` — ${entry.customer.fdCustName}` : ''}`
+    const formatted = `${entry.fdListCode}${entry.customer?.fdCustName ? ` — ${displayCustName(entry.customer.fdCustName)}` : ''}`
     setEntrySearchQuery(formatted)
     setIsDropdownOpen(false)
     handlePerformEntryLookup(entry.fdListCode)

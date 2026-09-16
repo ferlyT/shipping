@@ -19,7 +19,7 @@ import {
 import { Button } from '@/components/ui/Button'
 import { Badge } from '@/components/ui/Badge'
 import { EmptyState } from '@/components/ui/EmptyState'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, displayCustName } from '@/lib/utils'
 import { CategoryGroupedPriceTable } from './CategoryGroupedPriceTable'
 import type { useEntryLookup } from '../hooks/useEntryLookup'
 
@@ -196,7 +196,7 @@ export function EntryLookupTab({
                           </span>
                           {item.customer?.fdCustName && (
                             <span className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-                              {item.customer.fdCustName}
+                              {displayCustName(item.customer.fdCustName)}
                             </span>
                           )}
                         </div>
@@ -318,7 +318,7 @@ export function EntryLookupTab({
                   <User size={11} /> Customer
                 </span>
                 <p className="font-semibold text-[var(--color-primary)] mt-0.5 truncate">
-                  {entryResult.customer?.fdCustName || '—'}
+                  {displayCustName(entryResult.customer?.fdCustName)}
                   {entryResult.customer?.fdCustCode && (
                     <span className="text-[10px] font-normal text-[var(--color-secondary)] ml-1">
                       ({entryResult.customer.fdCustCode})

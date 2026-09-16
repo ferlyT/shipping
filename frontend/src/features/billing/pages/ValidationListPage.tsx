@@ -1,7 +1,7 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
-import { ChevronRight, SlidersHorizontal, Plane, Ship, ShieldCheck, LayoutGrid, User, ScrollText, RotateCcw, Search } from 'lucide-react'
+import { ChevronRight, SlidersHorizontal, Plane, Ship, ShieldCheck, LayoutGrid, User, ScrollText, RotateCcw, Search, AlertTriangle } from 'lucide-react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { billingApi } from '../services/billing.service'
 import { useDebounce } from '@/hooks/useDebounce'
@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/ui/EmptyState'
 import { formatWithCurrency } from '@/components/ui/CurrencyValue'
 import { AgingBadge } from '../components/AgingBadge'
 import { BillingStatusTag } from '../components/BillingStatusTag'
-import { formatDate } from '@/lib/utils'
+import { formatDate, displayCustName } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -158,7 +158,7 @@ export function ValidationListPage() {
       const amt2 = Number(b.fdJumlah2 || 0)
       if (amt1 <= 0 && amt2 <= 0) return false
 
-      const isDraft = (b.fdGive2 ?? 0) !== 1 && (b.fdGive ?? 0) !== 1 && !b.fdCekDate
+      const isDraft = (b.fdGive ?? 0) !== 1 && (b.fdGive2 ?? 0) !== 1 && !b.fdCekDate
       return isDraft
     })
   }, [billingsData])
@@ -192,6 +192,7 @@ export function ValidationListPage() {
         const invNo = (b.fdInvNo || '').toLowerCase()
         const custCode = (b.fdCustCode || '').toLowerCase()
         const custName = (b.customer?.fdCustName || '').toLowerCase()
+        const billTo = (b.customer?.fdBillTo || '').toLowerCase()
         const markingCode = (b.fdMarkingCode || '').toLowerCase()
         const markingNo = (b.fdMarkingNo || '').toLowerCase()
         const author = (b.employee?.fdEmpName || '').toLowerCase()
@@ -202,6 +203,7 @@ export function ValidationListPage() {
           invNo.includes(q) ||
           custCode.includes(q) ||
           custName.includes(q) ||
+          billTo.includes(q) ||
           markingCode.includes(q) ||
           markingNo.includes(q) ||
           author.includes(q) ||
@@ -217,6 +219,61 @@ export function ValidationListPage() {
       return timeA - timeB
     })
   }, [activeDraftBillings, listTypeFilter, authorFilter, search])
+
+  // 4. Infinite Scroll State & Window Scroll Listener (Initial 25 rows)
+  const PAGE_SIZE = 25
+  const [displayLimit, setDisplayLimit] = useState(PAGE_SIZE)
+  const sentinelRef = useRef<HTMLDivElement | null>(null)
+
+  // Reset display limit when filter or search changes
+  useEffect(() => {
+    setDisplayLimit(PAGE_SIZE)
+  }, [search, listTypeFilter, authorFilter])
+
+  const visibleBillings = useMemo(() => {
+    return filteredBillings.slice(0, displayLimit)
+  }, [filteredBillings, displayLimit])
+
+  const hasMore = displayLimit < filteredBillings.length
+
+  const loadMore = useCallback(() => {
+    if (hasMore) {
+      setDisplayLimit((prev) => Math.min(prev + PAGE_SIZE, filteredBillings.length))
+    }
+  }, [hasMore, filteredBillings.length])
+
+  // Observer on bottom sentinel
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasMore) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          loadMore()
+        }
+      },
+      { rootMargin: '300px' }
+    )
+
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore, loadMore])
+
+  // Window scroll fallback
+  useEffect(() => {
+    if (!hasMore) return
+
+    const handleScroll = () => {
+      const scrollBottom = document.documentElement.scrollHeight - window.innerHeight - window.scrollY
+      if (scrollBottom < 400) {
+        loadMore()
+      }
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [hasMore, loadMore])
 
   const isInitialLoading = isListLoading && billingsData.length === 0
   const isRefreshing = (isListLoading || isFetching) && billingsData.length > 0
@@ -268,23 +325,50 @@ export function ValidationListPage() {
       header: t('billing.customer'),
       className: 'w-[25%]',
       render: (row: Billing) => {
-        const custName = row.customer?.fdCustName || row.fdCustCode || '—'
+        const rawBillTo = row.customer?.fdBillTo?.trim() || ''
+        const rawCustName = row.customer?.fdCustName?.trim() || ''
+        const isDiff = Boolean(
+          rawBillTo && rawCustName && rawBillTo.toLowerCase() !== rawCustName.toLowerCase()
+        )
+        const mainDisplayName = displayCustName(rawBillTo || rawCustName || row.fdCustCode)
         const custStatus = row.customer?.fdBlocked ?? 0
         const badgeCfg = statusConfig[custStatus as keyof typeof statusConfig] || statusConfig[0]
 
         return (
           <div className="py-0.5">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-semibold text-[var(--color-primary)] leading-snug">{custName}</span>
+              <span
+                className="font-semibold text-[var(--color-primary)] leading-snug"
+                title={isDiff ? `Bill To: ${rawBillTo} | Master: ${rawCustName}` : mainDisplayName}
+              >
+                {mainDisplayName}
+              </span>
+              {isDiff && (
+                <span
+                  className="text-[9.5px] font-semibold px-1.5 py-0.2 rounded border border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 inline-flex items-center gap-0.5 shrink-0"
+                  title={`Nama BillTo (${rawBillTo}) berbeda dengan nama Master Customer (${rawCustName})`}
+                >
+                  <AlertTriangle size={10} className="shrink-0" />
+                  <span>BillTo ≠ Master</span>
+                </span>
+              )}
               {row.customer && (
                 <Badge variant={badgeCfg.badgeVariant} className="text-[10px] px-1.5 py-0">
                   {badgeCfg.label}
                 </Badge>
               )}
             </div>
-            {row.fdCustCode && (
-              <div className="text-[11px] text-[var(--color-secondary)] font-normal">{row.fdCustCode}</div>
-            )}
+            {isDiff ? (
+              <div className="text-[11px] text-[var(--color-secondary)] font-normal flex items-center gap-1 flex-wrap mt-0.5">
+                <span className="font-mono">{row.fdCustCode}</span>
+                <span>•</span>
+                <span className="text-[var(--color-secondary)]" title="Nama resmi di Master Customer (tbCustomers)">
+                  Master: <span className="font-medium text-[var(--color-primary)]/80">{displayCustName(rawCustName)}</span>
+                </span>
+              </div>
+            ) : row.fdCustCode ? (
+              <div className="text-[11px] text-[var(--color-secondary)] font-normal mt-0.5">{row.fdCustCode}</div>
+            ) : null}
           </div>
         )
       },
@@ -670,7 +754,7 @@ export function ValidationListPage() {
           <div className="hidden sm:block bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-sm overflow-hidden">
             <Table<Billing>
               columns={columns}
-              data={filteredBillings}
+              data={visibleBillings}
               keyExtractor={(row) => row.fdInvNo}
               onRowClick={(row) => navigate(ROUTES.BILLING_VALIDATION_DETAIL(row.fdInvNo))}
               emptyMessage={t('billing.noBillingData')}
@@ -679,8 +763,13 @@ export function ValidationListPage() {
 
           {/* Mobile Card List */}
           <div className="sm:hidden space-y-2.5">
-            {filteredBillings.map((b: Billing) => {
-              const custName = b.customer?.fdCustName || b.fdCustCode || '—'
+            {visibleBillings.map((b: Billing) => {
+              const rawBillTo = b.customer?.fdBillTo?.trim() || ''
+              const rawCustName = b.customer?.fdCustName?.trim() || ''
+              const isDiff = Boolean(
+                rawBillTo && rawCustName && rawBillTo.toLowerCase() !== rawCustName.toLowerCase()
+              )
+              const mainDisplayName = displayCustName(rawBillTo || rawCustName || b.fdCustCode)
               const custStatus = b.customer?.fdBlocked ?? 0
               const badgeCfg = statusConfig[custStatus as keyof typeof statusConfig] || statusConfig[0]
               const bType = getBillType(b)
@@ -710,22 +799,42 @@ export function ValidationListPage() {
                     <BillingStatusTag row={b} />
                   </div>
 
-                  <div className="flex items-center justify-between border-t border-[var(--color-border)] pt-2 text-xs">
-                    <div className="flex items-center gap-1.5 flex-wrap min-w-0 pr-2">
-                      <span className="font-semibold text-[var(--color-primary)] truncate">{custName}</span>
-                      {b.customer && (
-                        <Badge variant={badgeCfg.badgeVariant} className="text-[10px] px-1.5 py-0 shrink-0">
-                          {badgeCfg.label}
-                        </Badge>
-                      )}
+                  <div className="flex flex-col border-t border-[var(--color-border)] pt-2 text-xs space-y-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap min-w-0 pr-2">
+                        <span className="font-semibold text-[var(--color-primary)] truncate">{mainDisplayName}</span>
+                        {isDiff && (
+                          <span
+                            className="text-[9px] font-semibold px-1 py-0.2 rounded border border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 inline-flex items-center gap-0.5 shrink-0"
+                            title={`BillTo: ${rawBillTo} | Master: ${rawCustName}`}
+                          >
+                            <AlertTriangle size={9} className="shrink-0" />
+                            <span>Beda Master</span>
+                          </span>
+                        )}
+                        {b.customer && (
+                          <Badge variant={badgeCfg.badgeVariant} className="text-[10px] px-1.5 py-0 shrink-0">
+                            {badgeCfg.label}
+                          </Badge>
+                        )}
+                      </div>
+                      <span className="font-bold text-[var(--color-tertiary)] tabular-nums shrink-0">
+                        {Number(b.fdJumlah2 || 0) > 0 ? (
+                          formatWithCurrency(b.fdJumlah2, b.fdCurr1)
+                        ) : (
+                          formatWithCurrency(b.fdJumlah1, 'Rp.')
+                        )}
+                      </span>
                     </div>
-                    <span className="font-bold text-[var(--color-tertiary)] tabular-nums shrink-0">
-                      {Number(b.fdJumlah2 || 0) > 0 ? (
-                        formatWithCurrency(b.fdJumlah2, b.fdCurr1)
-                      ) : (
-                        formatWithCurrency(b.fdJumlah1, 'Rp.')
-                      )}
-                    </span>
+                    {isDiff ? (
+                      <div className="text-[10.5px] text-[var(--color-secondary)]">
+                        Cust Master: <span className="font-medium text-[var(--color-primary)]/80">{displayCustName(rawCustName)}</span>
+                      </div>
+                    ) : b.fdCustCode ? (
+                      <div className="text-[10.5px] text-[var(--color-secondary)]">
+                        {b.fdCustCode}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="flex items-center justify-between text-[11px] text-[var(--color-secondary)] pt-1 border-t border-[var(--color-border)]/50">
@@ -741,6 +850,39 @@ export function ValidationListPage() {
                 </div>
               )
             })}
+          </div>
+
+          {/* Infinite Scroll Sentinel & Counter */}
+          <div
+            ref={sentinelRef}
+            className="py-5 flex flex-col items-center justify-center gap-2 border border-[var(--color-border)] bg-[var(--color-surface)] rounded-[var(--radius-lg)] shadow-xs p-4 text-xs text-[var(--color-secondary)]"
+          >
+            <div className="flex items-center gap-1.5 flex-wrap justify-center text-center">
+              <span>{t('common.showing') || 'Menampilkan'}</span>
+              <span className="px-2 py-0.5 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] font-bold text-[var(--color-primary)] tabular-nums">
+                {visibleBillings.length}
+              </span>
+              <span>{t('common.of') || 'dari'}</span>
+              <span className="px-2 py-0.5 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] font-bold text-[var(--color-primary)] tabular-nums">
+                {filteredBillings.length}
+              </span>
+              <span>{t('nav.validationList') || 'faktur validasi'}</span>
+            </div>
+
+            {hasMore ? (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={loadMore}
+                className="mt-1 text-xs cursor-pointer flex items-center gap-1.5"
+              >
+                <span>Muat Lebih Banyak (+25)</span>
+              </Button>
+            ) : filteredBillings.length > 0 ? (
+              <span className="text-[11px] opacity-70 mt-0.5">
+                ✓ Seluruh {filteredBillings.length} faktur telah ditampilkan
+              </span>
+            ) : null}
           </div>
         </>
       )}

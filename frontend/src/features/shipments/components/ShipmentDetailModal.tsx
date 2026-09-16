@@ -2,14 +2,16 @@ import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
-  X, Check, Copy, Info, Ruler, Truck,
+  X, Check, Copy, Info, Ruler, Truck, FileText,
   MapPin, Loader2,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, displayCustName, copyToClipboard as copyTextToClipboard } from '@/lib/utils'
+import { useTranslation } from '@/hooks/useTranslation'
 import { StatusBadge } from './StatusBadge'
 import { ShipmentInfoTab } from './detail/ShipmentInfoTab'
 import { ShipmentDimensionsTab } from './detail/ShipmentDimensionsTab'
 import { ShipmentTimelineTab } from './detail/ShipmentTimelineTab'
+import { ShipmentInvoiceTab } from './detail/ShipmentInvoiceTab'
 import type {
   Shipment,
   ShipmentDimensionGudang,
@@ -29,13 +31,7 @@ interface ShipmentDetailModalProps {
   onClose: () => void
 }
 
-type TabId = 'info' | 'dimensions' | 'timeline'
-
-const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
-  { id: 'info', label: 'Ringkasan', icon: Info },
-  { id: 'dimensions', label: 'Dimensi', icon: Ruler },
-  { id: 'timeline', label: 'Timeline', icon: Truck },
-]
+type TabId = 'info' | 'dimensions' | 'timeline' | 'invoice'
 
 export function ShipmentDetailModal({
 
@@ -50,19 +46,42 @@ export function ShipmentDetailModal({
   onClose,
 }: ShipmentDetailModalProps) {
   useModalEscape(Boolean(shipment), onClose)
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState<TabId>('info')
   const [copiedField, setCopiedField] = useState<string | null>(null)
 
-  const copyToClipboard = (value: string | null | undefined, field: string) => {
+  const copyToClipboard = async (value: string | null | undefined, field: string) => {
     if (!value) return
-    navigator.clipboard?.writeText(value).then(() => {
+    const ok = await copyTextToClipboard(value)
+    if (ok) {
       setCopiedField(field)
       setTimeout(() => setCopiedField(null), 1500)
-    })
+    }
   }
 
   const status = shipment.shipmentStatus
   const totalDimCount = dimsGudang.length + dimsPackingList.length + dimsKomplain.length
+
+  // Check apakah invoice ada dan berstatus > issued (issued, collected, paid / lunas)
+  const hasIssuedInvoice = Boolean(
+    shipment.invoice && (
+      shipment.invoice.isIssued ||
+      shipment.invoice.isCollected ||
+      shipment.invoice.isPaid ||
+      (shipment.invoice.fdGive != null && Number(shipment.invoice.fdGive) >= 1)
+    )
+  )
+
+  const currentTab = activeTab === 'invoice' && !hasIssuedInvoice ? 'info' : activeTab
+
+  const tabs: { id: TabId; label: string; icon: React.ElementType }[] = [
+    { id: 'info', label: t('shipments.tab.info') || 'Ringkasan', icon: Info },
+    { id: 'dimensions', label: t('shipments.tab.dimensions') || 'Dimensi', icon: Ruler },
+    { id: 'timeline', label: t('shipments.tab.timeline') || 'Timeline', icon: Truck },
+    ...(hasIssuedInvoice
+      ? [{ id: 'invoice' as TabId, label: t('shipments.tab.invoice') || 'Invoice', icon: FileText }]
+      : []),
+  ]
 
   if (typeof document === 'undefined') return null
 
@@ -76,7 +95,7 @@ export function ShipmentDetailModal({
 
       {/* Modal Dialog Container */}
       <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 pointer-events-none">
-        <div className="w-full sm:max-w-2xl bg-[var(--color-neutral)] shadow-2xl rounded-t-3xl sm:rounded-3xl flex flex-col overflow-hidden pointer-events-auto max-h-[92vh] sm:max-h-[86vh] border border-[var(--color-border)] animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
+        <div className="w-full sm:max-w-2xl bg-[var(--color-neutral)] shadow-2xl rounded-t-3xl sm:rounded-3xl flex flex-col overflow-hidden pointer-events-auto h-[88vh] sm:h-[82vh] border border-[var(--color-border)] animate-in slide-in-from-bottom-4 sm:zoom-in-95 duration-200">
 
           {/* Drag Pill (Mobile Only) */}
           <div className="sm:hidden flex justify-center pt-3 pb-1 bg-[var(--color-surface)] shrink-0">
@@ -89,7 +108,7 @@ export function ShipmentDetailModal({
               <div className="min-w-0 flex-1">
                 {/* Title (Customer Name) */}
                 <h2 className="text-[15px] font-bold font-[var(--font-label)] uppercase tracking-wide text-[var(--color-text)] truncate">
-                  {shipment.fdCustName || 'Customer Tidak Dikenal'}
+                  {displayCustName(shipment.fdCustName, 'Customer Tidak Dikenal')}
                 </h2>
 
                 {/* Subtitle (List Code Badge + Status + Location) */}
@@ -134,8 +153,8 @@ export function ShipmentDetailModal({
 
             {/* Segmented Main Navigation Bar */}
             <div className="flex gap-1 mt-3 p-0.5 bg-[var(--color-neutral)] rounded-lg border border-[var(--color-border)]">
-              {TABS.map(({ id, label, icon: Icon }) => {
-                const isActive = activeTab === id
+              {tabs.map(({ id, label, icon: Icon }) => {
+                const isActive = currentTab === id
                 return (
                   <button
                     key={id}
@@ -175,14 +194,14 @@ export function ShipmentDetailModal({
               </div>
             ) : (
               <>
-                {activeTab === 'info' && (
+                {currentTab === 'info' && (
                   <ShipmentInfoTab
                     shipment={shipment}
                     copiedField={copiedField}
                     onCopy={copyToClipboard}
                   />
                 )}
-                {activeTab === 'dimensions' && (
+                {currentTab === 'dimensions' && (
                   <ShipmentDimensionsTab
                     dimsGudang={dimsGudang}
                     isLoadingGudang={isLoadingGudang}
@@ -192,8 +211,11 @@ export function ShipmentDetailModal({
                     isLoadingKomplain={isLoadingKomplain}
                   />
                 )}
-                {activeTab === 'timeline' && (
+                {currentTab === 'timeline' && (
                   <ShipmentTimelineTab shipment={shipment} />
+                )}
+                {currentTab === 'invoice' && shipment.invoice && (
+                  <ShipmentInvoiceTab invoice={shipment.invoice} />
                 )}
               </>
             )}

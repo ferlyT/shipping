@@ -305,6 +305,7 @@ model VwShipmentDimensionWH {
 
 model VwShipment {
   fdCustName        String?   @db.VarChar(50)
+  fdCustCode        String?   @db.VarChar(50)
   fdListCode        String    @id @db.Char(20)
   fdTerima          String?   @db.VarChar(50)
   fdTglAgent        DateTime? @db.DateTime
@@ -317,11 +318,10 @@ model VwShipment {
   fdListType        Int?
   fdDesc            String?   @db.Char(2000)
   fdComodity        String?   @db.Char(200)
-  fdComodityName    String?   @db.VarChar(50)
+  fdTypeComodity    Int?
   fdM3              Decimal?  @db.Decimal(18, 4)
   fdCancel          Int?
   fdMarkingCodeAsal String?   @db.Char(20)
-  fdLocalTrackingNo String?   @db.VarChar(50)
 
   @@map("vwShipment")
 }

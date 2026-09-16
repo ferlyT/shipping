@@ -43,50 +43,68 @@ export async function getCustomerHargaAuditInfo(custCode?: string | null): Promi
   fdUpdate: string | null
   fdUpdateDate: Date | null
   source: 'AUDIT' | 'CUSTOMER_HARGA' | null
+  fdNoteAir: string | null
+  fdNote1Sea: string | null
 }> {
   const targetCust = (custCode || '').trim()
-  if (!targetCust) return { fdUpdate: null, fdUpdateDate: null, source: null }
+  if (!targetCust) {
+    return { fdUpdate: null, fdUpdateDate: null, source: null, fdNoteAir: null, fdNote1Sea: null }
+  }
 
-  // 1. Coba dari tbCustomersHargaAudit (tbAuditHarga)
-  const auditRes = await safeRunRaw(async () => {
-    return prisma.$queryRaw<any[]>`
-      SELECT TOP 1 
-        RTRIM(fdUpdatedBy) AS fdUpdate, 
-        fdUpdateDate AS fdUpdateDate
-      FROM tbCustomersHargaAudit WITH (NOLOCK)
-      WHERE fdCustCode = ${targetCust}
-      ORDER BY fdUpdateDate DESC
-    `
-  }, 'get_customer_harga_audit')
+  const [auditRes, custHargaRes] = await Promise.all([
+    safeRunRaw(async () => {
+      return prisma.$queryRaw<any[]>`
+        SELECT TOP 1 
+          RTRIM(fdUpdatedBy) AS fdUpdate, 
+          fdUpdateDate AS fdUpdateDate
+        FROM tbCustomersHargaAudit WITH (NOLOCK)
+        WHERE fdCustCode = CAST(${targetCust} AS CHAR(7))
+        ORDER BY fdUpdateDate DESC
+      `
+    }, 'get_customer_harga_audit'),
+    safeRunRaw(async () => {
+      return prisma.$queryRaw<any[]>`
+        SELECT TOP 1 
+          RTRIM(fdUpdate) AS fdUpdate, 
+          fdLoad AS fdUpdateDate,
+          RTRIM(fdNote) AS fdNoteAir,
+          RTRIM(fdNote1) AS fdNote1Sea
+        FROM tbCustomersHarga WITH (NOLOCK)
+        WHERE fdCustCode = CAST(${targetCust} AS CHAR(7))
+      `
+    }, 'get_customer_harga_fallback')
+  ])
+
+  const fdNoteAir =
+    custHargaRes && custHargaRes.length > 0 && custHargaRes[0].fdNoteAir
+      ? String(custHargaRes[0].fdNoteAir).trim()
+      : null
+  const fdNote1Sea =
+    custHargaRes && custHargaRes.length > 0 && custHargaRes[0].fdNote1Sea
+      ? String(custHargaRes[0].fdNote1Sea).trim()
+      : null
 
   if (auditRes && auditRes.length > 0 && auditRes[0].fdUpdate) {
     return {
       fdUpdate: auditRes[0].fdUpdate ? String(auditRes[0].fdUpdate).trim() : null,
       fdUpdateDate: auditRes[0].fdUpdateDate ? new Date(auditRes[0].fdUpdateDate) : null,
       source: 'AUDIT',
+      fdNoteAir,
+      fdNote1Sea,
     }
   }
-
-  // 2. Fallback: tbCustomersHarga -> fdUpdate nama yang update dan fdLoad tgl update
-  const custHargaRes = await safeRunRaw(async () => {
-    return prisma.$queryRaw<any[]>`
-      SELECT TOP 1 
-        RTRIM(fdUpdate) AS fdUpdate, 
-        fdLoad AS fdUpdateDate
-      FROM tbCustomersHarga WITH (NOLOCK)
-      WHERE fdCustCode = ${targetCust}
-    `
-  }, 'get_customer_harga_fallback')
 
   if (custHargaRes && custHargaRes.length > 0) {
     return {
       fdUpdate: custHargaRes[0].fdUpdate ? String(custHargaRes[0].fdUpdate).trim() : null,
       fdUpdateDate: custHargaRes[0].fdUpdateDate ? new Date(custHargaRes[0].fdUpdateDate) : null,
       source: 'CUSTOMER_HARGA',
+      fdNoteAir,
+      fdNote1Sea,
     }
   }
 
-  return { fdUpdate: null, fdUpdateDate: null, source: null }
+  return { fdUpdate: null, fdUpdateDate: null, source: null, fdNoteAir, fdNote1Sea }
 }
 
 /**
@@ -102,7 +120,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
     throw new Error('Parameter identifier (listCode/invNo/markingCode) wajib diisi')
   }
 
-  // 1. Resolve listCode, custCode, dan markingCode dari tbBilling atau tbEntryList
+  // 1. Resolve listCode, custCode, dan markingCode dari tbEntryList atau tbBilling
   let resolvedListCode = cleanIdentifier
   let resolvedCustCode = ''
   let resolvedMarkingCode = ''
@@ -114,170 +132,191 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
   let custName = ''
   let custSalesNM = ''
 
-  // Coba cari di tbBilling terlebih dahulu
-  const billingInfo = await safeRunRaw(async () => {
-    return prisma.tbBilling.findFirst({
-      where: {
-        OR: [
-          { fdListCode: cleanIdentifier },
-          { fdInvNo: cleanIdentifier },
-          { fdMarkingCode: cleanIdentifier },
-        ],
-      },
-      select: {
-        fdInvNo: true,
-        fdListCode: true,
-        fdMarkingCode: true,
-        fdCustCode: true,
-        fdListType: true,
-        fdBranchCode: true,
-        customer: { select: { fdCustCode: true, fdCustName: true, fdBlocked: true, fdSalesNM: true, fdBroker: true } },
-      },
-    })
-  }, 'billingInfo')
+  let agentDate: Date | null = null
 
-  if (billingInfo) {
-    if (billingInfo.fdMarkingCode?.trim()) resolvedMarkingCode = billingInfo.fdMarkingCode.trim()
-    if (billingInfo.fdCustCode?.trim()) resolvedCustCode = billingInfo.fdCustCode.trim()
-    if (billingInfo.fdListType !== null && billingInfo.fdListType !== undefined) {
-      resolvedListType = Number(billingInfo.fdListType)
-    }
-    if (billingInfo.fdBranchCode?.trim()) resolvedBranchCode = billingInfo.fdBranchCode.trim()
-    if (billingInfo.customer) {
-      custName = billingInfo.customer.fdCustName?.trim() || ''
-      custBlocked = billingInfo.customer.fdBlocked ?? 0
-      custBroker = billingInfo.customer.fdBroker ?? 0
-      custSalesNM = billingInfo.customer.fdSalesNM?.trim() || ''
-    }
+  if (is7DigitListCode(cleanIdentifier)) {
+    // Jalur Cepat (Index Seek PK tbEntryList) jika identifier adalah 5-8 digit list code
+    const entryRows = await safeRunRaw(async () => {
+      return prisma.$queryRaw<any[]>`
+        SELECT TOP 1 
+          RTRIM(el.fdListCode) as fdListCode, 
+          el.fdListType, 
+          RTRIM(el.fdMarkingCode) as fdMarkingCode, 
+          RTRIM(el.fdCustCode) as fdCustCode,
+          el.fdTglAgent,
+          el.fdTypeComodity,
+          el.fdSatuan,
+          RTRIM(c.fdCustName) as fdCustName, 
+          c.fdBlocked, 
+          RTRIM(c.fdSalesNM) as fdSalesNM, 
+          c.fdBroker,
+          RTRIM(m.fdBranchCode) as fdBranchCode,
+          RTRIM(cb.fdBranchName) as fdBranchName
+        FROM tbEntryList el WITH (NOLOCK)
+        LEFT JOIN tbCustomers c WITH (NOLOCK) ON el.fdCustCode = c.fdCustCode
+        LEFT JOIN tbMarking m WITH (NOLOCK) ON m.fdMarkingCode = el.fdMarkingCode
+        LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = m.fdBranchCode
+        WHERE el.fdListCode = CAST(${cleanIdentifier} AS CHAR(7))
+      `
+    }, 'entryInfo_fast')
 
-    if (is7DigitListCode(billingInfo.fdListCode)) {
-      resolvedListCode = billingInfo.fdListCode!.trim()
-    } else {
-      // Cari candidate entries di tbEntryList
-      const batchCode = resolvedMarkingCode.split(';')[0]?.trim() || ''
-      const markingPart = resolvedMarkingCode.split(';')[1]?.trim() || ''
-
-      const invDigitsMatch = billingInfo.fdInvNo.trim().match(/(\d{5,6})/)
-      const invNum = invDigitsMatch?.[1] || ''
-      const invTail = invNum.length === 6 ? invNum.slice(1) : invNum
-
-      const entries = await safeRunRaw(async () => {
-        let sql = `
-          SELECT fdListCode, fdMarkingCode, fdMarkingNo, fdCustCode, fdJmlPack, fdSatuan, fdJmlBerat, fdM3, fdInvoiceNo
-          FROM tbEntryList WITH (NOLOCK)
-          WHERE 1=0
-        `
-        if (resolvedCustCode && batchCode) {
-          sql += ` OR (fdCustCode = '${resolvedCustCode}' AND fdMarkingCode = '${batchCode}')`
-        }
-        if (billingInfo.fdInvNo) {
-          sql += ` OR (fdInvoiceNo = '${billingInfo.fdInvNo}')`
-        }
-        if (resolvedCustCode && invTail) {
-          sql += ` OR (fdCustCode = '${resolvedCustCode}' AND fdInvoiceNo LIKE '%${invTail}%')`
-        }
-        return prisma.$queryRawUnsafe<any[]>(sql)
-      }, 'find_candidate_entries')
-
-      if (Array.isArray(entries) && entries.length > 0) {
-        const exactMarkingMatch = markingPart
-          ? entries.find((e) => e.fdMarkingNo?.trim().toUpperCase().includes(markingPart.toUpperCase()))
-          : null
-
-        const chosenEntry = exactMarkingMatch || entries[0]
-        resolvedListCode = chosenEntry.fdListCode.trim()
+    if (entryRows && entryRows.length > 0) {
+      const e = entryRows[0]
+      resolvedListCode = e.fdListCode || cleanIdentifier
+      if (e.fdListType !== null && e.fdListType !== undefined) {
+        resolvedListType = Number(e.fdListType)
       }
+      if (e.fdMarkingCode) resolvedMarkingCode = e.fdMarkingCode
+      if (e.fdCustCode) resolvedCustCode = e.fdCustCode
+      if (e.fdCustName) custName = e.fdCustName
+      custBlocked = e.fdBlocked ?? 0
+      custBroker = e.fdBroker ?? 0
+      if (e.fdSalesNM) custSalesNM = e.fdSalesNM
+      if (e.fdBranchCode) resolvedBranchCode = e.fdBranchCode
+      if (e.fdBranchName) resolvedBranchName = e.fdBranchName
+      if (e.fdTglAgent) agentDate = new Date(e.fdTglAgent)
     }
-  } else {
-    // Cari di tbEntryList
-    const entryInfo = await safeRunRaw(async () => {
-      const entry = await prisma.tbEntryList.findUnique({
-        where: { fdListCode: cleanIdentifier },
-        select: {
-          fdListCode: true,
-          fdListType: true,
-          fdMarkingCode: true,
-          deliveries: {
-            select: {
-              fdCustCode: true,
-            },
-            take: 1,
+  }
+
+  // Jika belum resolved (bukan listcode atau tidak ketemu di tbEntryList), cari di tbBilling secara spesifik
+  if (!resolvedCustCode) {
+    const isInvFormat = cleanIdentifier.includes('-') || /^[A-Za-z]/.test(cleanIdentifier)
+    const billingInfo = await safeRunRaw(async () => {
+      if (isInvFormat) {
+        return prisma.tbBilling.findFirst({
+          where: { fdInvNo: cleanIdentifier },
+          select: {
+            fdInvNo: true,
+            fdListCode: true,
+            fdMarkingCode: true,
+            fdCustCode: true,
+            fdListType: true,
+            fdBranchCode: true,
+            customer: { select: { fdCustCode: true, fdCustName: true, fdBlocked: true, fdSalesNM: true, fdBroker: true } },
           },
+        })
+      }
+      return prisma.tbBilling.findFirst({
+        where: {
+          OR: [
+            { fdListCode: cleanIdentifier },
+            { fdMarkingCode: cleanIdentifier },
+          ],
+        },
+        select: {
+          fdInvNo: true,
+          fdListCode: true,
+          fdMarkingCode: true,
+          fdCustCode: true,
+          fdListType: true,
+          fdBranchCode: true,
+          customer: { select: { fdCustCode: true, fdCustName: true, fdBlocked: true, fdSalesNM: true, fdBroker: true } },
         },
       })
-      if (!entry) return null
+    }, 'billingInfo')
 
-      let custData: { fdCustCode: string; fdCustName: string | null; fdBlocked: number; fdSalesNM: string | null; fdBroker: number } | null = null
-      const dCustCode = entry.deliveries?.[0]?.fdCustCode?.trim()
-      if (dCustCode) {
-        const foundCust = await prisma.tbCustomers.findUnique({
-          where: { fdCustCode: dCustCode },
-          select: { fdCustCode: true, fdCustName: true, fdBlocked: true, fdSalesNM: true, fdBroker: true },
-        })
-        if (foundCust) {
-          custData = {
-            fdCustCode: foundCust.fdCustCode,
-            fdCustName: foundCust.fdCustName,
-            fdBlocked: foundCust.fdBlocked ?? 0,
-            fdSalesNM: foundCust.fdSalesNM?.trim() || null,
-            fdBroker: foundCust.fdBroker ?? 0,
+    if (billingInfo) {
+      if (billingInfo.fdMarkingCode?.trim()) resolvedMarkingCode = billingInfo.fdMarkingCode.trim()
+      if (billingInfo.fdCustCode?.trim()) resolvedCustCode = billingInfo.fdCustCode.trim()
+      if (billingInfo.fdListType !== null && billingInfo.fdListType !== undefined) {
+        resolvedListType = Number(billingInfo.fdListType)
+      }
+      if (billingInfo.fdBranchCode?.trim()) resolvedBranchCode = billingInfo.fdBranchCode.trim()
+      if (billingInfo.customer) {
+        custName = billingInfo.customer.fdCustName?.trim() || ''
+        custBlocked = billingInfo.customer.fdBlocked ?? 0
+        custBroker = billingInfo.customer.fdBroker ?? 0
+        custSalesNM = billingInfo.customer.fdSalesNM?.trim() || ''
+      }
+
+      if (is7DigitListCode(billingInfo.fdListCode)) {
+        resolvedListCode = billingInfo.fdListCode!.trim()
+      } else {
+        const batchCode = resolvedMarkingCode.split(';')[0]?.trim() || ''
+        const markingPart = resolvedMarkingCode.split(';')[1]?.trim() || ''
+        const invDigitsMatch = billingInfo.fdInvNo.trim().match(/(\d{5,6})/)
+        const invNum = invDigitsMatch?.[1] || ''
+        const invTail = invNum.length === 6 ? invNum.slice(1) : invNum
+
+        const entries = await safeRunRaw(async () => {
+          let sql = `
+            SELECT fdListCode, fdMarkingCode, fdMarkingNo, fdCustCode, fdJmlPack, fdSatuan, fdJmlBerat, fdM3, fdInvoiceNo, fdTglAgent
+            FROM tbEntryList WITH (NOLOCK)
+            WHERE 1=0
+          `
+          if (resolvedCustCode && batchCode) {
+            sql += ` OR (fdCustCode = CAST('${resolvedCustCode}' AS CHAR(7)) AND fdMarkingCode = CAST('${batchCode}' AS VARCHAR(30)))`
           }
+          if (billingInfo.fdInvNo) {
+            sql += ` OR (fdInvoiceNo = CAST('${billingInfo.fdInvNo.trim()}' AS CHAR(20)))`
+          }
+          if (resolvedCustCode && invTail) {
+            sql += ` OR (fdCustCode = CAST('${resolvedCustCode}' AS CHAR(7)) AND fdInvoiceNo LIKE '%${invTail}%')`
+          }
+          return prisma.$queryRawUnsafe<any[]>(sql)
+        }, 'find_candidate_entries')
+
+        if (Array.isArray(entries) && entries.length > 0) {
+          const exactMarkingMatch = markingPart
+            ? entries.find((e) => e.fdMarkingNo?.trim().toUpperCase().includes(markingPart.toUpperCase()))
+            : null
+
+          const chosenEntry = exactMarkingMatch || entries[0]
+          resolvedListCode = chosenEntry.fdListCode.trim()
+          if (chosenEntry.fdTglAgent) agentDate = new Date(chosenEntry.fdTglAgent)
         }
-      }
-
-      return {
-        fdListCode: entry.fdListCode,
-        fdListType: entry.fdListType,
-        fdMarkingCode: entry.fdMarkingCode,
-        customer: custData,
-      }
-    }, 'entryInfo')
-
-    if (entryInfo && entryInfo.fdListCode) {
-      resolvedListCode = entryInfo.fdListCode.trim()
-      if (entryInfo.fdListType !== null && entryInfo.fdListType !== undefined) {
-        resolvedListType = Number(entryInfo.fdListType)
-      }
-      if (entryInfo.fdMarkingCode?.trim()) resolvedMarkingCode = entryInfo.fdMarkingCode.trim()
-      if (entryInfo.customer) {
-        resolvedCustCode = entryInfo.customer.fdCustCode.trim()
-        custName = entryInfo.customer.fdCustName?.trim() || ''
-        custBlocked = entryInfo.customer.fdBlocked ?? 0
-        custBroker = entryInfo.customer.fdBroker ?? 0
-        custSalesNM = entryInfo.customer.fdSalesNM?.trim() || ''
       }
     }
   }
 
-  // Ambil informasi cabang dan marking
-  const markingBranch = await safeRunRaw(async () => {
-    if (!resolvedListCode && !resolvedMarkingCode) return null
-    const res = await prisma.$queryRaw<any[]>`
-      SELECT TOP 1
-        el.fdListType,
-        el.fdTypeComodity,
-        el.fdSatuan,
-        m.fdBranchCode,
-        cb.fdBranchName
-      FROM tbEntryList el WITH (NOLOCK)
-      LEFT JOIN tbMarking m WITH (NOLOCK) ON m.fdMarkingCode = el.fdMarkingCode
-      LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = m.fdBranchCode
-      WHERE el.fdListCode = ${resolvedListCode}
-         OR el.fdMarkingCode = ${resolvedMarkingCode}
-      ORDER BY CASE WHEN RTRIM(el.fdListCode) = ${resolvedListCode} THEN 0 ELSE 1 END, el.fdListCode ASC
-    `
-    return res && res.length > 0 ? res[0] : null
-  }, 'markingBranch')
+  // Ambil informasi cabang dan marking jika belum lengkap
+  let markingBranch: any = null
+  if (!resolvedBranchCode && (resolvedListCode || resolvedMarkingCode)) {
+    markingBranch = await safeRunRaw(async () => {
+      if (resolvedListCode) {
+        const res = await prisma.$queryRaw<any[]>`
+          SELECT TOP 1
+            el.fdListType,
+            el.fdTypeComodity,
+            el.fdSatuan,
+            m.fdBranchCode,
+            cb.fdBranchName
+          FROM tbEntryList el WITH (NOLOCK)
+          LEFT JOIN tbMarking m WITH (NOLOCK) ON m.fdMarkingCode = el.fdMarkingCode
+          LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = m.fdBranchCode
+          WHERE el.fdListCode = CAST(${resolvedListCode} AS CHAR(7))
+        `
+        if (res && res.length > 0) return res[0]
+      }
+      if (resolvedMarkingCode) {
+        const res = await prisma.$queryRaw<any[]>`
+          SELECT TOP 1
+            el.fdListType,
+            el.fdTypeComodity,
+            el.fdSatuan,
+            m.fdBranchCode,
+            cb.fdBranchName
+          FROM tbEntryList el WITH (NOLOCK)
+          LEFT JOIN tbMarking m WITH (NOLOCK) ON m.fdMarkingCode = el.fdMarkingCode
+          LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = m.fdBranchCode
+          WHERE el.fdMarkingCode = CAST(${resolvedMarkingCode} AS VARCHAR(30))
+          ORDER BY el.fdListCode ASC
+        `
+        return res && res.length > 0 ? res[0] : null
+      }
+      return null
+    }, 'markingBranch')
 
-  if (markingBranch) {
-    if (resolvedListType === null && markingBranch.fdListType !== null && markingBranch.fdListType !== undefined) {
-      resolvedListType = Number(markingBranch.fdListType)
-    }
-    if (markingBranch.fdBranchCode) {
-      resolvedBranchCode = String(markingBranch.fdBranchCode).trim()
-    }
-    if (markingBranch.fdBranchName) {
-      resolvedBranchName = String(markingBranch.fdBranchName).trim()
+    if (markingBranch) {
+      if (resolvedListType === null && markingBranch.fdListType !== null && markingBranch.fdListType !== undefined) {
+        resolvedListType = Number(markingBranch.fdListType)
+      }
+      if (markingBranch.fdBranchCode) {
+        resolvedBranchCode = String(markingBranch.fdBranchCode).trim()
+      }
+      if (markingBranch.fdBranchName) {
+        resolvedBranchName = String(markingBranch.fdBranchName).trim()
+      }
     }
   }
 
@@ -292,12 +331,26 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
   else if (bCombined.includes('SG') || bCombined.includes('SINGAPORE')) expectedBranch = 'SG'
   else if (bCombined.includes('SH') || bCombined.includes('SHANGHAI')) expectedBranch = 'SH'
   else if (bCombined.includes('YW') || bCombined.includes('YIWU')) expectedBranch = 'YW'
+  else if (bCombined.includes('SZ') || bCombined.includes('SHENZHEN')) expectedBranch = 'SZ'
   else if (resolvedBranchCode?.trim()) expectedBranch = resolvedBranchCode.trim().toUpperCase()
 
   const cleanBatchCode = resolvedMarkingCode.split(';')[0]?.trim() || resolvedMarkingCode
 
-  // 2. Eksekusi query pengecekan M3 & SP secara paralel
-  const [unifiedM3Rows, m3CustRows, profileHargaRows, markingComodityRows, beratGudangRows, freightChargeRows, commodityMappingRows, beratSJRows] = await Promise.all([
+  // 2. Eksekusi seluruh query pengecekan M3, SP, audit profil, dan price lookup secara paralel
+  const [
+    unifiedM3Rows,
+    m3CustRows,
+    profileHargaRows,
+    markingComodityRows,
+    beratGudangRows,
+    freightChargeRows,
+    commodityMappingRows,
+    beratSJRows,
+    auditInfo,
+    generalLookup,
+    custLookupResult,
+    fallbackAgentDate
+  ] = await Promise.all([
     // A. Unified M3 SP: exec get_m3_listcode
     safeRunRaw(async () => {
       if (!is7DigitListCode(resolvedListCode)) return []
@@ -322,7 +375,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
     safeRunRaw(async () => {
       if (!resolvedListCode) return []
       return prisma.$queryRaw<any[]>`
-        SELECT TOP 1 fdJmlBerat FROM tbEntryListGudang WITH (NOLOCK) WHERE fdListCode = ${resolvedListCode}
+        SELECT TOP 1 fdJmlBerat FROM tbEntryListGudang WITH (NOLOCK) WHERE fdListCode = CAST(${resolvedListCode} AS CHAR(7))
       `
     }, 'get_berat_gudang'),
     // F. Freight Charge Summary dari tbEntrylist
@@ -334,8 +387,8 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
           COUNT(CASE WHEN COALESCE(fdFc, 0) > 0 THEN 1 END) as listsWithFcCount,
           MAX(RTRIM(fdCurrFc)) as currency
         FROM tbEntrylist WITH (NOLOCK)
-        WHERE (${resolvedCustCode ? true : false} = 0 OR RTRIM(fdCustCode) = ${resolvedCustCode})
-          AND (${cleanBatchCode ? true : false} = 0 OR RTRIM(fdMarkingCode) = ${cleanBatchCode})
+        WHERE fdCustCode = CAST(${resolvedCustCode} AS CHAR(7))
+          AND fdMarkingCode = CAST(${cleanBatchCode} AS VARCHAR(30))
       `
     }, 'get_freight_charge_summary'),
     // G. Commodity Mapping dari tbCommodityMapping (khusus customer atau global)
@@ -374,11 +427,39 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
       `
       return rows && rows.length > 0 ? Number(rows[0].totalBeratSJ || 0) : null
     }, 'get_berat_delivery_sj'),
+    // I. Audit info histori profil harga customer
+    getCustomerHargaAuditInfo(resolvedCustCode),
+    // J. Master Price List lookup
+    lookupPriceList(agentDate || new Date(), {
+      mode: expectedMode || undefined,
+      branch: expectedBranch || undefined,
+      markingCode: resolvedMarkingCode || undefined,
+    }),
+    // K. Customer Price List lookup
+    resolvedCustCode
+      ? lookupCustomerPriceList(resolvedCustCode, agentDate || new Date(), {
+          mode: expectedMode || undefined,
+          branch: expectedBranch || undefined,
+          markingCode: resolvedMarkingCode || undefined,
+        })
+      : Promise.resolve(null),
+    // L. Fallback agent date jika belum terisi dari tbEntryList
+    (!agentDate && resolvedListCode)
+      ? safeRunRaw(async () => {
+          const r = await prisma.$queryRaw<any[]>`
+            SELECT TOP 1 fdTglAgent FROM vwShipment WITH (NOLOCK) WHERE fdListCode = ${resolvedListCode}
+          `
+          return r && r.length > 0 && r[0].fdTglAgent ? new Date(r[0].fdTglAgent) : null
+        }, 'get_fallback_tgl_agent')
+      : Promise.resolve(null)
   ])
+
+  if (!agentDate && fallbackAgentDate) {
+    agentDate = fallbackAgentDate
+  }
 
   const profileHargaRow = Array.isArray(profileHargaRows) && profileHargaRows.length > 0 ? profileHargaRows[0] : null
   const custForAudit = (profileHargaRow?.fdCustCode || resolvedCustCode || '').trim()
-  const auditInfo = await getCustomerHargaAuditInfo(custForAudit)
 
   const profileHarga: ProfileHargaItem | null = profileHargaRow
     ? {
@@ -395,6 +476,26 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
         fdUpdate: auditInfo.fdUpdate,
         fdUpdateDate: auditInfo.fdUpdateDate,
         fdUpdateSource: auditInfo.source,
+        fdNoteAir: auditInfo.fdNoteAir,
+        fdNote1Sea: auditInfo.fdNote1Sea,
+      }
+    : (auditInfo.fdNoteAir || auditInfo.fdNote1Sea || auditInfo.fdUpdate)
+    ? {
+        fdListCode: resolvedListCode,
+        fdCustCode: custForAudit,
+        harga: 0,
+        rasio: 0,
+        typeTagihan: 0,
+        kg: 0,
+        taxReturnPrice: 0,
+        taxReturnMinCharge: 0,
+        minChargeM3: 0,
+        minChargeKg: 0,
+        fdUpdate: auditInfo.fdUpdate,
+        fdUpdateDate: auditInfo.fdUpdateDate,
+        fdUpdateSource: auditInfo.source,
+        fdNoteAir: auditInfo.fdNoteAir,
+        fdNote1Sea: auditInfo.fdNote1Sea,
       }
     : null
 
@@ -455,7 +556,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
       })
     : []
 
-  const firstMappedType = markingComodities.length > 0 ? markingComodities[0].fdTypeComodity : null
+  const firstMappedType = markingComodities.length > 0 ? (markingComodities[0]?.fdTypeComodity ?? null) : null
   const markingComodityType: number | null = firstMappedType !== null && firstMappedType !== undefined
     ? firstMappedType
     : (rawFirstType !== undefined && rawFirstType !== null && !isNaN(Number(rawFirstType)) ? Number(rawFirstType) : null)
@@ -623,7 +724,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
       rawRec = candidateValues.length > 0 ? Math.max(...candidateValues) : maxM3
       recommendedM3Source = 'MAX'
     } else if (normGudangValues.length > 0 || normCustValues.length > 0) {
-      rawRec = normGudangValues[0] ?? normCustValues[0]
+      rawRec = (normGudangValues[0] ?? normCustValues[0]) ?? maxM3
       recommendedM3Source = 'GUDANG'
     } else {
       rawRec = maxM3
@@ -642,36 +743,15 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
 
   const recommendedM3 = parseFloat(Number(rawRec || 0).toFixed(4))
 
-  // Ambil fdTglAgent dari tbEntryList / vwShipment
-  const tglAgentRes = await safeRunRaw(async () => {
-    const r1 = await prisma.$queryRaw<any[]>`
-      SELECT TOP 1 fdTglAgent FROM tbEntryList WITH (NOLOCK) WHERE fdListCode = ${resolvedListCode}
-    `
-    if (r1 && r1.length > 0 && r1[0].fdTglAgent) return r1[0].fdTglAgent
-    const r2 = await prisma.$queryRaw<any[]>`
-      SELECT TOP 1 fdTglAgent FROM vwShipment WITH (NOLOCK) WHERE fdListCode = ${resolvedListCode}
-    `
-    if (r2 && r2.length > 0 && r2[0].fdTglAgent) return r2[0].fdTglAgent
-    return null
-  }, 'get_tgl_agent')
-
-  const agentDate = tglAgentRes ? new Date(tglAgentRes) : null
-
-  // Ambil Master Price List untuk referensi harga modal
+  // Master Price List items
   let masterPriceListItems: any[] = []
   let priceEffectiveDate: string | null = null
 
-  const generalLookup = await lookupPriceList(agentDate || new Date(), {
-    mode: expectedMode || undefined,
-    branch: expectedBranch || undefined,
-    markingCode: resolvedMarkingCode || undefined,
-  })
-
-  if (generalLookup.found && generalLookup.uploadInfo) {
+  if (generalLookup && generalLookup.found && generalLookup.uploadInfo) {
     priceEffectiveDate = generalLookup.uploadInfo.effectiveDate
       ? new Date(generalLookup.uploadInfo.effectiveDate).toISOString()
       : null
-    masterPriceListItems = generalLookup.items.map((it) => ({
+    masterPriceListItems = (generalLookup.items || []).map((it: any) => ({
       id: it.id,
       sheetType: it.sheetType,
       mode: it.mode,
@@ -682,36 +762,25 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
     }))
   }
 
-  // Ambil Customer Price List jika ada
+  // Customer Price List items
   let customerPriceListItems: any[] = []
   let customerPriceEffectiveDate: string | null = null
   let hasCustomerPriceList = false
-  let custLookupResult: any = null
 
-  if (resolvedCustCode) {
-    const refDate = (priceEffectiveDate ? new Date(priceEffectiveDate) : agentDate) || new Date()
-    const custLookup = await lookupCustomerPriceList(resolvedCustCode, refDate, {
-      mode: expectedMode || undefined,
-      branch: expectedBranch || undefined,
-      markingCode: resolvedMarkingCode || undefined,
-    })
-    custLookupResult = custLookup
-
-    if (custLookup.found && custLookup.items.length > 0) {
-      hasCustomerPriceList = true
-      customerPriceEffectiveDate = custLookup.uploadInfo?.effectiveDate
-        ? new Date(custLookup.uploadInfo.effectiveDate).toISOString()
-        : null
-      customerPriceListItems = custLookup.items.map((it) => ({
-        id: it.id,
-        sheetType: 'CUSTOMER',
-        mode: it.mode,
-        branch: it.branch,
-        category: it.category,
-        price: Number(it.price),
-        isCustomerPrice: true,
-      }))
-    }
+  if (custLookupResult && custLookupResult.found && custLookupResult.items?.length > 0) {
+    hasCustomerPriceList = true
+    customerPriceEffectiveDate = custLookupResult.uploadInfo?.effectiveDate
+      ? new Date(custLookupResult.uploadInfo.effectiveDate).toISOString()
+      : null
+    customerPriceListItems = custLookupResult.items.map((it: any) => ({
+      id: it.id,
+      sheetType: 'CUSTOMER',
+      mode: it.mode,
+      branch: it.branch,
+      category: it.category,
+      price: Number(it.price),
+      isCustomerPrice: true,
+    }))
   }
 
   const allPriceListItems = [...customerPriceListItems, ...masterPriceListItems]
@@ -745,7 +814,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
         ? (custLookupResult?.isMarkingOverride || false)
         : (generalLookup.isMarkingOverride || false),
       matchedMarkingCode: hasCustomerPriceList
-        ? (custLookupResult?.matchedMarkingCode || null)
+        ? ((custLookupResult as any)?.matchedMarkingCode || null)
         : (generalLookup.matchedMarkingCode || null),
       expectedMode,
       expectedBranch,
@@ -836,6 +905,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
     vfcGudangPerMarking: parseM3Val(unifiedRow?.VFCGudangPerMarking),
     vfcKomplainPerMarking: parseM3Val(unifiedRow?.VFCKomplainPerMarking),
     minChargeKg: profileHarga?.minChargeKg ? profileHarga.minChargeKg : (resolvedListType === 1 ? 3 : 0),
+    minChargeM3: profileHarga?.minChargeM3 ? profileHarga.minChargeM3 : (resolvedListType === 2 ? 0.1 : 0),
     profileHarga,
     comodityTypes: await safeRunRaw(async () => {
       const rows = await prisma.$queryRaw<any[]>`

@@ -209,6 +209,8 @@ export interface TargetPriceCheckData {
     fdUpdate?: string | null
     fdUpdateDate?: string | Date | null
     fdUpdateSource?: 'AUDIT' | 'CUSTOMER_HARGA' | null
+    fdNoteAir?: string | null
+    fdNote1Sea?: string | null
   } | null
   customerTariffs: CustomerTariffItem[]
   customerPriceList?: {
@@ -427,6 +429,9 @@ export interface CustomerBillingHistoryDetail {
   typeComodityName?: string | null
   changeStatus?: 'UNCHANGED' | 'UPDATE' | 'INSERT' | 'DELETE'
   hasAdjustment?: boolean
+  fdBerat?: number | null
+  fdM3?: number | null
+  fdSatuan?: string | null
   diffs?: {
     itemName?: { old: string | null; new: string | null }
     qty?: { old: number | null; new: number | null }
@@ -469,6 +474,9 @@ export interface CustomerBillingHistoryItem {
   fdJumlah2: number
   fdCurr1: string | null
   totalAmount: number
+  fdTotalInv?: number | null
+  fdBerat?: number | null
+  fdM3?: number | null
   fdEmpCode: string | null
   empName: string | null
   isIssued: boolean
@@ -485,6 +493,15 @@ export interface CustomerBillingHistoryItem {
   detailsCount: number
   details?: CustomerBillingHistoryDetail[]
   totals: CustomerBillingHistoryTotal[]
+}
+
+export interface CommodityAvgRate {
+  typeComodityName: string
+  totalAmount: number
+  totalM3: number
+  avgPricePerM3: number
+  invoiceCount: number
+  itemCount: number
 }
 
 export interface CustomerBillingHistoryResponse {
@@ -509,6 +526,19 @@ export interface CustomerBillingHistoryResponse {
     latestInvoiceDate: string | null
     earliestInvoiceDate: string | null
     yearsAvailable: number[]
+    commodityAvgRates?: CommodityAvgRate[]
+  }
+  pagination?: {
+    page: number
+    limit: number
+    totalItems: number
+    totalPages: number
+    hasNextPage: boolean
+  }
+  filterOptions?: {
+    branches: Array<{ code: string; name: string }>
+    typeComodities: string[]
+    years: number[]
   }
   items: CustomerBillingHistoryItem[]
 }
@@ -651,4 +681,148 @@ export interface PairingLocalChargeResult {
   summary: PairingLocalChargeSummary
   rows: PairingLocalChargeRow[]
 }
+
+export interface ComodityType {
+  fdID: number
+  fdTypeComodity: number | null
+  fdComodityName: string
+  fdListType: number | null
+}
+
+export interface PriceItem {
+  id: number
+  sheetType: string
+  mode: string
+  branch: string
+  category: string
+  price: number
+}
+
+export interface MarkingDetailItem {
+  fdListCode: string
+  fdMarkingNo: string
+  fdQty: number | null
+  fdM3PL: number | null
+  fdM3Gudang: number | null
+  fdM3Komplain: number | null
+  fdBerat: number | null
+  fdSatuan: string
+}
+
+export interface M3CheckResponse {
+  fdListCode: string
+  fdListType?: number | null
+  defaultFdTypeComodity?: number | null
+  markingComodityType?: number | null
+  markingComodities?: { fdTypeComodity: number | null; fdComodity: string | null; fdComodityName?: string | null }[]
+  commodityMappings?: { id: number; commodityName: string; targetCommodity: string; fdTypeComodity: number | null; fdCustCode: string | null }[]
+  fdTglAgent?: string | null
+  expectedMode?: string | null
+  expectedBranch?: string | null
+  priceValidation?: {
+    fdTglAgent: string | null
+    effectiveDate: string | null
+    masterEffectiveDate?: string | null
+    customerEffectiveDate?: string | null
+    hasCustomerPriceList?: boolean
+    isMarkingOverride?: boolean
+    matchedMarkingCode?: string | null
+    expectedMode?: string | null
+    expectedBranch?: string | null
+    items: PriceItem[]
+  } | null
+  customer?: {
+    fdListCode: string
+    fdMarkingCode: string | null
+    fdCustCode: string | null
+    fdCustName: string | null
+    fdBlocked: number
+    fdSalesNM?: string | null
+    fdBroker?: number
+  } | null
+  isCodOrUrgent: boolean
+  recommendedM3: number
+  recommendedM3Source?: 'KOMPLAIN' | 'HYBRID' | 'MAX' | 'GUDANG' | 'PL'
+  hasApprovedKomplain?: boolean
+  isFullKomplainQtyMatch?: boolean
+  isKomplainRejected?: boolean
+  komplainRejectedReason?: string | null
+  m3PackingList: { raw: any[]; values: number[]; qty?: number | null }
+  m3Gudang: { raw: any[]; values: number[]; qty?: number | null }
+  m3CustPerMarking: { raw: any[]; values: number[]; totalEntryList?: number | null }
+  m3PLPerMarking?: { raw: any[]; values: number[]; totalEntryList?: number | null }
+  m3Komplain: { raw: any[]; values: number[]; qty?: number | null }
+  m3KomplainPerMarking: { raw: any[]; values: number[]; totalEntryKomplain?: number | null }
+  m3ListBatch?: { raw: any[]; values: number[]; qty?: number | null }
+  fdQtyList?: number | null
+  fdTotalQtyPL?: number | null
+  fdTotalQtyGudang?: number | null
+  fdTotalQtyKomplain?: number | null
+  totalEntryKomplain?: number | null
+  totalEntryList?: number | null
+  isPartialKomplain?: boolean
+  m3KomplainPlusGudang?: number | null
+  countKomplainLC?: number
+  countGudangLC?: number
+  fdSatuan?: string | null
+  fdBeratList?: number | null
+  fdJmlBeratGudang?: number | null
+  fdJmlBeratKomplain?: number | null
+  fdBeratSJ?: number | null
+  totalJmlBeratSJ?: number | null
+  totalBeratPerMarking?: number | null
+  markingDetails?: MarkingDetailItem[]
+  fdVFCGudang?: number | null
+  fdVFCPL?: number | null
+  fdVFCKomplain?: number | null
+  vfcGudangPerMarking?: number | null
+  vfcKomplainPerMarking?: number | null
+  freightChargeSummary?: {
+    totalFc: number
+    listsWithFcCount: number
+    currency: string
+  } | null
+  minChargeKg?: number | null
+  minChargeM3?: number | null
+  profileHarga?: {
+    fdListCode: string
+    fdCustCode: string
+    harga: number
+    rasio: number
+    typeTagihan: number
+    kg: number
+    taxReturnPrice: number
+    taxReturnMinCharge: number
+    minChargeM3?: number
+    minChargeKg?: number
+    fdUpdate?: string | null
+    fdUpdateDate?: string | Date | null
+    fdUpdateSource?: 'AUDIT' | 'CUSTOMER_HARGA' | null
+    fdNoteAir?: string | null
+    fdNote1Sea?: string | null
+  } | null
+  comodityTypes?: ComodityType[]
+}
+
+export interface FlatDetailTraceItem {
+  id: string
+  invNo: string
+  invDate: string
+  branchCode: string | null
+  branchName?: string | null
+  tglAgent: string | null
+  typeComodityName: string | null
+  itemName: string | null
+  satuan: string | null
+  qty: number
+  itemPrice: number
+  total: number
+  curr: string | null
+  markingCode: string | null
+  markingNo: string | null
+  listCode: string | null
+  berat: number
+  m3: number
+}
+
 

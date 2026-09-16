@@ -47,4 +47,9 @@ export interface MarkingManifest {
   fdM3: number | null;
   fdCancel: number | null;
   fdMarkingCodeAsal: string | null;
+  isBlocked?: number | boolean;
+  blockedBy?: string | null;
+  blockedReason?: string | null;
+  financialStatus?: string | null;
+  custBlocked?: number | null;
 }

@@ -1,4 +1,9 @@
+import { useState, useRef, useEffect } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { Search, X, Rows3, LayoutGrid, Loader2 } from 'lucide-react'
+import apiClient from '@/api/client'
+import { useDebounce } from '@/hooks/useDebounce'
+import { SearchSuggestionsDropdown } from '@/components/ui/SearchSuggestionsDropdown'
 import { cn } from '@/lib/utils'
 
 export type DeliveryViewMode = 'table' | 'cards'
@@ -30,30 +35,81 @@ export function DeliveryOrderToolbar({
   isFetching,
   isLoading,
 }: DeliveryOrderToolbarProps) {
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const searchContainerRef = useRef<HTMLDivElement>(null)
+  const debouncedSearch = useDebounce(search, 300)
+
+  const { data: suggestions = [], isFetching: isFetchingSuggestions } = useQuery({
+    queryKey: ['delivery-order-toolbar-suggestions', debouncedSearch],
+    queryFn: async () => {
+      if (!debouncedSearch || debouncedSearch.trim().length < 2) return []
+      const res = await apiClient.get('/delivery-orders/suggestions', { params: { q: debouncedSearch.trim() } })
+      return res.data?.data || []
+    },
+    enabled: debouncedSearch.trim().length >= 2,
+    staleTime: 30000,
+  })
+
+  // Close suggestions on click outside
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
   return (
     <div className="bg-[var(--color-surface)] px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-[var(--color-border)] rounded-t-xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
         {/* Left: Search Bar */}
         <div className="flex items-center gap-2 flex-1 sm:max-w-[480px]">
-          <div className="relative flex-1 flex items-center rounded-xl border border-[var(--color-border)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/20 transition-all bg-[var(--color-surface)] shadow-2xs overflow-hidden">
-            <Search size={14} className="absolute left-3 text-[var(--color-secondary)] pointer-events-none shrink-0" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-              placeholder="Cari nomor SJ, customer, deskripsi, supir, plat nomor..."
-              className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm text-[var(--color-text)] outline-none bg-transparent placeholder:text-[var(--color-secondary)] font-medium"
+          <div ref={searchContainerRef} className="relative flex-1">
+            <div className="relative flex items-center rounded-xl border border-[var(--color-border)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/20 transition-all bg-[var(--color-surface)] shadow-2xs overflow-hidden">
+              <Search size={14} className="absolute left-3 text-[var(--color-secondary)] pointer-events-none shrink-0" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => {
+                  onSearchChange(e.target.value)
+                  if (e.target.value.trim().length >= 2) setShowSuggestions(true)
+                  else setShowSuggestions(false)
+                }}
+                onFocus={() => {
+                  if (search.trim().length >= 2) setShowSuggestions(true)
+                }}
+                placeholder="Cari nomor SJ, customer, deskripsi, supir, plat nomor..."
+                className="w-full pl-9 pr-8 py-2 text-xs sm:text-sm text-[var(--color-text)] outline-none bg-transparent placeholder:text-[var(--color-secondary)] font-medium"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSearchChange('')
+                    setShowSuggestions(false)
+                  }}
+                  className="absolute right-2.5 text-[var(--color-secondary)] hover:text-[var(--color-text)] p-0.5 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer transition-colors"
+                  title="Hapus pencarian"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+
+            {/* Dropdown Suggestions */}
+            <SearchSuggestionsDropdown
+              visible={showSuggestions && search.trim().length >= 2}
+              suggestions={suggestions}
+              isLoading={isFetchingSuggestions}
+              title="Saran Surat Jalan (SJ / Customer / Supir / Plat)"
+              onSelect={(item) => {
+                onSearchChange(item.value)
+                setShowSuggestions(false)
+              }}
+              onClose={() => setShowSuggestions(false)}
             />
-            {search && (
-              <button
-                type="button"
-                onClick={() => onSearchChange('')}
-                className="absolute right-2.5 text-[var(--color-secondary)] hover:text-[var(--color-text)] p-0.5 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer transition-colors"
-                title="Hapus pencarian"
-              >
-                <X size={13} />
-              </button>
-            )}
           </div>
         </div>
 

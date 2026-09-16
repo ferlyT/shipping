@@ -3,7 +3,7 @@ import { zValidator } from '@hono/zod-validator'
 import { authMiddleware } from '../../middleware/auth'
 import { successResponse, errorResponse } from '../../utils/response'
 import { updateProfileSchema, changePasswordSchema } from './profile.schema'
-import { getProfile, updateProfile, changePassword, uploadAvatar } from './profile.service'
+import { getProfile, updateProfile, changePassword, uploadAvatar, uploadAvatarBase64 } from './profile.service'
 
 const profileRoutes = new Hono()
 
@@ -25,39 +25,54 @@ profileRoutes.get('/', async (c) => {
 profileRoutes.put('/', zValidator('json', updateProfileSchema), async (c) => {
   try {
     const userPayload = c.get('user')
-    const body = c.req.valid('json')
-    const user = await updateProfile(userPayload.userId, body)
+    const data = c.req.valid('json')
+    const user = await updateProfile(userPayload.userId, data)
     return successResponse(c, user)
   } catch (err) {
     return errorResponse(c, (err as Error).message, 400)
   }
 })
 
-// 3. Ganti password
-profileRoutes.put('/password', zValidator('json', changePasswordSchema), async (c) => {
+// 3. Ganti kata sandi mandiri
+profileRoutes.put('/change-password', zValidator('json', changePasswordSchema), async (c) => {
   try {
     const userPayload = c.get('user')
-    const body = c.req.valid('json')
-    const result = await changePassword(userPayload.userId, body)
+    const data = c.req.valid('json')
+    const result = await changePassword(userPayload.userId, data)
     return successResponse(c, result)
   } catch (err) {
     return errorResponse(c, (err as Error).message, 400)
   }
 })
 
-// 4. Upload foto profil
+// 4. Unggah foto profil avatar (multipart/form-data atau json base64)
 profileRoutes.post('/avatar', async (c) => {
   try {
     const userPayload = c.get('user')
-    const body = await c.req.parseBody()
-    const file = body['avatar']
+    const contentType = c.req.header('content-type') || ''
 
-    if (!file || !(file instanceof File)) {
-      return errorResponse(c, 'File gambar avatar wajib disertakan', 400)
+    if (contentType.includes('application/json')) {
+      const json = await c.req.json().catch(() => ({}))
+      if (json.avatarBase64 && typeof json.avatarBase64 === 'string') {
+        const result = await uploadAvatarBase64(userPayload.userId, json.avatarBase64)
+        return successResponse(c, result)
+      }
     }
 
-    const result = await uploadAvatar(userPayload.userId, file)
-    return successResponse(c, result)
+    const body = (await c.req.parseBody().catch(() => ({}))) as Record<string, any>
+    const file = body['avatar']
+
+    if (file && file instanceof File) {
+      const result = await uploadAvatar(userPayload.userId, file)
+      return successResponse(c, result)
+    }
+
+    if (body['avatarBase64'] && typeof body['avatarBase64'] === 'string') {
+      const result = await uploadAvatarBase64(userPayload.userId, body['avatarBase64'])
+      return successResponse(c, result)
+    }
+
+    return errorResponse(c, 'File gambar avatar atau avatarBase64 wajib disertakan', 400)
   } catch (err) {
     return errorResponse(c, (err as Error).message, 400)
   }

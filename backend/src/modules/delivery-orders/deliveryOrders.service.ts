@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database'
 import { Prisma } from '@prisma/client'
 import { buildPagination, parsePagination } from '../../utils/pagination'
+import { suggestionCache } from '../../utils/cache'
 
 // Re-export types
 export * from './deliveryOrders.types'
@@ -97,7 +98,7 @@ export async function getDeliveryOrdersKPIs(query: Record<string, string | undef
       }
     : baseWhere
 
-  const [totalSJ, totalAgg, sjBulanIni] = await Promise.all([
+  const [totalSJ, totalAgg, sjBulanIni, onDelivery] = await Promise.all([
     prisma.tbDelivery.count({ where }),
     prisma.tbDelivery.aggregate({
       where,
@@ -109,6 +110,15 @@ export async function getDeliveryOrdersKPIs(query: Record<string, string | undef
         fdSJDate: { gte: startOfMonth, lt: endOfMonth },
       },
     }),
+    prisma.tbDelivery.count({
+      where: {
+        ...where,
+        OR: [
+          { fdSent: 0 },
+          { fdSent: null },
+        ],
+      },
+    }),
   ])
 
   return {
@@ -116,6 +126,7 @@ export async function getDeliveryOrdersKPIs(query: Record<string, string | undef
     totalPackages: totalAgg._sum.fdJmlPackSJ || 0,
     totalWeight: totalAgg._sum.fdJmlBeratSJ || 0,
     sjBulanIni,
+    onDelivery,
   }
 }
 
@@ -285,4 +296,115 @@ export async function getDeliveryBranchGroups(query: Record<string, string | und
   }))
 
   return { data }
+}
+
+export interface DeliveryOrderSuggestion {
+  type: 'sj' | 'customer' | 'supir' | 'car'
+  title: string
+  subtitle: string
+  value: string
+}
+
+export async function getDeliveryOrderSuggestions(keyword: string): Promise<DeliveryOrderSuggestion[]> {
+  const cleanQ = (keyword || '').trim()
+  if (!cleanQ || cleanQ.length < 2) return []
+
+  const cacheKey = `do:${cleanQ.toLowerCase()}`
+  const cached = suggestionCache.get<DeliveryOrderSuggestion[]>(cacheKey)
+  if (cached) return cached
+
+  const prefixLike = `${cleanQ}%`
+  const searchLike = `%${cleanQ}%`
+
+  try {
+    // Stage 1: Fast prefix match on fdSJNo (PK) bounded by fdSJDate >= '2023-01-01'
+    let rows: any[] = (await prisma.$queryRaw<any[]>`
+      SELECT TOP 15 
+        RTRIM(ISNULL(fdSJNo, '')) AS fdSJNo,
+        RTRIM(ISNULL(fdCustNameSJ, '')) AS fdCustNameSJ,
+        RTRIM(ISNULL(fdSupir, '')) AS fdSupir,
+        RTRIM(ISNULL(fdCarID, '')) AS fdCarID
+      FROM tbDelivery WITH (NOLOCK)
+      WHERE fdSJDate >= '2023-01-01'
+        AND fdSJNo LIKE ${prefixLike}
+      ORDER BY fdSJDate DESC
+    `.catch(() => [] as any[])) || []
+
+    // Stage 2: If fewer than 5 rows, search across all relevant fields bounded by fdSJDate >= '2023-01-01'
+    if (rows.length < 5) {
+      const fallbackRows: any[] = (await prisma.$queryRaw<any[]>`
+        SELECT TOP 15 
+          RTRIM(ISNULL(fdSJNo, '')) AS fdSJNo,
+          RTRIM(ISNULL(fdCustNameSJ, '')) AS fdCustNameSJ,
+          RTRIM(ISNULL(fdSupir, '')) AS fdSupir,
+          RTRIM(ISNULL(fdCarID, '')) AS fdCarID
+        FROM tbDelivery WITH (NOLOCK)
+        WHERE fdSJDate >= '2023-01-01'
+          AND (
+            fdSJNo LIKE ${searchLike} 
+            OR fdCustNameSJ LIKE ${searchLike} 
+            OR fdSupir LIKE ${searchLike} 
+            OR fdCarID LIKE ${searchLike}
+          )
+        ORDER BY fdSJDate DESC
+      `.catch(() => [] as any[])) || []
+
+      const existingSJNos = new Set((rows || []).map((r: any) => r.fdSJNo))
+      for (const r of fallbackRows) {
+        if (!existingSJNos.has(r.fdSJNo)) {
+          rows.push(r)
+        }
+      }
+    }
+
+    const suggestions: DeliveryOrderSuggestion[] = []
+    const seen = new Set<string>()
+    const qLower = cleanQ.toLowerCase()
+
+    for (const row of rows) {
+      if (row.fdSJNo && row.fdSJNo.toLowerCase().includes(qLower) && !seen.has(`sj:${row.fdSJNo}`)) {
+        seen.add(`sj:${row.fdSJNo}`)
+        suggestions.push({
+          type: 'sj',
+          title: row.fdSJNo,
+          subtitle: row.fdCustNameSJ ? `Customer: ${row.fdCustNameSJ}` : 'Nomor Surat Jalan',
+          value: row.fdSJNo,
+        })
+      }
+      if (row.fdCustNameSJ && row.fdCustNameSJ.toLowerCase().includes(qLower) && !seen.has(`c:${row.fdCustNameSJ}`)) {
+        seen.add(`c:${row.fdCustNameSJ}`)
+        suggestions.push({
+          type: 'customer',
+          title: row.fdCustNameSJ,
+          subtitle: 'Penerima / Customer',
+          value: row.fdCustNameSJ,
+        })
+      }
+      if (row.fdSupir && row.fdSupir.toLowerCase().includes(qLower) && !seen.has(`s:${row.fdSupir}`)) {
+        seen.add(`s:${row.fdSupir}`)
+        suggestions.push({
+          type: 'supir',
+          title: row.fdSupir,
+          subtitle: row.fdCarID ? `Plat: ${row.fdCarID}` : 'Nama Pengemudi / Supir',
+          value: row.fdSupir,
+        })
+      }
+      if (row.fdCarID && row.fdCarID.toLowerCase().includes(qLower) && !seen.has(`car:${row.fdCarID}`)) {
+        seen.add(`car:${row.fdCarID}`)
+        suggestions.push({
+          type: 'car',
+          title: row.fdCarID,
+          subtitle: row.fdSupir ? `Supir: ${row.fdSupir}` : 'Plat Nomor Kendaraan',
+          value: row.fdCarID,
+        })
+      }
+      if (suggestions.length >= 10) break
+    }
+
+    const result = suggestions.slice(0, 10)
+    suggestionCache.set(cacheKey, result)
+    return result
+  } catch {
+    return []
+  }
 }

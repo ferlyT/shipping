@@ -26,6 +26,8 @@ export interface CustomerBillingHistoryItem {
   fdJumlah2: number
   fdCurr1: string | null
   totalAmount: number
+  fdBerat?: number | null
+  fdM3?: number | null
   fdEmpCode: string | null
   empName: string | null
   isIssued: boolean
@@ -59,6 +61,15 @@ export interface CustomerBillingHistoryItem {
   }>
 }
 
+export interface CommodityAvgRate {
+  typeComodityName: string
+  totalAmount: number
+  totalM3: number
+  avgPricePerM3: number
+  invoiceCount: number
+  itemCount: number
+}
+
 export interface CustomerBillingHistoryResponse {
   customer: {
     fdCustCode: string
@@ -81,6 +92,19 @@ export interface CustomerBillingHistoryResponse {
     latestInvoiceDate: Date | string | null
     earliestInvoiceDate: Date | string | null
     yearsAvailable: number[]
+    commodityAvgRates?: CommodityAvgRate[]
+  }
+  pagination: {
+    page: number
+    limit: number
+    totalItems: number
+    totalPages: number
+    hasNextPage: boolean
+  }
+  filterOptions?: {
+    branches: Array<{ code: string; name: string }>
+    typeComodities: string[]
+    years: number[]
   }
   items: CustomerBillingHistoryItem[]
 }
@@ -266,10 +290,15 @@ export async function getCustomerBillingHistory(
     diffStatus?: 'all' | 'diff' | 'same'
     moda?: 'air' | 'sea' | 'all'
     status?: 'issued' | 'draft' | 'lunas' | 'partial' | 'overdue' | 'unpaid' | 'all'
-    limit?: number
+    page?: number | string
+    limit?: number | string
   }
 ): Promise<CustomerBillingHistoryResponse> {
   const cleanCustCode = custCode.trim()
+  const page = Math.max(1, parseInt(String(options?.page || 1), 10) || 1)
+  const limit = Math.min(Math.max(1, parseInt(String(options?.limit || 30), 10) || 30), 100)
+  const offset = (page - 1) * limit
+
   if (!cleanCustCode) {
     return {
       customer: null,
@@ -289,6 +318,13 @@ export async function getCustomerBillingHistory(
         earliestInvoiceDate: null,
         yearsAvailable: [],
       },
+      pagination: {
+        page,
+        limit,
+        totalItems: 0,
+        totalPages: 0,
+        hasNextPage: false,
+      },
       items: [],
     }
   }
@@ -296,7 +332,9 @@ export async function getCustomerBillingHistory(
   await ensureBillingIndexes()
 
   // Build WHERE conditions
-  const conditions: string[] = [`(b.fdCustCode = '${cleanCustCode.replace(/'/g, "''")}' OR RTRIM(b.fdCustCode) = '${cleanCustCode.replace(/'/g, "''")}')`]
+  const conditions: string[] = [
+    `(b.fdCustCode = '${cleanCustCode.replace(/'/g, "''")}' OR RTRIM(b.fdCustCode) = '${cleanCustCode.replace(/'/g, "''")}')`
+  ]
 
   if (options?.year && options.year !== 'all') {
     const y = typeof options.year === 'number' ? options.year : parseInt(options.year, 10)
@@ -321,9 +359,19 @@ export async function getCustomerBillingHistory(
   }
 
   if (options?.typeComodity !== undefined && options.typeComodity !== 'all') {
-    const tcVal = Number(options.typeComodity)
+    const rawTc = String(options.typeComodity).trim().replace(/'/g, "''")
+    const tcVal = Number(rawTc)
     if (!isNaN(tcVal)) {
-      conditions.push(`(el.fdTypeComodity = ${tcVal} OR EXISTS (SELECT 1 FROM tbBillingDetail dtc WHERE dtc.fdInvNo = b.fdInvNo AND dtc.fdTypeComodity = ${tcVal}))`)
+      conditions.push(`(el.fdTypeComodity = ${tcVal} OR EXISTS (SELECT 1 FROM tbBillingDetail dtc WITH (NOLOCK) WHERE dtc.fdInvNo = b.fdInvNo AND dtc.fdTypeComodity = ${tcVal}))`)
+    } else if (rawTc) {
+      conditions.push(`(
+        tc.fdComodityName LIKE '%${rawTc}%'
+        OR EXISTS (
+          SELECT 1 FROM tbBillingDetail dtc WITH (NOLOCK)
+          LEFT JOIN tbTypeComodity tc_dtc WITH (NOLOCK) ON dtc.fdTypeComodity = tc_dtc.fdTypeComodity
+          WHERE dtc.fdInvNo = b.fdInvNo AND (tc_dtc.fdComodityName LIKE '%${rawTc}%' OR dtc.fdComodity LIKE '%${rawTc}%')
+        )
+      )`)
     }
   }
 
@@ -331,6 +379,29 @@ export async function getCustomerBillingHistory(
     conditions.push(`b.fdListType = 1`)
   } else if (options?.moda === 'sea') {
     conditions.push(`b.fdListType = 2`)
+  }
+
+  if (options?.status && options.status !== 'all') {
+    const st = options.status.toLowerCase()
+    if (st === 'draft') {
+      conditions.push(`(b.fdGive = 0 OR b.fdGive IS NULL)`)
+    } else if (st === 'issued') {
+      conditions.push(`(b.fdGive = 1 AND ISNULL(tot.totalBayar, 0) = 0 AND DATEDIFF(day, b.fdInvDate, GETDATE()) < 7)`)
+    } else if (st === 'lunas') {
+      conditions.push(`(b.fdGive = 1 AND ISNULL(tot.totalJumlah, b.fdJumlah1) > 0 AND ABS(ISNULL(tot.totalJumlah, b.fdJumlah1) - ISNULL(tot.totalBayar, 0)) <= 0.01)`)
+    } else if (st === 'partial') {
+      conditions.push(`(b.fdGive = 1 AND ISNULL(tot.totalBayar, 0) > 0 AND (ISNULL(tot.totalJumlah, b.fdJumlah1) - ISNULL(tot.totalBayar, 0)) > 0.01)`)
+    } else if (st === 'overdue') {
+      conditions.push(`(b.fdGive = 1 AND ISNULL(tot.totalBayar, 0) = 0 AND DATEDIFF(day, b.fdInvDate, GETDATE()) > 30)`)
+    } else if (st === 'unpaid') {
+      conditions.push(`(b.fdGive = 1 AND ISNULL(tot.totalBayar, 0) = 0 AND DATEDIFF(day, b.fdInvDate, GETDATE()) >= 7 AND DATEDIFF(day, b.fdInvDate, GETDATE()) <= 30)`)
+    }
+  }
+
+  if (options?.diffStatus === 'diff') {
+    conditions.push(`ISNULL(prev_chk.prevDiffCount, 0) > 0`)
+  } else if (options?.diffStatus === 'same') {
+    conditions.push(`ISNULL(prev_chk.prevDiffCount, 0) = 0`)
   }
 
   if (options?.search?.trim()) {
@@ -344,6 +415,7 @@ export async function getCustomerBillingHistory(
       b.fdBranchCode LIKE '%${s}%' OR
       tc.fdComodityName LIKE '%${s}%' OR
       m.fdConsignee LIKE '%${s}%' OR
+      CONVERT(VARCHAR(10), el.fdTglAgent, 120) LIKE '%${s}%' OR
       EXISTS (
         SELECT 1 FROM tbBillingDetail d WITH (NOLOCK)
         WHERE d.fdInvNo = b.fdInvNo AND (d.fdItemName LIKE '%${s}%' OR d.fdComodity LIKE '%${s}%')
@@ -352,10 +424,52 @@ export async function getCustomerBillingHistory(
   }
 
   const whereClause = conditions.join(' AND ')
-  const limit = Math.min(options?.limit || 500, 1000)
 
+  // 1. Count query for total filtered items
+  const countSql = `
+    SELECT COUNT(*) AS total
+    FROM tbBilling b WITH (NOLOCK)
+    LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = b.fdBranchCode
+    LEFT JOIN tbEntryList el WITH (NOLOCK) ON b.fdListCode = el.fdListCode
+    LEFT JOIN tbTypeComodity tc WITH (NOLOCK) 
+      ON el.fdTypeComodity = tc.fdTypeComodity 
+     AND (el.fdListType = tc.fdListType OR tc.fdListType IS NULL)
+    LEFT JOIN tbMarking m WITH (NOLOCK) ON b.fdMarkingCode = m.fdMarkingCode
+    OUTER APPLY (
+      SELECT 
+        SUM(t.fdJumlah) AS totalJumlah,
+        SUM(t.fdBayar) AS totalBayar
+      FROM tbBillingTotal t WITH (NOLOCK)
+      WHERE t.fdInvNo = b.fdInvNo
+    ) tot
+    ${
+      options?.diffStatus && options.diffStatus !== 'all'
+        ? `
+      OUTER APPLY (
+        SELECT 
+          COUNT(CASE 
+            WHEN prev.fdID IS NULL THEN 1
+            WHEN d.fdID IS NULL THEN 1
+            WHEN (
+              ISNULL(d.fdQty, 0) <> ISNULL(prev.fdQty, 0)
+              OR ISNULL(d.fdItemPrice, 0) <> ISNULL(prev.fdItemPrice, 0)
+              OR ISNULL(d.fdTotal, 0) <> ISNULL(prev.fdTotal, 0)
+              OR RTRIM(ISNULL(d.fdItemName, '')) <> RTRIM(ISNULL(prev.fdItemName, ''))
+              OR RTRIM(ISNULL(d.fdCurr, '')) <> RTRIM(ISNULL(prev.fdCurr, ''))
+            ) THEN 1
+          END) AS prevDiffCount
+        FROM (SELECT * FROM tbBillingDetail WITH (NOLOCK) WHERE fdInvNo = b.fdInvNo) d
+        FULL OUTER JOIN (SELECT * FROM tbBillingDetailPrev WITH (NOLOCK) WHERE fdInvNo = b.fdInvNo) prev
+          ON d.fdID = prev.fdID
+      ) prev_chk`
+        : ''
+    }
+    WHERE ${whereClause}
+  `
+
+  // 2. Paginated rows query
   const querySql = `
-    SELECT TOP (${limit})
+    SELECT
       b.fdInvNo,
       b.fdInvDate,
       b.fdCustCode,
@@ -389,6 +503,8 @@ export async function getCustomerBillingHistory(
       b.fdCekBy,
       b.fdEmp2Code,
       el.fdTglAgent,
+      el.fdM3,
+      el.fdJmlBerat AS fdBerat,
       RTRIM(el.fdTerima) AS fdTerima,
       COALESCE(el.fdTypeComodity, first_tc.fdTypeComodity) AS fdTypeComodity,
       COALESCE(
@@ -455,28 +571,164 @@ export async function getCustomerBillingHistory(
       WHERE d.fdInvNo = b.fdInvNo
     ) d_comm
     WHERE ${whereClause}
-    ORDER BY b.fdInvDate DESC
+    ORDER BY b.fdInvDate DESC, b.fdInvNo DESC
+    OFFSET ${offset} ROWS
+    FETCH NEXT ${limit} ROWS ONLY
   `
 
-  // Execute customer info, raw billings query, employees map, and branches map in parallel
-  const [customer, rawBillings, empMap, branchMap] = await Promise.all([
-    prisma.tbCustomers.findUnique({
-      where: { fdCustCode: cleanCustCode },
-      select: {
-        fdCustCode: true,
-        fdCustName: true,
-        fdSalesNM: true,
-        fdBroker: true,
-      },
-    }),
+  // 3. Overall Summary & Metadata queries (evaluated on page 1 for maximum efficiency)
+  const isFirstPage = page === 1
+
+  const summarySql = isFirstPage
+    ? `
+    SELECT 
+      COUNT(*) AS totalInvoices,
+      ISNULL(SUM(tot.totalJumlah), 0) AS totalAmountIdr,
+      COUNT(CASE WHEN b.fdListType = 1 THEN 1 END) AS totalAirInvoices,
+      COUNT(CASE WHEN b.fdListType = 2 THEN 1 END) AS totalSeaInvoices,
+      COUNT(CASE WHEN b.fdGive = 1 THEN 1 END) AS issuedCount,
+      COUNT(CASE WHEN b.fdGive = 0 OR b.fdGive IS NULL THEN 1 END) AS draftCount,
+      COUNT(CASE WHEN b.fdGive = 1 AND ISNULL(tot.totalJumlah, b.fdJumlah1) > 0 AND ABS(ISNULL(tot.totalJumlah, b.fdJumlah1) - ISNULL(tot.totalBayar, 0)) <= 0.01 THEN 1 END) AS lunasCount,
+      COUNT(CASE WHEN b.fdGive = 1 AND ISNULL(tot.totalBayar, 0) > 0 AND (ISNULL(tot.totalJumlah, b.fdJumlah1) - ISNULL(tot.totalBayar, 0)) > 0.01 THEN 1 END) AS partialCount,
+      COUNT(CASE WHEN b.fdGive = 1 AND ISNULL(tot.totalBayar, 0) = 0 AND DATEDIFF(day, b.fdInvDate, GETDATE()) > 30 THEN 1 END) AS overdueCount,
+      COUNT(CASE WHEN b.fdGive = 1 AND ISNULL(tot.totalBayar, 0) = 0 AND DATEDIFF(day, b.fdInvDate, GETDATE()) >= 7 AND DATEDIFF(day, b.fdInvDate, GETDATE()) <= 30 THEN 1 END) AS unpaidCount,
+      COUNT(CASE WHEN b.fdGive = 1 AND ISNULL(tot.totalBayar, 0) = 0 AND DATEDIFF(day, b.fdInvDate, GETDATE()) < 7 THEN 1 END) AS issuedRecentCount,
+      MIN(b.fdInvDate) AS earliestInvoiceDate,
+      MAX(b.fdInvDate) AS latestInvoiceDate
+    FROM tbBilling b WITH (NOLOCK)
+    OUTER APPLY (
+      SELECT 
+        SUM(t.fdJumlah) AS totalJumlah,
+        SUM(t.fdBayar) AS totalBayar
+      FROM tbBillingTotal t WITH (NOLOCK)
+      WHERE t.fdInvNo = b.fdInvNo
+    ) tot
+    WHERE (b.fdCustCode = '${cleanCustCode.replace(/'/g, "''")}' OR RTRIM(b.fdCustCode) = '${cleanCustCode.replace(/'/g, "''")}')
+  `
+    : null
+
+  const yearsSql = isFirstPage
+    ? `
+    SELECT DISTINCT YEAR(fdInvDate) AS yr
+    FROM tbBilling WITH (NOLOCK)
+    WHERE (fdCustCode = '${cleanCustCode.replace(/'/g, "''")}' OR RTRIM(fdCustCode) = '${cleanCustCode.replace(/'/g, "''")}')
+      AND fdInvDate IS NOT NULL
+    ORDER BY yr DESC
+  `
+    : null
+
+  const branchesSql = isFirstPage
+    ? `
+    SELECT DISTINCT 
+      CASE 
+        WHEN NULLIF(RTRIM(b.fdBranchCode), '') IS NOT NULL AND RTRIM(b.fdBranchCode) NOT IN ('--', '-') THEN RTRIM(b.fdBranchCode)
+        WHEN b.fdInvNo LIKE '--S%' OR b.fdInvNo LIKE '--A%' OR b.fdInvNo LIKE 'SGS%' OR b.fdInvNo LIKE 'SGA%' THEN 'SG'
+        WHEN b.fdInvNo LIKE 'GZS%' OR b.fdInvNo LIKE 'GZA%' THEN 'GZ'
+        WHEN b.fdInvNo LIKE 'YWS%' OR b.fdInvNo LIKE 'YWA%' THEN 'YW'
+        WHEN b.fdInvNo LIKE 'SHS%' OR b.fdInvNo LIKE 'SHA%' THEN 'SH'
+        WHEN b.fdInvNo LIKE 'SZS%' OR b.fdInvNo LIKE 'SZA%' THEN 'SZ'
+        WHEN b.fdInvNo LIKE 'HKS%' OR b.fdInvNo LIKE 'HKA%' THEN 'HK'
+        WHEN b.fdInvNo LIKE 'KRS%' OR b.fdInvNo LIKE 'KRA%' THEN 'KR'
+        WHEN b.fdInvNo LIKE 'BKS%' OR b.fdInvNo LIKE 'THS%' THEN 'BK'
+        ELSE RTRIM(b.fdBranchCode)
+      END AS fdBranchCode,
+      RTRIM(cb.fdBranchName) AS fdBranchName
+    FROM tbBilling b WITH (NOLOCK)
+    LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = b.fdBranchCode
+    WHERE (b.fdCustCode = '${cleanCustCode.replace(/'/g, "''")}' OR RTRIM(b.fdCustCode) = '${cleanCustCode.replace(/'/g, "''")}')
+  `
+    : null
+
+  const commodityTypesSql = isFirstPage
+    ? `
+    SELECT DISTINCT RTRIM(tc.fdComodityName) AS typeComodityName
+    FROM tbBilling b WITH (NOLOCK)
+    LEFT JOIN tbEntryList el WITH (NOLOCK) ON b.fdListCode = el.fdListCode
+    LEFT JOIN tbTypeComodity tc WITH (NOLOCK) ON el.fdTypeComodity = tc.fdTypeComodity
+    WHERE (b.fdCustCode = '${cleanCustCode.replace(/'/g, "''")}' OR RTRIM(b.fdCustCode) = '${cleanCustCode.replace(/'/g, "''")}')
+      AND tc.fdComodityName IS NOT NULL
+  `
+    : null
+
+  const commodityRatesSql = isFirstPage
+    ? `
+    SELECT 
+      COALESCE(
+        NULLIF(RTRIM(tc_d.fdComodityName), ''),
+        NULLIF(RTRIM(tc_el.fdComodityName), ''),
+        NULLIF(RTRIM(d.fdComodity), ''),
+        'UMUM'
+      ) AS typeComodityName,
+      COUNT(DISTINCT b.fdInvNo) AS invoiceCount,
+      COUNT(d.fdID) AS itemCount,
+      SUM(CASE WHEN d.fdListCode = 'M3' OR d.fdSatuan = 'M3' OR d.fdItemName LIKE '%(M3)%' THEN ISNULL(d.fdQty, 0) ELSE 0 END) AS totalM3,
+      SUM(CASE WHEN d.fdListCode = 'M3' OR d.fdSatuan = 'M3' OR d.fdItemName LIKE '%(M3)%' THEN ISNULL(d.fdTotal, 0) ELSE 0 END) AS totalAmountM3,
+      SUM(ISNULL(d.fdTotal, 0)) AS totalAmountAll
+    FROM tbBilling b WITH (NOLOCK)
+    JOIN tbBillingDetail d WITH (NOLOCK) ON b.fdInvNo = d.fdInvNo
+    LEFT JOIN tbEntryList el WITH (NOLOCK) ON b.fdListCode = el.fdListCode
+    LEFT JOIN tbTypeComodity tc_el WITH (NOLOCK) 
+      ON el.fdTypeComodity = tc_el.fdTypeComodity 
+     AND (el.fdListType = tc_el.fdListType OR tc_el.fdListType IS NULL)
+    LEFT JOIN tbTypeComodity tc_d WITH (NOLOCK) 
+      ON d.fdTypeComodity = tc_d.fdTypeComodity 
+     AND (b.fdListType = tc_d.fdListType OR tc_d.fdListType IS NULL)
+    WHERE (b.fdCustCode = '${cleanCustCode.replace(/'/g, "''")}' OR RTRIM(b.fdCustCode) = '${cleanCustCode.replace(/'/g, "''")}')
+    GROUP BY COALESCE(
+      NULLIF(RTRIM(tc_d.fdComodityName), ''),
+      NULLIF(RTRIM(tc_el.fdComodityName), ''),
+      NULLIF(RTRIM(d.fdComodity), ''),
+      'UMUM'
+    )
+    HAVING SUM(CASE WHEN d.fdListCode = 'M3' OR d.fdSatuan = 'M3' OR d.fdItemName LIKE '%(M3)%' THEN ISNULL(d.fdQty, 0) ELSE 0 END) > 0
+       OR SUM(ISNULL(d.fdTotal, 0)) > 0
+    ORDER BY totalM3 DESC
+  `
+    : null
+
+  // Execute database queries in parallel
+  const [
+    customer,
+    countRes,
+    rawBillings,
+    empMap,
+    branchMap,
+    summaryRes,
+    yearsRes,
+    branchesRes,
+    commoditiesRes,
+    commodityRatesRes,
+  ] = await Promise.all([
+    isFirstPage
+      ? prisma.tbCustomers.findUnique({
+          where: { fdCustCode: cleanCustCode },
+          select: {
+            fdCustCode: true,
+            fdCustName: true,
+            fdSalesNM: true,
+            fdBroker: true,
+          },
+        })
+      : Promise.resolve(null),
+    prisma.$queryRawUnsafe<any[]>(countSql),
     prisma.$queryRawUnsafe<any[]>(querySql),
     getEmployeesMap(),
     getBranchesMap(),
+    summarySql ? prisma.$queryRawUnsafe<any[]>(summarySql) : Promise.resolve([]),
+    yearsSql ? prisma.$queryRawUnsafe<any[]>(yearsSql) : Promise.resolve([]),
+    branchesSql ? prisma.$queryRawUnsafe<any[]>(branchesSql) : Promise.resolve([]),
+    commodityTypesSql ? prisma.$queryRawUnsafe<any[]>(commodityTypesSql) : Promise.resolve([]),
+    commodityRatesSql ? prisma.$queryRawUnsafe<any[]>(commodityRatesSql) : Promise.resolve([]),
   ])
 
-  // Batch fetch details for all raw billings
+  const totalItems = Number(countRes[0]?.total || 0)
+  const totalPages = Math.ceil(totalItems / limit)
+  const hasNextPage = page < totalPages
+
+  // Batch fetch details for the current page only (maximum 30 items)
   const invNos = rawBillings.map((b) => String(b.fdInvNo).trim()).filter(Boolean)
   const allDetailsMap = new Map<string, any[]>()
+
   if (invNos.length > 0) {
     const escapedInvList = invNos.map((inv) => `'${inv.replace(/'/g, "''")}'`).join(',')
     try {
@@ -588,40 +840,15 @@ export async function getCustomerBillingHistory(
     }
   }
 
-  // Calculate summary stats
-  let totalAmountIdr = 0
-  let totalAir = 0
-  let totalSea = 0
-  let issuedCount = 0
-  let draftCount = 0
-  let lunasCount = 0
-  let partialCount = 0
-  let overdueCount = 0
-  let unpaidCount = 0
-  let issuedRecentCount = 0
-  const yearSet = new Set<number>()
   const now = new Date()
 
   const items: CustomerBillingHistoryItem[] = rawBillings.map((b) => {
-    const invDate = b.fdInvDate ? new Date(b.fdInvDate) : new Date()
-    if (b.fdInvDate) {
-      yearSet.add(invDate.getFullYear())
-    }
-
     const moda: 'Udara' | 'Laut' | 'Unknown' =
       b.fdListType === 1 ? 'Udara' : b.fdListType === 2 ? 'Laut' : 'Unknown'
 
-    if (moda === 'Udara') totalAir++
-    else if (moda === 'Laut') totalSea++
-
     const isIssued = Number(b.fdGive) === 1
-
-    if (isIssued) issuedCount++
-    else draftCount++
-
     const sumJumlahTotals = Number(b.totalJumlah || b.fdJumlah1 || 0)
     const sumBayarTotals = Number(b.totalBayar || 0)
-    totalAmountIdr += sumJumlahTotals
 
     const commoditiesList: string[] = []
     if (b.fdDescr) commoditiesList.push(String(b.fdDescr).trim())
@@ -642,32 +869,19 @@ export async function getCustomerBillingHistory(
 
     const sisaBayar = Math.max(0, sumJumlahTotals - sumBayarTotals)
 
-    // Status Hierarchy:
-    // 1. DRAFT: fdGive = 0 (belum terbit / konsep invoice)
-    // Jika fdGive = 1 (sudah terbit):
-    // 2. LUNAS: fdJumlah - fdBayar = 0
-    // 3. PARTIAL: fdBayar > 0
-    // 4. JATUH TEMPO: fdBayar = 0 & ageDays > 30
-    // 5. BARU TERBIT: fdBayar = 0 & ageDays < 7
-    // 6. BELUM LUNAS: fdBayar = 0 & ageDays 7 - 30
     let paymentStatus: 'LUNAS' | 'PARTIAL' | 'OVERDUE' | 'UNPAID' | 'ISSUED' | 'DRAFT' = 'DRAFT'
     if (!isIssued) {
       paymentStatus = 'DRAFT'
     } else if (sumJumlahTotals > 0 && Math.abs(sumJumlahTotals - sumBayarTotals) <= 0.01) {
       paymentStatus = 'LUNAS'
-      lunasCount++
     } else if (sumBayarTotals > 0) {
       paymentStatus = 'PARTIAL'
-      partialCount++
     } else if (sumBayarTotals === 0 && isOverdue) {
       paymentStatus = 'OVERDUE'
-      overdueCount++
     } else if (sumBayarTotals === 0 && ageDays < 7) {
       paymentStatus = 'ISSUED'
-      issuedRecentCount++
     } else {
       paymentStatus = 'UNPAID'
-      unpaidCount++
     }
 
     const cleanEmpCode = (b.fdEmpCode || '').trim()
@@ -710,6 +924,8 @@ export async function getCustomerBillingHistory(
       fdListType: b.fdListType !== null && b.fdListType !== undefined ? Number(b.fdListType) : null,
       fdTglAgent: b.fdTglAgent || null,
       fdTerima: b.fdTerima ? String(b.fdTerima).trim() : null,
+      fdM3: b.fdM3 !== null && b.fdM3 !== undefined ? Number(b.fdM3) : null,
+      fdBerat: b.fdBerat !== null && b.fdBerat !== undefined ? Number(b.fdBerat) : null,
       fdTypeComodity: b.fdTypeComodity !== null && b.fdTypeComodity !== undefined ? Number(b.fdTypeComodity) : null,
       fdTypeComodityName: b.fdTypeComodityName ? String(b.fdTypeComodityName).trim() : null,
       fdConsignee: b.fdConsignee ? String(b.fdConsignee).trim() : null,
@@ -745,31 +961,68 @@ export async function getCustomerBillingHistory(
           fdJumlah: sumJumlahTotals,
           fdBayar: sumBayarTotals,
           fdSLunas: b.totalSLunas !== null && b.totalSLunas !== undefined ? Number(b.totalSLunas) : null,
-        }
+        },
       ],
     }
   })
 
-  const yearsAvailable = Array.from(yearSet).sort((a, b) => b - a)
+  // Format summary from fast SQL summary query
+  const sRow = summaryRes[0] || {}
 
-  let filteredItems = items
-  if (
-    options?.status === 'lunas' ||
-    options?.status === 'partial' ||
-    options?.status === 'overdue' ||
-    options?.status === 'issued' ||
-    options?.status === 'unpaid'
-  ) {
-    filteredItems = filteredItems.filter((it) => it.paymentStatus.toLowerCase() === options.status?.toLowerCase())
-  } else if (options?.status === 'draft') {
-    filteredItems = filteredItems.filter((it) => !it.isIssued)
+  const commodityAvgRates: CommodityAvgRate[] = isFirstPage && commodityRatesRes
+    ? commodityRatesRes.map((r: any) => {
+        const totalM3 = Number(r.totalM3 || 0)
+        const totalAmountM3 = Number(r.totalAmountM3 || 0)
+        const totalAmountAll = Number(r.totalAmountAll || 0)
+        const totalAmount = totalAmountM3 > 0 ? totalAmountM3 : totalAmountAll
+        const avgPricePerM3 = totalM3 > 0 ? Math.round(totalAmount / totalM3) : 0
+        return {
+          typeComodityName: String(r.typeComodityName || 'UMUM').trim(),
+          totalAmount,
+          totalM3,
+          avgPricePerM3,
+          invoiceCount: Number(r.invoiceCount || 0),
+          itemCount: Number(r.itemCount || 0),
+        }
+      })
+    : []
+
+  const summary = {
+    totalInvoices: Number(sRow.totalInvoices || totalItems),
+    totalAmountIdr: Number(sRow.totalAmountIdr || 0),
+    totalAirInvoices: Number(sRow.totalAirInvoices || 0),
+    totalSeaInvoices: Number(sRow.totalSeaInvoices || 0),
+    issuedCount: Number(sRow.issuedCount || 0),
+    draftCount: Number(sRow.draftCount || 0),
+    lunasCount: Number(sRow.lunasCount || 0),
+    partialCount: Number(sRow.partialCount || 0),
+    overdueCount: Number(sRow.overdueCount || 0),
+    unpaidCount: Number(sRow.unpaidCount || 0),
+    issuedRecentCount: Number(sRow.issuedRecentCount || 0),
+    latestInvoiceDate: sRow.latestInvoiceDate || null,
+    earliestInvoiceDate: sRow.earliestInvoiceDate || null,
+    yearsAvailable: yearsRes.map((r) => Number(r.yr)).filter(Boolean),
+    commodityAvgRates,
   }
 
-  if (options?.diffStatus === 'diff') {
-    filteredItems = filteredItems.filter((it) => it.hasPrevDiff)
-  } else if (options?.diffStatus === 'same') {
-    filteredItems = filteredItems.filter((it) => !it.hasPrevDiff)
-  }
+  // Format filter options
+  const filterOptions = isFirstPage
+    ? {
+        branches: branchesRes
+          .map((br) => ({
+            code: String(br.fdBranchCode || '').trim(),
+            name: String(br.fdBranchName || '').trim(),
+          }))
+          .filter((b) => b.code && b.code !== '--' && b.code !== '-'),
+        typeComodities: Array.from(
+          new Set([
+            ...commodityAvgRates.map((c) => c.typeComodityName),
+            ...commoditiesRes.map((c) => String(c.typeComodityName || '').trim()),
+          ])
+        ).filter(Boolean).sort(),
+        years: summary.yearsAvailable,
+      }
+    : undefined
 
   return {
     customer: customer
@@ -780,23 +1033,16 @@ export async function getCustomerBillingHistory(
           fdBroker: customer.fdBroker,
         }
       : null,
-    summary: {
-      totalInvoices: items.length,
-      totalAmountIdr,
-      totalAirInvoices: totalAir,
-      totalSeaInvoices: totalSea,
-      issuedCount,
-      draftCount,
-      lunasCount,
-      partialCount,
-      overdueCount,
-      unpaidCount,
-      issuedRecentCount,
-      latestInvoiceDate: items[0]?.fdInvDate || null,
-      earliestInvoiceDate: items[items.length - 1]?.fdInvDate || null,
-      yearsAvailable,
+    summary,
+    pagination: {
+      page,
+      limit,
+      totalItems,
+      totalPages,
+      hasNextPage,
     },
-    items: filteredItems,
+    filterOptions,
+    items,
   }
 }
 

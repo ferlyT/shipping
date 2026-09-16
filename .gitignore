@@ -45,7 +45,23 @@ backend/public/uploads/*
 !backend/public/uploads/.gitkeep
 !backend/public/uploads/**/.gitkeep
 
-# Ignore all markdown files in root folder only (except README.md and mobile-app.md)
+# Ignore all markdown files in root folder only (except README.md, mobile-app.md, and frontend-app.md)
 /*.md
 !/README.md
 !/mobile-app.md
+!/frontend-app.md
+
+# Temporary backend scratch & profiling scripts
+backend/benchmark-draft-list.ts
+backend/check-*.ts
+backend/create-index-*.ts
+backend/profile-*.ts
+backend/scratch-check.ts
+
+# Multi-agent coordination logs & temporary workspaces
+.agents/orchestrator_*/
+.agents/teamwork_preview_*/
+.agents/victory_auditor_*/
+.agents/sentinel/
+.agents/ORIGINAL_REQUEST.md
+

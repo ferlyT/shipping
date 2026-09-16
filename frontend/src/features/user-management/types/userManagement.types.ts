@@ -7,6 +7,7 @@ export interface User {
   role: string
   fdEmpCode?: string | null
   fdEmpName?: string | null
+  avatarUrl?: string | null
   isActive: boolean
   lastLoginAt: string | null
   createdAt: string

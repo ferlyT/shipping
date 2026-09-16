@@ -373,7 +373,7 @@ export default function ShipmentsDashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <PageHeader
           title={t('shipments.title')}
-          subtitle={t('shipments.subtitle')}
+          subtitle={`${t('shipments.subtitle')} • Tahun ${kpis?.year || new Date().getFullYear()} (Berdasarkan Tgl Loading)`}
           breadcrumbs={[
             { label: t('module.logistics'), path: ROUTES.SHIPMENTS },
             { label: t('nav.shipment') },
@@ -441,6 +441,7 @@ export default function ShipmentsDashboardPage() {
       {/* Commodity Distribution Chart (Separated Sea & Air) */}
       <CommodityDistributionSection
         commodities={kpis?.commodities}
+        year={kpis?.year}
         mode={transportMode}
         isLoading={isLoading}
       />

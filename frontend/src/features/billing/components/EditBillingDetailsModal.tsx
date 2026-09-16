@@ -10,10 +10,11 @@ import {
   AlertTriangle,
   ArrowUp,
   ArrowDown,
+  Lock,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { useToastStore } from '@/stores/toastStore'
-import { formatCurrency, cn } from '@/lib/utils'
+import { formatCurrency, formatDecimal, cn } from '@/lib/utils'
 import { billingApi } from '../services/billing.service'
 import type { BillingDetail, BillingDetailInput } from '../types/billing.types'
 
@@ -29,6 +30,8 @@ interface EditBillingDetailsModalProps {
   initialDetails: BillingDetail[]
   isPaid?: boolean
   paymentStatus?: string
+  isLocked?: boolean
+  lockReason?: string
   onSuccess?: () => void
 }
 
@@ -42,6 +45,8 @@ export function EditBillingDetailsModal({
   initialDetails,
   isPaid = false,
   paymentStatus,
+  isLocked = false,
+  lockReason,
   onSuccess,
 }: EditBillingDetailsModalProps) {
   const { addToast } = useToastStore()
@@ -213,6 +218,10 @@ export function EditBillingDetailsModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (isLocked) {
+      onClose()
+      return
+    }
     setValidationError(null)
 
     if (items.length === 0) {
@@ -272,17 +281,27 @@ export function EditBillingDetailsModal({
         {/* ─── 1. Header ─── */}
         <div className="px-4 sm:px-5 py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/40 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-[var(--color-tertiary)]/15 text-[var(--color-tertiary)] flex items-center justify-center shrink-0">
-              <Receipt size={18} />
+            <div className={cn(
+              "w-8 h-8 rounded-lg flex items-center justify-center shrink-0",
+              isLocked
+                ? "bg-amber-500/15 text-amber-600 dark:text-amber-400"
+                : "bg-[var(--color-tertiary)]/15 text-[var(--color-tertiary)]"
+            )}>
+              {isLocked ? <Lock size={18} /> : <Receipt size={18} />}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm sm:text-base font-bold text-[var(--color-primary)]">
-                  Edit Rincian Item Tagihan
+                  {isLocked ? 'Rincian Item Tagihan (Terkunci)' : 'Edit Rincian Item Tagihan'}
                 </h3>
                 <span className="font-mono text-xs px-2 py-0.5 rounded bg-[var(--color-surface)] border border-[var(--color-border)] font-bold text-[var(--color-tertiary)]">
                   {invNo}
                 </span>
+                {isLocked && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30 tracking-wider uppercase">
+                    READ-ONLY
+                  </span>
+                )}
               </div>
               <p className="text-[11px] text-[var(--color-secondary)] truncate">
                 Customer: <strong className="text-[var(--color-primary)]">{custName || custCode || '—'}</strong>
@@ -302,8 +321,15 @@ export function EditBillingDetailsModal({
           </button>
         </div>
 
-        {/* ─── 2. Warning if Paid / Partial ─── */}
-        {(isPaid || paymentStatus === 'LUNAS' || paymentStatus === 'SEBAGIAN') && (
+        {/* ─── 2. Warning Banner ─── */}
+        {isLocked ? (
+          <div className="px-4 py-2.5 bg-amber-500/10 border-b border-amber-500/30 flex items-center gap-2 text-xs text-amber-800 dark:text-amber-200 shrink-0">
+            <Lock size={14} className="shrink-0 text-amber-600 dark:text-amber-400" />
+            <span>
+              <strong>Invoice Terkunci (Read-Only):</strong> {lockReason || 'Invoice telah berstatus ISSUED / LUNAS. Rincian item dikunci demi menjaga integritas data akuntansi.'}
+            </span>
+          </div>
+        ) : (isPaid || paymentStatus === 'LUNAS' || paymentStatus === 'SEBAGIAN') && (
           <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/30 flex items-center gap-2 text-xs text-amber-700 dark:text-amber-400 shrink-0">
             <AlertTriangle size={14} className="shrink-0 text-amber-600 dark:text-amber-400" />
             <span>
@@ -360,79 +386,115 @@ export function EditBillingDetailsModal({
 
                     {/* Deskripsi */}
                     <td className="px-2.5 py-2">
-                      <input
-                        type="text"
-                        value={item.fdItemName}
-                        onChange={(e) => handleItemChange(idx, 'fdItemName', e.target.value)}
-                        placeholder="Deskripsi item..."
-                        required
-                        className="w-full px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] font-medium text-xs focus:border-[var(--color-tertiary)] focus:ring-1 focus:ring-[var(--color-tertiary)]/20 outline-none transition-all placeholder:text-[var(--color-secondary)]/50"
-                      />
+                      {isLocked ? (
+                        <span className="font-semibold text-xs text-[var(--color-primary)] block py-1">
+                          {item.fdItemName}
+                        </span>
+                      ) : (
+                        <input
+                          type="text"
+                          value={item.fdItemName}
+                          onChange={(e) => handleItemChange(idx, 'fdItemName', e.target.value)}
+                          placeholder="Deskripsi item..."
+                          required
+                          className="w-full px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] font-medium text-xs focus:border-[var(--color-tertiary)] focus:ring-1 focus:ring-[var(--color-tertiary)]/20 outline-none transition-all placeholder:text-[var(--color-secondary)]/50"
+                        />
+                      )}
                     </td>
 
                     {/* Satuan / ListCode */}
                     <td className="px-2 py-2">
-                      <div className="relative">
-                        <input
-                          type="text"
-                          list="unit-options"
-                          value={item.fdListCode || ''}
-                          onChange={(e) => handleItemChange(idx, 'fdListCode', e.target.value.toUpperCase())}
-                          placeholder="M3 / KG..."
-                          className="w-full font-mono uppercase px-2 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] font-bold text-xs focus:border-[var(--color-tertiary)] outline-none text-center"
-                        />
-                      </div>
+                      {isLocked ? (
+                        <span className="font-mono uppercase font-bold text-xs text-center block text-[var(--color-secondary)] py-1">
+                          {item.fdListCode || '—'}
+                        </span>
+                      ) : (
+                        <div className="relative">
+                          <input
+                            type="text"
+                            list="unit-options"
+                            value={item.fdListCode || ''}
+                            onChange={(e) => handleItemChange(idx, 'fdListCode', e.target.value.toUpperCase())}
+                            placeholder="M3 / KG..."
+                            className="w-full font-mono uppercase px-2 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] font-bold text-xs focus:border-[var(--color-tertiary)] outline-none text-center"
+                          />
+                        </div>
+                      )}
                     </td>
 
                     {/* Qty */}
                     <td className="px-2 py-2 text-right">
-                      <input
-                        type="number"
-                        step="0.0001"
-                        min="0"
-                        value={item.fdQty !== undefined && item.fdQty !== null ? item.fdQty : ''}
-                        onChange={(e) => handleItemChange(idx, 'fdQty', e.target.value)}
-                        required
-                        className="w-full font-mono text-right px-2 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] font-bold text-xs focus:border-[var(--color-tertiary)] outline-none"
-                      />
+                      {isLocked ? (
+                        <span className="font-mono text-right font-bold text-xs block text-[var(--color-primary)] py-1">
+                          {formatDecimal(Number(item.fdQty || 0), 4)}
+                        </span>
+                      ) : (
+                        <input
+                          type="number"
+                          step="0.0001"
+                          min="0"
+                          value={item.fdQty !== undefined && item.fdQty !== null ? item.fdQty : ''}
+                          onChange={(e) => handleItemChange(idx, 'fdQty', e.target.value)}
+                          required
+                          className="w-full font-mono text-right px-2 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] font-bold text-xs focus:border-[var(--color-tertiary)] outline-none"
+                        />
+                      )}
                     </td>
 
                     {/* Harga Satuan */}
                     <td className="px-2.5 py-2 text-right">
-                      <input
-                        type="number"
-                        step="1"
-                        min="0"
-                        value={item.fdItemPrice || ''}
-                        onChange={(e) => handleItemChange(idx, 'fdItemPrice', e.target.value)}
-                        required
-                        className="w-full font-mono text-right px-2 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] font-bold text-xs focus:border-[var(--color-tertiary)] outline-none"
-                      />
+                      {isLocked ? (
+                        <span className="font-mono text-right font-bold text-xs block text-[var(--color-primary)] py-1">
+                          {formatCurrency(item.fdItemPrice || 0)}
+                        </span>
+                      ) : (
+                        <input
+                          type="number"
+                          step="1"
+                          min="0"
+                          value={item.fdItemPrice || ''}
+                          onChange={(e) => handleItemChange(idx, 'fdItemPrice', e.target.value)}
+                          required
+                          className="w-full font-mono text-right px-2 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] font-bold text-xs focus:border-[var(--color-tertiary)] outline-none"
+                        />
+                      )}
                     </td>
 
-                    {/* Subtotal (Disabled / Auto-calculated) */}
+                    {/* Subtotal */}
                     <td className="px-2.5 py-2 text-right">
-                      <input
-                        type="text"
-                        disabled
-                        readOnly
-                        value={formatCurrency(item.fdTotal || 0)}
-                        title="Subtotal otomatis (jika Qty 0 maka Subtotal = Harga × 1)"
-                        className="w-full font-mono text-right px-2 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-neutral)] text-[var(--color-primary)] font-bold text-xs cursor-not-allowed select-none opacity-80"
-                      />
+                      {isLocked ? (
+                        <span className="font-mono text-right font-bold text-xs block text-[var(--color-tertiary)] py-1">
+                          {formatCurrency(item.fdTotal || 0)}
+                        </span>
+                      ) : (
+                        <input
+                          type="text"
+                          disabled
+                          readOnly
+                          value={formatCurrency(item.fdTotal || 0)}
+                          title="Subtotal otomatis (jika Qty 0 maka Subtotal = Harga × 1)"
+                          className="w-full font-mono text-right px-2 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-neutral)] text-[var(--color-primary)] font-bold text-xs cursor-not-allowed select-none opacity-80"
+                        />
+                      )}
                     </td>
 
-                    {/* Action: Delete */}
+                    {/* Action: Delete / Lock status */}
                     <td className="px-2 py-2 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteRow(idx)}
-                        disabled={items.length <= 1}
-                        className="p-1 rounded-md text-rose-500 hover:bg-rose-500/15 border border-transparent hover:border-rose-500/30 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
-                        title={items.length <= 1 ? 'Minimal 1 item' : 'Hapus baris item'}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      {isLocked ? (
+                        <span className="text-[10px] text-[var(--color-secondary)]/50 font-mono flex items-center justify-center" title="Item terkunci">
+                          <Lock size={12} className="text-amber-500/60" />
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteRow(idx)}
+                          disabled={items.length <= 1}
+                          className="p-1 rounded-md text-rose-500 hover:bg-rose-500/15 border border-transparent hover:border-rose-500/30 transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
+                          title={items.length <= 1 ? 'Minimal 1 item' : 'Hapus baris item'}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -447,26 +509,28 @@ export function EditBillingDetailsModal({
             </datalist>
 
             {/* Add Row Button */}
-            <div className="mt-3 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={handleAddRow}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-[var(--color-border)] hover:border-[var(--color-tertiary)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/40 transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <Plus size={14} className="text-[var(--color-tertiary)]" />
-                <span>Tambah Baris Item</span>
-              </button>
+            {!isLocked && (
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={handleAddRow}
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-dashed border-[var(--color-border)] hover:border-[var(--color-tertiary)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/40 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Plus size={14} className="text-[var(--color-tertiary)]" />
+                  <span>Tambah Baris Item</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={handleReset}
-                className="px-2.5 py-1 text-xs font-medium text-[var(--color-secondary)] hover:text-[var(--color-primary)] flex items-center gap-1 cursor-pointer transition-colors"
-                title="Kembalikan ke data awal sebelum diedit"
-              >
-                <RotateCcw size={12} />
-                <span>Reset Perubahan</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  className="px-2.5 py-1 text-xs font-medium text-[var(--color-secondary)] hover:text-[var(--color-primary)] flex items-center gap-1 cursor-pointer transition-colors"
+                  title="Kembalikan ke data awal sebelum diedit"
+                >
+                  <RotateCcw size={12} />
+                  <span>Reset Perubahan</span>
+                </button>
+              </div>
+            )}
           </div>
 
           {/* ─── 5. Summary Bar & Action Footer ─── */}
@@ -507,40 +571,57 @@ export function EditBillingDetailsModal({
             </div>
 
             {/* Actions */}
-            <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
-              <label className="inline-flex items-center gap-2 text-xs text-[var(--color-secondary)] cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={saveToPrev}
-                  onChange={(e) => setSaveToPrev(e.target.checked)}
-                  className="rounded border-[var(--color-border)] text-[var(--color-tertiary)] focus:ring-[var(--color-tertiary)] cursor-pointer"
-                />
-                <span>
-                  Simpan ke tabel <code className="font-mono text-[11px] font-bold text-[var(--color-primary)]">tbBillingDetailPrev</code> juga
+            {isLocked ? (
+              <div className="flex items-center justify-between gap-2 pt-1">
+                <span className="text-xs text-[var(--color-secondary)] flex items-center gap-1.5">
+                  <Lock size={13} className="text-amber-500 shrink-0" />
+                  <span>Mode baca (Read-Only). Rincian item tidak dapat diubah setelah terbit/lunas.</span>
                 </span>
-              </label>
-
-              <div className="flex items-center gap-2 ml-auto">
                 <Button
                   type="button"
                   variant="secondary"
                   onClick={onClose}
-                  disabled={isSubmitting}
-                  className="cursor-pointer"
+                  className="cursor-pointer ml-auto"
                 >
-                  Batal
-                </Button>
-                <Button
-                  type="submit"
-                  isLoading={isSubmitting}
-                  disabled={isSubmitting}
-                  className="bg-[var(--color-tertiary)] hover:brightness-110 text-white flex items-center gap-1.5 cursor-pointer shadow-xs"
-                >
-                  {!isSubmitting && <Save size={14} />}
-                  <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+                  Tutup
                 </Button>
               </div>
-            </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                <label className="inline-flex items-center gap-2 text-xs text-[var(--color-secondary)] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={saveToPrev}
+                    onChange={(e) => setSaveToPrev(e.target.checked)}
+                    className="rounded border-[var(--color-border)] text-[var(--color-tertiary)] focus:ring-[var(--color-tertiary)] cursor-pointer"
+                  />
+                  <span>
+                    Simpan ke tabel <code className="font-mono text-[11px] font-bold text-[var(--color-primary)]">tbBillingDetailPrev</code> juga
+                  </span>
+                </label>
+
+                <div className="flex items-center gap-2 ml-auto">
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={onClose}
+                    disabled={isSubmitting}
+                    className="cursor-pointer"
+                  >
+                    Batal
+                  </Button>
+                  <Button
+                    type="submit"
+                    isLoading={isSubmitting}
+                    disabled={isSubmitting}
+                    className="bg-[var(--color-tertiary)] hover:brightness-110 text-white flex items-center gap-1.5 cursor-pointer shadow-xs"
+                  >
+                    {!isSubmitting && <Save size={14} />}
+                    <span>{isSubmitting ? 'Menyimpan...' : 'Simpan Perubahan'}</span>
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         </form>
       </div>

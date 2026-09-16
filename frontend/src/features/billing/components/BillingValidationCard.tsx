@@ -18,18 +18,21 @@ import {
   History,
   Truck,
   Clock,
+  FileText,
+  Plane,
+  Ship,
 } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { Badge } from '@/components/ui/Badge'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslation } from '@/hooks/useTranslation'
-import { formatDate, formatDecimal, formatCurrency, formatNumber } from '@/lib/utils'
+import { formatDate, formatDecimal, formatCurrency, formatNumber, displayCustName, cleanFoxProString } from '@/lib/utils'
 import { evaluateItemPrice } from '../utils/billing.utils'
 import { useOverweightValidation } from '../hooks/useOverweightValidation'
 import type { BillingValidationState } from '../hooks/useBillingValidation'
 import { PriceListDetailModal } from './PriceListDetailModal'
 import { CustMarkingDetailModal } from './CustMarkingDetailModal'
-import type { M3CheckResponse } from './BillingValidationSummaryModal'
+import type { M3CheckResponse } from '../types/billing.types'
 import { BILL_TYPES, type BillType } from '../constants/billing.constants'
 import { Type2ComparisonPanel } from './Type2ComparisonPanel'
 
@@ -93,6 +96,8 @@ export function BillingValidationCard({
   billType,
   markingCode,
   invoiceNo,
+  customerName: customerNameProp,
+  custCode: custCodeProp,
   onOpenAuditModal,
 }: BillingValidationCardProps) {
   const { t } = useTranslation()
@@ -302,6 +307,16 @@ export function BillingValidationCard({
     }
   }
 
+  // Evaluasi Tagihan di Bawah Minimum Charge M3 (Laut)
+  const effectiveMinChargeM3 = validation?.minChargeM3 ?? (
+    (res?.profileHarga?.minChargeM3 && res.profileHarga.minChargeM3 > 0)
+      ? res.profileHarga.minChargeM3
+      : (res?.minChargeM3 && res.minChargeM3 > 0 ? res.minChargeM3 : 0.1)
+  )
+  const isBilledBelowMinM3 = validation?.isBilledBelowMinM3 ?? (
+    !isAir && billedM3 > 0 && billedM3 < (effectiveMinChargeM3 - 0.0001)
+  )
+
   const isCodOrUrgent = Boolean(res?.isCodOrUrgent)
   const recommendedM3 = res?.recommendedM3 ?? 0
   const isCodUrgentShortfall = validation ? validation.isCodUrgentShortfall : (!isAir && isCodOrUrgent && recommendedM3 > billedM3 + 0.001)
@@ -319,6 +334,9 @@ export function BillingValidationCard({
       StatusIcon = Check
     }
   } else if (isCodUrgentShortfall) {
+    badgeVariant = 'warning'
+    StatusIcon = AlertTriangle
+  } else if (isBilledBelowMinM3) {
     badgeVariant = 'warning'
     StatusIcon = AlertTriangle
   } else if (matchStatus === 'MATCH_PRIMARY') {
@@ -350,9 +368,11 @@ export function BillingValidationCard({
         ? t('billing.validation.statusCodUrgentWarning')
         : matchStatus === 'NO_MATCH'
           ? t('billing.validation.statusNoMatch')
-          : isMinChargeApplied
-            ? `COCOK (ATURAN MIN. 0,1 m³ · ${matchedSourceName})`
-            : t('billing.validation.statusMatch', { source: matchedSourceName })
+          : isBilledBelowMinM3
+            ? `DI BAWAH MIN. CHARGE (${formatDecimal(billedM3, 4)} m³ < ${formatDecimal(effectiveMinChargeM3, 3)} m³ · ${matchedSourceName || 'GUDANG'})`
+            : isMinChargeApplied
+              ? `COCOK (ATURAN MIN. ${formatDecimal(effectiveMinChargeM3, 3)} m³ · ${matchedSourceName})`
+              : t('billing.validation.statusMatch', { source: matchedSourceName })
 
   const isMatch = validation ? validation.isMatch : (matchStatus === 'MATCH_PRIMARY' || matchStatus === 'MATCH_MARKING')
 
@@ -408,11 +428,11 @@ export function BillingValidationCard({
   const hasFreightCharge = Boolean(res?.freightChargeSummary?.totalFc && res.freightChargeSummary.totalFc > 0)
 
   // Helper cek selisih overweight & rasio berat fisik (jalur laut)
+  // Sesuai aturan: catatan validasi berat jalur laut HANYA muncul jika sisa kuota berat < 0 (isOverweight)
   const hasOverweightIssue = !isAir && !isType2 && (
     (isOverweight && !isBilledOverweightExactMatch) ||
     isBilledUnneededOverweight ||
-    (!isBilledOverweightMatch && isOverweight) ||
-    hasWeightMismatch
+    (!isBilledOverweightMatch && isOverweight)
   )
 
   // Auto-determined active tab based on problem hierarchy
@@ -468,9 +488,9 @@ export function BillingValidationCard({
     )
   }
   return (
-    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-sm overflow-hidden animate-fadeIn">
+    <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-[var(--radius-lg)] shadow-sm overflow-hidden animate-fadeIn flex flex-col h-full min-h-0">
       {/* Header */}
-      <div className="px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between gap-2">
+      <div className="px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)] flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
           <ShieldCheck className="w-4 h-4 text-[var(--color-primary)] shrink-0" />
           <h3 className="text-xs sm:text-sm font-bold font-[var(--font-label)] uppercase tracking-wider text-[var(--color-primary)] truncate">
@@ -506,7 +526,7 @@ export function BillingValidationCard({
       </div>
 
       {/* Navigation Tab Bar (Clean 4-Tab Header with Touch Scrolling) */}
-      <div className="px-2.5 sm:px-4 py-1.5 sm:py-2 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/30 flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar touch-pan-x">
+      <div className="px-2.5 sm:px-4 py-1.5 sm:py-2 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/30 flex items-center gap-1 sm:gap-1.5 overflow-x-auto no-scrollbar touch-pan-x shrink-0">
         {/* Tab 1: Profile / Items */}
         <button
           type="button"
@@ -573,17 +593,13 @@ export function BillingValidationCard({
           >
             <Scale size={13} />
             <span>Overweight</span>
-            {(isBilledOverweightExactMatch || (!isOverweight && !isBilledUnneededOverweight)) && !hasWeightMismatch ? (
+            {(isBilledOverweightExactMatch || (!isOverweight && !isBilledUnneededOverweight)) ? (
               <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-500/15 text-emerald-600 border border-emerald-500/30">
                 ✓ Aman
               </span>
-            ) : isBilledOverweightTolerated && !hasWeightMismatch ? (
+            ) : isBilledOverweightTolerated ? (
               <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
                 ✓ Toleransi
-              </span>
-            ) : hasWeightMismatch && !isOverweight ? (
-              <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
-                Selisih Berat
               </span>
             ) : (
               <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 border border-amber-500/30">
@@ -646,7 +662,7 @@ export function BillingValidationCard({
       </div>
 
       {/* Main Comparison Body */}
-      <div className="p-3 sm:p-5 space-y-3 sm:space-y-4">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5 space-y-3 sm:space-y-4 pb-8 sm:pb-10">
         {/* TAB 1: ITEM & TARIF / PROFILE HARGA CUSTOMER */}
         {activeTab === 'profile' && (
           <div className="space-y-4">
@@ -790,6 +806,86 @@ export function BillingValidationCard({
                       <p className="font-bold text-[var(--color-primary)] mt-0.5 text-xs sm:text-sm">
                         {res.profileHarga.taxReturnMinCharge > 0 ? `${formatDecimal(res.profileHarga.taxReturnMinCharge, 4)} m³` : '—'}
                       </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Kelompok Catatan Khusus Tarif Customer (tbCustomersHarga: fdNote Air & fdNote 1 Sea) */}
+                <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-2.5 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <p className="text-[10px] uppercase font-sans text-[var(--color-secondary)] font-bold tracking-wider flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                      <span>{t('billing.validation.tariffNotesTitle')}</span>
+                      <span className="text-[9px] font-normal text-[var(--color-secondary)] lowercase font-mono">
+                        (tbCustomersHarga)
+                      </span>
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
+                    {/* 1. Note Air (fdNote) */}
+                    <div
+                      className={`p-2.5 rounded-md border transition-all ${
+                        res.fdListType === 1
+                          ? 'border-sky-500/40 bg-sky-500/5 shadow-2xs'
+                          : 'border-[var(--color-border)] bg-[var(--color-neutral)]/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1.5 mb-1">
+                        <span className="text-[10px] uppercase font-bold flex items-center gap-1 text-sky-600 dark:text-sky-400">
+                          <Plane size={12} className="shrink-0" />
+                          <span>{t('billing.validation.noteAirLabel')}</span>
+                          <span className="text-[8.5px] font-mono text-[var(--color-secondary)] font-normal">
+                            (fdNote)
+                          </span>
+                        </span>
+                        {res.fdListType === 1 && (
+                          <span className="text-[8.5px] px-1.5 py-0.2 rounded font-bold border border-sky-500/40 text-sky-600 dark:text-sky-400 bg-sky-500/10">
+                            {t('billing.validation.activeModeBadge')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11.5px] font-mono text-[var(--color-primary)] leading-relaxed whitespace-pre-wrap break-words">
+                        {res.profileHarga.fdNoteAir ? (
+                          cleanFoxProString(res.profileHarga.fdNoteAir)
+                        ) : (
+                          <span className="text-[var(--color-secondary)] italic text-[11px]">
+                            {t('billing.validation.noAirNote')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. Note Sea (fdNote 1) */}
+                    <div
+                      className={`p-2.5 rounded-md border transition-all ${
+                        res.fdListType === 2
+                          ? 'border-blue-500/40 bg-blue-500/5 shadow-2xs'
+                          : 'border-[var(--color-border)] bg-[var(--color-neutral)]/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-1.5 mb-1">
+                        <span className="text-[10px] uppercase font-bold flex items-center gap-1 text-blue-600 dark:text-blue-400">
+                          <Ship size={12} className="shrink-0" />
+                          <span>{t('billing.validation.noteSeaLabel')}</span>
+                          <span className="text-[8.5px] font-mono text-[var(--color-secondary)] font-normal">
+                            (fdNote 1)
+                          </span>
+                        </span>
+                        {res.fdListType === 2 && (
+                          <span className="text-[8.5px] px-1.5 py-0.2 rounded font-bold border border-blue-500/40 text-blue-600 dark:text-blue-400 bg-blue-500/10">
+                            {t('billing.validation.activeModeBadge')}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11.5px] font-mono text-[var(--color-primary)] leading-relaxed whitespace-pre-wrap break-words">
+                        {res.profileHarga.fdNote1Sea ? (
+                          cleanFoxProString(res.profileHarga.fdNote1Sea)
+                        ) : (
+                          <span className="text-[var(--color-secondary)] italic text-[11px]">
+                            {t('billing.validation.noSeaNote')}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -970,10 +1066,19 @@ export function BillingValidationCard({
               {/* Baris 1: Card Billed + Box Data Utama */}
               <div className="flex gap-2.5 items-stretch">
                 {/* Card 1: Billed Metric — lebar tetap */}
-                <div className="rounded-[var(--radius-lg)] border-2 border-[var(--color-primary)] bg-[var(--color-neutral)] p-2.5 sm:p-3 shrink-0 w-28 sm:w-32 flex flex-col justify-center">
-                  <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
-                    {isAir ? 'Tagihan Berat (Billed KG)' : t('billing.validation.billedM3')}
-                  </p>
+                <div className={`rounded-[var(--radius-lg)] border-2 ${
+                  isBilledBelowMinM3
+                    ? 'border-amber-500 bg-amber-500/5'
+                    : 'border-[var(--color-primary)] bg-[var(--color-neutral)]'
+                } p-2.5 sm:p-3 shrink-0 w-28 sm:w-32 flex flex-col justify-center`}>
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
+                      {isAir ? 'Tagihan Berat (Billed KG)' : t('billing.validation.billedM3')}
+                    </p>
+                    {isBilledBelowMinM3 && (
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                    )}
+                  </div>
                   <p className="mt-1 text-sm sm:text-base font-bold text-[var(--color-primary)] tabular-nums">
                     {isAir ? `${formatDecimal(effectiveBilledKg, 2)} kg` : `${formatDecimal(billedM3, 4)} m³`}
                   </p>
@@ -985,6 +1090,21 @@ export function BillingValidationCard({
                   {isAir && billedM3 > 0 && (
                     <p className="text-[10px] text-[var(--color-secondary)] mt-0.5 font-mono">
                       Vol: {formatDecimal(billedM3, 4)} m³
+                    </p>
+                  )}
+                  {!isAir && isBilledBelowMinM3 && (
+                    <div className="mt-1 flex flex-col gap-0.5">
+                      <span className="text-[9px] font-bold text-amber-600 dark:text-amber-400 bg-amber-500/15 border border-amber-500/30 rounded px-1 py-0.2 inline-block">
+                        ⚠ &lt; Min {formatDecimal(effectiveMinChargeM3, 2)} m³
+                      </span>
+                      <span className="text-[8.5px] text-[var(--color-secondary)] leading-tight font-mono">
+                        Basis KG: {formatDecimal(overweight.refM3, 2)} m³
+                      </span>
+                    </div>
+                  )}
+                  {!isAir && !isBilledBelowMinM3 && overweight?.isMinM3EnforcedForKg && (
+                    <p className="text-[9.5px] text-amber-600 dark:text-amber-400 mt-0.5 font-medium leading-tight">
+                      Basis KG: 0.1 m³
                     </p>
                   )}
                 </div>
@@ -1554,6 +1674,22 @@ export function BillingValidationCard({
                       </div>
                     )}
 
+                    {/* Alert Peringatan Tagihan di Bawah Min Charge M3 */}
+                    {isBilledBelowMinM3 && (
+                      <div className="flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300 bg-amber-500/10 border border-amber-500/40 rounded-[var(--radius-md)] p-2.5">
+                        <AlertTriangle className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                        <div className="font-medium">
+                          <span className="font-bold">Peringatan: Tagihan di Bawah Batas Minimum Charge M3. </span>
+                          <span>
+                            Volume yang ditagihkan ({formatDecimal(billedM3, 4)} m³) lebih rendah dari batas minimum charge ({formatDecimal(effectiveMinChargeM3, 4)} m³{res?.profileHarga?.minChargeM3 ? ' master customer' : ' standar 0.1 m³'}).
+                            {matchStatus === 'MATCH_PRIMARY' || matchStatus === 'MATCH_MARKING'
+                              ? ` Data fisik ${matchedSourceName} cocok (${formatDecimal(matchedRawVal, 4)} m³), namun pastikan apakah penagihan volume riil ini disengaja atau seharusnya dikenakan tarif batas minimum.`
+                              : ''}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
                     {/* COD / URGENT Alert */}
                     {isCodUrgentShortfall && (
                       <div className="flex items-start gap-2 text-xs text-[var(--color-warning)] bg-amber-50/80 dark:bg-transparent border border-[var(--color-warning)] rounded-[var(--radius-md)] p-2.5">
@@ -1645,7 +1781,7 @@ export function BillingValidationCard({
                   </span>
                 </div>
                 <span className="text-[10px] text-[var(--color-secondary)] block truncate pt-1 border-t border-[var(--color-border)]/60">
-                  {formatDecimal(billedM3, 4)} m³ × {overweight.rasio} kg
+                  {formatDecimal(overweight.refM3, 4)} m³ × {overweight.rasio} kg {overweight.isMinM3EnforcedForKg ? '(Min 0.1)' : ''}
                 </span>
               </div>
               <div className="p-3 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] flex flex-col justify-between space-y-1">
@@ -1893,8 +2029,8 @@ export function BillingValidationCard({
         expectedMode={res.expectedMode || res.priceValidation?.expectedMode}
         expectedBranch={res.expectedBranch || res.priceValidation?.expectedBranch}
         salesName={res.customer?.fdSalesNM}
-        customerName={res.customer?.fdCustName}
-        customerCode={res.customer?.fdCustCode}
+        customerName={displayCustName(customerNameProp || res.customer?.fdCustName)}
+        customerCode={custCodeProp || res.customer?.fdCustCode}
         hasCustomerPriceList={res.priceValidation?.hasCustomerPriceList}
         items={res.priceValidation?.items || []}
       />
@@ -1902,8 +2038,8 @@ export function BillingValidationCard({
       <CustMarkingDetailModal
         isOpen={isCustMarkingModalOpen}
         onClose={() => setIsCustMarkingModalOpen(false)}
-        custCode={res.customer?.fdCustCode || null}
-        custName={res.customer?.fdCustName || null}
+        custCode={custCodeProp || res.customer?.fdCustCode || null}
+        custName={displayCustName(customerNameProp || res.customer?.fdCustName)}
         markingCode={res.customer?.fdMarkingCode || res.fdListCode || listCode}
       />
     </div>

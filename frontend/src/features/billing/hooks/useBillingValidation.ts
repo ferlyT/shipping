@@ -10,8 +10,8 @@ import {
 } from '../utils/billing.utils'
 import { getBillType, BILL_TYPES } from '../constants/billing.constants'
 import { useOverweightValidation, type OverweightValidationResult } from './useOverweightValidation'
-import type { Billing, BillingDetail } from '../types/billing.types'
-import type { M3CheckResponse } from '../components/BillingValidationSummaryModal'
+import { formatDecimal } from '@/lib/utils'
+import type { Billing, BillingDetail, M3CheckResponse } from '../types/billing.types'
 
 export interface UnderchargedItem {
   itemName: string
@@ -142,6 +142,10 @@ export interface BillingValidationState {
   overchargedItems: OverchargedItem[]
   hasPriceDiscrepancy: boolean
 
+  // Min Charge M3 Validation (Sea)
+  minChargeM3: number
+  isBilledBelowMinM3: boolean
+
   // Kesimpulan / Overall Verdict
   isPhysicalValid: boolean
   isFinancialValid: boolean
@@ -233,11 +237,6 @@ export function useBillingValidation({
       map[unit] = (map[unit] || 0) + Number(row.fdQty || 0)
       return map
     }, {})
-
-    // Min-charge enforcement: M3 < 0.1 → round up to 0.1
-    if (acc['M3'] !== undefined && acc['M3'] > 0 && acc['M3'] < 0.1) {
-      acc['M3'] = 0.1
-    }
     return acc
   }, [details])
 
@@ -268,7 +267,7 @@ export function useBillingValidation({
   }, [details])
 
   const calcM3 = unitTotals['M3'] ?? rawM3
-  const billedM3 = calcM3 > 0 && calcM3 < 0.1 ? 0.1 : calcM3
+  const billedM3 = calcM3
   const billedKg = unitTotals['KG'] ?? rawKg
   const billedVfc = unitTotals['VOLUME FREIGHT CHARGES (KG)'] ?? rawVfc
 
@@ -460,13 +459,23 @@ export function useBillingValidation({
         : (rawKomplainM3 !== null ? normM3(rawKomplainM3) : null))
     : null
 
-  const seaPrimaryMatch = !isAir ? seaCandidates.find((c) => Math.abs(c.val - billedM3) < 0.001) || null : null
-  const isBilledMatchedApprovedKomplain = !isAir && isApprovedKomplainActive && targetKomplainM3 !== null && Math.abs(targetKomplainM3 - billedM3) < 0.001
+  const seaPrimaryMatch = !isAir
+    ? seaCandidates.find((c) => Math.abs((c.rawVal ?? c.val) - billedM3) < 0.001 || Math.abs(c.val - billedM3) < 0.001) || null
+    : null
+  const isBilledMatchedApprovedKomplain = !isAir && isApprovedKomplainActive && (
+    (rawKomplainM3 !== null && Math.abs(rawKomplainM3 - billedM3) < 0.001) ||
+    (targetKomplainM3 !== null && Math.abs(targetKomplainM3 - billedM3) < 0.001)
+  )
   const isBilledMismatchedApprovedKomplain = !isAir && isApprovedKomplainActive && targetKomplainM3 !== null && !isBilledMatchedApprovedKomplain && !(isHybridActive && seaPrimaryMatch?.sourceKey === 'KomplainHybrid')
-  const isBilledUsingRejectedKomplain = !isAir && isKomplainRejected && rawKomplainM3 !== null && Math.abs(normM3(rawKomplainM3) - billedM3) < 0.001
+  const isBilledUsingRejectedKomplain = !isAir && isKomplainRejected && rawKomplainM3 !== null && (
+    Math.abs(rawKomplainM3 - billedM3) < 0.001 || Math.abs(normM3(rawKomplainM3) - billedM3) < 0.001
+  )
 
   const rawMarkingVal = custMarkingValues.length > 0 ? custMarkingValues[0] : null
-  const seaMarkingMatch = !isAir && !seaPrimaryMatch && custMarkingValues.length > 0 && Math.abs(normM3(custMarkingValues[0]) - billedM3) < 0.001
+  const seaMarkingMatch = !isAir && !seaPrimaryMatch && custMarkingValues.length > 0 && (
+    Math.abs(custMarkingValues[0] - billedM3) < 0.001 ||
+    Math.abs(normM3(custMarkingValues[0]) - billedM3) < 0.001
+  )
 
   let matchStatus: 'MATCH_PRIMARY' | 'MATCH_MARKING' | 'NO_MATCH' = 'NO_MATCH'
   let matchedSourceName = ''
@@ -499,7 +508,12 @@ export function useBillingValidation({
     if (seaPrimaryMatch) {
       matchStatus = 'MATCH_PRIMARY'
       matchedSourceName = seaPrimaryMatch.sourceName
-      isMinChargeApplied = (seaPrimaryMatch.rawVal ?? 0) > 0 && (seaPrimaryMatch.rawVal ?? 0) < 0.1
+      isMinChargeApplied = Boolean(
+        (seaPrimaryMatch.rawVal ?? 0) > 0 &&
+        (seaPrimaryMatch.rawVal ?? 0) < 0.1 &&
+        Math.abs(seaPrimaryMatch.val - billedM3) < 0.001 &&
+        billedM3 >= 0.1
+      )
       matchLabel = isBilledMatchedApprovedKomplain
         ? (isGabungan ? 'M3 Komplain Per Marking' : 'Ukuran Komplain')
         : seaPrimaryMatch.sourceName
@@ -507,7 +521,12 @@ export function useBillingValidation({
       matchStatus = 'MATCH_MARKING'
       matchedSourceName = 'M3 Customer Per Marking'
       matchLabel = 'M3 Per Marking'
-      isMinChargeApplied = (rawMarkingVal ?? 0) > 0 && (rawMarkingVal ?? 0) < 0.1
+      isMinChargeApplied = Boolean(
+        (rawMarkingVal ?? 0) > 0 &&
+        (rawMarkingVal ?? 0) < 0.1 &&
+        Math.abs(normM3(rawMarkingVal ?? 0) - billedM3) < 0.001 &&
+        billedM3 >= 0.1
+      )
     } else {
       matchStatus = 'NO_MATCH'
       matchLabel = 'Selisih Kubikasi (M3)'
@@ -518,6 +537,13 @@ export function useBillingValidation({
   const isCodOrUrgent = Boolean(res?.isCodOrUrgent)
   const recommendedM3 = res?.recommendedM3 ?? 0
   const isCodUrgentShortfall = !isAir && isCodOrUrgent && recommendedM3 > billedM3 + 0.001
+
+  // Evaluasi Tagihan di Bawah Minimum Charge M3 (Khusus Pengiriman Laut)
+  const effectiveMinChargeM3 = (res?.profileHarga?.minChargeM3 && res.profileHarga.minChargeM3 > 0)
+    ? res.profileHarga.minChargeM3
+    : (res?.minChargeM3 && res.minChargeM3 > 0 ? res.minChargeM3 : 0.1)
+
+  const isBilledBelowMinM3 = !isAir && billedM3 > 0 && billedM3 < (effectiveMinChargeM3 - 0.0001)
 
   // 6. Commodity & Item Pricing Evaluation
   const defaultTypeId = billingData?.fdTypeComodity ?? res?.defaultFdTypeComodity ?? res?.markingComodityType ?? null
@@ -571,12 +597,19 @@ export function useBillingValidation({
   const hasPriceDiscrepancy = underchargedItems.length > 0
 
   // 7. Overall Verdict
+  // Untuk pengiriman laut (!isAir), selisih catatan berat fisik antar dokumen (hasWeightMismatch)
+  // TIDAK menggagalkan validasi fisik selama sisa kuota berat >= 0 (tidak overweight).
+  // Warning kelebihan berat hanya muncul jika sisa kuota berat < 0 (overweight.isOverweight).
+  const isWeightPhysicallyValid = isAir
+    ? !hasWeightMismatch
+    : (!overweight.isOverweight || overweight.isBilledOverweightMatch)
+
   const isPhysicalValid = isType2
-    ? (!isType2Discrepancy && !hasWeightMismatch)
+    ? (!isType2Discrepancy && (!hasWeightMismatch || overweight.isOverweight))
     : Boolean(
         isMatch &&
         !hasQtyMismatch &&
-        !hasWeightMismatch &&
+        isWeightPhysicallyValid &&
         !isCodUrgentShortfall &&
         !isBilledMismatchedApprovedKomplain &&
         (!overweight.isOverweight || overweight.isBilledOverweightMatch) &&
@@ -604,7 +637,8 @@ export function useBillingValidation({
     if (hasQtyMismatch) {
       issues.push('Terdapat ketidaksesuaian jumlah koli (Qty) antar tahapan')
     }
-    if (hasWeightMismatch) {
+    // Perbedaan berat antar dokumen hanya menjadi issue jika moda udara atau muatan overweight (sisa kuota < 0)
+    if (hasWeightMismatch && (isAir || overweight.isOverweight)) {
       issues.push(
         `Terdapat perbedaan berat fisik antar dokumen (${activeWeights.map((w) => `${w.label}: ${w.val.toLocaleString('id-ID', { minimumFractionDigits: 1, maximumFractionDigits: 2 })} kg`).join(' vs ')})`
       )
@@ -627,6 +661,9 @@ export function useBillingValidation({
     if (hasPriceDiscrepancy) {
       issues.push(`Terdapat ${underchargedItems.length} item dengan tarif di bawah master (undercharge)`)
     }
+    if (isBilledBelowMinM3) {
+      issues.push(`Volume yang ditagihkan (${formatDecimal(billedM3, 4)} m³) lebih rendah dari batas minimum charge (${formatDecimal(effectiveMinChargeM3, 4)} m³)`)
+    }
     return issues
   }, [
     isMatch,
@@ -644,6 +681,9 @@ export function useBillingValidation({
     unbilledExpedisiList.length,
     hasPriceDiscrepancy,
     underchargedItems.length,
+    isBilledBelowMinM3,
+    billedM3,
+    effectiveMinChargeM3,
   ])
 
   return {
@@ -671,6 +711,8 @@ export function useBillingValidation({
     matchLabel,
     isMatch,
     isMinChargeApplied,
+    minChargeM3: effectiveMinChargeM3,
+    isBilledBelowMinM3,
     isCodUrgentShortfall,
 
     rawKomplainM3,

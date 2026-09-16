@@ -40,5 +40,6 @@ export interface KpiData {
   totalSJ: number
   totalPackages: number
   totalWeight: number
-  sjBulanIni: number
+  sjBulanIni?: number
+  onDelivery?: number
 }

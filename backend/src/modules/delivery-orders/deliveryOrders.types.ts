@@ -19,6 +19,7 @@ export interface DeliveryOrderKPIResponse {
   totalPackages: number
   totalWeight: number
   sjBulanIni: number
+  onDelivery: number
 }
 
 export interface DeliveryGroupedItem {

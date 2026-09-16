@@ -630,10 +630,10 @@ export async function getTransportValidationCheck(query: {
         RTRIM(b.fdCurr1) as fdCurr1,
         RTRIM(e.fdEmpName) as fdEmpName
       FROM tbBilling b WITH (NOLOCK)
-      LEFT JOIN tbEmployees e WITH (NOLOCK) ON RTRIM(b.fdEmpCode) = RTRIM(e.fdEmpCode)
-      WHERE RTRIM(b.fdCustCode) = ${custCode}
-        AND RTRIM(b.fdMarkingCode) = ${markingCode}
-        AND RTRIM(b.fdInvNo) <> ${invNo}
+      LEFT JOIN tbEmployees e WITH (NOLOCK) ON b.fdEmpCode = e.fdEmpCode
+      WHERE b.fdCustCode = CAST(${custCode} AS CHAR(7))
+        AND b.fdMarkingCode = CAST(${markingCode} AS CHAR(30))
+        AND b.fdInvNo <> CAST(${invNo} AS CHAR(20))
         AND (
           b.fdJumlah1 = ${amount} 
           OR (b.fdJumlah2 IS NOT NULL AND b.fdJumlah2 = ${amount})
@@ -667,9 +667,9 @@ export async function getTransportValidationCheck(query: {
           RTRIM(el.fdMarkingCode) as fdMarkingCode,
           RTRIM(el.fdMarkingNo) as fdMarkingNo
         FROM tbExpIndo e WITH (NOLOCK)
-        LEFT JOIN tbExpedisi x WITH (NOLOCK) ON RTRIM(e.fdExpID) = RTRIM(x.fdExpID)
-        LEFT JOIN tbEntryList el WITH (NOLOCK) ON RTRIM(e.fdListCode) = RTRIM(el.fdListCode)
-        WHERE RTRIM(e.fdListCode) = ${listCodes[0]}
+        LEFT JOIN tbExpedisi x WITH (NOLOCK) ON e.fdExpID = x.fdExpID
+        LEFT JOIN tbEntryList el WITH (NOLOCK) ON el.fdListCode = CAST(e.fdListCode AS CHAR(7))
+        WHERE e.fdListCode = CAST(${listCodes[0]} AS CHAR(7))
         ORDER BY e.fdCreatedDate DESC
       `
     } else if (listCodes.length > 1) {
@@ -689,9 +689,9 @@ export async function getTransportValidationCheck(query: {
           RTRIM(el.fdMarkingCode) as fdMarkingCode,
           RTRIM(el.fdMarkingNo) as fdMarkingNo
         FROM tbExpIndo e WITH (NOLOCK)
-        LEFT JOIN tbExpedisi x WITH (NOLOCK) ON RTRIM(e.fdExpID) = RTRIM(x.fdExpID)
-        LEFT JOIN tbEntryList el WITH (NOLOCK) ON RTRIM(e.fdListCode) = RTRIM(el.fdListCode)
-        WHERE RTRIM(e.fdListCode) IN (${Prisma.join(listCodes)})
+        LEFT JOIN tbExpedisi x WITH (NOLOCK) ON e.fdExpID = x.fdExpID
+        LEFT JOIN tbEntryList el WITH (NOLOCK) ON el.fdListCode = CAST(e.fdListCode AS CHAR(7))
+        WHERE e.fdListCode IN (${Prisma.join(listCodes)})
         ORDER BY e.fdCreatedDate DESC
       `
     }
@@ -715,14 +715,14 @@ export async function getTransportValidationCheck(query: {
           RTRIM(el.fdMarkingCode) as fdMarkingCode,
           RTRIM(el.fdMarkingNo) as fdMarkingNo
         FROM tbEntryList el WITH (NOLOCK)
-        INNER JOIN tbExpIndo e WITH (NOLOCK) ON RTRIM(el.fdListCode) = RTRIM(e.fdListCode)
-        LEFT JOIN tbExpedisi x WITH (NOLOCK) ON RTRIM(e.fdExpID) = RTRIM(x.fdExpID)
-        WHERE RTRIM(el.fdCustCode) = ${custCode}
+        INNER JOIN tbExpIndo e WITH (NOLOCK) ON el.fdListCode = CAST(e.fdListCode AS CHAR(7))
+        LEFT JOIN tbExpedisi x WITH (NOLOCK) ON e.fdExpID = x.fdExpID
+        WHERE el.fdCustCode = CAST(${custCode} AS CHAR(7))
           AND (
-            RTRIM(el.fdMarkingCode) = ${coreMarking}
-            OR RTRIM(el.fdMarkingCode) = ${markingCode}
+            el.fdMarkingCode = CAST(${coreMarking} AS VARCHAR(30))
+            OR el.fdMarkingCode = CAST(${markingCode} AS VARCHAR(30))
             OR ${markingCode} LIKE '%' + RTRIM(el.fdMarkingCode) + '%'
-            OR RTRIM(el.fdMarkingCode) LIKE '%' + ${coreMarking} + '%'
+            OR el.fdMarkingCode LIKE '%' + ${coreMarking} + '%'
           )
         ORDER BY e.fdCreatedDate DESC
       `

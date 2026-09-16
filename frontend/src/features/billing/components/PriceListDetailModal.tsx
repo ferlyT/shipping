@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { X, Search, Tag, ShieldCheck, Filter, Plane, Ship } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { CurrencyValue } from '@/components/ui/CurrencyValue'
-import { formatDate } from '@/lib/utils'
+import { formatDate, displayCustName } from '@/lib/utils'
 import { useTranslation } from '@/hooks/useTranslation'
 import { isMktCustomer, isBranchMatched } from '../utils/billing.utils'
 
@@ -156,7 +156,7 @@ export function PriceListDetailModal({
       let label = k
       if (k === 'CUSTOMER') {
         label = customerName
-          ? `${t('billing.validation.groupCustomer') || 'Harga Khusus Customer'} (${customerName})`
+          ? `${t('billing.validation.groupCustomer') || 'Harga Khusus Customer'} (${displayCustName(customerName)})`
           : `${t('billing.validation.groupCustomer') || 'Harga Khusus Customer'} (${customerCode || 'Customer'})`
       } else if (k === 'CS') {
         label = t('billing.validation.groupCs')

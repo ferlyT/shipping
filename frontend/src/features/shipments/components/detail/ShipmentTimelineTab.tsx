@@ -1,4 +1,4 @@
-import { Check, Circle } from 'lucide-react'
+import { Check, Circle, ShieldAlert } from 'lucide-react'
 import { cn, formatDate } from '@/lib/utils'
 import type { Shipment } from '../../types/shipments.types'
 
@@ -11,6 +11,7 @@ export function ShipmentTimelineTab({ shipment }: ShipmentTimelineTabProps) {
   const currentStep = status?.statusStep ?? 0
   const gudang = status?.fdGudang?.trim()
   const isCanceled = currentStep === -1 || Number(shipment.fdCancel) === 1
+  const isBlocked = currentStep === 10 || status?.statusLabel === 'Blocked' || Boolean(status?.isBlocked)
 
   if (isCanceled) {
     return (
@@ -19,10 +20,38 @@ export function ShipmentTimelineTab({ shipment }: ShipmentTimelineTabProps) {
           ✕
         </div>
         <div>
-          <h4 className="text-sm font-bold text-[var(--color-text)]">Pengiriman Dibatalkan (Canceled)</h4>
+          <h4 className="text-sm font-bold text-[var(--color-primary)]">Pengiriman Dibatalkan (Canceled)</h4>
           <p className="text-xs text-[var(--color-secondary)] max-w-sm mt-1 leading-relaxed">
             Data resi ini memiliki status dibatalkan (<code className="text-rose-500 font-mono">fdCancel = 1</code>). Seluruh aktivitas dan tahapan logistik tidak dilanjutkan.
           </p>
+        </div>
+      </div>
+    )
+  }
+
+  if (isBlocked) {
+    return (
+      <div className="bg-[var(--color-surface)] rounded-2xl border border-red-500/30 shadow-sm p-6 text-center flex flex-col items-center justify-center gap-3 animate-in fade-in duration-200">
+        <div className="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-500 font-bold text-lg border border-red-500/30">
+          <ShieldAlert className="w-6 h-6 text-red-500" />
+        </div>
+        <div>
+          <h4 className="text-sm font-bold text-[var(--color-primary)]">Pengiriman Ditahan / Diblokir (Blocked)</h4>
+          <p className="text-xs text-[var(--color-secondary)] max-w-sm mt-1 leading-relaxed">
+            Resi pengiriman ini diblokir oleh bagian Finance sehingga proses pengiriman barang ditahan.
+          </p>
+          <div className="mt-3 inline-flex flex-col items-center gap-1 px-4 py-2.5 rounded-lg bg-red-500/5 border border-red-500/20 text-xs">
+            {status?.blockedBy && (
+              <span className="text-[var(--color-primary)] font-semibold">
+                Blocked by: <span className="text-red-600 dark:text-red-400 font-bold">{status.blockedBy}</span>
+              </span>
+            )}
+            {status?.blockedReason ? (
+              <span className="text-[var(--color-secondary)] italic">
+                "{status.blockedReason}"
+              </span>
+            ) : null}
+          </div>
         </div>
       </div>
     )

@@ -1,5 +1,6 @@
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Platform, StatusBar } from 'react-native'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { CheckCircle2, AlertTriangle, AlertCircle, Info, X } from 'lucide-react-native'
 import { useToastStore, ToastItem } from '../../stores/toastStore'
 import { useThemeStore } from '../../theme/themeStore'
@@ -7,12 +8,20 @@ import { useThemeStore } from '../../theme/themeStore'
 export const ToastContainer: React.FC = () => {
   const { toasts, removeToast } = useToastStore()
   const { colors, mode } = useThemeStore()
+  const insets = useSafeAreaInsets()
   const isDark = mode === 'midnight'
 
   if (toasts.length === 0) return null
 
+  // Ensure toast is positioned safely below device clock, status bar, and camera notch
+  const statusBarHeight = Platform.OS === 'android'
+    ? Math.max(insets.top, StatusBar.currentHeight || 0, 24)
+    : Math.max(insets.top, 44)
+
+  const topOffset = statusBarHeight + 12
+
   return (
-    <SafeAreaView pointerEvents="box-none" style={styles.overlay}>
+    <View pointerEvents="box-none" style={[styles.overlay, { top: topOffset }]}>
       <View pointerEvents="box-none" style={styles.toastList}>
         {toasts.map((toast) => {
           let IconComponent = CheckCircle2
@@ -70,14 +79,13 @@ export const ToastContainer: React.FC = () => {
           )
         })}
       </View>
-    </SafeAreaView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
   overlay: {
     position: 'absolute',
-    top: 10,
     left: 0,
     right: 0,
     zIndex: 9999,

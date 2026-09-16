@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
-import { User, Shield, Calendar, Clock, Save, Loader2, Lock } from 'lucide-react'
+import { User, Shield, Calendar, Clock, Save, Lock } from 'lucide-react'
 import { useTranslation } from '@/hooks/useTranslation'
 import { formatDate, formatDateTime } from '@/lib/utils'
+import { Button } from '@/components/ui/Button'
 import type { UserProfile, UpdateProfileInput } from '../types/profile.types'
 
 interface ProfileInfoFormProps {
@@ -105,18 +106,16 @@ export function ProfileInfoForm({ profile, onSave, isSaving }: ProfileInfoFormPr
 
       {/* Save Button */}
       <div className="flex justify-end pt-2">
-        <button
+        <Button
           type="submit"
+          variant="primary"
+          size="md"
           disabled={isSaving || !isDirty || !fullName.trim()}
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-md)] bg-[var(--color-tertiary)] hover:opacity-90 text-[var(--color-on-primary)] text-xs font-semibold shadow-xs transition-all duration-150 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+          isLoading={isSaving}
         >
-          {isSaving ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
+          <Save className="w-4 h-4" />
           <span>{t('profile.saveProfile')}</span>
-        </button>
+        </Button>
       </div>
     </form>
   )

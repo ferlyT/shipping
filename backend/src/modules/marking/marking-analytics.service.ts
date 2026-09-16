@@ -201,6 +201,8 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
     yesterdayStart.setDate(yesterdayStart.getDate() - 1)
     const dayAfterTomorrowStart = new Date(tomorrowStart)
     dayAfterTomorrowStart.setDate(dayAfterTomorrowStart.getDate() + 1)
+    const sevenDaysAgoStart = new Date(todayStart)
+    sevenDaysAgoStart.setDate(sevenDaysAgoStart.getDate() - 7)
 
     const currentYear = today.getFullYear()
     const lastYear = currentYear - 1
@@ -269,7 +271,8 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
       etaNotExitList,
       prediksiExit,
       exitTodayList,
-      exitYesterdayList
+      exitYesterdayList,
+      exitLast7DaysList
     ] = await Promise.all([
       prisma.tbMarking.count({ where }),
       prisma.tbMarking.count({ where: { ...where, fdListType: 1 } }),
@@ -336,6 +339,16 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
           }
         },
         select: { fdMarkingCode: true, fdConsignee: true, fdExitDate: true, fdGudang: true, fdListType: true, fdKet: true }
+      }),
+      prisma.tbMarking.findMany({
+        where: {
+          ...where,
+          fdExitDate: {
+            gte: sevenDaysAgoStart,
+            lt: tomorrowStart
+          }
+        },
+        select: { fdMarkingCode: true, fdConsignee: true, fdExitDate: true, fdGudang: true, fdListType: true, fdKet: true }
       })
     ])
 
@@ -355,6 +368,9 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
 
     const exitYesterdayAir = exitYesterdayList.filter(b => b.fdListType === 1).length
     const exitYesterdaySea = exitYesterdayList.filter(b => b.fdListType === 2).length
+
+    const exitLast7DaysAir = exitLast7DaysList.filter(b => b.fdListType === 1).length
+    const exitLast7DaysSea = exitLast7DaysList.filter(b => b.fdListType === 2).length
 
     const prediksiAttentionList = prediksiExit.prediksiExitList.filter(p => p.category === 'terlambat' || p.category === 'segera')
     const prediksiAttentionAir = prediksiAttentionList.filter(p => p.fdListType === 1).length
@@ -469,13 +485,18 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
       etaNotExitBatchesAir,
       etaNotExitBatchesSea,
       etaNotExitSummary: etaNotExitSummaryArray,
+      etaNotExitSummaryArray,
       averageTransitDays: avgTransitDays,
       averageTransitDaysAir: avgTransitDaysAir,
       averageTransitDaysSea: avgTransitDaysSea,
       missedTargetCount: missedTargetBatches,
       missedTargetCountAir: missedTargetBatchesAir,
       missedTargetCountSea: missedTargetBatchesSea,
+      missedTargetBatches,
+      missedTargetBatchesAir,
+      missedTargetBatchesSea,
       missedTargetSummary: missedTargetSummaryArray,
+      missedTargetSummaryArray,
       prediksiTerlambatCount: prediksiExit.prediksiTerlambatCount,
       prediksiSegeraCount: prediksiExit.prediksiSegeraCount,
       prediksiDekatCount: prediksiExit.prediksiDekatCount,
@@ -485,13 +506,19 @@ export async function getMarkingKPIs(query: Record<string, string | undefined>) 
       exitTodayCount: exitTodayList.length,
       exitTodayAir,
       exitTodaySea,
+      exitTodayList,
       exitYesterdayCount: exitYesterdayList.length,
       exitYesterdayAir,
       exitYesterdaySea,
+      exitYesterdayList,
       expectedExitTomorrowCount,
       expectedExitTomorrowAir,
       expectedExitTomorrowSea,
       expectedExitTomorrowList,
+      exitLast7DaysCount: exitLast7DaysList.length,
+      exitLast7DaysAir,
+      exitLast7DaysSea,
+      exitLast7DaysList,
     }
   } catch (error) {
     logger.error('Error fetching marking KPIs:', error)

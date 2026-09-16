@@ -7,6 +7,7 @@ import {
   getManifestSuggestionsController,
   getMarkingKPIsController,
   getMarkingExitHistoryController,
+  getMarkingSuggestionsController,
 } from './marking.controller'
 import { authMiddleware, requirePermission } from '../../middleware/auth'
 
@@ -15,6 +16,7 @@ export const markingRoutes = new Hono()
 markingRoutes.use('*', authMiddleware, requirePermission('/mshipping/shipment-batches'))
 
 markingRoutes.get('/', listMarkings)
+markingRoutes.get('/suggestions', getMarkingSuggestionsController)
 markingRoutes.get('/kpi', getMarkingKPIsController)
 markingRoutes.get('/exit-history', getMarkingExitHistoryController)
 markingRoutes.get('/groups', getMarkingGroupsController)

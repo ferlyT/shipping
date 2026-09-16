@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import {
   View,
   Text,
@@ -11,92 +11,186 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import {
-  ScanLine,
-  Package,
-  FileText,
-  Calculator,
-  Plane,
-  Ship,
-  Users,
-  Box,
-  Scale,
-  TrendingUp,
   Moon,
   Sun,
   Globe,
+  LogOut,
+  AlertTriangle,
+  Clock,
+  ChevronRight,
+  ShieldAlert,
 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { Card } from '../../src/components/ui/Card'
 import { Badge } from '../../src/components/ui/Badge'
 import { SkeletonShimmer } from '../../src/components/ui/SkeletonShimmer'
 import { SegmentedControl } from '../../src/components/ui/SegmentedControl'
-import { BarcodeScannerModal } from '../../src/components/scanner/BarcodeScannerModal'
 import { useAuthStore } from '../../src/stores/authStore'
 import { useThemeStore } from '../../src/theme/themeStore'
-import { useToastStore } from '../../src/stores/toastStore'
 import { useTranslation } from '../../src/hooks/useTranslation'
-import { formatNumber, formatDecimal, formatDate } from '../../src/lib/utils'
+import { formatNumber } from '../../src/lib/utils'
 import apiClient from '../../src/api/client'
+import { AlertDetailModal } from '../../src/features/overview/components/AlertDetailModal'
+import { ExitActivityKpiGrid } from '../../src/features/overview/components/ExitActivityKpiGrid'
+import { ExitBatchListItem } from '../../src/features/overview/components/ExitBatchListItem'
+import { BatchManifestSheet } from '../../src/features/logistics/components/BatchManifestSheet'
+
+type ExitScope = 'today' | 'yesterday' | 'tomorrow' | 'recent' | 'eta_not_exit' | 'missed_sla'
 
 export default function OverviewScreen() {
   const router = useRouter()
   const { user } = useAuthStore()
   const { colors, mode, toggleTheme } = useThemeStore()
-  const { showToast } = useToastStore()
   const { t, language, toggleLanguage } = useTranslation()
 
+  const currentYear = new Date().getFullYear().toString()
+  const [activeScope, setActiveScope] = useState<ExitScope>('today')
   const [modeFilter, setModeFilter] = useState<'all' | '1' | '2'>('all')
-  const [scannerVisible, setScannerVisible] = useState(false)
+  const [yearFilter, setYearFilter] = useState<string>(currentYear)
+  const [refreshing, setRefreshing] = useState(false)
+  const [selectedBatch, setSelectedBatch] = useState<any | null>(null)
+  const scrollViewRef = useRef<ScrollView>(null)
 
-  // Fetch KPI data
+  const isAlertScope = activeScope === 'eta_not_exit' || activeScope === 'missed_sla'
+
+  // Actionable Alerts Detail Modal State
+  const [alertModal, setAlertModal] = useState<{
+    visible: boolean
+    type: 'eta' | 'sla'
+    title: string
+    subtitle: string
+    items: any[]
+  }>({
+    visible: false,
+    type: 'eta',
+    title: '',
+    subtitle: '',
+    items: [],
+  })
+
+  const openEtaModal = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setAlertModal({
+      visible: true,
+      type: 'eta',
+      title: t('overview.etaModalTitle', 'Batch ETA Belum Keluar'),
+      subtitle: `${markingKpis?.etaNotExitBatches || 0} ${t('overview.etaModalSubtitle', 'batch melewati jadwal ETA namun belum tercatat keluar')}`,
+      items: markingKpis?.etaNotExitSummaryArray || [],
+    })
+  }
+
+  const openSlaModal = () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    setAlertModal({
+      visible: true,
+      type: 'sla',
+      title: t('overview.slaModalTitle', 'Peringatan Target SLA'),
+      subtitle: `${markingKpis?.missedTargetBatches || 0} ${t('overview.slaModalSubtitle', 'batch dengan durasi transit melebihi target SLA rute')}`,
+      items: markingKpis?.missedTargetSummaryArray || [],
+    })
+  }
+
+  // Fetch Exit Activity KPIs from /marking/kpi
   const {
-    data: kpiData,
-    isLoading: isKpiLoading,
-    refetch: refetchKpi,
-    isRefetching,
+    data: markingKpis,
+    isLoading: isMarkingKpiLoading,
+    refetch: refetchMarkingKpi,
   } = useQuery({
-    queryKey: ['shipments-kpi', modeFilter],
+    queryKey: ['marking-kpi-overview'],
     queryFn: async () => {
-      const params: any = {}
-      if (modeFilter !== 'all') params.listType = modeFilter
-      const res = await apiClient.get('/shipments/kpi', { params })
+      const res = await apiClient.get('/marking/kpi')
       return res.data.data
     },
   })
 
-  // Fetch recent shipments
-  const { data: recentShipments, isLoading: isListLoading } = useQuery({
-    queryKey: ['recent-shipments'],
+  // Fetch Exit Batches according to activeScope, modeFilter & yearFilter
+  const {
+    data: exitBatches,
+    isLoading: isExitListLoading,
+    refetch: refetchExitBatches,
+  } = useQuery({
+    queryKey: ['exit-batches', activeScope, modeFilter, isAlertScope ? yearFilter : 'all'],
     queryFn: async () => {
-      const res = await apiClient.get('/shipments', { params: { limit: 5 } })
+      const params: any = {
+        exitScope: activeScope,
+        limit: 50,
+      }
+      if (modeFilter !== 'all') {
+        params.listType = modeFilter
+      }
+      if (isAlertScope && yearFilter !== 'ALL') {
+        params.year = yearFilter
+      }
+      const res = await apiClient.get('/marking', { params })
       return res.data.data || []
     },
   })
 
   const onRefresh = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-    await refetchKpi()
+    setRefreshing(true)
+    try {
+      await Promise.all([refetchMarkingKpi(), refetchExitBatches()])
+    } finally {
+      setRefreshing(false)
+    }
   }
 
-  const handleScanResult = (barcode: string) => {
-    showToast(`Resi terdeteksi: ${barcode}`, 'info')
-    // Open shipment list with search filter
-    router.push({
-      pathname: '/(tabs)/logistics',
-      params: { search: barcode },
-    })
+  const handleScopeChange = (scope: ExitScope) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    setActiveScope(scope)
+    if (scope === 'eta_not_exit' || scope === 'missed_sla') {
+      setYearFilter(currentYear)
+      setTimeout(() => {
+        scrollViewRef.current?.scrollTo({ y: 360, animated: true })
+      }, 100)
+    }
   }
 
   const isDark = mode === 'midnight'
-  const metrics = kpiData?.all || {}
+
+  const getScopeTitle = () => {
+    switch (activeScope) {
+      case 'today':
+        return t('overview.today', 'Batch Exit Hari Ini')
+      case 'yesterday':
+        return t('overview.yesterday', 'Batch Exit Kemarin')
+      case 'tomorrow':
+        return t('overview.tomorrow', 'Prediksi Exit Besok')
+      case 'recent':
+        return t('overview.exit7Days', 'Batch Exit 7 Hari Terakhir')
+      case 'eta_not_exit':
+        return `${t('overview.etaNotExit', 'Batch ETA Belum Keluar')} (${yearFilter === 'ALL' ? t('overview.all', 'Semua') : yearFilter})`
+      case 'missed_sla':
+        return `${t('overview.missedSla', 'Peringatan SLA')} (${yearFilter === 'ALL' ? t('overview.all', 'Semua') : yearFilter})`
+    }
+  }
+
+  const getScopeEmptyText = () => {
+    switch (activeScope) {
+      case 'today':
+        return t('overview.emptyToday', 'Belum ada aktivitas exit batch hari ini')
+      case 'yesterday':
+        return t('overview.emptyYesterday', 'Tidak ada aktivitas exit batch kemarin')
+      case 'tomorrow':
+        return t('overview.emptyTomorrow', 'Tidak ada prediksi batch keluar besok')
+      case 'recent':
+        return t('overview.emptyRecent', 'Tidak ada aktivitas exit batch dalam 7 hari terakhir')
+      case 'eta_not_exit':
+        return t('overview.emptyEta', 'Bagus! Semua batch yang tiba (ETA) telah diproses keluar gudang')
+      case 'missed_sla':
+        return t('overview.emptySla', 'Hebat! Semua batch tiba tepat waktu sesuai standar target SLA rute')
+    }
+  }
 
   return (
     <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
       <ScrollView
+        ref={scrollViewRef}
         contentContainerStyle={styles.scrollContainer}
         refreshControl={
           <RefreshControl
-            refreshing={isRefetching}
+            refreshing={refreshing}
             onRefresh={onRefresh}
             tintColor={colors.tertiary}
           />
@@ -106,7 +200,7 @@ export default function OverviewScreen() {
         <View style={styles.headerRow}>
           <View>
             <Text style={[styles.welcomeLabel, { color: colors.secondary }]}>
-              {t('common.welcome', 'Halo')},
+              {t('overview.welcomeBack', 'Selamat datang kembali,')}
             </Text>
             <Text style={[styles.userName, { color: colors.primary }]}>
               {user?.fullName || user?.username || 'User'}
@@ -134,242 +228,284 @@ export default function OverviewScreen() {
           </View>
         </View>
 
-        {/* Quick Actions Grid */}
-        <View style={styles.quickActionGrid}>
+        {/* 1. Operasional Lapangan & Peringatan Dini (Actionable Alerts) */}
+        <View style={[styles.sectionHeader, { marginTop: 10 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <ShieldAlert size={16} color="#EF4444" />
+            <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+              {t('overview.operationalAlerts', 'Peringatan Dini Operasional')}
+            </Text>
+          </View>
+        </View>
+
+        {/* 2 Actionable Alert Cards */}
+        <View style={styles.alertCardsRow}>
+          {/* Alert 1: ETA Belum Keluar */}
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => setScannerVisible(true)}
+            onPress={() => handleScopeChange('eta_not_exit')}
             style={[
-              styles.actionBox,
-              { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+              styles.alertCard,
+              {
+                borderWidth: activeScope === 'eta_not_exit' ? 2 : 1,
+                borderColor: activeScope === 'eta_not_exit'
+                  ? '#F59E0B'
+                  : (markingKpis?.etaNotExitBatches || 0) > 0
+                  ? 'rgba(245, 158, 11, 0.5)'
+                  : colors.border,
+                backgroundColor: activeScope === 'eta_not_exit'
+                  ? (isDark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.1)')
+                  : (isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(245, 158, 11, 0.05)'),
+              },
             ]}
           >
-            <View style={[styles.actionIconBox, { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
-              <ScanLine size={22} color="#38BDF8" />
+            <View style={styles.alertCardHeader}>
+              <View style={styles.alertTitleWrapper}>
+                <AlertTriangle size={13} color="#F59E0B" style={{ flexShrink: 0 }} />
+                <Text
+                  style={[styles.alertCardTitle, { color: '#F59E0B' }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {t('overview.etaNotExit', 'ETA NOT EXIT').toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.alertActionsWrapper}>
+                {activeScope === 'eta_not_exit' ? (
+                  <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#F59E0B' }} />
+                ) : null}
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation()
+                    openEtaModal()
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <ChevronRight size={13} color={colors.secondary} />
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={[styles.actionLabel, { color: colors.primary }]}>Scan Resi</Text>
+
+            <View style={{ marginVertical: 3 }}>
+              <Text style={[styles.alertCardValue, { color: colors.primary }]}>
+                {formatNumber(markingKpis?.etaNotExitBatches || 0)}
+              </Text>
+              <Text style={[styles.alertCardSub, { color: colors.secondary }]} numberOfLines={2}>
+                {t('overview.etaCardSub', 'Batch ETA lewat & belum keluar')}
+              </Text>
+            </View>
+
+            <View style={[styles.alertBreakdownRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+              <Text style={[styles.alertBreakdownText, { color: colors.secondary }]} numberOfLines={1}>
+                {t('overview.air', 'Udara')}: <Text style={{ fontWeight: '700', color: colors.primary }}>{markingKpis?.etaNotExitBatchesAir || 0}</Text>
+              </Text>
+              <Text style={[styles.alertBreakdownDot, { color: colors.secondary }]}>•</Text>
+              <Text style={[styles.alertBreakdownText, { color: colors.secondary }]} numberOfLines={1}>
+                {t('overview.sea', 'Laut')}: <Text style={{ fontWeight: '700', color: colors.primary }}>{markingKpis?.etaNotExitBatchesSea || 0}</Text>
+              </Text>
+            </View>
           </TouchableOpacity>
 
+          {/* Alert 2: Melewati Target SLA */}
           <TouchableOpacity
             activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/logistics')}
+            onPress={() => handleScopeChange('missed_sla')}
             style={[
-              styles.actionBox,
-              { backgroundColor: colors.surface, borderColor: colors.cardBorder },
+              styles.alertCard,
+              {
+                borderWidth: activeScope === 'missed_sla' ? 2 : 1,
+                borderColor: activeScope === 'missed_sla'
+                  ? '#EF4444'
+                  : (markingKpis?.missedTargetBatches || 0) > 0
+                  ? 'rgba(239, 68, 68, 0.5)'
+                  : colors.border,
+                backgroundColor: activeScope === 'missed_sla'
+                  ? (isDark ? 'rgba(239, 68, 68, 0.16)' : 'rgba(239, 68, 68, 0.1)')
+                  : (isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.05)'),
+              },
             ]}
           >
-            <View style={[styles.actionIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-              <Package size={22} color="#10B981" />
+            <View style={styles.alertCardHeader}>
+              <View style={styles.alertTitleWrapper}>
+                <Clock size={13} color="#EF4444" style={{ flexShrink: 0 }} />
+                <Text
+                  style={[styles.alertCardTitle, { color: '#EF4444' }]}
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                >
+                  {t('overview.missedSla', 'MISSED SLA').toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.alertActionsWrapper}>
+                {activeScope === 'missed_sla' ? (
+                  <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#EF4444' }} />
+                ) : null}
+                <TouchableOpacity
+                  onPress={(e) => {
+                    e.stopPropagation()
+                    openSlaModal()
+                  }}
+                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
+                >
+                  <ChevronRight size={13} color={colors.secondary} />
+                </TouchableOpacity>
+              </View>
             </View>
-            <Text style={[styles.actionLabel, { color: colors.primary }]}>Shipment</Text>
-          </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/finance')}
-            style={[
-              styles.actionBox,
-              { backgroundColor: colors.surface, borderColor: colors.cardBorder },
-            ]}
-          >
-            <View style={[styles.actionIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-              <FileText size={22} color="#F59E0B" />
+            <View style={{ marginVertical: 3 }}>
+              <Text style={[styles.alertCardValue, { color: colors.primary }]}>
+                {formatNumber(markingKpis?.missedTargetBatches || 0)}
+              </Text>
+              <Text style={[styles.alertCardSub, { color: colors.secondary }]} numberOfLines={2}>
+                {t('overview.slaCardSub', 'Durasi transit melebihi target')}
+              </Text>
             </View>
-            <Text style={[styles.actionLabel, { color: colors.primary }]}>Billing</Text>
-          </TouchableOpacity>
 
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => router.push('/(tabs)/finance')}
-            style={[
-              styles.actionBox,
-              { backgroundColor: colors.surface, borderColor: colors.cardBorder },
-            ]}
-          >
-            <View style={[styles.actionIconBox, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-              <Calculator size={22} color="#8B5CF6" />
+            <View style={[styles.alertBreakdownRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+              <Text style={[styles.alertBreakdownText, { color: colors.secondary }]} numberOfLines={1}>
+                {t('overview.air', 'Udara')}: <Text style={{ fontWeight: '700', color: colors.primary }}>{markingKpis?.missedTargetBatchesAir || 0}</Text>
+              </Text>
+              <Text style={[styles.alertBreakdownDot, { color: colors.secondary }]}>•</Text>
+              <Text style={[styles.alertBreakdownText, { color: colors.secondary }]} numberOfLines={1}>
+                {t('overview.sea', 'Laut')}: <Text style={{ fontWeight: '700', color: colors.primary }}>{markingKpis?.missedTargetBatchesSea || 0}</Text>
+              </Text>
             </View>
-            <Text style={[styles.actionLabel, { color: colors.primary }]}>Cek Tarif</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Moda Switcher */}
-        <View style={styles.sectionHeader}>
-          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-            Ringkasan Operasional
-          </Text>
+        {/* Exit Activity Section Header */}
+        <View style={[styles.sectionHeader, { marginTop: 14 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <LogOut size={16} color={colors.tertiary} />
+            <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+              {t('overview.exitActivity', 'Exit Activity')}
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              router.push({
+                pathname: '/(tabs)/logistics',
+                params: { tab: 'batches', t: Date.now().toString() },
+              })
+            }}
+          >
+            <Text style={[styles.seeAllText, { color: colors.tertiary }]}>{t('overview.seeAllBatches', 'Lihat Semua Batch')}</Text>
+          </TouchableOpacity>
         </View>
 
-        <SegmentedControl
-          options={[
-            { label: 'Semua Moda', value: 'all' },
-            { label: 'Udara', value: '1', icon: <Plane size={14} color="#38BDF8" /> },
-            { label: 'Laut', value: '2', icon: <Ship size={14} color="#818CF8" /> },
-          ]}
-          selectedValue={modeFilter}
-          onValueChange={setModeFilter}
-          style={{ marginBottom: 16 }}
+        {/* Exit Activity 4-Column Stat Cards */}
+        <ExitActivityKpiGrid
+          activeScope={activeScope}
+          markingKpis={markingKpis}
+          onScopeChange={handleScopeChange}
         />
 
-        {/* 5 Executive KPI Cards Grid */}
-        {isKpiLoading ? (
-          <View style={styles.kpiGrid}>
-            {[1, 2, 3, 4].map((i) => (
-              <View key={i} style={styles.kpiCol}>
-                <Card style={{ padding: 16, height: 100, justifyContent: 'space-between' }}>
-                  <SkeletonShimmer width="40%" height={12} />
-                  <SkeletonShimmer width="80%" height={24} />
-                  <SkeletonShimmer width="60%" height={10} />
-                </Card>
-              </View>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.kpiGrid}>
-            {/* Total Resi */}
-            <View style={styles.kpiCol}>
-              <Card>
-                <View style={styles.kpiHeader}>
-                  <Text style={[styles.kpiTitle, { color: colors.secondary }]}>TOTAL RESI</Text>
-                  <Box size={16} color={colors.tertiary} />
-                </View>
-                <Text style={[styles.kpiValue, { color: colors.primary }]}>
-                  {formatNumber(metrics.totalReceipts || 0)}
-                </Text>
-                <View style={styles.kpiFooter}>
-                  <Plane size={12} color="#38BDF8" />
-                  <Text style={[styles.kpiSubText, { color: colors.secondary }]}>
-                    {formatNumber(metrics.breakdown?.udara?.receipts || 0)}
-                  </Text>
-                  <Ship size={12} color="#818CF8" style={{ marginLeft: 6 }} />
-                  <Text style={[styles.kpiSubText, { color: colors.secondary }]}>
-                    {formatNumber(metrics.breakdown?.laut?.receipts || 0)}
-                  </Text>
-                </View>
-              </Card>
-            </View>
+        {/* Dynamic List Header with Active Scope Badge */}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>
+            {getScopeTitle()}
+          </Text>
+          <Badge
+            label={`${exitBatches?.length || 0} Batch`}
+            variant={
+              activeScope === 'today'
+                ? 'success'
+                : activeScope === 'tomorrow' || activeScope === 'eta_not_exit'
+                ? 'warning'
+                : activeScope === 'missed_sla'
+                ? 'danger'
+                : 'neutral'
+            }
+          />
+        </View>
 
-            {/* Total Koli */}
-            <View style={styles.kpiCol}>
-              <Card>
-                <View style={styles.kpiHeader}>
-                  <Text style={[styles.kpiTitle, { color: colors.secondary }]}>TOTAL KOLI</Text>
-                  <Package size={16} color="#10B981" />
-                </View>
-                <Text style={[styles.kpiValue, { color: colors.primary }]}>
-                  {formatNumber(metrics.totalPackages || 0)}
-                </Text>
-                <View style={styles.kpiFooter}>
-                  <Plane size={12} color="#38BDF8" />
-                  <Text style={[styles.kpiSubText, { color: colors.secondary }]}>
-                    {formatNumber(metrics.breakdown?.udara?.packages || 0)}
-                  </Text>
-                  <Ship size={12} color="#818CF8" style={{ marginLeft: 6 }} />
-                  <Text style={[styles.kpiSubText, { color: colors.secondary }]}>
-                    {formatNumber(metrics.breakdown?.laut?.packages || 0)}
-                  </Text>
-                </View>
-              </Card>
-            </View>
+        {/* Group Pills Udara dan Laut */}
+        <View style={{ marginBottom: isAlertScope ? 8 : 10 }}>
+          <SegmentedControl
+            options={[
+              { label: t('overview.all', 'Semua'), value: 'all' },
+              { label: t('overview.air', 'Udara'), value: '1' },
+              { label: t('overview.sea', 'Laut'), value: '2' },
+            ]}
+            selectedValue={modeFilter}
+            onValueChange={(val) => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              setModeFilter(val as any)
+            }}
+          />
+        </View>
 
-            {/* Total Berat */}
-            <View style={styles.kpiCol}>
-              <Card>
-                <View style={styles.kpiHeader}>
-                  <Text style={[styles.kpiTitle, { color: colors.secondary }]}>TOTAL BERAT</Text>
-                  <Scale size={16} color="#F59E0B" />
-                </View>
-                <Text style={[styles.kpiValue, { color: colors.primary }]}>
-                  {formatDecimal(metrics.totalWeight || 0, 1)} <Text style={styles.unitText}>kg</Text>
-                </Text>
-                <View style={styles.kpiFooter}>
-                  <TrendingUp size={12} color={colors.secondary} />
-                  <Text style={[styles.kpiSubText, { color: colors.secondary }]}>
-                    MoM {metrics.comparison?.weight?.momGrowth || '0%'}
-                  </Text>
-                </View>
-              </Card>
+        {/* Group Pills Berdasarkan Tahun */}
+        {isAlertScope && (
+          <View style={{ marginBottom: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: colors.secondary, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {t('overview.batchYear', 'Tahun Batch:')}
+              </Text>
+              <Badge
+                label={yearFilter === currentYear ? t('overview.thisYearActive', `${yearFilter} (Tahun Ini - Aktif)`, { year: yearFilter }) : t('overview.year', `Tahun ${yearFilter}`, { year: yearFilter })}
+                variant={yearFilter === currentYear ? 'info' : 'neutral'}
+              />
             </View>
-
-            {/* Total Volume */}
-            <View style={styles.kpiCol}>
-              <Card>
-                <View style={styles.kpiHeader}>
-                  <Text style={[styles.kpiTitle, { color: colors.secondary }]}>TOTAL VOLUME</Text>
-                  <TrendingUp size={16} color="#8B5CF6" />
-                </View>
-                <Text style={[styles.kpiValue, { color: colors.primary }]}>
-                  {formatDecimal(metrics.totalVolume || 0, 3)} <Text style={styles.unitText}>m³</Text>
-                </Text>
-                <View style={styles.kpiFooter}>
-                  <Users size={12} color={colors.secondary} />
-                  <Text style={[styles.kpiSubText, { color: colors.secondary }]}>
-                    {formatNumber(metrics.totalCust || 0)} Customer
-                  </Text>
-                </View>
-              </Card>
-            </View>
+            <SegmentedControl
+              options={[
+                { label: `${currentYear}`, value: currentYear },
+                { label: '2025', value: '2025' },
+                { label: '2024', value: '2024' },
+                { label: t('overview.all', 'Semua'), value: 'ALL' },
+              ]}
+              selectedValue={yearFilter}
+              onValueChange={(val) => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                setYearFilter(val)
+              }}
+            />
           </View>
         )}
 
-        {/* Recent Shipments Feed */}
-        <View style={[styles.sectionHeader, { marginTop: 12 }]}>
-          <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-            Shipment Terkini
-          </Text>
-          <TouchableOpacity onPress={() => router.push('/(tabs)/logistics')}>
-            <Text style={[styles.seeAllText, { color: colors.tertiary }]}>Lihat Semua</Text>
-          </TouchableOpacity>
-        </View>
-
-        {isListLoading ? (
+        {/* Exit Batches List */}
+        {isExitListLoading ? (
           <View style={{ gap: 10 }}>
-            <SkeletonShimmer height={70} />
-            <SkeletonShimmer height={70} />
+            <SkeletonShimmer height={80} />
+            <SkeletonShimmer height={80} />
           </View>
-        ) : recentShipments?.length > 0 ? (
+        ) : exitBatches && exitBatches.length > 0 ? (
           <View style={{ gap: 10 }}>
-            {recentShipments.map((s: any) => (
-              <Card key={s.fdListCode || s.fdTerima} style={styles.recentItemCard}>
-                <View style={styles.recentItemHeader}>
-                  <Text style={[styles.itemResi, { color: colors.primary }]}>
-                    {s.fdTerima || s.fdListCode}
-                  </Text>
-                  <Badge
-                    label={s.fdListType === 1 ? 'Udara' : 'Laut'}
-                    variant={s.fdListType === 1 ? 'air' : 'sea'}
-                    icon={s.fdListType === 1 ? <Plane size={10} color="#38BDF8" /> : <Ship size={10} color="#818CF8" />}
-                  />
-                </View>
-                <Text style={[styles.itemCust, { color: colors.secondary }]} numberOfLines={1}>
-                  {s.fdCustName || '—'}
-                </Text>
-                <View style={styles.itemMetaRow}>
-                  <Text style={[styles.itemMetaText, { color: colors.secondary }]}>
-                    {(s.fdJmlPack ?? s.fdColy)
-                      ? `${formatNumber(s.fdJmlPack ?? s.fdColy)} ${s.fdSatuan || 'Koli'}`
-                      : '—'}{' '}
-                    • {formatDecimal(s.fdJmlBerat ?? s.fdWeight, 1)} kg
-                  </Text>
-                  <Text style={[styles.itemDate, { color: colors.secondary }]}>
-                    {formatDate(s.fdDateTerima || s.fdDate)}
-                  </Text>
-                </View>
-              </Card>
+            {exitBatches.map((b: any, idx: number) => (
+              <ExitBatchListItem
+                key={(b.fdMarkingCode || '').trim() || String(idx)}
+                batch={b}
+                activeScope={activeScope}
+                onPress={(batch) => {
+                  setSelectedBatch(batch)
+                }}
+              />
             ))}
           </View>
         ) : (
-          <Card style={{ alignItems: 'center', padding: 24 }}>
-            <Text style={{ color: colors.secondary }}>Belum ada transaksi terkini</Text>
+          <Card style={{ alignItems: 'center', padding: 20 }}>
+            <Text style={{ color: colors.secondary, fontSize: 12 }}>{getScopeEmptyText()}</Text>
           </Card>
         )}
       </ScrollView>
 
-      {/* Barcode Scanner Modal */}
-      <BarcodeScannerModal
-        visible={scannerVisible}
-        onClose={() => setScannerVisible(false)}
-        onScanned={handleScanResult}
+      {/* Alert Detail Modal */}
+      <AlertDetailModal
+        visible={alertModal.visible}
+        type={alertModal.type}
+        title={alertModal.title}
+        subtitle={alertModal.subtitle}
+        items={alertModal.items}
+        onClose={() => setAlertModal((prev) => ({ ...prev, visible: false }))}
+        onSelectBatch={(b) => setSelectedBatch(b)}
+      />
+
+      {/* Batch Manifest Sheet */}
+      <BatchManifestSheet
+        selectedBatch={selectedBatch}
+        onClose={() => setSelectedBatch(null)}
+        setSelectedBatch={setSelectedBatch}
       />
     </SafeAreaView>
   )
@@ -387,7 +523,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   welcomeLabel: {
     fontSize: 12,
@@ -416,116 +552,85 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   langText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
-  },
-  quickActionGrid: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  actionBox: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  actionIconBox: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  actionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '700',
     letterSpacing: -0.2,
   },
   seeAllText: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11.5,
+    fontWeight: '700',
   },
-  kpiGrid: {
+  alertCardsRow: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginHorizontal: -5,
-    marginBottom: 16,
+    gap: 8,
+    marginBottom: 12,
   },
-  kpiCol: {
-    width: '50%',
-    paddingHorizontal: 5,
-    marginBottom: 10,
+  alertCard: {
+    flex: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    borderRadius: 14,
+    overflow: 'hidden',
   },
-  kpiHeader: {
+  alertCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    minHeight: 20,
   },
-  kpiTitle: {
+  alertTitleWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    flex: 1,
+    minWidth: 0,
+    marginRight: 4,
+  },
+  alertActionsWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    flexShrink: 0,
+  },
+  alertCardTitle: {
     fontSize: 10,
-    fontWeight: '700',
-    letterSpacing: 0.5,
-  },
-  kpiValue: {
-    fontSize: 18,
     fontWeight: '800',
-    marginBottom: 6,
+    letterSpacing: 0.1,
+    flexShrink: 1,
   },
-  unitText: {
-    fontSize: 12,
-    fontWeight: '500',
+  alertCardValue: {
+    fontSize: 24,
+    fontWeight: '900',
+    letterSpacing: -0.5,
   },
-  kpiFooter: {
+  alertCardSub: {
+    fontSize: 10,
+    marginTop: 1,
+    lineHeight: 14,
+  },
+  alertBreakdownRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+    borderTopWidth: 1,
+    paddingTop: 5,
+    marginTop: 4,
+    flexWrap: 'wrap',
   },
-  kpiSubText: {
-    fontSize: 11,
-    fontWeight: '600',
-    marginLeft: 3,
+  alertBreakdownText: {
+    fontSize: 9.5,
   },
-  recentItemCard: {
-    padding: 12,
-  },
-  recentItemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  itemResi: {
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  itemCust: {
-    fontSize: 12,
-    fontWeight: '500',
-    marginBottom: 6,
-  },
-  itemMetaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  itemMetaText: {
-    fontSize: 11,
-  },
-  itemDate: {
-    fontSize: 11,
+  alertBreakdownDot: {
+    fontSize: 9.5,
   },
 })

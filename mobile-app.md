@@ -9,11 +9,11 @@ Dokumen ini menjelaskan secara menyeluruh seluruh halaman pada aplikasi mobile *
 ### Stack Teknologi
 - **Framework Mobile**: Expo SDK 57 (React Native 0.86, React 19.2, TypeScript 6.0)
 - **Routing**: Expo Router v4 (File-based Routing di folder `mobile/app/`)
-- **State Management**: Zustand v5 (`authStore`, `themeStore`, `toastStore`, `updateStore`)
+- **State Management**: Zustand v5 (`authStore`, `toastStore`, `updateStore`)
 - **Server State & Caching**: TanStack React Query v5 (dengan refetching & cache invalidation)
 - **Komunikasi REST**: Axios via `mobile/src/api/client.ts`
 - **Penyimpanan Kredensial**: `expo-secure-store` (Enkripsi KeyStore Android / Keychain iOS)
-- **Versi Rilis Saat Ini**: `v1.0.3` (Build/VersionCode: `4`, Single Source of Truth di `mobile/src/config/version.ts`)
+- **Versi Rilis Saat Ini**: `v1.2.1` (Build/VersionCode: `13`, Force Update: `true`, `minVersion: "1.2.1"`, Single Source of Truth di `mobile/src/config/version.ts`)
 - **Integrasi Perangkat Keras**:
   - `expo-camera`: Pemindai barcode/QR resi fisik
   - `expo-local-authentication`: Autentikasi biometrik FaceID / Fingerprint
@@ -32,28 +32,42 @@ Dokumen ini menjelaskan secara menyeluruh seluruh halaman pada aplikasi mobile *
 ## 📑 2. Struktur Routing Aplikasi Mobile
 
 ```text
-mobile/app/
-├── _layout.tsx           # Root Provider (QueryClient, Theme, Toast, Auth Init)
-├── index.tsx             # Splash Screen & Gatekeeper Redirection
-├── (auth)/               # Layar Autentikasi
-│   ├── _layout.tsx       # Auth Stack Layout
-│   ├── login.tsx         # Halaman Masuk (Manual & Biometrik)
-│   └── register.tsx      # Halaman Pendaftaran Akun Baru
-└── (tabs)/               # 5 Modul Utama (Bottom Tab Navigator)
-    ├── _layout.tsx       # Bottom Tabs Navigation Bar (Dynamic Safe Area Insets)
-    ├── overview.tsx      # Tab 1: Dashboard Eksekutif & Ringkasan KPI
-    ├── logistics.tsx     # Tab 2: Resi, Batch Marking, & Surat Jalan
-    ├── finance.tsx       # Tab 3: Daftar Invoice, Audit Validasi, & Kalkulator Tarif
-    ├── master.tsx        # Tab 4: Direktori Pelanggan & Kontak Langsung
-    └── profile.tsx       # Tab 5: Akun, Biometrik, Tema, Bahasa, & Status ERP
+mobile/
+├── app/                      # Expo Router File-based Routing
+│   ├── _layout.tsx           # Root Provider (QueryClient, Theme, Toast, Auth Init)
+│   ├── index.tsx             # Splash Screen & Gatekeeper Redirection
+│   ├── (auth)/               # Layar Autentikasi
+│   │   ├── _layout.tsx       # Auth Stack Layout
+│   │   ├── login.tsx         # Halaman Masuk (Manual & Biometrik)
+│   │   └── register.tsx      # Halaman Pendaftaran Akun Baru
+│   └── (tabs)/               # 5 Modul Ramping (Thin Screen Orchestrators)
+│       ├── _layout.tsx       # Bottom Tabs Navigation Bar (Dynamic Safe Area Insets)
+│       ├── overview.tsx      # Tab 1: Dashboard Eksekutif & Ringkasan KPI (~360 baris)
+│       ├── logistics.tsx     # Tab 2: Resi, Batch Marking, & Surat Jalan (360 baris)
+│       ├── finance.tsx       # Tab 3: Daftar Invoice, Audit Validasi, & Cek Tarif (540 baris)
+│       ├── master.tsx        # Tab 4: Direktori Pelanggan & Kontak Langsung (~140 baris)
+│       └── profile.tsx       # Tab 5: Akun, Biometrik, Tema, Bahasa, & Status ERP
+└── src/
+    ├── features/             # Feature-Driven Architecture (Modular Components, Hooks & Utils)
+    │   ├── overview/         # AlertDetailModal, ExitActivityKpiGrid, ExitBatchListItem
+    │   ├── logistics/        # ShipmentListItem, BatchListItem, DeliveryListItem, Sheet & Tabs
+    │   ├── finance/          # BillingListItem, ValidationListItem, InvoiceDetailSheet, finance.utils
+    │   └── master/           # CustomerListItem, CustomerDetailSheet, master.utils
+    ├── components/           # Reusable UI & Scanner components
+    ├── stores/               # Zustand Global Stores (auth, toast, update)
+    ├── theme/                # Theme Store & Token Styles
+    └── lib/                  # Utilities & Helpers
 ```
 
 > **Catatan Penanganan Safe Area Insets Bawah (Android Navigation Bar)**:
 > Pada `mobile/app/(tabs)/_layout.tsx`, tinggi dan padding bawah TabBar dihitung secara dinamis menggunakan `useSafeAreaInsets()` dari `react-native-safe-area-context`:
-> - `bottomInset = insets.bottom > 0 ? insets.bottom : (Platform.OS === 'android' ? 12 : 8)`
-> - `tabBarHeight = 54 + bottomInset`
+> - `bottomInset = Platform.OS === 'android' ? Math.max(insets.bottom, 48) : Math.max(insets.bottom, 16)`
+> - `tabBarHeight = 52 + bottomInset`
 > - `paddingBottom: bottomInset`
-> Pengaturan ini mencegah benturan visual antara navigasi aplikasi dengan tombol navigasi sistem Android (3-button navigation bar / gesture navigation bar), sekaligus memberikan latar belakang warna tema yang mulus di bawah tombol sistem.
+> Nilai minimum 48dp pada Android menjamin bahwa tombol navigasi 3-tombol sistem (`|||`, `O`, `<`) tidak pernah bertumpuk dengan ikon atau label teks tab, bahkan pada perangkat ROM OEM (seperti Xiaomi/MIUI/HyperOS atau ColorOS) yang mengembalikan nilai `insets.bottom = 0`.
+>
+> **Catatan Safe Area Toast Notification**:
+> Pada `ToastContainer.tsx`, posisi vertikal dihitung dengan `topOffset = Math.max(insets.top, StatusBar.currentHeight || 0, 24) + 12`, sehingga notifikasi melayang anggun di bawah jam status bar dan punch-hole kamera perangkat tanpa saling bertumpuk.
 
 ---
 
@@ -195,86 +209,54 @@ Pendaftaran akun staf baru untuk mendapatkan akses ke ekosistem ERP M-Shipping.
 ### 3.4. Halaman Dashboard & Overview (`app/(tabs)/overview.tsx`)
 
 #### A. Tujuan & Logika
-Halaman utama setelah login yang berfungsi sebagai pusat informasi eksekutif, statistik operasional harian, aksi cepat, dan pemindai resi cepat.
+Halaman utama setelah login yang berfungsi sebagai pusat informasi eksekutif dan pemantauan aktivitas kontainer/batch keluar gudang (Exit Activity).
 
 1. **Header Pengguna & Kontrol Cepat**:
    - Menampilkan sapaan nama pengguna (`user.fullName` / `user.username`) dan role badge.
    - Tombol toggle bahasa bilingual (`ID` / `EN`).
    - Tombol toggle tema gelap/terang (`Midnight` / `Heritage`).
-2. **4 Quick Action Grid**:
-   - **Scan Resi**: Membuka kamera pemindai barcode/QR langsung.
-   - **Shipment**: Navigasi cepat ke Tab Logistik (sub-tab Resi).
-   - **Billing**: Navigasi cepat ke Tab Keuangan (sub-tab Invoice).
-   - **Cek Tarif**: Navigasi cepat ke Tab Keuangan (sub-tab Kalkulator Tarif).
-3. **Filter Segmented Moda Operasional**:
-   - Pilihan: `Semua Moda` (`all`), `Udara` (`1`), `Laut` (`2`).
-   - Perubahan moda memicu refetch data KPI secara instan.
-4. **5 Kartu KPI Eksekutif**:
-   - **Total Resi**: Jumlah seluruh resi terdaftar + breakdown rasio (Udara vs Laut).
-   - **Total Koli**: Akumulasi jumlah fisik koli + breakdown koli Udara vs Laut.
-   - **Total Berat (Kg)**: Akumulasi berat aktual gudang + persentase tren MoM (*Month-over-Month*).
-   - **Total Volume (M³)**: Akumulasi volume kubikasi gudang + counter jumlah customer unik aktif.
-5. **Feed "Shipment Terkini"**:
-   - Menampilkan 5 transaksi shipment terbaru dari server.
-   - Dilengkapi badge moda (Udara `Plane` sky / Laut `Ship` indigo), nama customer, jumlah koli, berat, dan tanggal terima.
-6. **Pull-to-Refresh**:
-   - Mendukung gesture tarik ke bawah untuk memuat ulang data KPI secara real-time.
+2. **Seksi Peringatan Dini Operasional (Actionable Alerts) & Exit Activity Terpadu**:
+   - **Peringatan Dini Operasional Interaktif**:
+     - **ETA NOT EXIT**: Jumlah batch melewati jadwal ETA namun belum keluar gudang. Mengetuk kartu langsung memfilter daftar batch di bawah untuk menampilkan seluruh batch yang sudah ETA tapi belum exit (`exitScope=eta_not_exit`).
+     - **MISSED SLA**: Jumlah batch dengan durasi transit ETD -> ETA melewati standar target SLA cabang. Mengetuk kartu langsung memfilter daftar batch di bawah untuk menampilkan batch yang lewat target SLA (`exitScope=missed_sla`).
+     - Ikon panah/chevron pada kartu tetap membuka modal dialog ringkasan rincian per-consignee.
+   - **4 Kartu KPI Ringkasan Exit**:
+     - **Kemarin**: Jumlah batch keluar kemarin (`exitScope=yesterday`).
+     - **Hari Ini (Default)**: Jumlah batch keluar hari ini (`exitScope=today`).
+     - **Besok (Prediksi)**: Estimasi batch yang dijadwalkan keluar besok (`exitScope=tomorrow`).
+     - **Exit 7 Hari (Terbaru)**: Akumulasi batch keluar dalam 7 hari terakhir (`exitScope=recent`).
+     - **Desain Multi-Tema (Anti Shadow Bleed-Through)**: Seluruh kartu menggunakan warna latar belakang opaque solid (contoh: `#ECFDF5` untuk Hari Ini, `#F0F9FF` untuk Kemarin/7 Hari, `#FFFBEB` untuk Besok pada tema terang) agar elevasi bayangan native Android tidak tembus ke dalam kartu dan warna tampil 100% rata, bersih, dan bergradasi proporsional.
+   - **Group Pills Filter Moda & Tahun**:
+     - Dilengkapi segmented group pills moda (`Semua`, `Udara`, `Laut`) tepat di atas daftar batch untuk memfilter muatan secara instan berbasis `listType`.
+     - Khusus saat kriteria **ETA NOT EXIT** atau **MISSED SLA** aktif, muncul filter tahun batch interaktif (`2026`, `2025`, `2024`, `Semua`) dengan tahun berjalan (`2026`) langsung aktif secara otomatis (`year=2026`).
+   - **Daftar Batch Terkini**:
+     - Menampilkan kode batch marking, kontainer/AWB, cabang asal, consignee, koli & berat, serta tanggal kontekstual (Exit Date, Estimasi Prediksi, ETA Belum Keluar, atau Transit vs SLA).
+     - **In-Place Modal Manifest**: Mengetuk item batch langsung memunculkan modal lembar manifest (`BatchManifestSheet`) secara in-place di halaman Overview tanpa berpindah tab ke Logistik, sehingga pengguna dapat langsung meninjau rincian resi & koli muatan dengan cepat dan tetap berada di dashboard.
+     - Mengetuk chip kode batch pada dialog popup ringkasan consignee (modal alert ETA/SLA) juga langsung menampilkan modal lembar manifest batch secara in-place di halaman Overview.
+   - **Navigasi "Lihat Semua Batch"**: Tombol di header Exit Activity yang membuka tab Logistik (`/(tabs)/logistics`) dengan sub-tab **Batch Marking** (`batches`) aktif otomatis.
+3. **Pull-to-Refresh**:
+   - Mendukung gesture tarik ke bawah untuk memuat ulang data KPI Exit Activity dan batch exit aktif secara real-time.
 
 #### B. Endpoint API Terkait
 
-##### 1. Agregasi KPI Shipment
+##### 1. Aktivitas Keluar Kontainer / Batch (Exit Activity) & Peringatan Dini
 - **Method**: `GET`
-- **Endpoint**: `/api/shipments/kpi`
-- **Query Params**:
-  - `listType` (opsional): `"1"` (Udara) atau `"2"` (Laut)
-- **Response Data**:
-  ```json
-  {
-    "success": true,
-    "data": {
-      "all": {
-        "totalReceipts": 1420,
-        "totalPackages": 8950,
-        "totalWeight": 74520.5,
-        "totalVolume": 312.458,
-        "totalCust": 128,
-        "breakdown": {
-          "udara": { "receipts": 420, "packages": 2100, "weight": 12500.0, "volume": 45.2, "cust": 54 },
-          "laut": { "receipts": 1000, "packages": 6850, "weight": 62020.5, "volume": 267.258, "cust": 95 }
-        },
-        "comparison": {
-          "weight": { "momGrowth": "+8.4%" },
-          "volume": { "momGrowth": "+12.1%" },
-          "receipts": { "momGrowth": "+5.2%" }
-        }
-      }
-    }
-  }
-  ```
-
-##### 2. Daftar Transaksi Shipment Terkini
-- **Method**: `GET`
-- **Endpoint**: `/api/shipments`
-- **Query Params**: `limit=5`
-- **Response Data**:
-  ```json
-  {
-    "success": true,
-    "data": [
-      {
-        "fdMarkingCode": "MK-260901-001",
-        "fdTerima": "RESI-889102",
-        "fdCustName": "PT. MITRA JAYA MAKMUR",
-        "fdListType": 1,
-        "fdJmlPack": 25,
-        "fdSatuan": "Ctn",
-        "fdJmlBerat": 350.5,
-        "fdM3": 1.254,
-        "fdDateTerima": "2026-09-12T04:15:00.000Z"
-      }
-    ]
-  }
-  ```
+- **Endpoint**: `/api/marking/kpi` & `/api/marking`
+- **Query Params `/api/marking`**: `exitScope=today|yesterday|tomorrow|recent|eta_not_exit|missed_sla`, `listType=ALL|1|2`, `year=YYYY|ALL`, `limit=50`
+- **Sumber Data KPI**: `/api/marking/kpi` mengembalikan ringkasan harian (kemarin, hari ini, besok prediksi, dan exit 7 hari terakhir) serta alert ETA & SLA.
+- **Data Kunci yang Ditampilkan**:
+  - **KPI 4-Kolom Ringkasan**:
+    - **Kemarin**: Jumlah batch keluar kemarin (breakdown Udara & Laut)
+    - **Hari Ini**: Jumlah batch keluar hari ini (breakdown Udara & Laut)
+    - **Besok (Prediksi)**: Estimasi batch yang dijadwalkan keluar besok
+    - **Exit 7 Hari**: Jumlah batch keluar dalam 7 hari terakhir
+  - **Daftar Batch Terkini**:
+    - `fdMarkingCode`: Nomor batch marking kontainer / penerbangan
+    - `fdContNo` / `fdAWB`: Nomor kontainer atau AWB pengiriman
+    - `fdBranchCode`: Kode cabang asal (`GZ`, `HK`, `SG`, `YW`, `SH`)
+    - `fdConsignee`: Penerima / consignee batch
+    - `fdExitDate` / `predictedExitDate` / `fdETA`: Tanggal selesai keluar, estimasi keluar, atau jadwal ETA
+    - Koli & Berat: Total koli muatan dan berat kilogram
 
 ---
 
@@ -294,8 +276,30 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
 3. **Sub-Tab 1: Daftar Resi**:
    - Filter tambahan: `Semua`, `Udara`, `Laut`.
    - Menampilkan nomor resi (`fdTerima`), kode marking (`fdMarkingCode`), nomor marking (`fdMarkingNo`), nama customer, jumlah pack & satuan (`fdJmlPack`, `fdSatuan`), berat (`fdJmlBerat`), dan volume kubikasi (`fdM3`).
-   - **Modal Rincian Muatan (Bottom Sheet)**:
-     - Jika item kartu diklik, muncul modal bawah yang membedah ukuran fisik: Pack / Satuan, Berat (kg), Volume (m³), cabang gudang, dan identifikasi marking.
+   - **Modal Rincian Muatan (Bottom Sheet 3-Tab)**:
+     - Mengikuti struktur modal detail shipment di Frontend Web (`ShipmentDetailModal.tsx`):
+       - **Header Modal**: Nama Customer master (dibersihkan via `displayCustName`), Badge No. List (`fdListCode`), Badge Status Pengiriman (`getShipmentStatusBadge`), dan chip lokasi gudang (`MapPin {fdGudang}`).
+       - **Navigasi Tersegmen (SegmentedControl)**:
+         1. **`Ringkasan`**:
+            - 3 Kartu Metrik KPI: **Total Koli** (`fdJmlPack` / `fdColy` + satuan), **Total Berat** (`fdJmlBerat` kg), dan **Total Volume** (`fdM3` $m^3$).
+            - Panel Rincian Identifikasi: No. Resi (`fdTerima`), Tracking No. (`fdLocalTrackingNo`), Marking & No. (`fdMarkingCode` + `fdMarkingNo`), Tanggal Agent (`fdTglAgent`), dan Moda / Cabang.
+            - Panel Komoditas: Nama komoditas & badge tipe jika tersedia (`fdComodity`, `fdComodityName`).
+            - Panel Keterangan: Catatan operasional resi (`fdDesc`).
+         2. **`Dimensi`**:
+            - Sub-tab switcher: **Packing List**, **Ukuran Gudang**, dan **Komplain** lengkap dengan badge hitung jumlah item.
+            - Banner Total Volume Kubikasi: Menampilkan akumulasi volume $m^3$ sub-tab aktif berbasis rumus `(P * L * T * Qty) / 1.000.000`.
+            - Daftar Kartu Dimensi Per Koli: Menampilkan deskripsi koli, badge volume, dan grid 4 metrik (Panjang cm, Lebar cm, Tinggi cm, Jumlah pcs).
+         3. **`Timeline`**:
+            - Jika pengiriman dibatalkan (`fdCancel = 1` atau `statusStep = -1`), menampilkan kartu pembatalan beraksen rose.
+            - **Status Ditahan / Diblokir Finance (`Blocked` / `statusStep = 10`)**: Jika muatan diblokir oleh bagian keuangan (`tbEntryList_Bloked_Finance.fdBlocked = 1`), menampilkan banner peringatan merah ditahan oleh Finance lengkap dengan nama petugas (*Blocked by*) dan alasan pembatasan.
+            - Menampilkan 6 tahapan pelacakan logistik vertikal:
+              1. **Waiting Loading**: Menunggu proses loading ke kontainer (`fdLoadDate`).
+              2. **ETD (Keberangkatan)**: Estimated Time of Departure (`fdETD`).
+              3. **ETA (Kedatangan)**: Estimated Time of Arrival di pelabuhan (`fdETA`).
+              4. **Warehouse (Gudang)**: Tiba di gudang penyortiran (`fdExitDate` + nama gudang).
+              5. **Delivery**: Dalam pengantaran armada ke penerima.
+              6. **Delivered**: Barang telah diterima oleh customer.
+            - Garis konektor vertikal dengan node bulat hijau (`Check`) untuk langkah selesai, efek ring dan badge *"Berjalan"* untuk tahap aktif, serta indikator *"Menunggu"* untuk tahap mendatang.
 4. **Sub-Tab 2: Batch Marking**:
    - Filter tambahan moda: `Semua`, `Udara`, `Laut`.
    - Menampilkan kode batch marking (`fdMarkingCode`), cabang gudang (`fdBranch`), keterangan (`fdKet`), dan tanggal operasional berbasis hirarki (`Exit`, `ETA`, `ETD`, `Load`).
@@ -303,7 +307,12 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
      - Jika moda **Udara** (`fdListType === 1`) $\to$ menampilkan nomor AWB (`fdAWB`).
      - Jika moda **Laut** (`fdListType === 2`) $\to$ menampilkan nomor kontainer (`fdContNo`).
      - *Catatan Desain*: Hanya menampilkan string data mentah secara tegas (warna aksen tersier) tanpa teks label awalan "AWB:" maupun "Kontainer:". Tepat di bawahnya, hanya menampilkan `fdKet` jika tersedia (tanpa teks default/placeholder).
-   - Tautan/tombol interaktif untuk menampilkan **Data Manifest** resi shipment per batch (`/api/marking/:id/manifest`).
+   - **Modal Rincian Data Manifest Batch**:
+     - Menampilkan seluruh resi muatan fisik yang terdaftar dalam batch (`/api/marking/:id/manifest`).
+     - Ringkasan KPI manifest (Total Resi, Koli, Berat kg, Kubikasi m³, dan Jumlah Customer).
+     - **Status Finansial & Override Blocked Finance**:
+       - Setiap item kartu manifest menampilkan badge **Status Finansial** yang bersumber dari master status pelanggan **`tbCustomers.fdBlocked`** (`OK`, `COD`, `WARNING`, `BLOCKED`, `URGENT`, `NO STATUS`).
+       - **Override Otomatis Status Blocked**: Apabila status shipment diblokir oleh Finance (`tbEntryList_Bloked_Finance.fdBlocked = 1`), status finansial otomatis di-override menjadi badge merah **`BLOCKED`**, serta memunculkan kotak banner merah peringatan bertuliskan nama staf (*Blocked by* / `fdCreated`) dan alasan penahanan (*Alasan* / `fdKeterangan`).
 5. **Sub-Tab 3: Surat Jalan (Delivery Orders)**:
    - Menampilkan nomor surat jalan (`fdSJNo`), nama customer (`fdCustNameSJ`), supir (`fdSupir`), plat mobil armada (`fdCarID`), perkiraan tanggal kirim (`fdEstimasi`), tanggal penyerahan ke kantor (`fdGiveDate`), dan status kirim (`Delivered` vs `On Delivery`).
 
@@ -327,6 +336,24 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
   - `fdJmlBerat`: Berat timbangan gudang (kg)
   - `fdM3`: Volume kubikasi riil ($m^3$)
 
+##### 1.1. Saran Pencarian Cepat Resi & Shipment (Dropdown Suggestions)
+- **Method**: `GET`
+- **Endpoint**: `/api/shipments/suggestions`
+- **Query Params**:
+  - `q=<keyword>` (minimal 2 karakter)
+- **Logika & Optimasi**:
+  - Menjalankan 3 query paralel terindeks pada `tbCustomers` (nama pelanggan), `tbEntryList` (nomor resi), dan `tbEntryList` (marking code) menggunakan `WITH (NOLOCK)`.
+  - Mengembalikan daftar saran cepat terstruktur dalam waktu ~200ms dengan kategori: `resi`, `customer`, `marking`.
+  - Menampilkan dropdown mengambang (`SearchSuggestionsDropdown.tsx`) di bawah SearchBar dengan haptic feedback dan ikon semantik (`Receipt`, `User`, `Tag`).
+
+##### 1.2. Detail Lengkap & Dimensi Resi (Modal Dialog)
+- **Method**: `GET`
+- **Endpoint**:
+  - `GET /api/shipments/:id`: Detail shipment lengkap beserta kalkulasi relasi status `shipmentStatus` (statusStep 1..6, statusLabel, fdLoadDate, fdETD, fdETA, fdExitDate, fdGudang).
+  - `GET /api/shipments/:id/dimensions/packinglist`: Daftar rincian dimensi packing list per koli.
+  - `GET /api/shipments/:id/dimensions/gudang`: Daftar rincian ukuran fisik aktual gudang (`tbEntryListDetail`).
+  - `GET /api/shipments/:id/dimensions/komplain`: Daftar rincian dimensi komplain selisih ukuran.
+
 ##### 2. Data Batch Marking
 - **Method**: `GET`
 - **Endpoint**: `/api/marking`
@@ -335,6 +362,13 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
   - `search=<keyword>` (kode batch marking, BL/AWB, consignee, kontainer)
   - `listType=ALL|1|2` (**Filter tambahan**: `ALL` / Semua, `1` = Udara, `2` = Laut)
   - `isClosed=true|false` (opsional: status keluar gudang)
+
+##### 2.1. Saran Pencarian Batch Marking
+- **Method**: `GET`
+- **Endpoint**: `/api/marking/suggestions`
+- **Query Params**:
+  - `q=<keyword>`
+- **Response**: Mengembalikan saran cepat kode marking dan consignee dalam waktu ~50ms.
 - **Data Kunci yang Ditampilkan**:
   - `fdMarkingCode`: Kode batch container/marking
   - `fdBranch`: Cabang pelabuhan / gudang asal
@@ -348,7 +382,18 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
   - `fdJmlPack` & `fdJmlBerat`: Akumulasi jumlah pack/koli dan berat (kg) dalam batch
 - **Tautan Menampilkan Data Manifest Per Batch**:
   - **Endpoint**: `GET /api/marking/:id/manifest` (dimana `:id` adalah `fdMarkingCode`)
-  - **Deskripsi**: Menampilkan seluruh rincian manifest shipment (`vwShipment`) dalam batch terpilih: daftar resi (`fdTerima`), nama customer (`fdCustName`), koli/pack (`fdJmlPack`), satuan (`fdSatuan`), berat (`fdJmlBerat`), dan volume kubikasi (`fdM3`).
+  - **Deskripsi**: Menampilkan seluruh rincian manifest shipment (`vwShipment`) dalam batch terpilih dengan bottom sheet modal yang memuat:
+    - **Header & Keterangan**: Kode batch marking, nomor kontainer (jika ada), cabang gudang asal, dan keterangan batch (`fdKet`).
+    - **Panel Ringkasan KPI (4-Metric Grid)**:
+      1. **Total Koli**: Akumulasi seluruh `fdJmlPack` dalam manifest (`formatNumber`).
+      2. **Total Berat**: Akumulasi seluruh berat `fdJmlBerat` dalam kg (`formatDecimal(totalBerat, 1)` kg).
+      3. **Total Volume**: Akumulasi volume kubikasi `fdM3` (`formatDecimal(totalM3, 4)` m³).
+      4. **Customer & Resi**: Perhitungan jumlah pelanggan unik (`Set<fdCustName>`) dan total nomor resi yang tergabung.
+    - **Baris Kartu Resi Manifest (`renderItem`)**:
+      - Nomor urut dan nomor resi/terima (`fdTerima` / `fdListCode`) + Marking No (`fdMarkingNo`).
+      - Nama Customer (`displayCustName(fdCustName)`) dan Badge Nama Sales (`fdSalesNM`).
+      - Informasi Komoditas & Tipe Komoditas: Kotak panel bergaris tepi memuat Badge Tipe Komoditas (`typeComodityName` / `fdComodityName`) dan deskripsi barang (`fdComodity`) yang dibungkus rapi (*natural word wrap*) tanpa pemotongan / overflow horizontal.
+      - Rincian fisik: Jumlah Koli & Satuan (`fdJmlPack`, `fdSatuan`), Berat (`fdJmlBerat` kg), dan Kubikasi (`fdM3` m³).
 
 ##### 3. Data Surat Jalan (Delivery Order)
 - **Method**: `GET`
@@ -369,7 +414,12 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
   - **Logika Penentuan Status Pengantaran (`fdStatus`)**:
     - **`Delivered`**: Apabila `fdSent === 1` (sudah terkirim)
     - **`On Delivery`**: Apabila tanggal sekarang $\ge$ `fdEstimasi` dan `fdSent === 0`
-    - **`Scheduled / Pending`**: Apabila tanggal sekarang $<$ `fdEstimasi` dan `fdSent === 0` (atau belum dijadwalkan)
+##### 3.1. Saran Pencarian Surat Jalan (Delivery Order)
+- **Method**: `GET`
+- **Endpoint**: `/api/delivery-orders/suggestions`
+- **Query Params**:
+  - `q=<keyword>`
+- **Response**: Mengembalikan saran nomor SJ, customer, dan supir dalam waktu ~10ms.
 
 ---
 
@@ -381,26 +431,37 @@ Manajemen piutang dan tagihan pelanggan, audit validasi kebenaran tarif dan ukur
 1. **Segmented Tabs Navigasi**:
    - **Tab 1: Daftar Invoice (`billing`)**
    - **Tab 2: Audit Validasi (`validation`)**
-   - **Tab 3: Kalkulator Tarif (`calculator`)**
+   - **Tab 3: Cek Tarif (`priceLookup`)**
 2. **Sub-Tab 1: Daftar Invoice**:
-   - Menampilkan daftar tagihan resmi dengan nomor invoice (`fdInvNo`), nama customer, tanggal tagihan, status bayar (`PAID` / `ISSUED`), dan total nilai tagihan (format mata uang Rupiah).
-   - Tombol **Salin No. Inv**: Menyalin nomor invoice ke clipboard dengan haptic feedback.
-   - **Modal Rincian & Cetak/Bagikan PDF**:
-     - Membuka bottom sheet rincian invoice.
-     - Tombol *"Bagikan / Cetak PDF"*: Menggunakan `expo-print` untuk merender template HTML invoice dan `expo-sharing` untuk membagikan file PDF ke WhatsApp, email, atau printer dokumen.
-3. **Sub-Tab 2: Audit Validasi Tagihan**:
-   - Menampilkan status audit validasi per invoice untuk mencegah kesalahan tagih (*overcharge / undercharge / overweight*).
-   - Menampilkan status verdict (`SESUAI / EQUAL`, `OVERWEIGHT`, `OVERCHARGE`, `UNDERCHARGE`).
-   - Indikator kecocokan tarif harga master vs tagihan (`priceCheckOk`).
-   - Indikator kecocokan volume kubikasi vs berat aktual (`m3CheckOk`).
-4. **Sub-Tab 3: Kalkulator Tarif Lapangan**:
-   - Switcher moda pengiriman: `Moda Udara` (kalkulasi berbasis tarif per kg) vs `Moda Laut` (kalkulasi berbasis tarif per $m^3$).
-   - Input berat muatan (`kg`).
-   - Input dimensi fisik karton: Panjang $\times$ Lebar $\times$ Tinggi (`cm`).
-   - **Live Quotation Box**:
-     - Menghitung volume otomatis: $\text{Volume } (m^3) = \frac{P \times L \times T}{1.000.000}$.
-     - Menghitung rasio muatan: $\text{Rasio} = \frac{\text{Berat}}{\text{Volume}} \text{ kg/m}^3$.
-     - Menghitung estimasi total biaya tagihan berdasarkan tarif standar rute.
+   - Menampilkan daftar tagihan resmi dengan nomor invoice (`fdInvNo`), status pembayaran (`LUNAS`, `PARTIAL`, `ISSUED`, `OVERDUE`, `DRAFT`), nama customer resmi (`displayCustName`), **Marking (`fdMarkingCode`)**, **No. Marking (`fdMarkingNo`)**, tanggal tagihan, dan **Total Tagihan (`totalJumlah` / `formatCurrency`)**.
+   - **Modal Detail Invoice Komprehensif (Paritas Penuh dengan `DetailPage.tsx` Web)**:
+      - Saat item invoice disentuh, aplikasi membuka lembar modal detail (`InvoiceDetailSheet`) yang secara otomatis memuat data lengkap invoice via TanStack React Query (`GET /api/billing/:id`).
+      - **4 Kartu Informasi Utama**:
+        1. **Pelanggan**: Nama pelanggan resmi, kode customer, badge status pelanggan (`NORMAL`, `BLOCKED`, `COD`, `WARNING`, `URGENT`), badge `BROKER (MKT)` / `MKT`, nama sales, dan alamat penagihan.
+        2. **Waktu & Pembuat**: Tanggal invoice, tanggal terbit (`fdGiveDate` atau badge `DRAFT`), diserahkan oleh (`giveEmployee`), dan author pembuat bill (`employee`).
+        3. **Status Pembayaran (Kasir)**: Status badge (`✓ LUNAS`, `SEBAGIAN`, `BELUM BAYAR`), no. kasir (`cashierID`), tanggal pembayaran (`cashierDate`), dan total dibayar (`totalPaid`).
+        4. **Marking & Komoditi**: Marking code & no, badge consignee (dengan verifikasi hak akses role `canViewConsignee`), badge `PARSIAL`, chips nomor resi (`resiSummary.resiList`), komoditi (dengan layout auto-wrap multi-baris agar tidak overflow) & tipe komoditi, tanggal agent, serta tombol salin info marking lengkap.
+      - **Rincian Item Tagihan**: Tabel / baris item lengkap (`fdItemName`, kuantiti & unit `fdListCode`, harga satuan `fdItemPrice`, dan total `fdTotal`).
+      - **Footer Ringkasan & Total**: Breakdown akumulasi per satuan (TOTAL KG, TOTAL M3, TOTAL VOLUME FREIGHT CHARGES VFC) serta nominal **TOTAL TAGIHAN** tebal dengan format mata uang yang tepat.
+      - **Aksi Dokumen**:
+        - Tombol *"Salin Nomor Invoice"*: Menyalin nomor invoice ke clipboard dengan haptic feedback.
+3. **Sub-Tab 2: Audit Validasi Tagihan (Sinkron Penuh dengan ERP Web)**:
+   - Akses sub-tab Audit Validasi ini dilindungi oleh kontrol izin akses (`canViewBillingValidation`), hanya muncul jika pengguna memiliki hak akses role validasi atau admin.
+   - Menampilkan daftar antrean validasi aktif sinkron dengan `http://36.93.22.142/mshipping/finance/billing/validation/list`.
+   - Query endpoint: `/api/billing?hasAmount=true&draftOnly=true&noPagination=true&minYear=2023`.
+   - Menampilkan nomor invoice, badge umur invoice (Aging Days: Baru, Perhatian, Kritis), badge moda (Udara / Laut), nama customer resmi, marking & nomor, nama pembuat / PIC invoice, serta nominal rupiah tagihan.
+   - Mendukung dropdown suggestions via `/api/billing/suggestions`.
+   - Membuka modal rincian invoice dan preview tagihan langsung.
+4. **Sub-Tab 3: Cek Tarif (Price List Lookup)**:
+   - Menggantikan kalkulator statis lama dengan sistem lookup tarif master resmi & khusus pelanggan:
+   - **Sub-Tab Tarif Umum (Master)**:
+     - Filter Moda: `Semua`, `Udara`, `Laut`.
+     - Filter Cabang Asal: `ALL`, `GZ`, `HK`, `SG`, `YW`, `SH`.
+     - **Cari Cepat by Resi / Entry Code**: Mengakses `/api/price-list/lookup-by-entry` untuk mendeteksi tarif pengiriman spesifik secara instan.
+     - **Daftar Tarif Master**: Menampilkan kategori barang, tarif rupiah per kg atau per m³, cabang, serta estimasi waktu transit.
+   - **Sub-Tab Tarif Khusus Customer**:
+     - Kolom pencarian customer dengan *autocomplete dropdown* langsung dari `/api/customers/suggestions`.
+     - Menampilkan kartu tarif khusus pelanggan terpilih: kategori barang, tarif khusus, moda & cabang, tanggal berlaku, dan catatan khusus.
 
 #### B. Endpoint API Terkait
 
@@ -413,58 +474,128 @@ Manajemen piutang dan tagihan pelanggan, audit validasi kebenaran tarif dan ukur
 - **Data Kunci yang Ditampilkan**:
   - `fdInvNo`: Nomor invoice tagihan resmi
   - `fdCustName`: Nama customer resmi (diprioritaskan dari master `tbCustomers`)
+  - `fdMarkingCode`: Kode batch marking container/flight
+  - `fdMarkingNo`: Nomor marking fisik karton muatan
   - `fdInvDate`: Tanggal penerbitan invoice
-  - `fdTotalColy`: Total koli dalam invoice
-  - `fdTotalWeight`: Total akumulasi berat muatan (kg)
-  - `fdTotalM3`: Total akumulasi volume muatan ($m^3$)
-  - `fdTotalAmount`: Total nilai rupiah tagihan
-  - `fdStatus`: Status pembayaran (`PAID`, `ISSUED`, `UNPAID`)
+  - `totalJumlah` / `fdTotalAmount`: Total nilai rupiah tagihan resmi
+  - `paymentStatus`: Status pembayaran (`LUNAS`, `PARTIAL`, `ISSUED`, `OVERDUE`, `DRAFT`)
+
+##### 1.1. Saran Pencarian Invoice & Tagihan
+- **Method**: `GET`
+- **Endpoint**: `/api/billing/suggestions`
+- **Query Params**:
+  - `q=<keyword>`
+- **Response**: Mengembalikan saran nomor faktur dan customer dalam waktu ~30ms.
 
 ##### 2. Data Audit Validasi Tagihan
 - **Method**: `GET`
-- **Endpoint**: `/api/billing/validation/list`
+- **Endpoint**: `/api/billing`
 - **Query Params**:
-  - `limit=20`
+  - `hasAmount=true`
+  - `draftOnly=true`
+  - `noPagination=true`
+  - `minYear=2023`
   - `search=<keyword>`
 - **Data Kunci yang Ditampilkan**:
   - `fdInvNo`: Nomor invoice
   - `fdCustName`: Nama customer
-  - `verdict`: Hasil audit validasi (`EQUAL`, `OVERWEIGHT`, `OVERCHARGE`, `UNDERCHARGE`)
-  - `priceCheckOk`: Status kesesuaian harga terhadap master price list (boolean)
-  - `m3CheckOk`: Status evaluasi hirarki ukuran M3 (Gudang, Komplain, PL) (boolean)
+  - `agingDays`: Hari keterlambatan validasi sejak invoice dibuat
+  - `employee.fdEmpName`: Nama staf pembuat invoice
+  - `totalJumlah` / `fdTotalAmount`: Nominal rupiah validasi
+
+##### 3. Lookup Tarif Master & Customer
+- **Method**: `GET`
+- **Endpoint**:
+  - `/api/price-list/lookup`: Lookup tarif umum berdasarkan tanggal, moda, cabang, dan kategori.
+  - `/api/price-list/lookup-by-entry`: Deteksi otomatis tarif yang berlaku berdasarkan nomor resi/entry.
+  - `/api/customer-price-list/lookup`: Lookup tarif khusus pelanggan tertentu berdasarkan `custCode`.
 
 ---
 
 ### 3.7. Halaman Master Data Customer (`app/(tabs)/master.tsx`)
 
 #### A. Tujuan & Logika
-Direktori data pelanggan resmi (*Single Source of Truth* `tbCustomers`) yang dilengkapi fitur komunikasi instan sekali ketuk bagi tim sales dan lapangan.
+Direktori data pelanggan resmi (*Single Source of Truth* `tbCustomers`) yang dirancang identik dengan tampilan Web Frontend (`http://36.93.22.142/mshipping/master/customers`) dan modal detail 5-tab lengkap.
 
-1. **Pencarian Cepat**:
-   - Filter live berdasarkan nama pelanggan, kode pelanggan, kota, atau nama sales.
-2. **Single Source of Truth**:
-   - Selalu menampilkan `fdCustName` dan `fdCustCode` resmi dari tabel master `tbCustomers`.
-3. **Aksi Komunikasi Langsung**:
-   - Tombol **Telepon**: Membuka dialer telepon ponsel secara otomatis melalui URI schema `tel:<nomor_telepon>`.
-   - Tombol **WhatsApp**: Membuka aplikasi WhatsApp langsung dengan nomor tujuan melalui URI schema `https://wa.me/<nomor_hp_bersih>` (otomatis menstandarisasi awalan `08...` menjadi `628...`).
-4. **Modal Profil Lengkap Customer**:
-   - Jika kartu diklik, modal menampilkan rincian kontak lengkap: Kode Customer, Nama PIC/Kontak, Alamat kantor/gudang, Kota, dan nama Sales In-Charge (`fdSalesNM`).
+1. **Tampilan Kartu Pelanggan (Sama Seperti Frontend Web)**:
+   - **Top Row**:
+     - Kode Customer dalam font monospace (`fdCustCode`)
+     - Badge Customer Tier (`DIAMOND`, `PLATINUM`, `GOLD`, `SILVER`, `BRONZE`)
+     - Badge `BROKER` (apabila `fdBroker === 1`)
+     - Badge `DISCONTINUED` (apabila `fdDiscontinued === 1`)
+     - Badge Masa Bergabung / Tenure (`formatCustomerTenure`, misal: `Baru`, `6 bln`, `3 thn`)
+     - Badge Status Hubungan Pelanggan (`NORMAL`, `OK`, `COD`, `WARNING`, `BLOCKED`, `URGENT` dari `fdBlocked`)
+   - **Nama Customer & Omset**:
+     - Nama Customer resmi yang disanitasi (`displayCustName`)
+     - Badge Omset Tahunan berjalan (`formatCompactRupiah(annualRevenue)`) jika tersedia
+   - **Baris Kota & Alamat**:
+     - Ikon gedung `Building2`, Kota Operasional/Pengiriman, dan pratinjau alamat fisik
+   - **Kotak Rincian (Inner Box)**:
+     - Contact Person (CP: `fdContact`)
+     - Sales Representative (Sales: `fdSalesNM`)
+     - Nomor Kontak/HP (`fdHP` / `fdTelp`)
+     - Tautan Aksi cepat *"Detail"*
+   - **Aksi Cepat Komunikasi**:
+     - Tombol **Telepon**: Membuka dialer telepon ponsel langsung (`tel:...`)
+     - Tombol **WhatsApp**: Membuka WhatsApp langsung dengan standarisasi kode negara 62 (`https://wa.me/...`)
+2. **Modal Detail Customer 5-Tab (Sama Persis Seperti Frontend Web)**:
+   Modal dialog tinggi statis (`height: 86%`) dengan internal scroll yang memuat 5 tab navigasi:
+   - **Tab 1: Ringkasan (`info`)**:
+     - Kartu Contact Person & Kartu Sales Representative
+     - Rincian Saluran Kontak: Telepon Kantor, Handphone / WA (dengan tombol Panggil & WA instan), Email, Kota Operasional
+     - Alamat Kantor / Utama (`fdAddr1`, `fdAddr2`)
+     - Catatan Keterangan operasional (`fdKeterangan`)
+   - **Tab 2: Finansial (`finansial`)**:
+     - Kartu Tier Aktif, Omset Tahunan Berjalan, dan Total Invoice
+     - Progress Bar ke Tier Berikutnya (persentase & nominal sisa target belanja)
+     - Tabel Riwayat Finansial & Omzet Billing per Tahun (`financialStats`: Tahun, Omzet Rupiah, Jumlah Invoice, Tier)
+   - **Tab 3: Pengiriman (`pengiriman`)**:
+     - Nama Penerima (`fdNamaPengiriman`)
+     - Nomor HP Pengiriman (`fdHpPengiriman`) + tombol Telepon & WA Penerima
+     - Kota Pengiriman (`fdKotaPengiriman`)
+     - Kotak Alamat Lengkap Pengiriman (`fdAlamatPengiriman`)
+     - Peringatan Instruksi Khusus Pengiriman (`fdKetPengiriman`) berlatar aksen amber
+   - **Tab 4: Penagihan (`penagihan`) — Form Detail Penagihan**:
+     - Sesuai dengan form master penagihan resmi (`tbCustomerPenagihan` & master `tbCustomers`):
+     - Nama (`fdBillTo` / `fdCustName`)
+     - Nama PIC (`penagihanDetail.pic` / `fdContact`)
+     - Alamat Lengkap Penagihan (`penagihanDetail.alamat` / `fdBillAddr1`)
+     - Kota Penagihan (`penagihanDetail.kota` / `fdBillCityName`)
+     - HP Penagihan (`penagihanDetail.hp` / `fdHpPenagihan`) dengan aksi telepon langsung
+     - Email Penagihan (`penagihanDetail.email` / `fdEmailPenagihan`)
+     - Finance: Kode staf finance & Nama lengkap staf (`fdFinCode` + lookup `tbEmployees`)
+     - Notif Penagihan: Pilihan radio pill (`HP`, `Email`, `Kolektor`) yang menandai metode notifikasi aktif
+     - Kolektor: Kode kolektor & Nama lengkap staf (`fdKodePenagih` + lookup `tbEmployees`)
+     - Keterangan Khusus Penagihan (`fdKeteranganPenagihan`)
+     - Tetap menyertakan data NPWP, TOP, dan Batas Kredit jika tersedia di database.
+   - **Tab 5: Daftar Alamat (`alamat`)**:
+     - Daftar kartu alamat resmi (`addresses` / `vwCustomerContacts`):
+     - Badge Jenis Alamat (`PENGHUBUNG`, `PENGIRIMAN`, `PENAGIHAN`)
+     - Badge Status Keaktifan (`Aktif` / `Non-Aktif`)
+     - Nama PIC Alamat (`fdContact`)
+     - Alamat Lengkap & Kota (`fdAddr`, `fdCity`)
+     - Telepon / Handphone (`fdHP`, `fdTelp`) dengan tombol dialer langsung.
 
 #### B. Endpoint API Terkait
+
+##### 1. Daftar Pelanggan
 - **Method**: `GET`
 - **Endpoint**: `/api/customers`
+
+##### 1.1. Saran Pencarian Customer
+- **Method**: `GET`
+- **Endpoint**: `/api/customers/suggestions`
+- **Query Params**:
+  - `q=<keyword>`
+- **Response**: Mengembalikan saran nama customer, kode, dan PIC dalam waktu < 200ms.
 - **Query Params**:
   - `limit=25`
   - `search=<keyword>`
-- **Data Kunci yang Ditampilkan**:
-  - `fdCustCode`: Kode unik customer master
-  - `fdCustName`: Nama resmi perusahaan / pemilik barang
-  - `fdCity`: Kota domisili customer
-  - `fdAddress`: Alamat lengkap pengiriman/kantor
-  - `fdPhone` / `fdTelp`: Nomor kontak telepon / HP customer
-  - `fdContact`: Nama orang yang dapat dihubungi (PIC)
-  - `fdTier`: Tingkatan tier customer (`VIP`, `PRIORITY`, `REGULAR`)
-  - `fdSalesNM`: Nama petugas sales yang bertanggung jawab
+
+##### 2. Detail Pelanggan & Alamat Cabang
+- **Method**: `GET`
+- **Endpoint**: `/api/customers/:id` (dimana `:id` adalah `fdCustCode`)
+- **Response**: Objek customer lengkap termasuk relasi `addresses` (`vwCustomerContacts`).
 
 ---
 
@@ -473,29 +604,44 @@ Direktori data pelanggan resmi (*Single Source of Truth* `tbCustomers`) yang dil
 #### A. Tujuan & Logika
 Manajemen akun pengguna, konfigurasi keamanan biometrik, preferensi antarmuka (tema dan bahasa), pemantauan konektivitas backend ERP, dan sesi logout.
 
-1. **Kartu Header Pengguna**:
-   - Menampilkan avatar inisial/ikon pengguna.
+1. **Kartu Header Pengguna & Avatar Interaktif**:
+   - Menampilkan foto avatar pengguna (`user.avatarUrl`) yang di-resolve otomatis via `resolveAvatarUrl(user.avatarUrl)` ke backend `http://36.93.22.142:3010/uploads/...`.
+   - Jika foto belum diunggah, menampilkan inisial nama tebal (`getInitials(fullName)`).
+   - Dilengkapi badge ikon kamera di sudut avatar; mengetuk avatar membuka modal aksi foto profil (`AvatarModal.tsx`).
    - Nama lengkap (`user.fullName`) dan username (`user.username`).
    - Badge peran sistem (`ADMIN`, `OPERATOR`, `FINANCE`, `VIEWER`).
-2. **Pengaturan Keamanan & Biometrik**:
-   - Switch toggle login biometrik (Fingerprint / FaceID).
-   - Memanggil `biometricService.authenticate()` sebelum mengaktifkan atau menonaktifkan agar keamanan terverifikasi.
-3. **Preferensi Tampilan**:
+2. **Kamera Avatar Mandiri (`AvatarModal.tsx`)**:
+   - Memanfaatkan modul kamera perangkat keras `expo-camera` (`CameraView`) yang sudah terkompilasi dalam APK.
+   - Pilihan:
+     - **Ambil Foto (Kamera)**: Membuka viewfinder kamera layar penuh dengan panduan lingkaran wajah (*circular mask guide*), switch kamera depan/selfie atau belakang (`facing: 'front' | 'back'`), dan senter (*torch*).
+     - Pengambilan foto via `takePictureAsync({ base64: true, quality: 0.7 })`.
+     - Pratinjau instan (*instant preview*) dengan tombol "Ambil Ulang" dan "Gunakan Foto".
+     - Mengunggah foto berformat Base64 langsung ke `POST /api/profile/avatar`, otomatis menyinkronkan state global `authStore` dan memicu toast konfirmasi sukses.
+     - **Hapus Foto Profil**: Memanggil `DELETE /api/profile/avatar`, menghapus foto dari storage/database, dan mengembalikan tampilan ke inisial nama.
+3. **Pengaturan Keamanan & Ganti Kata Sandi**:
+   - **Ganti Kata Sandi (`ChangePasswordModal.tsx`)**:
+     - Form ganti kata sandi mandiri: Kata Sandi Saat Ini, Kata Sandi Baru, dan Konfirmasi Kata Sandi Baru.
+     - Dilengkapi tombol intip kata sandi (*eye toggle*), validasi panjang minimal 6 karakter, serta indikator visual kecocokan kata sandi (*real-time match badge*).
+     - Mengirimkan permintaan pembaruan ke `PUT /api/profile/password`.
+   - **Login Biometrik (Fingerprint / FaceID)**:
+     - Switch toggle login biometrik.
+     - Memanggil `biometricService.authenticate()` sebelum mengaktifkan atau menonaktifkan agar keamanan terverifikasi.
+4. **Preferensi Tampilan**:
    - Switcher tema antara **Midnight (Dark Mode)** dan **Heritage (Light Mode)**.
-   - Mengubah palet warna dinamis di seluruh komponen UI via Zustand `themeStore`.
-4. **Preferensi Bahasa**:
+   - Mengubah palet warna dinamis di seluruh komponen UI. State tema dikelola secara lokal di `profile.tsx` (tidak ada Zustand `themeStore` terpisah di mobile — berbeda dengan frontend web).
+5. **Preferensi Bahasa**:
    - Switcher bahasa bilingual antara 🇮🇩 **Bahasa Indonesia** (`id`) dan 🇬🇧 **English** (`en`).
    - Mengubah kamus terjemahan visual via custom hook `useTranslation()`.
-5. **Informasi Sistem & Status ERP**:
-   - Menampilkan status live koneksi ke server backend (`Online • 36.93.22.142:3010`).
+6. **Informasi Sistem & Status ERP**:
+   - Menampilkan status live koneksi sistem ERP (`Terhubung • Operasional Normal`) tanpa mengekspos alamat IP backend.
    - Menampilkan badge status server `ONLINE`.
-6. **Versi Aplikasi & Fitur Cek Pembaruan (Auto Update)**:
-   - Menampilkan versi aktif aplikasi saat ini (misal `v1.0.2` yang bersumber dari `mobile/src/config/version.ts`).
+7. **Versi Aplikasi & Fitur Cek Pembaruan (Auto Update)**:
+   - Menampilkan versi aktif aplikasi saat ini (misal `v1.0.5` yang bersumber dari `mobile/src/config/version.ts`).
    - Tombol interaktif **"Cek Pembaruan"** (`RefreshCw` / `Sparkles`):
      - Menjalankan pengecekan versi ke backend `GET /api/app-version/latest`.
      - Jika versi server lebih baru: memicu modal dialog pembaruan (`UpdateModal`) dan mengubah badge menjadi `UPDATE` merah.
-     - Jika sudah versi terbaru: memicu toast konfirmasi sukses *"Aplikasi sudah dalam versi terbaru (v1.0.2)"*.
-7. **Aksi Keluar (Logout)**:
+     - Jika sudah versi terbaru: memicu toast konfirmasi sukses *"Aplikasi sudah dalam versi terbaru"*.
+8. **Aksi Keluar (Logout)**:
    - Tombol *"Keluar dari Akun"* memunculkan dialog konfirmasi bawaan.
    - Jika disetujui:
      - Token dan kredensial dihapus secara permanen dari `expo-secure-store`.
@@ -503,6 +649,9 @@ Manajemen akun pengguna, konfigurasi keamanan biometrik, preferensi antarmuka (t
      - Pengguna diarahkan kembali ke layar `/(auth)/login`.
 
 #### B. Endpoint API Terkait
+- `POST /api/profile/avatar`: Mengunggah foto profil baru pengguna (mendukung payload JSON `{ avatarBase64: 'data:image/jpeg;base64,...' }` maupun `multipart/form-data`).
+- `DELETE /api/profile/avatar`: Menghapus foto profil pengguna dan mereset ke `avatarUrl: null`.
+- `PUT /api/profile/password`: Mengubah kata sandi pengguna (`{ currentPassword, newPassword, confirmPassword }`).
 - `GET /api/app-version/latest`: Pengecekan metadata versi aplikasi, ukuran file APK, dan catatan rilis (*changelog*).
 - Operasional lokal berbasis state session pengguna yang diperoleh dari response `/api/auth/login` dan `/api/auth/me`.
 
@@ -528,23 +677,26 @@ Komponen pemindai kamera hardware modular yang dapat dipanggil dari berbagai hal
 
 ---
 
-### 3.10. Komponen Dialog Auto Update (`UpdateModal.tsx`)
+### 3.10. Komponen Dialog Auto Update & Sistem Update Mandiri (`UpdateModal.tsx` & `updateStore.ts`)
 
 #### A. Tujuan & Logika
-Menangani alur pembaruan aplikasi mobile secara mandiri (*self-hosted sideload*) tanpa ketergantungan pada Google Play Store:
+Menangani alur pembaruan aplikasi mobile secara mandiri (*self-hosted automated update*) tanpa ketergantungan pada Google Play Store dan tanpa perlu unduh manual lewat browser Chrome:
 1. **Single Source of Truth Versi (`mobile/src/config/version.ts`)**:
-   - Versi aplikasi didefinisikan secara statis melalui `APP_VERSION = '1.0.2'` dan `APP_VERSION_CODE = 3` di `mobile/src/config/version.ts`.
-   - Hal ini menjamin versi tertanam langsung ke dalam bundle JavaScript/Hermes bytecode (mencegah nilai `null` pada `Constants.expoConfig` di lingkungan production APK mandiri).
+   - Versi aplikasi didefinisikan secara statis melalui `APP_VERSION = '1.0.9'` dan `APP_VERSION_CODE = 10` di `mobile/src/config/version.ts`.
+   - Menjamin versi tertanam langsung ke dalam bundle JavaScript/Hermes bytecode (mencegah nilai `null` pada `Constants.expoConfig` di lingkungan APK standalone).
 2. **Pemeriksaan Versi Latar Belakang (Otomatis)**:
-   - Pada `app/_layout.tsx`, `useUpdateStore.checkUpdate(false)` dieksekusi secara hening saat aplikasi terbuka.
+   - Pada `app/_layout.tsx`, `useUpdateStore.checkUpdate(false)` dieksekusi secara hening saat aplikasi dibuka.
    - Membandingkan `currentVersion` terhadap `latestVersion` dari endpoint backend `/api/app-version/latest`.
    - **Dismissed Version State**: Jika pengguna pernah menekan tombol "Nanti Saja" untuk versi tersebut, modal tidak akan muncul otomatis lagi saat pembukaan aplikasi berikutnya demi kenyamanan pengguna (kecuali jika disetel `forceUpdate: true` oleh server atau dicek manual via tab Profil).
-3. **Karakteristik & Kontrol Pembaruan**:
-   - **Informasi Versi**: Menampilkan perbandingan versi lama ➔ versi baru (`v1.0.1 ➔ v1.0.2`), ukuran berkas APK (`121.0 MB`), serta daftar catatan rilis (*release notes*).
-   - **Pembaruan Opsional vs Wajib**: Jika `forceUpdate === true`, tombol "Nanti Saja" dan gestur tutup modal dinonaktifkan sehingga pengguna wajib memperbarui demi menjaga kompatibilitas API.
-   - **Tindakan Unduh**: Tombol *"Perbarui Sekarang"* mengeksekusi `Linking.openURL(downloadUrl)` untuk memicu download file APK ke folder Download HP.
-   - **Petunjuk Instalasi APK**: Dilengkapi instruksi ramah pengguna: *"💡 Setelah unduh selesai, ketuk file APK di notifikasi HP untuk menginstal."*
-   - **Alternatif Web**: Tautan *"Unduh via Halaman Web QR"* mengarahkan ke portal web `/mshipping/download/`.
+3. **Mekanisme Update Otomatis Tanpa Instalasi Manual**:
+   - **Jalur 1: Over-The-Air (OTA) Updates (`expo-updates`)**:
+     - Jika module native `expo-updates` aktif (`Updates.isEnabled`), aplikasi memeriksa manifest ke endpoint backend `GET /api/manifest`.
+     - Jika bundle baru tersedia, bytecode Hermes (`.hbc`) diunduh di latar belakang via `/api/manifest/bundle` dan aplikasi langsung me-reload kode baru secara instan (`Updates.reloadAsync()`) **tanpa perlu instal ulang APK sama sekali**.
+   - **Jalur 2: In-App Direct APK Downloader & Automated Installer**:
+     - Jika rilis berupa binary APK baru, aplikasi mengunduh berkas APK langsung di dalam aplikasi menggunakan `expo-file-system/legacy` (`FileSystem.createDownloadResumable`).
+     - Menampilkan indikator persentase unduhan *real-time* dan animasi progress bar di dalam modal (`0% - 100%`, ukuran MB terunduh vs total MB).
+     - Begitu unduhan selesai, aplikasi secara otomatis memicu Android Package Installer sistem via `Sharing.shareAsync(uri, { mimeType: 'application/vnd.android.package-archive' })` sehingga dialog instalasi sistem langsung muncul di layar ponsel tanpa harus membuka browser atau mencari berkas di folder Download.
+   - **Fallback Browser**: Tautan alternatif *"Unduh via Halaman Web QR"* tetap disediakan jika pengguna ingin mengunduh secara manual via browser.
 
 ---
 
@@ -555,16 +707,28 @@ Menangani alur pembaruan aplikasi mobile secara mandiri (*self-hosted sideload*)
 | **1** | Autentikasi | `/api/auth/login` | `POST` | `{ username, password }` | Token JWT, Profil User, Role |
 | **2** | Autentikasi | `/api/auth/me` | `GET` | Header `Authorization: Bearer` | Verifikasi token biometrik |
 | **3** | Registrasi | `/api/auth/register` | `POST` | `{ fullName, username, password }` | Konfirmasi pendaftaran akun |
-| **4** | Dashboard KPI | `/api/shipments/kpi` | `GET` | `listType` (`all`, `1`, `2`) | Total resi, koli, berat, volume, MoM |
-| **5** | Dashboard Terkini | `/api/shipments` | `GET` | `limit=5` | 5 transaksi resi & shipment terbaru |
-| **6** | Logistik - Resi | `/api/shipments` | `GET` | `limit=20`, `search`, `listType` | Nomor resi, marking code, jml pack, satuan, berat (kg), m³ |
-| **7** | Logistik - Batch | `/api/marking` | `GET` | `limit=20`, `search`, `listType` (`ALL`, `1`, `2`) | Kode batch marking, cabang, `fdKet`, hirarki tanggal (`Exit`/`ETA`/`ETD`/`Load`) |
-| **8** | Logistik - Manifest Batch | `/api/marking/:id/manifest` | `GET` | Path `id` (`fdMarkingCode`) | Rincian resi manifest (`vwShipment`): resi, customer, pack, satuan, berat, m³ |
-| **9** | Logistik - Surat Jalan | `/api/delivery-orders` | `GET` | `limit=20`, `search` | `fdSJNo`, `fdCustNameSJ`, `fdSupir`, `fdCarID`, `fdEstimasi`, `fdSent`, `fdGiveDate` |
-| **10** | Finance - Invoice | `/api/billing` | `GET` | `limit=20`, `search` | No. inv, nama customer, tanggal, nominal |
-| **11** | Finance - Validasi | `/api/billing/validation/list` | `GET` | `limit=20`, `search` | Status verdict, audit tarif, audit M3 |
-| **12** | Master Customer | `/api/customers` | `GET` | `limit=25`, `search` | Nama customer master, telepon, sales |
-| **13** | Sistem & Auto Update | `/api/app-version/latest` | `GET` | None | Versi terbaru, changelog, URL APK, size |
+| **4** | Dashboard - Exit Activity KPI | `/api/marking/kpi` | `GET` | `isClosed=true` | Ringkasan batch keluar: kemarin, hari ini, besok, total |
+| **5** | Dashboard - Exit Activity List | `/api/marking` | `GET` | `isClosed=true`, `limit=10`, `sortBy=fdExitDate`, `sortDir=desc` | Daftar batch exit terkini: marking, kontainer/AWB, cabang, consignee, tanggal, koli, berat |
+| **6** | Logistik - Resi | `/api/shipments` | `GET` | `skip`, `limit` (Awal: 10, Scroll: +5), `search`, `listType` | Nomor resi, marking code/no, customer name, koli, berat, volume, `fdBranchCode` |
+| **7** | Logistik - Saran Resi | `/api/shipments/suggestions` | `GET` | `q` (min. 2 karakter) | Rekomendasi auto-suggest 4-kategori: Resi (`fdTerima`), Customer, Marking Code, Marking No |
+| **8** | Logistik - Batch | `/api/marking` | `GET` | `limit=20`, `search`, `listType` (`ALL`, `1`, `2`) | Kode batch marking, cabang, `fdKet`, hirarki tanggal (`Exit`/`ETA`/`ETD`/`Load`) |
+| **9** | Logistik - Manifest Batch | `/api/marking/:id/manifest` | `GET` | Path `id` (`fdMarkingCode`) | Rincian resi manifest (`vwShipment`): resi, customer, pack, satuan, berat, m³ |
+| **10** | Logistik - Surat Jalan | `/api/delivery-orders` | `GET` | `limit=20`, `search` | `fdSJNo`, `fdCustNameSJ`, `fdSupir`, `fdCarID`, `fdEstimasi`, `fdSent`, `fdGiveDate` |
+| **11** | Finance - Invoice | `/api/billing` | `GET` | `limit=20`, `search` | No. inv, nama customer, marking, no. marking, tanggal, total tagihan |
+| **12** | Finance - Validasi | `/api/billing` | `GET` | `hasAmount=true`, `draftOnly=true`, `noPagination=true`, `minYear=2023` | Antrean validasi: aging days, moda, customer, marking, PIC, nominal |
+| **13** | Finance - Saran Invoice | `/api/billing/suggestions` | `GET` | `q` (min. 2 karakter) | Saran nomor invoice dan nama customer |
+| **14** | Finance - Lookup Tarif Umum | `/api/price-list/lookup` | `GET` | `mode`, `branch`, `date` | Tarif master per kg/m³, moda, cabang, transit |
+| **15** | Finance - Lookup by Resi | `/api/price-list/lookup-by-entry` | `GET` | `entryCode` | Tarif spesifik berdasarkan nomor resi/entry |
+| **16** | Finance - Lookup Tarif Customer | `/api/customer-price-list/lookup` | `GET` | `custCode` | Tarif khusus pelanggan: kategori, moda, cabang, tanggal berlaku |
+| **17** | Master Customer | `/api/customers` | `GET` | `limit=25`, `search` | Nama customer master, telepon, sales, tier, omset |
+| **18** | Master Customer - Saran | `/api/customers/suggestions` | `GET` | `q` (min. 2 karakter) | Saran nama customer, kode, dan PIC |
+| **19** | Master Customer - Detail | `/api/customers/:id` | `GET` | Path `id` (`fdCustCode`) | Detail customer lengkap termasuk `addresses` (`vwCustomerContacts`), `penagihanDetail` (`tbCustomerPenagihan`), `financialStats` |
+| **20** | Sistem & Auto Update | `/api/app-version/latest` | `GET` | None | Versi terbaru, changelog, URL APK, size |
+| **21** | Self-Hosted OTA Manifest | `/api/manifest` | `GET` | Headers: `expo-runtime-version`, `expo-platform` | Manifest Expo Updates, launchAsset URL, metadata |
+| **22** | Self-Hosted OTA Bundle | `/api/manifest/bundle` | `GET` | None | Berkas bytecode JavaScript/Hermes (`.hbc`) |
+| **23** | Profil - Upload Avatar | `/api/profile/avatar` | `POST` | `{ avatarBase64 }` atau multipart file | Status sukses, `avatarUrl`, objek user |
+| **24** | Profil - Hapus Avatar | `/api/profile/avatar` | `DELETE` | None | Status sukses penghapusan foto profil |
+| **25** | Profil - Ganti Password | `/api/profile/password` | `PUT` | `{ currentPassword, newPassword, confirmPassword }` | Pesan konfirmasi pembaruan password |
 
 ---
 
@@ -573,31 +737,33 @@ Menangani alur pembaruan aplikasi mobile secara mandiri (*self-hosted sideload*)
 1. **Skeleton Shimmer Loading State**:
    - Seluruh daftar data menggunakan komponen wireframe animasi shimmer (`SkeletonShimmer.tsx`) saat proses pemuatan pertama (*initial load*).
    - DILARANG menggunakan fullscreen spinner bulat yang menghalangi konten.
-2. **Haptic Tactile Feedback**:
+2. **Desain Bersih Bebas Ikon pada List Data & Tab**:
+   - Seluruh tab navigasi atas (`SegmentedControl`) dan item list data bersih dari ikon dan emoji untuk estetika korporat modern.
+   - Menggunakan tipografi proporsional (`11.5px font-semibold` dengan `numberOfLines={1}` dan `adjustsFontSizeToFit`) agar teks tab tidak terlipat (*zero wrapping discrepancy*) baik pada HP berlayar kecil (360dp) maupun besar (412dp+).
+   - Header kartu list mengikat judul muatan dalam `flex: 1` dengan batasan `minWidth: 0, marginRight: 8` serta `flexShrink: 0` pada badge status sehingga badge tidak terdorong atau gepeng di layar sempit.
+3. **Haptic Tactile Feedback**:
    - Setiap ketukan tombol navigasi, filter mode, pemindaian barcode sukses, dan penyalinan teks memicu getaran proporsional (`Light`, `Medium`, `Success`, `Error`).
-3. **Format Representasi Data Standar**:
+4. **Format Representasi Data Standar**:
    - Seluruh angka dan mata uang diformat menggunakan utilitas terpusat:
      - Mata Uang: `formatCurrency(amount)` $\to$ `Rp 1.500.000`
      - Berat Fisik: `formatDecimal(weight, 1)` $\to$ `350,5 kg`
      - Volume Fisik: `formatDecimal(volume, 4)` $\to$ `1,2540 m³`
      - Angka Koli / Counter: `formatNumber(coly)` $\to$ `1.420`
      - Tanggal: `formatDate(date)` $\to$ `12 Sep 2026`
-4. **Single Source of Truth Customer**:
+5. **Single Source of Truth Customer**:
    - Nama customer yang muncul di seluruh modul (Dashboard, Logistik, Finance, dan Master) selalu terikat dan memprioritaskan data master `tbCustomers.fdCustName`.
 
 ---
 
-## 📲 6. Prosedur Distribusi & Pemasangan APK (Sideloading)
+## 📲 6. Prosedur Distribusi & Pemasangan APK (Sideloading & In-App Update)
 
-Karena aplikasi didistribusikan secara mandiri di server on-premise perusahaan (tanpa Google Play Store):
+Aplikasi didistribusikan secara mandiri di server on-premise perusahaan:
 1. **Titik Akses Unduhan Resmi**:
-   - **URL Unduh Langsung**: `http://36.93.22.142/mshipping/mshipping.apk`
-   - **URL Mirror Backend API**: `http://36.93.22.142:3010/uploads/mshipping.apk`
-   - **Landing Page QR Scanner**: `http://36.93.22.142/mshipping/download/`
-2. **Langkah Pemasangan di Perangkat Android**:
-   - Ketuk tombol *"Perbarui Sekarang"* di dalam dialog update aplikasi atau buka salah satu URL di atas melalui browser Chrome di HP.
-   - Browser akan mengunduh file `mshipping.apk` ke folder **Download**.
-   - Setelah unduhan selesai, **tarik bilah notifikasi Android ke bawah** atau buka File Manager di folder Download.
-   - Ketuk file `mshipping.apk` dan pilih **Update / Pasang**.
-   - Jika Android meminta izin *"Install unknown apps"* untuk browser/file manager, aktifkan izin tersebut sekali.
-   - Setelah selesai terpasang, buka aplikasi M-Shipping. Cek tab **Profil** $\to$ versi akan terbaca **`v1.0.2`** dan pop-up pembaruan tidak akan muncul lagi.
+    - **URL Unduh Langsung**: `http://36.93.22.142/mshipping/mshipping.apk`
+    - **URL Mirror Backend API**: `http://36.93.22.142:3010/uploads/mshipping.apk`
+    - **Landing Page QR Scanner**: `http://36.93.22.142/mshipping/download/`
+2. **Alur Pembaruan Aplikasi**:
+    - Ketika dialog "Pembaruan Tersedia" atau "Pembaruan Wajib" muncul, pengguna mengetuk tombol **"Perbarui Sekarang"**.
+    - Aplikasi memicu Android Download Manager via `Linking.openURL()` untuk mengunduh berkas APK secara andal di latar belakang.
+    - Notifikasi unduhan sistem Android menampilkan progres unduhan secara transparan.
+    - Begitu unduhan selesai, pengguna cukup mengetuk notifikasi untuk langsung memasang pembaruan (*1-tap update*).

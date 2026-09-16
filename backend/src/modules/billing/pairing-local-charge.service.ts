@@ -70,7 +70,7 @@ export function parseShippingMarks(rawMark: string): ParsedShippingMark[] {
   for (const part of parts) {
     // Cari pola 'NO.' atau 'NO' (case-insensitive)
     const match = part.match(/^(.*?)(?:\s+NO\.?|\s+No\.?|NO\.?|No\.?)\s*(.*)$/i)
-    if (match) {
+    if (match && match[1] !== undefined && match[2] !== undefined) {
       results.push({
         markingCode: match[1].trim(),
         markingNo: match[2].trim(),
@@ -110,10 +110,12 @@ export function parseReceiptNos(rawReceipt: string): string[] {
   if (parts.length === 0) return []
 
   const base = parts[0]
-  const results = [base]
+  if (!base) return []
+  const results: string[] = [base]
 
   for (let i = 1; i < parts.length; i++) {
     const suffix = parts[i]
+    if (!suffix) continue
     if (suffix.length < base.length) {
       const prefix = base.slice(0, base.length - suffix.length)
       results.push(prefix + suffix)
@@ -806,6 +808,7 @@ export async function processPairingByReceiptNos(
 
   for (let i = 0; i < rawTokens.length; i++) {
     const rawToken = rawTokens[i]
+    if (!rawToken) continue
     const parsed = parseReceiptNos(rawToken)
     parsed.forEach((rc) => allReceiptNos.add(rc))
 

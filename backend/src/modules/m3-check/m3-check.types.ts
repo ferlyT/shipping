@@ -46,6 +46,8 @@ export interface ProfileHargaItem {
   fdUpdate?: string | null
   fdUpdateDate?: string | Date | null
   fdUpdateSource?: 'AUDIT' | 'CUSTOMER_HARGA' | null
+  fdNoteAir?: string | null
+  fdNote1Sea?: string | null
 }
 
 export interface UnifiedM3CheckResult {
@@ -145,6 +147,7 @@ export interface UnifiedM3CheckResult {
   vfcGudangPerMarking: number | null
   vfcKomplainPerMarking: number | null
   minChargeKg: number
+  minChargeM3: number
   profileHarga: ProfileHargaItem | null
   comodityTypes: ComodityTypeOption[]
   freightChargeSummary?: {

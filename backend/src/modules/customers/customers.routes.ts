@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { authMiddleware, requirePermission } from '../../middleware/auth'
-import { getCustomers, getCustomerById } from './customers.service'
+import { getCustomers, getCustomerById, getCustomerSuggestions } from './customers.service'
 import { successResponse, errorResponse } from '../../utils/response'
 
 const customersRoutes = new Hono()
@@ -13,6 +13,16 @@ customersRoutes.get('/', async (c) => {
     const query = c.req.query()
     const result = await getCustomers(query)
     return successResponse(c, result.data, result.meta)
+  } catch (err) {
+    return errorResponse(c, (err as Error).message, 500)
+  }
+})
+
+customersRoutes.get('/suggestions', async (c) => {
+  try {
+    const q = c.req.query('q') || ''
+    const suggestions = await getCustomerSuggestions(q)
+    return successResponse(c, suggestions)
   } catch (err) {
     return errorResponse(c, (err as Error).message, 500)
   }

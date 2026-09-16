@@ -55,6 +55,79 @@ export interface DashboardRecentDO {
   } | null
 }
 
+export interface ActionableAlertCodeItem {
+  code: string
+  aging?: number
+  transit?: number
+  target?: number
+  eta?: string | Date | null
+  etd?: string | Date | null
+}
+
+export interface ActionableAlertConsignee {
+  name: string
+  count: number
+  codes: ActionableAlertCodeItem[]
+}
+
+export interface ActionableAlertsStats {
+  etaNotExit: {
+    total: number
+    air: number
+    sea: number
+    topConsignees: ActionableAlertConsignee[]
+  }
+  missedTargetSLA: {
+    total: number
+    air: number
+    sea: number
+    topConsignees: ActionableAlertConsignee[]
+  }
+}
+
+export interface DeliveryStatusStats {
+  scheduled: number
+  onDelivery: number
+  delivered: number
+  outstandingSJ: number
+  totalPackages: number
+  totalWeight: number
+}
+
+export interface FinancialOverviewStats {
+  draftInvoicesCount: number
+  draftInvoicesAmount: number
+  overdueInvoicesCount: number
+  overdueInvoicesAmount: number
+  monthlyRevenue: number
+  monthlyInvoicesCount: number
+}
+
+export interface OriginAnalyticsBranch {
+  branchCode: string
+  totalShipments: number
+  airShipments: number
+  seaShipments: number
+  totalVolume: number
+  totalWeight: number
+  totalPackages: number
+}
+
+export interface UpcomingArrivalItem {
+  markingCode: string
+  branchCode: string
+  listType: number
+  eta: Date | string | null
+  consignee: string | null
+  gudang: string | null
+  ket: string | null
+}
+
+export interface OriginAnalyticsStats {
+  branches: OriginAnalyticsBranch[]
+  upcomingArrivals: UpcomingArrivalItem[]
+}
+
 export interface DashboardStats {
   metrics: DashboardMetrics
   trends: DashboardTrends
@@ -63,4 +136,8 @@ export interface DashboardStats {
     invoices: DashboardRecentInvoice[]
     deliveryOrders: DashboardRecentDO[]
   }
+  actionableAlerts: ActionableAlertsStats
+  deliveryStatus: DeliveryStatusStats
+  financialOverview: FinancialOverviewStats
+  originAnalytics: OriginAnalyticsStats
 }
