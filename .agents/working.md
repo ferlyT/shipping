@@ -10,11 +10,30 @@
 ### 🕐 Terakhir Diperbarui
 - **Tanggal**: 2026-09-22
 - **Oleh**: Antigravity AI
-- **Sesi**: Cleanup Menu Delivery Orders — Perbaikan Label Sidebar, Hardcoded Strings, & Shortcut Card Lintas Modul
+- **Sesi**: Audit Menu Lanjutan — Live KPI Cards Billing, Dual-Bahasa Penuh Customer Price List, & Breadcrumb 3-Level Overview Dashboard
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
+
+- [x] **Penyelesaian Masalah Kritis Hasil Audit Menu & Dashboard ERP**:
+  1. **Billing Dashboard (`features/billing/pages/DashboardPage.tsx`)**:
+     - Memperbaiki bug UX di mana kartu KPI sebelumnya berisi data dummy statis (`KPI_CARDS`).
+     - Menghubungkan seluruh kartu KPI secara dinamis ke data live API (`useBillingDashboard` $\to$ `kpis`):
+       - Target Bill Hari Ini (Udara): kuantitas listcode dan rincian per PIC (Kiki vs Yati) terhubung ke `ROUTES.BILLING_TARGET`.
+       - Target Bill Hari Ini (Laut): kuantitas listcode dan rincian per PIC (Thara, Rico, Ferly) terhubung ke `ROUTES.BILLING_TARGET`.
+       - Invoice Terbit Bulan Ini: total invoice terbit bulan berjalan, persentase tren MoM (`↗`/`↘`/`→` % vs bulan lalu) atau breakdown per moda (Udara vs Laut), terhubung ke `ROUTES.BILLING_LIST`.
+       - Total Nominal Tagihan Bulan Ini: akumulasi nominal rupiah tagihan terbit bulan ini (`formatCurrency`), persentase tren MoM atau breakdown per moda (`formatCompactRupiah`), terhubung ke `ROUTES.BILLING_LIST`.
+  2. **Customer Price List (`features/customer-price-list/pages/ListPage.tsx`)**:
+     - Menghilangkan lebih dari 30 string teks bahasa Indonesia hardcode pada tabel, toolbar, kartu mobile, badge, dan modal.
+     - Menggantikan string hardcode dengan kunci i18n terstruktur (`customerPriceList.*`), terpasang berpasangan pada `id.json` dan `en.json`.
+     - Menghilangkan anti-pattern `console.error` pada handler data.
+     - Menyediakan teks bilingual penuh untuk modal konfirmasi akhiri masa berlaku dan modal hapus tarif khusus.
+  3. **Overview Dashboard (`features/dashboard/pages/DashboardPage.tsx`)**:
+     - Menyesuaikan breadcrumb `DashboardSkeleton` dan halaman utama menjadi **3-Level Standar ERP**: `{ t('module.overview') }` $\to$ `{ t('nav.dashboard') }` $\to$ `{ t('dashboard.overviewTitle') }`.
+     - Mengganti teks subtitle modal alert kedatangan dan SLA menjadi dinamis via i18n (`dashboard.etaNotExitDesc` dan `dashboard.missedSlaDesc`).
+  4. **Verifikasi Build**:
+     - Seluruh perubahan diverifikasi dengan `npm run build` sukses 100% tanpa galat (`✓ built in 3.01s`).
 
 - [x] **Cleanup & Perbaikan Relevansi Menu Delivery Orders (Opsi A)**:
   - **Latar Belakang & Permintaan User**: User menanyakan apakah menu Delivery Orders dan submenu-nya masih relevan.

@@ -454,14 +454,21 @@ Dokumen ini menjelaskan secara menyeluruh arsitektur, seluruh modul halaman, log
 
 Modul paling komprehensif pada sistem mshipping yang mencakup siklus hidup penagihan piutang, audit validasi, hingga pencetakan dokumen legal.
 
-#### A. Dashboard Keuangan (`BillingDashboardPage.tsx`)
-- **Fitur**: Kartu KPI piutang (Total Tertagih, Piutang Berjalan, Rasio Lunas), Grafik Tren Harian Penagihan per Karyawan/Sales (`by-employee-daily`), dan Grafik Komparasi Surat Jalan vs Faktur Terbit (`sj-vs-bill`).
+#### A. Dashboard Keuangan (`BillingDashboardPage.tsx` / `DashboardPage.tsx`)
+- **Fitur**:
+  - **4 Kartu KPI Terintegrasi Live API (`useBillingDashboard`)**:
+    - **Target Bill Hari Ini (Udara)**: Menampilkan total listcode target udara yang siap ditagih berserta rincian per PIC (Kiki vs Yati), dengan tautan langsung ke halaman Target Penagihan (`ROUTES.BILLING_TARGET`).
+    - **Target Bill Hari Ini (Laut)**: Menampilkan total listcode target laut berserta rincian per PIC (Thara, Rico, Ferly), dengan tautan langsung ke halaman Target Penagihan (`ROUTES.BILLING_TARGET`).
+    - **Invoice Terbit Bulan Ini**: Menampilkan volume invoice bulan berjalan, indikator tren persentase kenaikan/penurunan MoM (`↗`/`↘`/`→` % vs bulan lalu), atau rincian per moda (Udara vs Laut), terhubung ke Daftar Tagihan (`ROUTES.BILLING_LIST`).
+    - **Total Nominal Tagihan Bulan Ini**: Menampilkan akumulasi omzet tagihan yang diterbitkan bulan ini (`formatCurrency`), indikator tren persentase MoM, atau rincian per moda (`formatCompactRupiah`), terhubung ke Daftar Tagihan (`ROUTES.BILLING_LIST`).
+  - **Grafik Analitik Interaktif**: Grafik Tren Harian Penagihan per Karyawan/Sales (`by-employee-daily`), Grafik Tren Bulanan (`trends`), dan Grafik Komparasi Surat Jalan vs Faktur Terbit (`sj-vs-bill`).
+  - **Dukungan Dual-Bahasa Penuh (i18n)**: Seluruh label breadcrumb 3-level ERP (`nav.billingDashboard`), label tombol aksi header, dan teks metrik terhubung ke sistem kamus i18n tanpa string hardcode.
 - **Endpoint**:
-  - `GET /api/billing/kpi`
-  - `GET /api/billing/chart/by-employee-daily?days=30`
-  - `GET /api/billing/chart/trends?days=30`
-  - `GET /api/billing/chart/sj-vs-bill?days=30`
-  - `GET /api/billing/chart/sj-vs-bill/details?pic=...&type=...`
+  - `GET /api/billing/kpi`: Metrik agregasi invoice & target tagihan live.
+  - `GET /api/billing/chart/by-employee-daily?days=30`: Tren harian sales.
+  - `GET /api/billing/chart/trends?days=30`: Tren transaksi bulanan.
+  - `GET /api/billing/chart/sj-vs-bill?days=30`: Komparasi SJ vs Invoice.
+  - `GET /api/billing/chart/sj-vs-bill/details?pic=...&type=...`: Rincian unbilled SJ.
 
 #### B. Target Penagihan (`BillingTargetPage.tsx` / `TargetPage.tsx`)
 - **Tujuan**: Audit daftar muatan barang yang sudah selesai terkirim atau tiba di gudang namun belum diterbitkan invoice penagihannya.
@@ -703,7 +710,9 @@ Untuk mencegah *God Components* (>2.000 baris) dan kode *spaghetti*, seluruh mod
 ### 3.8. Modul Master Tarif Khusus Customer (`src/features/customer-price-list/`)
 
 #### A. Fitur & Halaman
-1. **Direktori Customer Price List (`ListPage.tsx`)**: Daftar seluruh pelanggan yang memiliki kontrak harga khusus tersendiri di luar tarif umum.
+1. **Direktori Customer Price List (`ListPage.tsx`)**:
+   - Menampilkan antarmuka dual-tab: **Harga Komoditi Khusus Customer** (tabel daftar harga khusus per komoditi dengan status aktif/kadaluarsa, aksi edit, akhiri masa berlaku, dan hapus) dan **Daftar Upload File Excel** (ringkasan unggahan master price list per customer).
+   - **Dukungan Dual-Bahasa Penuh (i18n)**: Seluruh header tabel desktop, kartu mobile, filter moda (`Semua Moda`/`SEA`/`AIR`), filter status (`Aktif`/`Semua Status`/`Kadaluarsa`), placeholder pencarian, toast feedback, dan modal konfirmasi terhubung penuh ke kamus bilingual (`useTranslation`).
 2. **Histori & Riwayat Customer (`HistoryPage.tsx`)**: Riwayat penyesuaian tarif per pelanggan tertentu beserta status aktif/kedaluwarsa.
 3. **Upload Tarif Khusus Pelanggan (`UploadPage.tsx`)**: Upload Excel daftar harga khusus satu pelanggan tertentu (`POST /api/customer-price-list/:custCode/upload`).
 4. **Visual Diff Pelanggan (`DiffPage.tsx`)**: Bedah komparasi tarif baru vs tarif lama khusus kontrak pelanggan bersangkutan.

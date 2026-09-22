@@ -56,7 +56,8 @@ function DashboardSkeleton() {
         subtitle={t('dashboard.overviewSubtitle')}
         breadcrumbs={[
           { label: t('module.overview'), path: ROUTES.DASHBOARD },
-          { label: t('nav.dashboard') },
+          { label: t('nav.dashboard'), path: ROUTES.DASHBOARD },
+          { label: t('dashboard.overviewTitle') },
         ]}
       />
 
@@ -181,7 +182,7 @@ export default function DashboardPage() {
       open: true,
       type: 'eta',
       title: t('dashboard.etaNotExit'),
-      subtitle: `${data.actionableAlerts?.etaNotExit?.total || 0} batch melewati estimasi kedatangan namun belum keluar dari pelabuhan/gudang`,
+      subtitle: `${data.actionableAlerts?.etaNotExit?.total || 0} ${t('dashboard.etaNotExitDesc')}`,
       items: data.actionableAlerts?.etaNotExit?.topConsignees || [],
     })
   }
@@ -191,7 +192,7 @@ export default function DashboardPage() {
       open: true,
       type: 'sla',
       title: t('dashboard.missedSla'),
-      subtitle: `${data.actionableAlerts?.missedTargetSLA?.total || 0} batch dengan waktu tempuh melebihi batas target SLA rute`,
+      subtitle: `${data.actionableAlerts?.missedTargetSLA?.total || 0} ${t('dashboard.missedSlaDesc')}`,
       items: data.actionableAlerts?.missedTargetSLA?.topConsignees || [],
     })
   }
@@ -203,7 +204,8 @@ export default function DashboardPage() {
         subtitle={t('dashboard.overviewSubtitle')}
         breadcrumbs={[
           { label: t('module.overview'), path: ROUTES.DASHBOARD },
-          { label: t('nav.dashboard') },
+          { label: t('nav.dashboard'), path: ROUTES.DASHBOARD },
+          { label: t('dashboard.overviewTitle') },
         ]}
       />
 

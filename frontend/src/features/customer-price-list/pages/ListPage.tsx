@@ -78,8 +78,8 @@ export function ListPage() {
         limit: 100,
       })
       setSpecialPrices(res.data.data)
-    } catch (err: any) {
-      console.error('Failed to load special prices', err)
+    } catch {
+      // silently handle or empty state will show
     } finally {
       setIsLoadingSpecial(false)
     }
@@ -122,11 +122,11 @@ export function ListPage() {
     try {
       setIsProcessingAction(true)
       await customerPriceListApi.deactivateSpecialPrice(itemToDeactivate.id)
-      toast.success('Masa berlaku harga khusus berhasil diakhiri')
+      toast.success(t('customerPriceList.toastDeactivateSuccess'))
       setItemToDeactivate(null)
       fetchSpecialPrices()
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Gagal menonaktifkan harga')
+      toast.error(err?.response?.data?.message || t('customerPriceList.toastDeactivateError'))
     } finally {
       setIsProcessingAction(false)
     }
@@ -138,11 +138,11 @@ export function ListPage() {
     try {
       setIsProcessingAction(true)
       await customerPriceListApi.deleteSpecialPrice(itemToDelete.id)
-      toast.success('Harga khusus berhasil dihapus')
+      toast.success(t('customerPriceList.toastDeleteSuccess'))
       setItemToDelete(null)
       fetchSpecialPrices()
     } catch (err: any) {
-      toast.error(err?.response?.data?.message || 'Gagal menghapus harga')
+      toast.error(err?.response?.data?.message || t('customerPriceList.toastDeleteError'))
     } finally {
       setIsProcessingAction(false)
     }
@@ -152,7 +152,7 @@ export function ListPage() {
   const specialColumns: Column<CustomerSpecialPriceItem>[] = [
     {
       key: 'customer',
-      header: 'Customer',
+      header: t('customerPriceList.customerName'),
       render: (row: CustomerSpecialPriceItem) => (
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-1.5 flex-wrap">
@@ -168,7 +168,7 @@ export function ListPage() {
     },
     {
       key: 'category',
-      header: 'Kategori / Komoditi',
+      header: t('customerPriceList.category'),
       render: (row: CustomerSpecialPriceItem) => (
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-1.5">
@@ -178,7 +178,7 @@ export function ListPage() {
           </div>
           {row.aliases && row.aliases.length > 0 && (
             <div className="flex items-center gap-1 flex-wrap">
-              <span className="text-[10px] text-[var(--color-secondary)]">Alias:</span>
+              <span className="text-[10px] text-[var(--color-secondary)]">{t('customerPriceList.alias')}</span>
               {row.aliases.map((a) => (
                 <span
                   key={a}
@@ -194,7 +194,7 @@ export function ListPage() {
     },
     {
       key: 'modeBranch',
-      header: 'Moda & Asal',
+      header: t('customerPriceList.modeBranch'),
       render: (row: CustomerSpecialPriceItem) => {
         const isAir = row.mode.toUpperCase().includes('AIR')
         return (
@@ -218,7 +218,7 @@ export function ListPage() {
     },
     {
       key: 'price',
-      header: 'Tarif Khusus',
+      header: t('customerPriceList.specialRate'),
       render: (row: CustomerSpecialPriceItem) => {
         const isAir = row.mode.toUpperCase().includes('AIR')
         return (
@@ -235,18 +235,18 @@ export function ListPage() {
     },
     {
       key: 'validity',
-      header: 'Masa Berlaku',
+      header: t('customerPriceList.validity'),
       render: (row: CustomerSpecialPriceItem) => (
         <div className="text-xs space-y-0.5">
           <div className="flex items-center gap-1 text-[var(--color-secondary)]">
-            <span>Mulai:</span>
+            <span>{t('customerPriceList.validityStart')}</span>
             <strong className="text-[var(--color-primary)]">{formatDate(row.effectiveDate)}</strong>
           </div>
           <div className="text-[11px] text-[var(--color-secondary)]">
             {row.endDate ? (
-              <span>s.d. <strong className="text-[var(--color-primary)]">{formatDate(row.endDate)}</strong></span>
+              <span>{t('customerPriceList.validityUntil')} <strong className="text-[var(--color-primary)]">{formatDate(row.endDate)}</strong></span>
             ) : (
-              <span className="text-emerald-600 dark:text-emerald-400 font-medium">Seterusnya (Ongoing)</span>
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium">{t('customerPriceList.validityOngoing')}</span>
             )}
           </div>
         </div>
@@ -254,7 +254,7 @@ export function ListPage() {
     },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status'),
       render: (row: CustomerSpecialPriceItem) => (
         <span
           className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
@@ -263,13 +263,13 @@ export function ListPage() {
               : 'bg-transparent border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
           }`}
         >
-          {row.isExpired ? 'Kadaluarsa' : 'Aktif'}
+          {row.isExpired ? t('customerPriceList.statusExpired') : t('customerPriceList.statusActive')}
         </span>
       ),
     },
     {
       key: 'actions',
-      header: 'Aksi',
+      header: t('common.actions'),
       className: 'text-right',
       render: (row: CustomerSpecialPriceItem) => (
         <div className="flex items-center justify-end gap-1">
@@ -280,7 +280,7 @@ export function ListPage() {
               setSelectedItem(row)
               setIsModalOpen(true)
             }}
-            title="Edit Harga"
+            title={t('common.edit')}
             className="p-1.5 h-auto text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
           >
             <Edit3 size={14} />
@@ -291,7 +291,7 @@ export function ListPage() {
               variant="ghost"
               size="sm"
               onClick={() => setItemToDeactivate(row)}
-              title="Akhiri Masa Berlaku Sekarang"
+              title={t('customerPriceList.modalEndValidityTitle')}
               className="p-1.5 h-auto text-amber-600 dark:text-amber-400 hover:bg-amber-500/10"
             >
               <Ban size={14} />
@@ -302,7 +302,7 @@ export function ListPage() {
             variant="ghost"
             size="sm"
             onClick={() => setItemToDelete(row)}
-            title="Hapus Harga Khusus"
+            title={t('customerPriceList.modalDeleteTitle')}
             className="p-1.5 h-auto text-rose-600 dark:text-rose-400 hover:bg-rose-500/10"
           >
             <Trash2 size={14} />
@@ -334,7 +334,7 @@ export function ListPage() {
     },
     {
       key: 'effectiveDate',
-      header: 'Effective Date',
+      header: t('customerPriceList.effectiveDateShort'),
       render: (row: CustomerPriceListUploadRow) => (
         <span className="text-[var(--color-secondary)]">
           {formatDate(row.effectiveDate)}
@@ -352,7 +352,7 @@ export function ListPage() {
     },
     {
       key: 'uploadedAt',
-      header: 'Upload Date',
+      header: t('customerPriceList.uploadDate'),
       render: (row: CustomerPriceListUploadRow) => (
         <span className="text-[var(--color-secondary)]">
           {formatDate(row.uploadedAt)}
@@ -406,7 +406,7 @@ export function ListPage() {
             <Link to={ROUTES.COMMODITY_MAPPING}>
               <Button variant="secondary" size="sm">
                 <Tag className="w-4 h-4 mr-1.5 text-blue-600 dark:text-blue-400" />
-                Pemetaan Komoditas
+                {t('nav.commodityMapping')}
               </Button>
             </Link>
             <Button
@@ -419,12 +419,12 @@ export function ListPage() {
               className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
             >
               <Sparkles className="w-4 h-4 mr-1.5 text-emerald-600 dark:text-emerald-400" />
-              + Input Harga Khusus
+              + {t('customerPriceList.inputSpecialPrice')}
             </Button>
             <Button asChild size="sm">
               <Link to={ROUTES.CUSTOMER_PRICE_LIST_UPLOAD}>
                 <Upload className="w-4 h-4 mr-1.5" />
-                {t('common.add')} File Excel
+                {t('common.add')} {t('customerPriceList.addExcelFile')}
               </Link>
             </Button>
           </div>
@@ -443,7 +443,7 @@ export function ListPage() {
           }`}
         >
           <Sparkles size={14} />
-          <span>Harga Komoditi Khusus Customer</span>
+          <span>{t('customerPriceList.tabSpecialPrices')}</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-[var(--color-neutral)] border border-[var(--color-border)]">
             {specialPrices.length}
           </span>
@@ -459,7 +459,7 @@ export function ListPage() {
           }`}
         >
           <FileSpreadsheet size={14} />
-          <span>Daftar Upload File Excel</span>
+          <span>{t('customerPriceList.tabMasterUploads')}</span>
           <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-[var(--color-neutral)] border border-[var(--color-border)]">
             {rows.length}
           </span>
@@ -475,7 +475,7 @@ export function ListPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-secondary)] pointer-events-none" />
               <input
                 type="text"
-                placeholder="Cari customer, komoditi (misal: BATTERY), atau branch..."
+                placeholder={t('customerPriceList.searchSpecialPlaceholder')}
                 value={specialSearch}
                 onChange={(e) => setSpecialSearch(e.target.value)}
                 className="w-full pl-9 pr-4 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-xl focus:outline-hidden focus:border-[var(--color-tertiary)] text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] transition-all"
@@ -496,7 +496,7 @@ export function ListPage() {
                         : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                     }`}
                   >
-                    {m === 'ALL' ? 'Semua Moda' : m}
+                    {m === 'ALL' ? t('customerPriceList.allModes') : m}
                   </button>
                 ))}
               </div>
@@ -513,7 +513,7 @@ export function ListPage() {
                         : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
                     }`}
                   >
-                    {s === 'ACTIVE' ? 'Aktif' : s === 'ALL' ? 'Semua Status' : 'Kadaluarsa'}
+                    {s === 'ACTIVE' ? t('customerPriceList.statusActive') : s === 'ALL' ? t('customerPriceList.allStatus') : t('customerPriceList.statusExpired')}
                   </button>
                 ))}
               </div>
@@ -535,7 +535,7 @@ export function ListPage() {
               ) : filteredSpecialPrices.length === 0 ? (
                 <div className="p-8 text-center text-xs text-[var(--color-secondary)] space-y-2">
                   <Sparkles size={24} className="mx-auto text-[var(--color-secondary)] opacity-50" />
-                  <p>Belum ada harga komoditi khusus yang sesuai filter.</p>
+                  <p>{t('customerPriceList.emptySpecialFilter')}</p>
                   <Button
                     size="sm"
                     variant="secondary"
@@ -545,7 +545,7 @@ export function ListPage() {
                     }}
                     className="mt-2"
                   >
-                    + Input Harga Khusus Sekarang
+                    + {t('customerPriceList.inputSpecialPriceNow')}
                   </Button>
                 </div>
               ) : (
@@ -567,30 +567,30 @@ export function ListPage() {
                             : 'border-emerald-500/40 text-emerald-600'
                         }`}
                       >
-                        {item.isExpired ? 'Kadaluarsa' : 'Aktif'}
+                        {item.isExpired ? t('customerPriceList.statusExpired') : t('customerPriceList.statusActive')}
                       </span>
                     </div>
 
                     <div className="p-3 rounded-xl bg-[var(--color-neutral)]/40 border border-[var(--color-border)] space-y-1.5 text-xs">
                       <div className="flex justify-between items-baseline">
-                        <span className="text-[var(--color-secondary)]">Kategori:</span>
+                        <span className="text-[var(--color-secondary)]">{t('customerPriceList.category')}:</span>
                         <strong className="text-[var(--color-primary)]">{item.category}</strong>
                       </div>
                       <div className="flex justify-between items-baseline">
-                        <span className="text-[var(--color-secondary)]">Moda & Branch:</span>
+                        <span className="text-[var(--color-secondary)]">{t('customerPriceList.modeBranch')}:</span>
                         <span className="font-semibold text-[var(--color-primary)]">
                           {item.mode.includes('AIR') ? 'AIR' : 'SEA'} · {item.branch}
                         </span>
                       </div>
                       <div className="flex justify-between items-baseline pt-1 border-t border-[var(--color-border)]">
-                        <span className="text-[var(--color-secondary)]">Tarif Khusus:</span>
+                        <span className="text-[var(--color-secondary)]">{t('customerPriceList.specialRate')}:</span>
                         <span className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400">
                           {formatCurrency(item.price)}
                         </span>
                       </div>
                       {item.aliases && item.aliases.length > 0 && (
                         <div className="pt-1 text-[11px] text-[var(--color-secondary)]">
-                          <span>Alias: </span>
+                          <span>{t('customerPriceList.alias')} </span>
                           <span className="font-mono text-[var(--color-primary)]">{item.aliases.join(', ')}</span>
                         </div>
                       )}
@@ -607,7 +607,7 @@ export function ListPage() {
                         }}
                       >
                         <Edit3 size={13} className="mr-1" />
-                        Edit
+                        {t('common.edit')}
                       </Button>
                       {!item.isExpired && (
                         <Button
@@ -617,7 +617,7 @@ export function ListPage() {
                           className="text-amber-600"
                         >
                           <Ban size={13} className="mr-1" />
-                          Akhiri
+                          {t('customerPriceList.modalEndValidityConfirm')}
                         </Button>
                       )}
                       <Button
@@ -640,7 +640,7 @@ export function ListPage() {
                 data={filteredSpecialPrices}
                 keyExtractor={(row) => String(row.id)}
                 isLoading={isLoadingSpecial}
-                emptyMessage="Belum ada data harga komoditi khusus per customer."
+                emptyMessage={t('customerPriceList.emptySpecialData')}
               />
             </div>
           </div>
@@ -654,7 +654,7 @@ export function ListPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-secondary)] pointer-events-none" />
               <input
                 type="text"
-                placeholder="Cari kode customer atau nama customer..."
+                placeholder={t('customerPriceList.searchUploadPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="w-full pl-9 pr-4 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-xl focus:outline-hidden focus:border-[var(--color-tertiary)] text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] transition-all"
@@ -663,8 +663,7 @@ export function ListPage() {
 
             <div className="flex items-center justify-between sm:justify-end gap-2 text-xs text-[var(--color-secondary)] font-medium">
               <span>
-                Menampilkan <strong className="text-[var(--color-primary)] font-mono">{filteredRows.length}</strong> dari{' '}
-                <strong className="text-[var(--color-primary)] font-mono">{rows.length}</strong> customer
+                {t('customerPriceList.showingCustCount', { current: filteredRows.length, total: rows.length })}
               </span>
             </div>
           </div>
@@ -686,7 +685,7 @@ export function ListPage() {
                 ))
               ) : filteredRows.length === 0 ? (
                 <div className="p-8 text-center text-xs text-[var(--color-secondary)]">
-                  {search ? 'Tidak ada customer yang sesuai pencarian.' : 'Belum ada data customer price list.'}
+                  {search ? t('customerPriceList.noCustMatch') : t('customerPriceList.emptyCustData')}
                 </div>
               ) : (
                 filteredRows.map((row) => (
@@ -714,7 +713,7 @@ export function ListPage() {
                     {/* Customer Name */}
                     <div>
                       <h4 className="text-sm font-bold text-[var(--color-primary)] line-clamp-1">
-                        {row.custName || 'Customer Tanpa Nama'}
+                        {row.custName || t('customerPriceList.unnamedCustomer')}
                       </h4>
                     </div>
 
@@ -722,7 +721,7 @@ export function ListPage() {
                     <div className="p-2.5 rounded-xl bg-[var(--color-neutral)]/50 border border-[var(--color-border)]/70 grid grid-cols-2 gap-2 text-xs">
                       <div>
                         <span className="text-[10px] uppercase font-semibold text-[var(--color-secondary)] block">
-                          Tgl Efektif
+                          {t('customerPriceList.effectiveDateShort')}
                         </span>
                         <span className="font-medium text-[var(--color-primary)] text-[11px] flex items-center gap-1 mt-0.5">
                           <Calendar size={11} className="text-[var(--color-secondary)] shrink-0" />
@@ -732,7 +731,7 @@ export function ListPage() {
 
                       <div>
                         <span className="text-[10px] uppercase font-semibold text-[var(--color-secondary)] block">
-                          Total Tarif
+                          {t('customerPriceList.totalItems')}
                         </span>
                         <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400 text-[11px] mt-0.5 block">
                           {row.itemCount.toLocaleString('en-US')}
@@ -743,10 +742,10 @@ export function ListPage() {
                     {/* Action Footer */}
                     <div className="flex items-center justify-between pt-1 text-xs text-[var(--color-tertiary)] font-semibold">
                       <span className="text-[11px] text-[var(--color-secondary)]">
-                        Upload: {formatDate(row.uploadedAt)}
+                        {t('customerPriceList.uploadDatePrefix', { date: formatDate(row.uploadedAt) })}
                       </span>
                       <span className="inline-flex items-center gap-1">
-                        <span>Lihat Riwayat</span>
+                        <span>{t('customerPriceList.viewHistory')}</span>
                         <ArrowRight size={12} />
                       </span>
                     </div>
@@ -786,10 +785,13 @@ export function ListPage() {
       {/* Confirm Deactivate Modal */}
       <ConfirmModal
         isOpen={Boolean(itemToDeactivate)}
-        title="Akhiri Masa Berlaku Harga"
-        message={`Apakah Anda yakin ingin mengakhiri masa berlaku harga khusus komoditi ${itemToDeactivate?.category} untuk ${itemToDeactivate?.custName || itemToDeactivate?.fdCustCode} per hari ini?`}
-        confirmText="Akhiri Sekarang"
-        cancelText="Batal"
+        title={t('customerPriceList.modalEndValidityTitle')}
+        message={t('customerPriceList.modalEndValidityMsg', {
+          category: itemToDeactivate?.category || '',
+          customer: itemToDeactivate?.custName || itemToDeactivate?.fdCustCode || '',
+        })}
+        confirmText={t('customerPriceList.modalEndValidityConfirm')}
+        cancelText={t('common.cancel')}
         onConfirm={handleConfirmDeactivate}
         onCancel={() => setItemToDeactivate(null)}
         isLoading={isProcessingAction}
@@ -798,10 +800,14 @@ export function ListPage() {
       {/* Confirm Delete Modal */}
       <ConfirmModal
         isOpen={Boolean(itemToDelete)}
-        title="Hapus Harga Khusus"
-        message={`Apakah Anda yakin ingin menghapus harga khusus komoditi ${itemToDelete?.category} (${formatCurrency(itemToDelete?.price || 0)}) untuk ${itemToDelete?.custName || itemToDelete?.fdCustCode}?`}
-        confirmText="Hapus"
-        cancelText="Batal"
+        title={t('customerPriceList.modalDeleteTitle')}
+        message={t('customerPriceList.modalDeleteMsg', {
+          category: itemToDelete?.category || '',
+          rate: formatCurrency(itemToDelete?.price || 0),
+          customer: itemToDelete?.custName || itemToDelete?.fdCustCode || '',
+        })}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         onConfirm={handleConfirmDelete}
         onCancel={() => setItemToDelete(null)}
         isLoading={isProcessingAction}

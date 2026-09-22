@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CreditCard, CalendarDays, Plane, Ship, ShieldCheck, ScrollText } from 'lucide-react'
 import { ROUTES } from '@/lib/constants'
@@ -10,18 +10,12 @@ import { SjVsBillChart } from '../components/SjVsBillChart'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useTranslation } from '@/hooks/useTranslation'
+import { cn, formatCurrency, formatNumber, formatCompactRupiah } from '@/lib/utils'
 import { useBillingDashboard } from '../hooks/useBillingDashboard'
 import { useSwipeTab } from '../hooks/useSwipeTab'
 
 type MetricMode = 'count' | 'value'
 type ChartTab = 'harian' | 'bulanan' | 'karyawan' | 'sj-vs-bill'
-
-const KPI_CARDS = [
-  { id: 'target_udara', key: 'billing.targetAir', value: '4 List', desc: 'Kiki: 4 | Yati: 0', icon: Plane, color: 'text-amber-500' },
-  { id: 'target_laut', key: 'billing.targetSea', value: '52 List', desc: 'Thara: 48 | Rico: 2 | Ferly: 2', icon: Ship, color: 'text-emerald-500' },
-  { id: 'inv_month', key: 'billing.monthInvoices', value: '946', desc: '↘ 81.6% vs bulan lalu', subDesc1: '223', subDesc2: '723', icon: CalendarDays, color: 'text-sky-500' },
-  { id: 'amt_month', key: 'billing.monthAmount', value: 'Rp. 10.837.404.519,95', desc: '↘ 83.7% vs bulan lalu', subDesc1: 'Rp 2,26 M', subDesc2: 'Rp 8,57 M', icon: CreditCard, color: 'text-rose-500' },
-]
 
 export default function DashboardPage() {
   const { t } = useTranslation()
@@ -60,6 +54,70 @@ export default function DashboardPage() {
   const { handleTouchStart, handleTouchEnd } = useSwipeTab(chartTabs, activeTab, setActiveTab)
 
   const isKpiLoading = isLoadingKpi && !kpis
+
+  const kpiCards = useMemo(() => {
+    const uTotal = kpis?.targetBillUdara?.total ?? 0
+    const uKiki = kpis?.targetBillUdara?.breakdown?.kiki ?? 0
+    const uYati = kpis?.targetBillUdara?.breakdown?.yati ?? 0
+
+    const lTotal = kpis?.targetBillLaut?.total ?? 0
+    const lThara = kpis?.targetBillLaut?.breakdown?.thara ?? 0
+    const lRico = kpis?.targetBillLaut?.breakdown?.rico ?? 0
+    const lFerly = kpis?.targetBillLaut?.breakdown?.ferly ?? 0
+
+    const invCount = kpis?.invoicesBulanIni ?? 0
+    const invTrend = kpis?.trend?.invoicesBulanIni
+    const invTrendIcon = invTrend?.direction === 'up' ? '↗' : invTrend?.direction === 'down' ? '↘' : '→'
+    const invDesc = invTrend && invTrend.value !== 0
+      ? `${invTrendIcon} ${Math.abs(invTrend.value)}% ${t('shipments.vsLastMonth')}`
+      : `${t('common.air')}: ${kpis?.invoicesBulanIniBreakdown?.udara ?? 0} | ${t('common.sea')}: ${kpis?.invoicesBulanIniBreakdown?.laut ?? 0}`
+
+    const amtTotal = kpis?.tagihanBulanIni ?? 0
+    const amtTrend = kpis?.trend?.tagihanBulanIni
+    const amtTrendIcon = amtTrend?.direction === 'up' ? '↗' : amtTrend?.direction === 'down' ? '↘' : '→'
+    const amtDesc = amtTrend && amtTrend.value !== 0
+      ? `${amtTrendIcon} ${Math.abs(amtTrend.value)}% ${t('shipments.vsLastMonth')}`
+      : `${t('common.air')}: ${formatCompactRupiah(kpis?.tagihanBulanIniBreakdown?.udara ?? 0)} | ${t('common.sea')}: ${formatCompactRupiah(kpis?.tagihanBulanIniBreakdown?.laut ?? 0)}`
+
+    return [
+      {
+        id: 'target_udara',
+        key: 'billing.targetAir',
+        value: `${formatNumber(uTotal)} List`,
+        desc: `Kiki: ${uKiki} | Yati: ${uYati}`,
+        icon: Plane,
+        color: 'text-amber-500',
+        path: ROUTES.BILLING_TARGET,
+      },
+      {
+        id: 'target_laut',
+        key: 'billing.targetSea',
+        value: `${formatNumber(lTotal)} List`,
+        desc: `Thara: ${lThara} | Rico: ${lRico} | Ferly: ${lFerly}`,
+        icon: Ship,
+        color: 'text-emerald-500',
+        path: ROUTES.BILLING_TARGET,
+      },
+      {
+        id: 'inv_month',
+        key: 'billing.monthInvoices',
+        value: formatNumber(invCount),
+        desc: invDesc,
+        icon: CalendarDays,
+        color: 'text-sky-500',
+        path: ROUTES.BILLING_LIST,
+      },
+      {
+        id: 'amt_month',
+        key: 'billing.monthAmount',
+        value: formatCurrency(amtTotal),
+        desc: amtDesc,
+        icon: CreditCard,
+        color: 'text-rose-500',
+        path: ROUTES.BILLING_LIST,
+      },
+    ]
+  }, [kpis, t])
 
   return (
     <div
@@ -101,10 +159,14 @@ export default function DashboardPage() {
         className="flex items-stretch gap-3 overflow-x-auto snap-x snap-mandatory pb-2 -mx-4 px-4 sm:mx-0 sm:px-0 sm:grid sm:grid-cols-2 lg:grid-cols-4 sm:overflow-visible [&::-webkit-scrollbar]:hidden"
         style={{ scrollbarWidth: 'none' }}
       >
-        {KPI_CARDS.map((card) => (
+        {kpiCards.map((card) => (
           <div
             key={card.id}
-            className="relative group bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden min-w-[240px] xs:min-w-[260px] sm:min-w-0 shrink-0 sm:shrink snap-start"
+            onClick={() => card.path && navigate(card.path)}
+            className={cn(
+              "relative group bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-4 sm:p-5 shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden min-w-[240px] xs:min-w-[260px] sm:min-w-0 shrink-0 sm:shrink snap-start",
+              card.path && "cursor-pointer hover:border-[var(--color-tertiary)]"
+            )}
           >
             <div className="flex justify-between items-start mb-3 sm:mb-4">
               <p className="text-[10px] sm:text-xs font-bold text-[var(--color-secondary)] uppercase tracking-wider">{t(card.key)}</p>
