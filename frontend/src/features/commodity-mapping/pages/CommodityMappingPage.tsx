@@ -18,6 +18,7 @@ import { Pagination } from '@/components/ui/Pagination'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { ROUTES } from '@/lib/constants'
+import { displayCustName, formatCurrency } from '@/lib/utils'
 import { CommodityMappingModal } from '../components/CommodityMappingModal'
 import { commodityMappingApi } from '../services/commodity-mapping.service'
 import type { CommodityMappingItem, CommodityMappingFilters } from '../types/commodity-mapping.types'
@@ -318,7 +319,8 @@ export default function CommodityMappingPage() {
                   <th className="px-4 py-3">Lingkup & Pelanggan</th>
                   <th className="px-4 py-3">Nama Komoditas Sumber</th>
                   <th className="px-4 py-3">Target Kategori Price List</th>
-                  <th className="px-4 py-3">Moda</th>
+                  <th className="px-4 py-3">Tarif Khusus (Tier 0)</th>
+                  <th className="px-4 py-3">Moda & Cabang</th>
                   <th className="px-4 py-3">Periode Berlaku</th>
                   <th className="px-4 py-3">Catatan</th>
                   <th className="px-4 py-3 text-right">Aksi</th>
@@ -330,7 +332,8 @@ export default function CommodityMappingPage() {
                     <td className="px-4 py-3.5"><div className="h-5 w-24 rounded-md skeleton-shimmer" /></td>
                     <td className="px-4 py-3.5"><div className="h-4 w-36 rounded-md skeleton-shimmer" /></td>
                     <td className="px-4 py-3.5"><div className="h-5 w-28 rounded-full skeleton-shimmer" /></td>
-                    <td className="px-4 py-3.5"><div className="h-4 w-16 rounded-md skeleton-shimmer" /></td>
+                    <td className="px-4 py-3.5"><div className="h-5 w-24 rounded-md skeleton-shimmer" /></td>
+                    <td className="px-4 py-3.5"><div className="h-4 w-20 rounded-md skeleton-shimmer" /></td>
                     <td className="px-4 py-3.5"><div className="h-4 w-24 rounded-md skeleton-shimmer" /></td>
                     <td className="px-4 py-3.5"><div className="h-3.5 w-32 rounded-md skeleton-shimmer" /></td>
                     <td className="px-4 py-3.5 text-right"><div className="h-7 w-14 rounded-lg skeleton-shimmer ml-auto" /></td>
@@ -379,7 +382,8 @@ export default function CommodityMappingPage() {
                   <th className="px-4 py-3">Lingkup & Pelanggan</th>
                   <th className="px-4 py-3">Nama Komoditas Sumber</th>
                   <th className="px-4 py-3">Target Kategori Price List</th>
-                  <th className="px-4 py-3">Moda</th>
+                  <th className="px-4 py-3">Tarif Khusus (Tier 0)</th>
+                  <th className="px-4 py-3">Moda & Cabang</th>
                   <th className="px-4 py-3">Periode Berlaku</th>
                   <th className="px-4 py-3">Catatan</th>
                   <th className="px-4 py-3 text-right">Aksi</th>
@@ -389,6 +393,7 @@ export default function CommodityMappingPage() {
                 {data.map((item) => {
                   const isCustomerScope = Boolean(item.fdCustCode)
                   const isExpired = item.endDate && new Date(item.endDate) < new Date()
+                  const hasDirectPrice = item.price != null && item.price > 0
 
                   return (
                     <tr
@@ -405,7 +410,7 @@ export default function CommodityMappingPage() {
                             </span>
                             {item.custName && (
                               <div className="text-[11px] text-gray-600 dark:text-gray-400 font-medium truncate max-w-[150px]">
-                                {item.custName}
+                                {displayCustName(item.custName)}
                               </div>
                             )}
                           </div>
@@ -438,11 +443,43 @@ export default function CommodityMappingPage() {
                         </div>
                       </td>
 
-                      {/* Mode */}
+                      {/* Direct Price & Effective Condition */}
                       <td className="px-4 py-3.5">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
-                          {item.mode || 'Semua Moda'}
-                        </span>
+                        {hasDirectPrice ? (
+                          <div className="space-y-0.5">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
+                              {formatCurrency(item.price!)}
+                            </span>
+                            {item.startMarkingCode && (
+                              <div className="text-[10px] font-mono font-semibold text-blue-600 dark:text-blue-400">
+                                Mulai: &ge; {item.startMarkingCode}
+                              </div>
+                            )}
+                            {item.startAgentDate && (
+                              <div className="text-[9.5px] text-gray-500">
+                                Agen &ge; {new Date(item.startAgentDate).toLocaleDateString('id-ID')}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 text-[10px] italic">
+                            Ikuti Master Tarif
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Mode & Branch */}
+                      <td className="px-4 py-3.5 whitespace-nowrap">
+                        <div className="flex items-center gap-1 flex-wrap">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300">
+                            {item.mode || 'Semua Moda'}
+                          </span>
+                          {item.branch && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                              {item.branch}
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Effective Dates */}

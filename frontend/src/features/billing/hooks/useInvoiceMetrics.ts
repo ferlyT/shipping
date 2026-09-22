@@ -62,14 +62,15 @@ export function useInvoiceMetrics({ details, validationData, expedisiList }: Use
       const nameUpper = (d.fdItemName || '').toUpperCase()
       if (!unit && nameUpper.includes('(M3)')) unit = 'M3'
       if (!unit && (nameUpper.includes('(KG)') || nameUpper.includes('PARCELS TO JAKARTA (KG)'))) unit = 'KG'
+      if (!unit && nameUpper.includes('(PCS)')) unit = 'PCS'
 
       const isM3 =
         unit === 'M3' ||
-        (unit !== 'KG' && nameUpper.includes('(M3)')) ||
-        (unit !== 'KG' && nameUpper.includes('PARCEL') && !nameUpper.includes('(KG)') && !nameUpper.includes('PARCELS TO JAKARTA (KG)'))
+        (unit !== 'KG' && unit !== 'PCS' && nameUpper.includes('(M3)')) ||
+        (unit !== 'KG' && unit !== 'PCS' && nameUpper.includes('PARCEL') && !nameUpper.includes('(KG)') && !nameUpper.includes('(PCS)') && !nameUpper.includes('PARCELS TO JAKARTA (KG)'))
       const isKg =
         unit === 'KG' ||
-        (unit !== 'M3' && (nameUpper.includes('(KG)') || nameUpper.includes('PARCELS TO JAKARTA (KG)')))
+        (unit !== 'M3' && unit !== 'PCS' && (nameUpper.includes('(KG)') || nameUpper.includes('PARCELS TO JAKARTA (KG)')))
 
       if (isM3) m3 += Number(d.fdQty || 0)
       else if (isKg) kg += Number(d.fdQty || 0)

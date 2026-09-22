@@ -14,9 +14,15 @@ export const ROUTES = {
   SHIPMENT_DETAIL: (id: string) => `/mshipping/logistics/shipments/${id}`,
   SHIPMENT_BATCHES: '/mshipping/logistics/shipment-batches',
   SHIPMENT_BATCHES_LIST: '/mshipping/logistics/shipment-batches/list',
+  SHIPMENT_BATCH_MARKING_SIZE: '/mshipping/logistics/shipment-batches/marking-size',
   DELIVERY_ORDERS: '/mshipping/logistics/delivery-orders',
+  DELIVERY_ORDERS_INVENTORY: '/mshipping/logistics/delivery-orders/inventory',
   DELIVERY_ORDERS_LIST: '/mshipping/logistics/delivery-orders/list',
   DELIVERY_DETAIL: (id: string) => `/mshipping/logistics/delivery-orders/${id}`,
+  DELIVERY_PRINT: (id: string, doc?: 'both' | 'sj' | 'ukuran') => {
+    const cleanId = (id || '').trim()
+    return doc ? `/mshipping/logistics/delivery-orders/${cleanId}/print?doc=${doc}` : `/mshipping/logistics/delivery-orders/${cleanId}/print`
+  },
 
   // Finance
   BILLING: '/mshipping/finance/billing',
@@ -33,6 +39,15 @@ export const ROUTES = {
   BILLING_VALIDATION_LIST: '/mshipping/finance/billing/validation/list',
   BILLING_VALIDATION_DETAIL: (id: string) => `/mshipping/finance/billing/validation/${(id || '').trim()}`,
   BILLING_PAIRING_LOCAL_CHARGE: '/mshipping/finance/billing/pairing-local-charge',
+
+  // Cashier & Pelunasan Piutang
+  CASHIER: '/mshipping/finance/cashier',
+  CASHIER_LIST: '/mshipping/finance/cashier',
+  CASHIER_DETAIL: (id: string) => `/mshipping/finance/cashier/${(id || '').trim()}`,
+
+  // Customer Wallet & Saldo Deposit
+  WALLET: '/mshipping/finance/wallet',
+  WALLET_LIST: '/mshipping/finance/wallet',
 
   // Price List
   PRICE_LIST: '/mshipping/finance/price-list',

@@ -20,10 +20,11 @@ const queryClient = new QueryClient({
 
 export default function RootLayout() {
   const { initializeAuth } = useAuthStore()
-  const { mode } = useThemeStore()
+  const { mode, initializeTheme } = useThemeStore()
   const { checkUpdate } = useUpdateStore()
 
   useEffect(() => {
+    initializeTheme()
     initializeAuth()
     // Silent background check for app update
     checkUpdate(false)

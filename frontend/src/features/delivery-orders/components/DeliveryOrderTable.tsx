@@ -9,6 +9,11 @@ import {
   ChevronRight,
   Inbox,
   Car,
+  Printer,
+  FileCheck,
+  FileText,
+  CheckCircle2,
+  Clock,
 } from 'lucide-react'
 import { ROUTES } from '@/lib/constants'
 import { formatDate, cn, displayCustName } from '@/lib/utils'
@@ -45,6 +50,7 @@ export function DeliveryOrderTable({
                 <th className="py-3 px-4">Supir & Kendaraan</th>
                 <th className="py-3 px-4 text-right">Pack / Koli</th>
                 <th className="py-3 px-4 text-right">Berat (Kg)</th>
+                <th className="py-3 px-4">Status</th>
                 <th className="py-3 px-4 text-center">Aksi</th>
               </tr>
             </thead>
@@ -58,6 +64,7 @@ export function DeliveryOrderTable({
                   <td className="py-3 px-4"><div className="h-3.5 w-28 rounded skeleton-shimmer" /></td>
                   <td className="py-3 px-4 text-right"><div className="h-3.5 w-14 rounded skeleton-shimmer ml-auto" /></td>
                   <td className="py-3 px-4 text-right"><div className="h-3.5 w-16 rounded skeleton-shimmer ml-auto" /></td>
+                  <td className="py-3 px-4"><div className="h-5 w-24 rounded-full skeleton-shimmer" /></td>
                   <td className="py-3 px-4 text-center"><div className="h-7 w-16 rounded-lg skeleton-shimmer mx-auto" /></td>
                 </tr>
               ))}
@@ -129,6 +136,7 @@ export function DeliveryOrderTable({
               <th className="py-3 px-4">Supir & Kendaraan</th>
               <th className="py-3 px-4 text-right">Pack / Koli</th>
               <th className="py-3 px-4 text-right">Berat (Kg)</th>
+              <th className="py-3 px-4">Status</th>
               <th className="py-3 px-4 text-center">Aksi</th>
             </tr>
           </thead>
@@ -211,6 +219,67 @@ export function DeliveryOrderTable({
                   </span>
                 </td>
 
+                {/* Status: Sent, Printed, AR */}
+                <td className="py-3 px-4 whitespace-nowrap">
+                  <div className="flex flex-col gap-1 items-start">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {item.fdSent === 1 ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
+                          <CheckCircle2 size={11} className="shrink-0 text-emerald-500" />
+                          <span>Terkirim</span>
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400">
+                          <Clock size={11} className="shrink-0 text-amber-500" />
+                          <span>Proses Kirim</span>
+                        </span>
+                      )}
+
+                      {item.fdPrintDate ? (
+                        <span
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-sky-500/10 border border-sky-500/40 text-sky-600 dark:text-sky-400"
+                          title={`Dicetak: ${formatDate(item.fdPrintDate)}`}
+                        >
+                          <Printer size={10} className="shrink-0 text-sky-500" />
+                          <span>Printed</span>
+                        </span>
+                      ) : (
+                        <span
+                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-transparent border border-dashed border-[var(--color-border)] text-[var(--color-secondary)]/70"
+                          title="Belum dicetak"
+                        >
+                          Belum Cetak
+                        </span>
+                      )}
+                    </div>
+
+                    {item.fdGive === 1 || item.fdGiveDate ? (
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-purple-500/10 border border-purple-500/40 text-purple-600 dark:text-purple-400"
+                        title={item.fdGiveDate ? `Sudah di AR: ${formatDate(item.fdGiveDate)}` : 'Sudah di AR'}
+                      >
+                        <FileCheck size={10} className="shrink-0 text-purple-500" />
+                        <span>AR{item.fdGiveDate ? ` • ${formatDate(item.fdGiveDate)}` : ''}</span>
+                      </span>
+                    ) : item.fdSndDate ? (
+                      <span
+                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-indigo-500/10 border border-indigo-500/40 text-indigo-600 dark:text-indigo-400"
+                        title={`Keluar Gudang / Di Billing: ${formatDate(item.fdSndDate)}`}
+                      >
+                        <FileText size={10} className="shrink-0 text-indigo-500" />
+                        <span>Billing • {formatDate(item.fdSndDate)}</span>
+                      </span>
+                    ) : (
+                      <span
+                        className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-transparent border border-dashed border-[var(--color-border)] text-[var(--color-secondary)]/80"
+                        title="Surat Jalan masih di Gudang"
+                      >
+                        Gudang
+                      </span>
+                    )}
+                  </div>
+                </td>
+
                 {/* Aksi */}
                 <td className="py-3 px-4 text-center whitespace-nowrap">
                   <Link
@@ -235,7 +304,7 @@ export function DeliveryOrderTable({
             className="p-3.5 sm:p-4 flex flex-col gap-2.5 hover:bg-[var(--color-neutral)]/30 transition-colors"
           >
             {/* Top row: SJ No + Date */}
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
               <Link
                 to={ROUTES.DELIVERY_DETAIL(item.fdSJNo)}
                 className="inline-flex items-center gap-1.5 font-mono font-bold text-sm text-[var(--color-primary)] hover:underline"
@@ -247,6 +316,57 @@ export function DeliveryOrderTable({
                 <Calendar size={10} />
                 {formatDate(item.fdSJDate)}
               </span>
+            </div>
+
+            {/* Status Badges Row in Mobile Card */}
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {item.fdSent === 1 ? (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 size={10} className="shrink-0 text-emerald-500" />
+                  <span>Terkirim</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400">
+                  <Clock size={10} className="shrink-0 text-amber-500" />
+                  <span>Proses</span>
+                </span>
+              )}
+
+              {item.fdPrintDate ? (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-sky-500/10 border border-sky-500/40 text-sky-600 dark:text-sky-400"
+                  title={`Dicetak: ${formatDate(item.fdPrintDate)}`}
+                >
+                  <Printer size={9} className="shrink-0 text-sky-500" />
+                  <span>Printed</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9.5px] font-medium bg-transparent border border-dashed border-[var(--color-border)] text-[var(--color-secondary)]/70">
+                  Belum Cetak
+                </span>
+              )}
+
+              {item.fdGive === 1 || item.fdGiveDate ? (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-purple-500/10 border border-purple-500/40 text-purple-600 dark:text-purple-400"
+                  title={item.fdGiveDate ? `Diserahkan ke AR: ${formatDate(item.fdGiveDate)}` : 'Diserahkan ke AR'}
+                >
+                  <FileCheck size={9} className="shrink-0 text-purple-500" />
+                  <span>AR{item.fdGiveDate ? ` (${formatDate(item.fdGiveDate)})` : ''}</span>
+                </span>
+              ) : item.fdSndDate ? (
+                <span
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/10 border border-indigo-500/40 text-indigo-600 dark:text-indigo-400"
+                  title={`Keluar Gudang / Di Billing: ${formatDate(item.fdSndDate)}`}
+                >
+                  <FileText size={9} className="shrink-0 text-indigo-500" />
+                  <span>Billing ({formatDate(item.fdSndDate)})</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-transparent border border-dashed border-[var(--color-border)] text-[var(--color-secondary)]/80">
+                  Gudang
+                </span>
+              )}
             </div>
 
             {/* Customer & Description */}

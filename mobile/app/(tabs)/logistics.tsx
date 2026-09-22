@@ -6,6 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams } from 'expo-router'
@@ -166,6 +167,7 @@ export default function LogisticsScreen() {
                 : t('logistics.suggestionsDelivery', 'Saran Pencarian (Surat Jalan / Supir / Plat)')
             }
             onSelect={(sug) => {
+              Keyboard.dismiss()
               setSearch(sug.value)
               setShowSuggestions(false)
             }}

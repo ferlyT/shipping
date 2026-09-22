@@ -1,51 +1,37 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  X, Search, ChevronDown, Layers, HelpCircle, Sparkles, FileText
-} from 'lucide-react'
+import { Search, X, Loader2 } from 'lucide-react'
 import apiClient from '@/api/client'
 import { useDebounce } from '@/hooks/useDebounce'
 import { SearchSuggestionsDropdown } from '@/components/ui/SearchSuggestionsDropdown'
-import { cn } from '@/lib/utils'
-
-export type BillingSearchScope = 'ALL' | 'invNo' | 'customer' | 'marking' | 'author'
-
-export const BILLING_SEARCH_SCOPES: { value: BillingSearchScope; label: string; placeholder: string }[] = [
-  { value: 'ALL', label: 'Semua Field', placeholder: 'Cari no invoice, customer, marking, dibuat oleh...' },
-  { value: 'invNo', label: 'No. Invoice', placeholder: 'Cari no. invoice (contoh: 2401-0001)...' },
-  { value: 'customer', label: 'Customer', placeholder: 'Cari customer (contoh: PT Maju, CV Sinar)...' },
-  { value: 'marking', label: 'Marking', placeholder: 'Cari marking (contoh: MRK-1, MRK-2)...' },
-  { value: 'author', label: 'Dibuat Oleh', placeholder: 'Cari nama staf pembuat invoice...' },
-]
+import { useTranslation } from '@/hooks/useTranslation'
 
 interface BillingToolbarProps {
   search: string
   onSearchChange: (v: string) => void
-  searchField: BillingSearchScope
-  onSearchFieldChange: (field: BillingSearchScope) => void
+  onSelectSuggestion?: (item: any) => void
   limit: number
   onLimitChange: (v: number) => void
   onPageReset: () => void
   displayCount: number
   total: number
+  isFetching?: boolean
+  isLoading?: boolean
 }
 
 export function BillingToolbar({
   search,
   onSearchChange,
-  searchField,
-  onSearchFieldChange,
+  onSelectSuggestion,
   limit,
   onLimitChange,
   onPageReset,
   displayCount,
   total,
+  isFetching = false,
+  isLoading = false,
 }: BillingToolbarProps) {
-  const [showTooltip, setShowTooltip] = useState(false)
-  const tooltipRef = useRef<HTMLDivElement>(null)
-  const currentScope = BILLING_SEARCH_SCOPES.find((s) => s.value === searchField) || BILLING_SEARCH_SCOPES[0]
-
-  // Suggestions state & query
+  const { t } = useTranslation()
   const [showSuggestions, setShowSuggestions] = useState(false)
   const searchContainerRef = useRef<HTMLDivElement>(null)
   const debouncedSearch = useDebounce(search, 300)
@@ -72,96 +58,43 @@ export function BillingToolbar({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (tooltipRef.current && !tooltipRef.current.contains(e.target as Node)) {
-        setShowTooltip(false)
-      }
-    }
-    if (showTooltip) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showTooltip])
-
-  const tokens = search
-    .split(/[,\n;\r\t]+/)
-    .map((s) => s.trim())
-    .filter(Boolean)
-  const isMultiSearch = tokens.length > 1
-
-  const applyExample = (text: string, scope?: BillingSearchScope) => {
-    onSearchChange(text)
-    if (scope) onSearchFieldChange(scope)
-    setShowTooltip(false)
-  }
-
   return (
-    <div className="bg-[var(--color-surface)] px-3.5 sm:px-5 py-2.5 sm:py-3">
+    <div className="bg-[var(--color-surface)] px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-[var(--color-border)]">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
-        {/* Left: Scoped search bar + Guide button */}
-        <div className="flex items-center gap-2 flex-1 sm:max-w-[560px]">
+        {/* Left: Search Bar with Autocomplete Suggestions */}
+        <div className="flex items-center gap-2 flex-1 sm:max-w-[480px]">
           <div ref={searchContainerRef} className="relative flex-1">
-            <div className="relative flex-1 flex items-center rounded-xl border border-[var(--color-border)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/20 transition-all bg-[var(--color-surface)] shadow-2xs overflow-hidden">
-              {/* Scope selector */}
-              <div className="relative shrink-0 border-r border-[var(--color-border)] bg-[var(--color-neutral)] hover:opacity-90 transition-colors">
-                <select
-                  value={searchField}
-                  onChange={(e) => onSearchFieldChange(e.target.value as BillingSearchScope)}
-                  className="appearance-none bg-transparent pl-2.5 sm:pl-3 pr-6 sm:pr-7 py-2 text-[11px] sm:text-xs font-semibold text-[var(--color-primary)] cursor-pointer outline-none max-w-[100px] sm:max-w-none truncate"
-                  aria-label="Cakupan pencarian"
+            <div className="relative flex items-center rounded-xl border border-[var(--color-border)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/20 transition-all bg-[var(--color-surface)] shadow-2xs overflow-hidden">
+              <Search size={14} className="absolute left-3 text-[var(--color-secondary)] pointer-events-none shrink-0" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => {
+                  onSearchChange(e.target.value)
+                  if (e.target.value.trim().length >= 2) setShowSuggestions(true)
+                  else setShowSuggestions(false)
+                }}
+                onFocus={() => {
+                  if (search.trim().length >= 2) setShowSuggestions(true)
+                }}
+                placeholder={t('billing.searchPlaceholder') || 'Cari no invoice, customer, marking, kode...'}
+                className="w-full pl-9 pr-9 py-2 text-xs sm:text-sm text-[var(--color-primary)] outline-none bg-transparent placeholder:text-[var(--color-secondary)] font-medium"
+              />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSearchChange('')
+                    onSelectSuggestion?.(null)
+                    setShowSuggestions(false)
+                    onPageReset()
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-primary)] p-0.5 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer transition-colors"
+                  title="Hapus pencarian"
                 >
-                  {BILLING_SEARCH_SCOPES.map((sc) => (
-                    <option key={sc.value} value={sc.value} className="bg-[var(--color-surface)] text-[var(--color-primary)]">
-                      {sc.label}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={11} className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none" />
-              </div>
-
-              {/* Search Input */}
-              <div className="relative flex-1 flex items-center min-w-0">
-                <Search size={13} className="absolute left-2.5 sm:left-3 text-[var(--color-secondary)] pointer-events-none shrink-0" />
-                <input
-                  value={search}
-                  onChange={(e) => {
-                    onSearchChange(e.target.value)
-                    if (e.target.value.trim().length >= 2) setShowSuggestions(true)
-                    else setShowSuggestions(false)
-                  }}
-                  onFocus={() => {
-                    if (search.trim().length >= 2) setShowSuggestions(true)
-                  }}
-                  placeholder={currentScope.placeholder}
-                  className="w-full pl-8 sm:pl-9 pr-12 sm:pr-14 py-2 text-xs sm:text-sm text-[var(--color-primary)] outline-none bg-transparent placeholder:text-[var(--color-secondary)] placeholder:text-xs"
-                />
-
-                {/* Multi-item badge count */}
-                {isMultiSearch && (
-                  <span
-                    className="absolute right-7 sm:right-8 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-transparent text-[var(--color-tertiary)] border border-[var(--color-tertiary)]/30 text-[10px] font-bold shrink-0"
-                    title={`${tokens.length} keyword pencarian terdeteksi`}
-                  >
-                    <Layers size={9} />
-                    {tokens.length}
-                  </span>
-                )}
-
-                {search && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSearchChange('')
-                      setShowSuggestions(false)
-                    }}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-primary)] p-1 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer transition-colors"
-                    title="Hapus pencarian"
-                  >
-                    <X size={12} />
-                  </button>
-                )}
-              </div>
+                  <X size={13} />
+                </button>
+              )}
             </div>
 
             {/* Dropdown Suggestions */}
@@ -169,100 +102,25 @@ export function BillingToolbar({
               visible={showSuggestions && search.trim().length >= 2}
               suggestions={suggestions}
               isLoading={isFetchingSuggestions}
-              title="Saran Billing (No. Invoice / Customer / Marking)"
+              title="Saran Faktur (No. Invoice / Customer / Marking)"
               onSelect={(item) => {
-                if (item.type === 'invoice') {
-                  onSearchFieldChange('invNo')
-                } else if (item.type === 'customer') {
-                  onSearchFieldChange('customer')
-                } else if (item.type === 'marking') {
-                  onSearchFieldChange('marking')
-                } else {
-                  onSearchFieldChange('ALL')
-                }
                 onSearchChange(item.value)
+                onSelectSuggestion?.(item)
                 setShowSuggestions(false)
+                onPageReset()
               }}
               onClose={() => setShowSuggestions(false)}
             />
-          </div>
-
-          {/* Interactive Search Guide Tooltip Trigger */}
-          <div className="relative shrink-0" ref={tooltipRef}>
-            <button
-              type="button"
-              onClick={() => setShowTooltip((prev) => !prev)}
-              className={cn(
-                'inline-flex items-center justify-center w-8 h-8 rounded-xl border transition-all cursor-pointer select-none',
-                showTooltip
-                  ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
-                  : 'bg-[var(--color-surface)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] border-[var(--color-border)]'
-              )}
-              title="Petunjuk & Contoh Pencarian"
-              aria-label="Petunjuk pencarian"
-            >
-              <HelpCircle size={15} />
-            </button>
-
-            {/* Tooltip / Popover Panel */}
-            {showTooltip && (
-              <div className="fixed sm:absolute inset-x-3 sm:inset-x-auto top-28 sm:top-full sm:right-0 sm:mt-2 w-auto sm:w-[360px] z-50 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-2xl p-4 text-xs animate-in fade-in-50 zoom-in-95 duration-150">
-                <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[var(--color-border)] mb-3">
-                  <div className="flex items-center gap-1.5 font-bold text-[var(--color-primary)] text-sm">
-                    <Sparkles size={14} className="text-[var(--color-tertiary)]" />
-                    <span>Panduan Pencarian Billing</span>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setShowTooltip(false)}
-                    className="text-[var(--color-secondary)] hover:text-[var(--color-primary)] p-1 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer"
-                  >
-                    <X size={13} />
-                  </button>
-                </div>
-
-                <div className="space-y-2.5 text-[var(--color-secondary)]">
-                  <div className="p-2.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)]">
-                    <div className="flex items-center gap-1.5 font-bold text-[var(--color-primary)] mb-1">
-                      <FileText size={12} className="text-[var(--color-tertiary)]" />
-                      <span>Cari Nomor Invoice / Customer</span>
-                    </div>
-                    <p className="text-xs leading-snug mb-1.5">
-                      Ketik nomor invoice, nama customer, atau kode marking.
-                    </p>
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() => applyExample('2401-0001', 'invNo')}
-                        className="px-2 py-0.5 rounded bg-[var(--color-surface)] border border-[var(--color-border)] text-[11px] font-mono text-[var(--color-primary)] hover:border-[var(--color-tertiary)] cursor-pointer"
-                      >
-                        2401-0001
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)]">
-                    <div className="flex items-center gap-1.5 font-bold text-[var(--color-primary)] mb-1">
-                      <Layers size={12} className="text-amber-500" />
-                      <span>Multi-Pencarian (Koma / Baris Baru)</span>
-                    </div>
-                    <p className="text-xs leading-snug">
-                      Pisahkan dengan tanda koma (,) untuk mencari banyak invoice sekaligus.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
           </div>
         </div>
 
         {/* Right: Counter + Rows-per-page */}
         <div className="flex items-center justify-between sm:justify-end gap-3 w-full sm:w-auto pt-1 sm:pt-0 text-[11px] sm:text-xs text-[var(--color-secondary)] font-medium">
-          <div className="flex items-center gap-1">
-            <span>Menampilkan</span>
-            <span className="font-bold text-[var(--color-primary)] tabular-nums">{displayCount}</span>
-            <span>dari</span>
-            <span className="font-bold text-[var(--color-primary)] tabular-nums">{total.toLocaleString('en-US')}</span>
+          <div className="flex items-center gap-1.5">
+            {isFetching && !isLoading && <Loader2 size={13} className="animate-spin text-[var(--color-tertiary)]" />}
+            <span className="tabular-nums text-[var(--color-secondary)]">
+              Menampilkan <strong className="text-[var(--color-primary)] font-semibold">{displayCount.toLocaleString('en-US')}</strong> dari <strong className="text-[var(--color-primary)] font-semibold">{total.toLocaleString('en-US')}</strong> faktur
+            </span>
           </div>
 
           <div className="flex items-center gap-2">

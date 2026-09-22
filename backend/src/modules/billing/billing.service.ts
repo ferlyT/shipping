@@ -20,6 +20,7 @@ export async function getBillings(query: Record<string, string | undefined>) {
   const { skip, take, meta } = buildPagination({ page, limit })
 
   const search = query.search?.trim()
+  const custCode = query.custCode?.trim()
   const hasAmount  = query.hasAmount  === 'true' || query.validOnly === 'true'
   const draftOnly  = query.draftOnly  === 'true' || query.status === 'draft'
   const statusFilter = query.status?.toLowerCase()
@@ -27,13 +28,15 @@ export async function getBillings(query: Record<string, string | undefined>) {
   const isNoPagination =
     query.noPagination === 'true' || query.all === 'true' || query.limit === 'all' || query.limit === '0'
 
-  // ── Step 1: Resolve search → expand ke customer/employee/marking codes (paralel) ──
+  // ── Step 1: Resolve search → expand ke customer/marking codes (paralel) ──
   let custCodesFromSearch: string[]    = []
-  let empCodesFromSearch: string[]     = []
   let markingCodesFromSearch: string[] = []
 
-  if (search) {
-    const [matchingCustomers, matchingEmployees, matchingMarkings] = await Promise.all([
+  if (custCode) {
+    // Jika custCode spesifik diberikan dari pilihan saran customer, kunci langsung ke kode tersebut
+    custCodesFromSearch = [custCode]
+  } else if (search) {
+    const [matchingCustomers, matchingMarkings] = await Promise.all([
       prisma.tbCustomers.findMany({
         where: {
           OR: [
@@ -45,16 +48,6 @@ export async function getBillings(query: Record<string, string | undefined>) {
         select: { fdCustCode: true },
         take: 500,
       }),
-      prisma.tbEmployees.findMany({
-        where: {
-          OR: [
-            { fdEmpName: { contains: search } },
-            { fdEmpCode: { contains: search } },
-          ],
-        },
-        select: { fdEmpCode: true },
-        take: 50,
-      }),
       prisma.tbMarking.findMany({
         where: { fdConsignee: { contains: search } },
         select: { fdMarkingCode: true },
@@ -62,24 +55,25 @@ export async function getBillings(query: Record<string, string | undefined>) {
       }),
     ])
     custCodesFromSearch    = matchingCustomers.map((c) => c.fdCustCode.trim())
-    empCodesFromSearch     = matchingEmployees.map((e) => e.fdEmpCode.trim())
     markingCodesFromSearch = matchingMarkings.map((m)  => m.fdMarkingCode.trim())
   }
 
   // ── Step 2: Build Prisma WHERE (index-friendly via parameterized query) ──
   const whereConditions: Prisma.TbBillingWhereInput[] = []
 
-  if (search) {
+  if (custCode) {
+    whereConditions.push({ fdCustCode: custCode })
+  } else if (search) {
     whereConditions.push({
       OR: [
         { fdInvNo:       { contains: search } },
         { fdDescr:       { contains: search } },
         { fdCustCode:    { contains: search } },
+        { fdEmpCode:     { contains: search } },
         { fdMarkingCode: { contains: search } },
         { fdMarkingNo:   { contains: search } },
         { fdListCode:    { contains: search } },
         ...(custCodesFromSearch.length    > 0 ? [{ fdCustCode:    { in: custCodesFromSearch    } }] : []),
-        ...(empCodesFromSearch.length     > 0 ? [{ fdEmpCode:     { in: empCodesFromSearch     } }] : []),
         ...(markingCodesFromSearch.length > 0 ? [{ fdMarkingCode: { in: markingCodesFromSearch } }] : []),
       ],
     })
@@ -327,7 +321,8 @@ export async function getBillingById(id: string) {
     return prisma.$queryRaw<any[]>`
       SELECT TOP 1 
         b.*,
-        c.fdCustName, c.fdBlocked, c.fdBillTo, c.fdContact, c.fdBillAddr1, c.fdSalesNM, c.fdBroker
+        c.fdCustName, c.fdBlocked, c.fdBillTo, c.fdContact, c.fdBillAddr1, c.fdSalesNM, c.fdBroker,
+        RTRIM(c.fdEmpName) as fdCustEmpName, RTRIM(c.fdEmpCode) as fdCustEmpCode
       FROM tbBilling b WITH (NOLOCK)
       LEFT JOIN tbCustomers c WITH (NOLOCK) ON b.fdCustCode = c.fdCustCode
       WHERE b.fdInvNo = CAST(${cleanId} AS CHAR(20))
@@ -346,7 +341,8 @@ export async function getBillingById(id: string) {
         return prisma.$queryRaw<any[]>`
           SELECT TOP 1 
             b.*,
-            c.fdCustName, c.fdBlocked, c.fdBillTo, c.fdContact, c.fdBillAddr1, c.fdSalesNM, c.fdBroker
+            c.fdCustName, c.fdBlocked, c.fdBillTo, c.fdContact, c.fdBillAddr1, c.fdSalesNM, c.fdBroker,
+            RTRIM(c.fdEmpName) as fdCustEmpName, RTRIM(c.fdEmpCode) as fdCustEmpCode
           FROM tbBilling b WITH (NOLOCK)
           LEFT JOIN tbCustomers c WITH (NOLOCK) ON b.fdCustCode = c.fdCustCode
           WHERE b.fdInvNo = CAST(${parentInvNo} AS CHAR(20))
@@ -367,6 +363,8 @@ export async function getBillingById(id: string) {
     fdBillAddr1,
     fdSalesNM,
     fdBroker,
+    fdCustEmpName,
+    fdCustEmpCode,
     fdEmpCode,
     ...billFields
   } = rawBill
@@ -601,6 +599,9 @@ export async function getBillingById(id: string) {
     fdSalesCode = String(salesRow[0].fdSalesCode).trim()
   }
 
+  const custEmpName = fdCustEmpName ? String(fdCustEmpName).trim() : ''
+  const fdCollector = custEmpName ? custEmpName.slice(0, 2).toUpperCase() : null
+
   const initialCustomer = rawBill.fdCustCode ? {
     fdCustName,
     fdBlocked,
@@ -609,7 +610,10 @@ export async function getBillingById(id: string) {
     fdBillAddr1,
     fdSalesNM,
     fdBroker,
+    fdEmpName: custEmpName || null,
+    fdEmpCode: fdCustEmpCode ? String(fdCustEmpCode).trim() : null,
     fdSalesCode: fdSalesCode || (fdSalesNM ? String(fdSalesNM).trim() : null),
+    fdCollector,
   } : null
 
   return {
@@ -763,17 +767,22 @@ export async function issueInvoice(
 export async function checkBillResiMarking(invNo: string, searchResi?: string) {
   const cleanInvNo = invNo.trim()
 
-  // 1. Ambil info bill
+  // 1. Ambil info bill & langsung ambil fdTerima via JOIN tbEntryList
   const billRows = await prisma.$queryRaw<any[]>`
-    SELECT TOP 1
+    SELECT 
       RTRIM(b.fdInvNo) as fdInvNo,
       RTRIM(b.fdListCode) as fdListCode,
       RTRIM(b.fdCustCode) as fdCustCode,
       RTRIM(c.fdCustName) as fdCustName,
       RTRIM(b.fdMarkingCode) as fdMarkingCode,
-      RTRIM(b.fdMarkingNo) as fdMarkingNo
+      RTRIM(b.fdMarkingNo) as fdMarkingNo,
+      RTRIM(e.fdTerima) as fdTerima
     FROM tbBilling b WITH (NOLOCK)
     LEFT JOIN tbCustomers c WITH (NOLOCK) ON RTRIM(b.fdCustCode) = RTRIM(c.fdCustCode)
+    LEFT JOIN tbEntryList e WITH (NOLOCK) ON (
+      RTRIM(b.fdListCode) = RTRIM(e.fdListCode)
+      OR RTRIM(e.fdInvoiceNo) = RTRIM(b.fdInvNo)
+    )
     WHERE RTRIM(b.fdInvNo) = ${cleanInvNo}
   `
 
@@ -786,20 +795,14 @@ export async function checkBillResiMarking(invNo: string, searchResi?: string) {
   const markingCode = bill.fdMarkingCode || ''
   const listCode = bill.fdListCode || ''
 
-  // 2. Kumpulkan semua fdTerima dari bill ini
-  const billResiRows = await prisma.$queryRaw<any[]>`
-    SELECT DISTINCT RTRIM(el.fdTerima) as fdTerima
-    FROM tbEntryList el WITH (NOLOCK)
-    WHERE (
-      RTRIM(el.fdInvoiceNo) = ${cleanInvNo}
-      OR (${listCode} <> '' AND RTRIM(el.fdListCode) = ${listCode})
-      OR (${custCode} <> '' AND ${markingCode} <> '' AND RTRIM(el.fdCustCode) = ${custCode} AND RTRIM(el.fdMarkingCode) = ${markingCode})
+  // 2. Kumpulkan list fdTerima dari hasil Query 1 (tanpa menarik seluruh resi satu marking code)
+  let targetResiList = Array.from(
+    new Set(
+      billRows
+        .map((r) => String(r.fdTerima || '').trim())
+        .filter((t) => t && !['', '-', '.'].includes(t))
     )
-    AND el.fdTerima IS NOT NULL
-    AND RTRIM(el.fdTerima) NOT IN ('', '-', '.')
-  `
-
-  let targetResiList = (billResiRows || []).map((r) => String(r.fdTerima || '').trim()).filter(Boolean)
+  )
 
   if (searchResi && searchResi.trim()) {
     const cleanSearch = searchResi.trim()
@@ -807,8 +810,6 @@ export async function checkBillResiMarking(invNo: string, searchResi?: string) {
       targetResiList.unshift(cleanSearch)
     }
   }
-
-  targetResiList = Array.from(new Set(targetResiList))
 
   if (targetResiList.length === 0) {
     return {
@@ -830,7 +831,7 @@ export async function checkBillResiMarking(invNo: string, searchResi?: string) {
     }
   }
 
-  // 3. Query seluruh kemunculan fdTerima ini di tbEntryList
+  // 3. Query seluruh kemunculan fdTerima ini di database (murni berdasarkan fdTerima dan fdCustCode)
   const occurrences = await prisma.$queryRaw<any[]>`
     SELECT 
       RTRIM(el.fdListCode) as fdListCode,
@@ -1204,11 +1205,126 @@ export async function getBatchEntryListDetails(listCodes: string[]) {
   })
 }
 
+export interface DimensionItem {
+  fdListCode: string
+  fdListDCode: string
+  fdDescr: string
+  fdPjg: number
+  fdLbr: number
+  fdTng: number
+  fdQty: number
+  fdM3: number
+  fdMarkingCode?: string
+  fdComodity?: string
+  fdLoad?: Date | string | null
+}
+
+export interface DimensionGroup {
+  items: DimensionItem[]
+  totalQty: number
+  totalM3: number
+  count: number
+}
+
+export interface BillingDimensionsResponse {
+  listCode: string
+  entryList: DimensionGroup
+  packingList: DimensionGroup
+  komplain: DimensionGroup
+}
+
+/**
+ * Mengambil detail ukuran fisik per koli (Panjang, Lebar, Tinggi, Qty, dan Hasil Hitungan M3)
+ * dari tabel terkait:
+ * - entrylist -> tbEntryListDetail
+ * - packing list -> tbEntryListDetail_PackingList
+ * - komplain -> tbEntryListDetail_Komplain
+ */
+export async function getBillingDimensions(listCodeInput: string): Promise<BillingDimensionsResponse> {
+  const rawCodes = (listCodeInput || '').split(',').map((s) => s.trim()).filter(Boolean)
+  const cleanCodes = rawCodes.length > 0 ? rawCodes : ['']
+  const codeVariants = cleanCodes.flatMap((c) => [c, c.padStart(7, ' ')])
+
+  const [rawEntryList, rawPackingList, rawKomplain] = await Promise.all([
+    safeRunRaw(async () => {
+      return prisma.tbEntryListDetail.findMany({
+        where: { fdListCode: { in: codeVariants } },
+        orderBy: [
+          { fdListCode: 'asc' },
+          { fdListDCode: 'asc' },
+        ],
+      })
+    }, 'getDimensions_EntryList'),
+    safeRunRaw(async () => {
+      return prisma.tbEntryListDetailPackingList.findMany({
+        where: { fdListCode: { in: codeVariants } },
+        orderBy: [
+          { fdListCode: 'asc' },
+          { fdListDCode: 'asc' },
+        ],
+      })
+    }, 'getDimensions_PackingList'),
+    safeRunRaw(async () => {
+      return prisma.tbEntryListDetailKomplain.findMany({
+        where: { fdListCode: { in: codeVariants } },
+        orderBy: [
+          { fdListCode: 'asc' },
+          { fdListDCode: 'asc' },
+        ],
+      })
+    }, 'getDimensions_Komplain'),
+  ])
+
+  const mapItem = (row: any, extraFields?: (r: any) => Record<string, any>): DimensionItem => {
+    const pjg = Number(row.fdPjg || 0)
+    const lbr = Number(row.fdLbr || 0)
+    const tng = Number(row.fdTng || 0)
+    const qty = Number(row.fdQty || 0)
+    // Formula resmi: (Panjang * Lebar * Tinggi * Qty) / 1,000,000 (cm^3 ke m^3)
+    const m3 = parseFloat(((pjg * lbr * tng * qty) / 1000000).toFixed(4))
+    return {
+      fdListCode: (row.fdListCode || '').trim(),
+      fdListDCode: (row.fdListDCode || '').trim(),
+      fdDescr: (row.fdDescr || '').trim(),
+      fdPjg: pjg,
+      fdLbr: lbr,
+      fdTng: tng,
+      fdQty: qty,
+      fdM3: m3,
+      fdLoad: row.fdLoad || null,
+      ...(extraFields ? extraFields(row) : {}),
+    }
+  }
+
+  const buildGroup = (rawList: any[], extraFields?: (r: any) => Record<string, any>): DimensionGroup => {
+    const items = (rawList || []).map((r) => mapItem(r, extraFields))
+    const totalQty = items.reduce((sum, item) => sum + item.fdQty, 0)
+    const totalM3 = parseFloat(items.reduce((sum, item) => sum + item.fdM3, 0).toFixed(4))
+    return {
+      items,
+      totalQty,
+      totalM3,
+      count: items.length,
+    }
+  }
+
+  return {
+    listCode: cleanCodes.join(', '),
+    entryList: buildGroup(rawEntryList || []),
+    packingList: buildGroup(rawPackingList || [], (r) => ({
+      fdMarkingCode: (r.fdMarkingCode || '').trim(),
+      fdComodity: (r.fdComodity || '').trim(),
+    })),
+    komplain: buildGroup(rawKomplain || []),
+  }
+}
+
 export interface BillingSuggestion {
   type: 'invoice' | 'customer' | 'marking'
   title: string
   subtitle: string
   value: string
+  custCode?: string
 }
 
 export async function getBillingSuggestions(keyword: string, draftOnly = false): Promise<BillingSuggestion[]> {
@@ -1292,7 +1408,7 @@ export async function getBillingSuggestions(keyword: string, draftOnly = false):
           RTRIM(ISNULL(fdCustCode, '')) AS fdCustCode, 
           RTRIM(ISNULL(fdCustName, '')) AS fdCustName
         FROM tbCustomers WITH (NOLOCK)
-        WHERE fdCustName LIKE ${searchLike} AND ISNULL(fdDiscontinued, 0) <> 1
+        WHERE (fdCustName LIKE ${searchLike} OR fdCustCode LIKE ${searchLike}) AND ISNULL(fdDiscontinued, 0) <> 1
         ORDER BY fdCustName ASC
       `.catch(() => []),
       prisma.$queryRaw<any[]>`
@@ -1321,13 +1437,14 @@ export async function getBillingSuggestions(keyword: string, draftOnly = false):
     }
 
     for (const cust of customers) {
-      if (cust.fdCustName && !seen.has(`cust:${cust.fdCustName}`)) {
-        seen.add(`cust:${cust.fdCustName}`)
+      if (cust.fdCustCode && !seen.has(`cust:${cust.fdCustCode}`)) {
+        seen.add(`cust:${cust.fdCustCode}`)
         suggestions.push({
           type: 'customer',
           title: cust.fdCustName,
           subtitle: `Customer (${cust.fdCustCode})`,
           value: cust.fdCustName,
+          custCode: cust.fdCustCode,
         })
       }
     }

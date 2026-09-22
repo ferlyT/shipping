@@ -22,6 +22,8 @@ import { commodityMappingRoutes } from './modules/commodity-mapping/commodity-ma
 import { priceCheckRoutes } from './modules/price-check/price-check.routes'
 import { m3CheckRoutes } from './modules/m3-check/m3-check.routes'
 import { appVersionRoutes } from './modules/app-version/app-version.routes'
+import cashierRoutes from './modules/cashier/cashier.routes'
+import walletRoutes from './modules/wallet/wallet.routes'
 
 
 import path from 'path'
@@ -129,6 +131,8 @@ apiApp.route('/commodity-mapping', commodityMappingRoutes)
 apiApp.route('/price-check', priceCheckRoutes)
 apiApp.route('/m3-check', m3CheckRoutes)
 apiApp.route('/app-version', appVersionRoutes)
+apiApp.route('/cashier', cashierRoutes)
+apiApp.route('/wallet', walletRoutes)
 
 // OpenAPI JSON & Swagger UI
 apiApp.get('/openapi.json', (c) => c.json(openApiSpec))

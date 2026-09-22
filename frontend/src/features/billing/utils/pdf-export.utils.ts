@@ -37,12 +37,20 @@ export async function exportBillToPdf(
     onclone: (_doc: Document, clonedEl: HTMLElement) => {
       // Pastikan wrapper clone tidak clip konten
       clonedEl.style.overflow = 'visible'
-      // Pastikan semua child table juga tidak clip
-      const allCells = clonedEl.querySelectorAll('td, th, div')
-      allCells.forEach((cell) => {
-        const el = cell as HTMLElement
-        if (el.style.overflow === 'hidden') {
-          el.style.overflow = 'visible'
+      // Pastikan semua child element (td, th, div, span, dll) juga tidak clip teks
+      const allElements = clonedEl.querySelectorAll('*')
+      allElements.forEach((node) => {
+        const el = node as HTMLElement
+        if (el.style) {
+          if (el.style.overflow === 'hidden') {
+            el.style.overflow = 'visible'
+          }
+          if (el.style.overflowY === 'hidden') {
+            el.style.overflowY = 'visible'
+          }
+          if (el.style.overflowX === 'hidden') {
+            el.style.overflowX = 'visible'
+          }
         }
       })
     },

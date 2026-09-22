@@ -12,7 +12,7 @@ import { PageHeader } from '@/components/ui/PageHeader'
 import { CurrencyValue } from '@/components/ui/CurrencyValue'
 import { BillingStatusTag } from '../components/BillingStatusTag'
 import { BillingFilterBar, type BillingModeFilter, type BillingStatusFilter } from '../components/BillingFilterBar'
-import { BillingToolbar, type BillingSearchScope } from '../components/BillingToolbar'
+import { BillingToolbar } from '../components/BillingToolbar'
 import { formatDate, cn, displayCustName } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { statusConfig } from '@/features/customers/components/CustomerBadges'
@@ -33,40 +33,41 @@ export default function ListPage() {
 
   // Search and filter state
   const [search, setSearch] = useState('')
-  const [searchField, setSearchField] = useState<BillingSearchScope>('ALL')
+  const [selectedCustCode, setSelectedCustCode] = useState<string | null>(null)
   const [modeFilter, setModeFilter] = useState<BillingModeFilter>('all')
   const [statusFilter, setStatusFilter] = useState<BillingStatusFilter>('all')
-  const [customerFilter, setCustomerFilter] = useState('')
-  const [markingFilter, setMarkingFilter] = useState('')
   const [jumpPage, setJumpPage] = useState('')
 
-  const debouncedSearch = useDebounce(search, 350)
-  const debouncedCustomer = useDebounce(customerFilter, 350)
-  const debouncedMarking = useDebounce(markingFilter, 350)
+  const debouncedSearch = useDebounce(search, 300)
 
   const { page, limit, setLimit, goToPage, reset } = usePagination(20)
+
+  const handleSearchChange = (val: string) => {
+    setSearch(val)
+    if (selectedCustCode) setSelectedCustCode(null)
+  }
+
+  const handleSelectSuggestion = (item: any) => {
+    if (item?.type === 'customer' && item?.custCode) {
+      setSelectedCustCode(item.custCode)
+    } else {
+      setSelectedCustCode(null)
+    }
+  }
 
   // Reset page whenever search or filter criteria change
   useEffect(() => {
     reset()
-  }, [debouncedSearch, debouncedCustomer, debouncedMarking, searchField, modeFilter, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Construct combined search string
-  const effectiveSearch = useMemo(() => {
-    const parts: string[] = []
-    if (debouncedSearch) parts.push(debouncedSearch)
-    if (debouncedCustomer) parts.push(debouncedCustomer)
-    if (debouncedMarking) parts.push(debouncedMarking)
-    return parts.join(' ').trim()
-  }, [debouncedSearch, debouncedCustomer, debouncedMarking])
+  }, [debouncedSearch, selectedCustCode, modeFilter, statusFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const { data: listRes, isLoading: isListLoading, isFetching, error } = useQuery({
-    queryKey: ['billings', page, limit, effectiveSearch, modeFilter, statusFilter],
+    queryKey: ['billings', page, limit, debouncedSearch, selectedCustCode, modeFilter, statusFilter],
     queryFn: async () => {
       const params: Record<string, string | number> = {
         page,
         limit,
-        ...(effectiveSearch && { search: effectiveSearch }),
+        ...(selectedCustCode ? { custCode: selectedCustCode } : {}),
+        ...(debouncedSearch && !selectedCustCode ? { search: debouncedSearch } : {}),
         ...(statusFilter !== 'all' && { status: statusFilter }),
       }
       const res = await billingApi.list(params)
@@ -147,11 +148,9 @@ export default function ListPage() {
 
   const clearAllFilters = () => {
     setSearch('')
-    setSearchField('ALL')
+    setSelectedCustCode(null)
     setModeFilter('all')
     setStatusFilter('all')
-    setCustomerFilter('')
-    setMarkingFilter('')
     goToPage(1)
   }
 
@@ -255,13 +254,9 @@ export default function ListPage() {
           <BillingFilterBar
             modeFilter={modeFilter}
             statusFilter={statusFilter}
-            customerFilter={customerFilter}
-            markingFilter={markingFilter}
             isFetching={isFetching}
             onModeChange={(v) => { setModeFilter(v); goToPage(1) }}
             onStatusChange={(v) => { setStatusFilter(v); goToPage(1) }}
-            onCustomerChange={(v) => { setCustomerFilter(v); goToPage(1) }}
-            onMarkingChange={(v) => { setMarkingFilter(v); goToPage(1) }}
             onClearAll={clearAllFilters}
           />
 
@@ -269,14 +264,15 @@ export default function ListPage() {
           <div className="border-t border-[var(--color-border)]">
             <BillingToolbar
               search={search}
-              onSearchChange={setSearch}
-              searchField={searchField}
-              onSearchFieldChange={(f) => { setSearchField(f); goToPage(1) }}
+              onSearchChange={handleSearchChange}
+              onSelectSuggestion={handleSelectSuggestion}
               limit={limit}
               onLimitChange={setLimit}
               onPageReset={() => goToPage(1)}
               displayCount={filteredData.length}
               total={total}
+              isFetching={isFetching}
+              isLoading={isListLoading}
             />
           </div>
 

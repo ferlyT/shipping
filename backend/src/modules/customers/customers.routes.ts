@@ -5,8 +5,8 @@ import { successResponse, errorResponse } from '../../utils/response'
 
 const customersRoutes = new Hono()
 
-// Semua route customers memerlukan auth
-customersRoutes.use('/*', authMiddleware, requirePermission('/mshipping/customers'))
+// Semua route customers memerlukan autentikasi login (bisa diakses oleh semua role yang login)
+customersRoutes.use('/*', authMiddleware)
 
 customersRoutes.get('/', async (c) => {
   try {

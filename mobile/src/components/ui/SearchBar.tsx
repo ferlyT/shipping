@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { View, TextInput, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native'
+import React, { useState, useEffect, useRef } from 'react'
+import { View, TextInput, TouchableOpacity, StyleSheet, ViewStyle, Keyboard } from 'react-native'
 import { Search, X, ScanLine } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useThemeStore } from '../../theme/themeStore'
@@ -20,27 +20,46 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   placeholder = 'Cari...',
   onScanPress,
   onFocus,
-  debounceMs = 400,
+  debounceMs = 0,
   style,
 }) => {
   const { colors } = useThemeStore()
   const [localText, setLocalText] = useState(value)
+  const isTypingRef = useRef(false)
 
+  // Sync external value changes (e.g. suggestion selected, cleared)
   useEffect(() => {
     setLocalText(value)
+    isTypingRef.current = false
   }, [value])
 
+  // Only debounce if debounceMs > 0 and user is actively typing
   useEffect(() => {
+    if (debounceMs <= 0 || !isTypingRef.current) return
+
     const timer = setTimeout(() => {
+      isTypingRef.current = false
       if (localText !== value) {
         onChangeText(localText)
       }
     }, debounceMs)
+
     return () => clearTimeout(timer)
-  }, [localText, debounceMs])
+  }, [localText, debounceMs, value, onChangeText])
+
+  const handleChangeText = (text: string) => {
+    setLocalText(text)
+    if (debounceMs <= 0) {
+      isTypingRef.current = false
+      onChangeText(text)
+    } else {
+      isTypingRef.current = true
+    }
+  }
 
   const handleClear = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+    isTypingRef.current = false
     setLocalText('')
     onChangeText('')
   }
@@ -64,12 +83,15 @@ export const SearchBar: React.FC<SearchBarProps> = ({
       <Search size={16} color={colors.secondary} style={styles.searchIcon} />
       <TextInput
         value={localText}
-        onChangeText={setLocalText}
+        onChangeText={handleChangeText}
         placeholder={placeholder}
         placeholderTextColor={colors.secondary}
         returnKeyType="search"
         onFocus={onFocus}
-        onSubmitEditing={() => onChangeText(localText)}
+        onSubmitEditing={() => {
+          onChangeText(localText)
+          Keyboard.dismiss()
+        }}
         style={[
           styles.input,
           {

@@ -19,6 +19,7 @@ export interface SuggestionItem {
   title: string
   subtitle?: string
   value: string
+  custCode?: string
 }
 
 interface SearchSuggestionsDropdownProps {

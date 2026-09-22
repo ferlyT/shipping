@@ -1,7 +1,9 @@
 // Shared row components untuk tabel/list marking
 // DILARANG: mendefinisikan ulang BatchRow atau BatchListRow di halaman manapun
 
-import { MapPin, Calendar, ClipboardList, Eye, Ship, Plane } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { MapPin, Calendar, ClipboardList, Eye, Ship, Plane, Ruler } from 'lucide-react'
+import { ROUTES } from '@/lib/constants'
 import { cn, formatDateShort } from '@/lib/utils'
 import { MarkingStatusBadge } from './MarkingStatusBadge'
 import type { Marking } from '../types/marking.types'
@@ -103,6 +105,14 @@ export function BatchRow({ row, onView, onViewManifest }: BatchRowProps) {
             <ClipboardList className="h-3.5 w-3.5" />
             Manifest
           </button>
+          <Link
+            to={`${ROUTES.SHIPMENT_BATCH_MARKING_SIZE}?code=${encodeURIComponent(row.fdMarkingCode.trim())}`}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] px-2.5 py-1.5 text-xs sm:text-sm font-semibold text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors hover:bg-[var(--color-neutral)] bg-[var(--color-surface)] cursor-pointer"
+            title="Audit Ukuran (M³ & Tonase Kg)"
+          >
+            <Ruler className="h-3.5 w-3.5 text-[var(--color-tertiary)]" />
+            <span className="hidden xl:inline">Ukuran</span>
+          </Link>
           <button
             onClick={() => onView(row)}
             className="inline-flex items-center justify-center p-2 text-[var(--color-secondary)] hover:bg-[var(--color-neutral)] rounded-lg transition-all duration-200"
@@ -241,12 +251,21 @@ export function BatchListRow({ row, onView, onViewManifest }: BatchListRowProps)
                   e.stopPropagation()
                   onViewManifest(row)
                 }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-primary)] transition-colors cursor-pointer shadow-2xs"
+                className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-primary)] transition-colors cursor-pointer shadow-2xs"
               >
                 <ClipboardList className="w-3 h-3 text-[var(--color-secondary)]" />
                 Manifest
               </button>
             )}
+            <Link
+              to={`${ROUTES.SHIPMENT_BATCH_MARKING_SIZE}?code=${encodeURIComponent(row.fdMarkingCode.trim())}`}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-semibold bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer shadow-2xs"
+              title="Audit Ukuran"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Ruler className="w-3 h-3 text-[var(--color-tertiary)]" />
+              <span>Ukuran</span>
+            </Link>
             <button
               type="button"
               onClick={() => onView(row)}

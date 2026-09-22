@@ -59,6 +59,9 @@ backend/check-*.ts
 backend/create-index-*.ts
 backend/profile-*.ts
 backend/scratch-check.ts
+backend/*.py
+backend/*.txt
+scratch_*
 
 # Multi-agent coordination logs & temporary workspaces
 .agents/orchestrator_*/

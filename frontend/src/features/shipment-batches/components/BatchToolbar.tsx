@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   X,
@@ -6,8 +7,10 @@ import {
   Rows3,
   List,
   ChevronDown,
+  Ruler,
 } from 'lucide-react'
 import apiClient from '@/api/client'
+import { ROUTES } from '@/lib/constants'
 import { useDebounce } from '@/hooks/useDebounce'
 import { SearchSuggestionsDropdown } from '@/components/ui/SearchSuggestionsDropdown'
 import { cn } from '@/lib/utils'
@@ -193,6 +196,16 @@ export function BatchToolbar({
               <List size={15} />
             </button>
           </div>
+
+          {/* Quick link to Audit Ukuran per Marking */}
+          <Link
+            to={ROUTES.SHIPMENT_BATCH_MARKING_SIZE}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-primary)] text-xs font-semibold transition-colors cursor-pointer shrink-0 shadow-2xs"
+            title="Audit Ukuran M³ (Laut) & Tonase Kg (Udara) per Marking"
+          >
+            <Ruler size={13} className="text-[var(--color-tertiary)]" />
+            <span className="hidden sm:inline">Audit Ukuran</span>
+          </Link>
         </div>
       </div>
     </div>

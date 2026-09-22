@@ -9,6 +9,7 @@ export interface ValidationSummaryHeaderProps {
   customerName: string
   isOverallValid: boolean
   hasWarning: boolean
+  isLoadingValidation?: boolean
   onClose: () => void
 }
 
@@ -17,6 +18,7 @@ export function ValidationSummaryHeader({
   customerName,
   isOverallValid,
   hasWarning,
+  isLoadingValidation = false,
   onClose,
 }: ValidationSummaryHeaderProps) {
   const isLunas = billingData.fdGive2 === 1
@@ -27,14 +29,18 @@ export function ValidationSummaryHeader({
       <div className="flex items-center gap-2.5 min-w-0">
         <div
           className={`p-1.5 rounded-lg border shrink-0 ${
-            isOverallValid
-              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-              : hasWarning
-                ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
-                : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
+            isLoadingValidation
+              ? 'bg-blue-500/10 border-blue-500/20 text-blue-500'
+              : isOverallValid
+                ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                : hasWarning
+                  ? 'bg-amber-500/10 border-amber-500/20 text-amber-500'
+                  : 'bg-rose-500/10 border-rose-500/20 text-rose-500'
           }`}
         >
-          {isOverallValid ? (
+          {isLoadingValidation ? (
+            <div className="w-4 h-4 rounded skeleton-shimmer" />
+          ) : isOverallValid ? (
             <CheckCircle2 className="w-4 h-4" />
           ) : hasWarning ? (
             <AlertTriangle className="w-4 h-4" />

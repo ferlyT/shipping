@@ -1,6 +1,6 @@
-import { formatCurrency, formatNumber, cleanFoxProString } from '@/lib/utils'
+import { formatCurrency, cleanFoxProString } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
-import type { ItemPriceEvaluation } from '../../utils/billing.utils'
+import { formatQtyDecimal, type ItemPriceEvaluation } from '../../utils/billing.utils'
 import type { BillingDetail } from '../../types/billing.types'
 
 export interface FinancialAuditItem {
@@ -10,6 +10,31 @@ export interface FinancialAuditItem {
 
 export interface FinancialAuditTabProps {
   evaluatedItems: FinancialAuditItem[]
+}
+
+function parsePriceDisplay(rawDisplay?: string): { pricePart: string; notePart?: string } {
+  if (!rawDisplay) return { pricePart: '' }
+  const str = cleanFoxProString(rawDisplay).trim()
+
+  // Match pattern like: "Rp. 13,000,000.00 (Cust)" or "20 kg (Gudang)"
+  const parenMatch = str.match(/^(.*?)\s*(\([^)]+\))$/)
+  if (parenMatch) {
+    return {
+      pricePart: parenMatch[1].trim(),
+      notePart: parenMatch[2].trim(),
+    }
+  }
+
+  // Match pattern like: "0 di tbEntrylist"
+  const diMatch = str.match(/^(.*?)\s+(di\s+tb[A-Za-z0-9_]+)$/i)
+  if (diMatch) {
+    return {
+      pricePart: diMatch[1].trim(),
+      notePart: diMatch[2].trim(),
+    }
+  }
+
+  return { pricePart: str }
 }
 
 export function FinancialAuditTab({ evaluatedItems }: FinancialAuditTabProps) {
@@ -78,7 +103,7 @@ export function FinancialAuditTab({ evaluatedItems }: FinancialAuditTabProps) {
                     )}
                   </td>
                   <td className="px-2.5 py-1.5 text-right tabular-nums whitespace-nowrap">
-                    {billedItem ? `${formatNumber(billedItem.fdQty)} ${billedItem.fdSatuan || ''}` : '1'}
+                    {billedItem ? `${formatQtyDecimal(billedItem.fdQty, billedItem.fdListCode, billedItem.fdItemName)} ${billedItem.fdListCode || ''}` : '1'}
                   </td>
                   <td className="px-2.5 py-1.5 text-right tabular-nums font-medium text-[var(--color-primary)] whitespace-nowrap">
                     {formatCurrency(billedPrice)}
@@ -89,13 +114,12 @@ export function FinancialAuditTab({ evaluatedItems }: FinancialAuditTabProps) {
                   <td className="px-2.5 py-1.5 text-right tabular-nums whitespace-nowrap">
                     {targetPrice > 0 ? (
                       <span
-                        className={`font-semibold whitespace-nowrap ${
-                          isUnder
-                            ? 'text-rose-500'
-                            : isOver
-                              ? 'text-amber-500'
-                              : 'text-emerald-500'
-                        }`}
+                        className={`font-semibold whitespace-nowrap ${isUnder
+                          ? 'text-rose-500'
+                          : isOver
+                            ? 'text-amber-500'
+                            : 'text-emerald-500'
+                          }`}
                       >
                         {diff > 0 ? `+${formatCurrency(diff)}` : diff < 0 ? formatCurrency(diff) : 'Rp 0'}
                       </span>
@@ -117,8 +141,25 @@ export function FinancialAuditTab({ evaluatedItems }: FinancialAuditTabProps) {
                       size="sm"
                     />
                   </td>
-                  <td className="px-2.5 py-1.5 text-[11px] text-[var(--color-secondary)] whitespace-nowrap">
-                    {cleanFoxProString(item.tierSource || item.priceListDisplay || 'Price List Master')}
+                  <td className="px-2.5 py-1.5 text-[11px] min-w-[130px] leading-tight">
+                    <div className="font-semibold text-[var(--color-primary)]">
+                      {cleanFoxProString(item.tierSource || 'Price List Master')}
+                    </div>
+                    {item.priceListDisplay && item.priceListDisplay !== item.tierSource && (() => {
+                      const { pricePart, notePart } = parsePriceDisplay(item.priceListDisplay)
+                      return (
+                        <div className="text-[10px] text-[var(--color-secondary)] mt-0.5 leading-tight space-y-0.5">
+                          {pricePart && (
+                            <div>{pricePart}</div>
+                          )}
+                          {notePart && (
+                            <div className="text-[9.5px] text-[var(--color-secondary)]/80">
+                              {notePart}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })()}
                   </td>
                 </tr>
               )

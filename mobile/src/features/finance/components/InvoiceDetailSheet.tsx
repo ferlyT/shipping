@@ -20,6 +20,7 @@ import {
   Clock,
   ShieldAlert,
   MapPin,
+  Printer,
 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useQuery } from '@tanstack/react-query'
@@ -31,6 +32,7 @@ import { useThemeStore } from '@/theme/themeStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
 import { useTranslation } from '@/hooks/useTranslation'
+import { useBiometricGuard } from '@/hooks/useBiometricGuard'
 import apiClient from '@/api/client'
 import {
   formatCurrency,
@@ -44,6 +46,7 @@ import {
 import { statusConfig } from '@/features/master/utils/master.utils'
 import { canViewConsignee } from '@/lib/permissions'
 import { formatQtyDecimal, isVfcItem, isMktCustomer } from '../utils/finance.utils'
+import { printInvoicePdf, shareInvoicePdf } from '../utils/billing-pdf.utils'
 
 interface InvoiceDetailSheetProps {
   selectedInvoice: any | null
@@ -62,6 +65,9 @@ export function InvoiceDetailSheet({
   const isDark = mode === 'midnight'
   const { showToast } = useToastStore()
   const [isCopiedMarking, setIsCopiedMarking] = useState(false)
+  const [isPrinting, setIsPrinting] = useState(false)
+  const [isSharing, setIsSharing] = useState(false)
+  const { guardedAction } = useBiometricGuard()
   const userCanViewConsignee = canViewConsignee(user)
 
   const invNo = (selectedInvoice?.fdInvNo || '').trim()
@@ -112,6 +118,38 @@ export function InvoiceDetailSheet({
     setIsCopiedMarking(true)
     showToast('Data marking & resi disalin', 'info')
     setTimeout(() => setIsCopiedMarking(false), 2000)
+  }
+
+  const handlePrint = async () => {
+    if (!invoice) return
+    setIsPrinting(true)
+    try {
+      await guardedAction(async () => {
+        showToast(t('finance.generatingPdf', 'Menyiapkan dokumen PDF...'), 'info')
+        await printInvoicePdf(invoice, user)
+        showToast(t('finance.pdfPrinted', 'Dokumen siap dicetak!'), 'success')
+      }, t('finance.biometricPromptPrint', 'Verifikasi untuk mencetak invoice'))
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal mencetak dokumen', 'error')
+    } finally {
+      setIsPrinting(false)
+    }
+  }
+
+  const handleShare = async () => {
+    if (!invoice) return
+    setIsSharing(true)
+    try {
+      await guardedAction(async () => {
+        showToast(t('finance.generatingPdf', 'Menyiapkan dokumen PDF...'), 'info')
+        await shareInvoicePdf(invoice, user)
+        showToast(t('finance.pdfShared', 'PDF berhasil dibagikan!'), 'success')
+      }, t('finance.biometricPromptShare', 'Verifikasi untuk membagikan invoice'))
+    } catch (err: any) {
+      showToast(err?.message || 'Gagal membagikan PDF', 'error')
+    } finally {
+      setIsSharing(false)
+    }
   }
 
   return (
@@ -531,12 +569,32 @@ export function InvoiceDetailSheet({
 
                 {/* ACTION BUTTONS */}
                 <View style={styles.actionButtons}>
+                  <View style={styles.actionRow}>
+                    <Button
+                      title={t('finance.printPdf', 'Cetak PDF')}
+                      variant="primary"
+                      icon={<Printer size={15} color="#FFFFFF" />}
+                      loading={isPrinting}
+                      disabled={isPrinting || isSharing}
+                      onPress={handlePrint}
+                      style={{ flex: 1 }}
+                    />
+                    <Button
+                      title={t('finance.sharePdf', 'Bagikan PDF')}
+                      variant="outline"
+                      icon={<Share2 size={15} color={colors.tertiary} />}
+                      loading={isSharing}
+                      disabled={isPrinting || isSharing}
+                      onPress={handleShare}
+                      style={{ flex: 1 }}
+                    />
+                  </View>
                   <Button
                     title={t('finance.copyInvoiceNo', 'Salin Nomor Invoice')}
-                    variant="outline"
+                    variant="secondary"
                     icon={<Copy size={15} color={colors.primary} />}
                     onPress={() => onCopyInvoiceNo(invoice?.fdInvNo)}
-                    style={{ flex: 1 }}
+                    style={{ width: '100%' }}
                   />
                 </View>
               </>
@@ -809,9 +867,13 @@ const styles = StyleSheet.create({
     fontFamily: 'monospace',
   },
   actionButtons: {
+    gap: 8,
+    marginTop: 6,
+    marginBottom: 8,
+  },
+  actionRow: {
     flexDirection: 'row',
     gap: 8,
-    marginTop: 4,
-    marginBottom: 8,
+    width: '100%',
   },
 })

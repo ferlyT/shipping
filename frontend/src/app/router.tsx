@@ -48,7 +48,10 @@ export function PermissionGuard() {
   const hasAccess = user?.permissions?.some((p) => {
     if (pathname === p || pathname.startsWith(p + '/')) return true
     if (p.startsWith('/mshipping/finance/billing') && pathname.startsWith('/mshipping/finance/billing')) return true
+    if (p.startsWith('/mshipping/finance/cashier') && pathname.startsWith('/mshipping/finance/cashier')) return true
     if (p.startsWith('/mshipping/logistics/shipments') && pathname.startsWith('/mshipping/logistics/shipments')) return true
+    if ((p.startsWith('/mshipping/logistics/shipment-batches') || p.startsWith('/mshipping/shipment-batches')) && pathname.startsWith('/mshipping/logistics/shipment-batches')) return true
+    if ((p.startsWith('/mshipping/logistics/delivery-orders') || p.startsWith('/mshipping/delivery-orders')) && pathname.startsWith('/mshipping/logistics/delivery-orders')) return true
     return false
   })
 
@@ -101,9 +104,12 @@ const ShipmentsDashboardPage = lazy(() => import('@/features/shipments').then(m 
 const ShipmentsListPage  = lazy(() => import('@/features/shipments').then(m => ({ default: m.ShipmentsListPage })))
 const ShipmentBatchesDashboardPage = lazy(() => import('@/features/shipment-batches').then(m => ({ default: m.ShipmentBatchesDashboardPage })))
 const ShipmentBatchesListPage = lazy(() => import('@/features/shipment-batches').then(m => ({ default: m.ShipmentBatchesListPage })))
+const ShipmentBatchesMarkingSizePage = lazy(() => import('@/features/shipment-batches').then(m => ({ default: m.MarkingSizePage })))
 const DeliveryOrdersDashboardPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DashboardPage })))
+const DeliveryOrdersInventoryPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.InventoryPage })))
 const DeliveryOrdersListPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.ListPage })))
 const DeliveryOrdersDetailPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DetailPage })))
+const DeliveryOrderPrintPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryOrderPrintPage })))
 const BillingDashboardPage = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingDashboardPage })))
 const BillingTargetPage    = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingTargetPage })))
 const BillingPage        = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingPage })))
@@ -124,6 +130,9 @@ const CustomerPriceListHistoryPage = lazy(() => import('@/features/customer-pric
 const CustomerPriceListDiffPage = lazy(() => import('@/features/customer-price-list').then(m => ({ default: m.DiffPage })))
 const CustomerPriceListLookupPage = lazy(() => import('@/features/customer-price-list').then(m => ({ default: m.PriceLookupPage })))
 const CommodityMappingPage = lazy(() => import('@/features/commodity-mapping').then(m => ({ default: m.CommodityMappingPage })))
+const CashierListPage = lazy(() => import('@/features/cashier').then(m => ({ default: m.ListPage })))
+const CashierDetailPage = lazy(() => import('@/features/cashier').then(m => ({ default: m.DetailPage })))
+const WalletListPage = lazy(() => import('@/features/wallet').then(m => ({ default: m.ListPage })))
 const UserManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.UserManagementPage })))
 const RoleManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.RoleManagementPage })))
 const AccountPage        = lazy(() => import('@/features/profile').then(m => ({ default: m.AccountPage })))
@@ -146,7 +155,9 @@ export function AppRouter() {
                 <Route path={ROUTES.SHIPMENTS_LIST}    element={<ShipmentsListPage />} />
                 <Route path={ROUTES.SHIPMENT_BATCHES}  element={<ShipmentBatchesDashboardPage />} />
                 <Route path={ROUTES.SHIPMENT_BATCHES_LIST}  element={<ShipmentBatchesListPage />} />
+                <Route path={ROUTES.SHIPMENT_BATCH_MARKING_SIZE} element={<ShipmentBatchesMarkingSizePage />} />
                 <Route path={ROUTES.DELIVERY_ORDERS}   element={<DeliveryOrdersDashboardPage />} />
+                <Route path={ROUTES.DELIVERY_ORDERS_INVENTORY} element={<DeliveryOrdersInventoryPage />} />
                 <Route path={ROUTES.DELIVERY_ORDERS_LIST} element={<DeliveryOrdersListPage />} />
                 <Route path={ROUTES.DELIVERY_DETAIL(':id')} element={<DeliveryOrdersDetailPage />} />
                 <Route path={ROUTES.BILLING}           element={<BillingDashboardPage />} />
@@ -171,6 +182,13 @@ export function AppRouter() {
 
                 {/* Commodity Mapping */}
                 <Route path={ROUTES.COMMODITY_MAPPING} element={<CommodityMappingPage />} />
+
+                {/* Cashier & Pelunasan Piutang */}
+                <Route path={ROUTES.CASHIER_LIST} element={<CashierListPage />} />
+                <Route path={ROUTES.CASHIER_DETAIL(':id')} element={<CashierDetailPage />} />
+
+                {/* Customer Wallet & Saldo Deposit */}
+                <Route path={ROUTES.WALLET} element={<WalletListPage />} />
               </Route>
               
               {/* Admin Only Routes */}
@@ -182,6 +200,7 @@ export function AppRouter() {
             </Route>
             {/* Print routes — di luar AppLayout agar tidak ada sidebar/navbar */}
             <Route path={ROUTES.BILLING_PRINT(':id')} element={<BillingPrintPage />} />
+            <Route path={ROUTES.DELIVERY_PRINT(':id')} element={<DeliveryOrderPrintPage />} />
           </Route>
           {/* Catch all */}
           <Route path="*" element={<DefaultRouteRedirect />} />

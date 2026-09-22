@@ -44,7 +44,7 @@ export const isAdmin = createMiddleware(async (c, next) => {
   await next()
 })
 
-export const requirePermission = (requiredPath: string) => createMiddleware(async (c, next) => {
+export const requirePermission = (requiredPath: string | string[]) => createMiddleware(async (c, next) => {
   const user = c.get('user')
   
   if (!user) {
@@ -62,7 +62,8 @@ export const requirePermission = (requiredPath: string) => createMiddleware(asyn
       .replace(/^\/mshipping\/(finance|master|logistics|admin|overview)\//, '/mshipping/')
       .replace(/\/+$/, '')
 
-  const reqNorm = normalize(requiredPath)
+  const paths = Array.isArray(requiredPath) ? requiredPath : [requiredPath]
+  const reqNorms = paths.map(normalize)
 
   let activePerms = user.permissions || []
   if (user.role) {
@@ -79,22 +80,26 @@ export const requirePermission = (requiredPath: string) => createMiddleware(asyn
     }
   }
 
-  // Check permissions
+  // Check permissions: has access if any active permission matches any required path
   const hasAccess = activePerms.some(p => {
     if (p === '/*') return true
     const pNorm = normalize(p)
-    return (
-      requiredPath === p ||
-      requiredPath.startsWith(p + '/') ||
-      p.startsWith(requiredPath + '/') ||
-      reqNorm === pNorm ||
-      reqNorm.startsWith(pNorm + '/') ||
-      pNorm.startsWith(reqNorm + '/')
-    )
+    return paths.some((reqP, idx) => {
+      const reqNorm = reqNorms[idx] || normalize(reqP)
+      return (
+        reqP === p ||
+        reqP.startsWith(p + '/') ||
+        p.startsWith(reqP + '/') ||
+        reqNorm === pNorm ||
+        reqNorm.startsWith(pNorm + '/') ||
+        pNorm.startsWith(reqNorm + '/')
+      )
+    })
   })
 
   if (!hasAccess) {
-    return errorResponse(c, `Akses ditolak: Anda tidak memiliki izin untuk ${requiredPath}`, 403)
+    const label = paths.join(' atau ')
+    return errorResponse(c, `Akses ditolak: Anda tidak memiliki izin untuk ${label}`, 403)
   }
 
   await next()

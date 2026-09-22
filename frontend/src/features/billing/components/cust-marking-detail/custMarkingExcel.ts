@@ -88,41 +88,100 @@ export async function exportCustMarkingToExcel({
   const sheet2Aoa: any[][] = []
 
   rows.forEach((rowItem) => {
+    const effectiveCustName = rowItem.raw?.fdCustName?.trim() || custName || '—'
+    const effectiveMarking = rowItem.raw?.fdMarkingCode?.trim() || markingCode || '—'
+    const effectiveMarkingNo = rowItem.marking || rowItem.raw?.fdMarkingNo?.trim() || '—'
+    const effectiveResi = rowItem.terima || rowItem.raw?.fdTerima?.trim() || '—'
+    const effectiveKomoditas = rowItem.fdComodity || rowItem.comodity || '—'
+
+    // Header identitas kargo vertikal
+    sheet2Aoa.push(['Customer Name', effectiveCustName])
+    sheet2Aoa.push(['Marking', effectiveMarking])
+    sheet2Aoa.push(['Marking No', effectiveMarkingNo])
+    sheet2Aoa.push(['Resi', effectiveResi])
+    sheet2Aoa.push(['Komoditas', effectiveKomoditas])
+
+    // Header tabel data detail horizontal
     sheet2Aoa.push([
-      `LISTCODE: ${rowItem.listCode}`,
-      `MARKING: ${rowItem.marking || markingCode || '—'}`,
-      `INVOICE: ${rowItem.invoice}`,
-      `CABANG: ${rowItem.branchCode}`,
-      `KOMODITAS: ${rowItem.comodity}`,
+      'No',
+      'Panjang (cm)',
+      'Lebar (cm)',
+      'Tinggi (cm)',
+      'Qty',
+      'Volume (m³)',
     ])
-    sheet2Aoa.push(['Item / Kode', 'Keterangan', 'Panjang (cm)', 'Lebar (cm)', 'Tinggi (cm)', 'Qty (Koli)', 'Volume (m³)', 'Load / Kontainer'])
 
     const matchedDetails = entryDetails.filter((d) => d.fdListCode === rowItem.listCode)
 
+    let totalQty = 0
+    let totalM3 = 0
+
     if (matchedDetails.length > 0) {
-      matchedDetails.forEach((d) => {
+      matchedDetails.forEach((d, dIdx) => {
+        const pjg = Number(d.fdPjg) || 0
+        const lbr = Number(d.fdLbr) || 0
+        const tng = Number(d.fdTng) || 0
+        const qty = Number(d.fdQty) || 0
+        const m3 =
+          Number(d.fdM3) ||
+          (pjg > 0 && lbr > 0 && tng > 0 ? parseFloat(((pjg * lbr * tng * qty) / 1000000).toFixed(4)) : 0)
+
+        totalQty += qty
+        totalM3 += m3
+
         sheet2Aoa.push([
-          d.fdListDCode || '—',
-          d.fdDescr || '—',
-          d.fdPjg || 0,
-          d.fdLbr || 0,
-          d.fdTng || 0,
-          d.fdQty || 0,
-          d.fdM3 || 0,
-          d.fdLoad || '—',
+          dIdx + 1,
+          pjg,
+          lbr,
+          tng,
+          qty,
+          parseFloat(m3.toFixed(4)),
         ])
       })
     } else {
-      sheet2Aoa.push(['—', 'Data ukuran fisik tidak ditemukan / belum diisi', 0, 0, 0, rowItem.qtyGdg || rowItem.qtySJ, rowItem.m3Gdg || rowItem.m3PL, '—'])
+      const fallbackQty = rowItem.qtyGdg || rowItem.qtySJ || 0
+      const fallbackM3 = rowItem.m3Gdg || rowItem.m3PL || rowItem.m3Bill || 0
+      totalQty = fallbackQty
+      totalM3 = fallbackM3
+
+      sheet2Aoa.push([
+        1,
+        0,
+        0,
+        0,
+        fallbackQty,
+        parseFloat(Number(fallbackM3).toFixed(4)),
+      ])
     }
 
-    sheet2Aoa.push([]) // baris kosong pemisah
+    // Baris terakhir: Total m3
+    sheet2Aoa.push([
+      'Total',
+      '',
+      '',
+      '',
+      totalQty,
+      parseFloat(totalM3.toFixed(4)),
+    ])
+
+    sheet2Aoa.push([]) // baris kosong pemisah antar kargo
+    sheet2Aoa.push([])
   })
 
   // 5. Buat Workbook
   const wb = XLSX.utils.book_new()
   const ws1 = XLSX.utils.json_to_sheet(sheet1Rows)
   const ws2 = XLSX.utils.aoa_to_sheet(sheet2Aoa)
+
+  // Pengaturan lebar kolom agar rapi dan proporsional
+  ws2['!cols'] = [
+    { wch: 18 }, // Col A: Label / No / Total
+    { wch: 28 }, // Col B: Value / Panjang (cm)
+    { wch: 14 }, // Col C: Lebar (cm)
+    { wch: 14 }, // Col D: Tinggi (cm)
+    { wch: 12 }, // Col E: Qty
+    { wch: 16 }, // Col F: Volume (m³)
+  ]
 
   XLSX.utils.book_append_sheet(wb, ws1, 'Ringkasan Marking')
   XLSX.utils.book_append_sheet(wb, ws2, 'Detail Ukuran Fisik')

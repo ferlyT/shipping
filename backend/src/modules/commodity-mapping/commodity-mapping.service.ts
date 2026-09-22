@@ -123,6 +123,10 @@ export async function getCommodityMappings(query: CommodityMappingQuery) {
       fdTypeComodity: d.fdTypeComodity,
       fdCustCode: cCode,
       custName: cCode ? custMap.get(cCode) || null : null,
+      price: d.price !== null && d.price !== undefined ? Number(d.price) : null,
+      branch: d.branch ? d.branch.trim() : null,
+      startMarkingCode: d.startMarkingCode ? d.startMarkingCode.trim() : null,
+      startAgentDate: d.startAgentDate ? d.startAgentDate.toISOString() : null,
       priceListUploadId: d.priceListUploadId,
       priceListFileName: d.priceListUploadId ? uploadMap.get(d.priceListUploadId) || null : null,
       effectiveDate: d.effectiveDate.toISOString(),
@@ -169,6 +173,10 @@ export async function getCommodityMappingById(id: number) {
   return {
     ...item,
     custName,
+    price: item.price !== null && item.price !== undefined ? Number(item.price) : null,
+    branch: item.branch ? item.branch.trim() : null,
+    startMarkingCode: item.startMarkingCode ? item.startMarkingCode.trim() : null,
+    startAgentDate: item.startAgentDate ? item.startAgentDate.toISOString() : null,
     priceListFileName,
     effectiveDate: item.effectiveDate.toISOString(),
     endDate: item.endDate ? item.endDate.toISOString() : null,
@@ -186,6 +194,10 @@ export async function createCommodityMapping(input: CreateCommodityMappingInput)
   const cleanCust = input.fdCustCode?.trim() || null
   const effectiveDate = input.effectiveDate ? new Date(input.effectiveDate) : new Date()
   const endDate = input.endDate ? new Date(input.endDate) : null
+  const price = input.price !== undefined && input.price !== null && !isNaN(Number(input.price)) ? Number(input.price) : null
+  const branch = input.branch?.trim() || null
+  const startMarkingCode = input.startMarkingCode?.trim()?.toUpperCase() || null
+  const startAgentDate = input.startAgentDate ? new Date(input.startAgentDate) : null
 
   // If fdTypeComodity is not provided, try to find matching fdTypeComodity from tbTypeComodity
   let resolvedTypeId = input.fdTypeComodity ?? null
@@ -207,6 +219,10 @@ export async function createCommodityMapping(input: CreateCommodityMappingInput)
       targetCommodity: cleanTarget,
       fdTypeComodity: resolvedTypeId,
       fdCustCode: cleanCust,
+      price,
+      branch,
+      startMarkingCode,
+      startAgentDate,
       priceListUploadId: input.priceListUploadId ?? null,
       effectiveDate,
       endDate,
@@ -249,6 +265,10 @@ export async function updateCommodityMapping(id: number, input: UpdateCommodityM
         targetCommodity: input.targetCommodity?.trim() || existing.targetCommodity,
         fdTypeComodity: input.fdTypeComodity !== undefined ? input.fdTypeComodity : existing.fdTypeComodity,
         fdCustCode: input.fdCustCode !== undefined ? (input.fdCustCode?.trim() || null) : existing.fdCustCode,
+        price: input.price !== undefined ? (input.price !== null && !isNaN(Number(input.price)) ? Number(input.price) : null) : existing.price,
+        branch: input.branch !== undefined ? (input.branch?.trim() || null) : existing.branch,
+        startMarkingCode: input.startMarkingCode !== undefined ? (input.startMarkingCode?.trim()?.toUpperCase() || null) : existing.startMarkingCode,
+        startAgentDate: input.startAgentDate !== undefined ? (input.startAgentDate ? new Date(input.startAgentDate) : null) : existing.startAgentDate,
         priceListUploadId: input.priceListUploadId !== undefined ? input.priceListUploadId : existing.priceListUploadId,
         effectiveDate: new Date(input.effectiveDate),
         endDate: input.endDate !== undefined ? (input.endDate ? new Date(input.endDate) : null) : null,
@@ -269,6 +289,10 @@ export async function updateCommodityMapping(id: number, input: UpdateCommodityM
       targetCommodity: input.targetCommodity ? input.targetCommodity.trim() : undefined,
       fdTypeComodity: input.fdTypeComodity !== undefined ? input.fdTypeComodity : undefined,
       fdCustCode: input.fdCustCode !== undefined ? (input.fdCustCode?.trim() || null) : undefined,
+      price: input.price !== undefined ? (input.price !== null && !isNaN(Number(input.price)) ? Number(input.price) : null) : undefined,
+      branch: input.branch !== undefined ? (input.branch?.trim() || null) : undefined,
+      startMarkingCode: input.startMarkingCode !== undefined ? (input.startMarkingCode?.trim()?.toUpperCase() || null) : undefined,
+      startAgentDate: input.startAgentDate !== undefined ? (input.startAgentDate ? new Date(input.startAgentDate) : null) : undefined,
       priceListUploadId: input.priceListUploadId !== undefined ? input.priceListUploadId : undefined,
       effectiveDate: input.effectiveDate ? new Date(input.effectiveDate) : undefined,
       endDate: input.endDate !== undefined ? (input.endDate ? new Date(input.endDate) : null) : undefined,

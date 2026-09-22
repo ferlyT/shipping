@@ -58,6 +58,9 @@ export const AVAILABLE_PATHS: AvailablePath[] = [
   { path: ROUTES.CUSTOMER_PRICE_LIST, label: 'Customer Price List', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.CUSTOMER_PRICE_LIST_LOOKUP, label: 'Pencarian Harga Customer', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
   { path: ROUTES.CUSTOMER_PRICE_LIST_UPLOAD, label: 'Upload Customer Price List', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
+  { path: ROUTES.COMMODITY_MAPPING, label: 'Commodity Mapping', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
+  { path: ROUTES.CASHIER, label: 'Kasir & Pelunasan Piutang', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
+  { path: ROUTES.WALLET, label: 'Customer Wallet & Deposit Pelanggan', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },
 
   // Master Data
   { path: ROUTES.CUSTOMERS, label: 'Customer Master Data', module: 'masterdata', moduleLabel: 'Master Data', accentColor: '#8B5CF6' },

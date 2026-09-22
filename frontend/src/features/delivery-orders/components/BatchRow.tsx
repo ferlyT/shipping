@@ -2,105 +2,149 @@ import { Fragment } from 'react'
 import { ChevronRight, Eye } from 'lucide-react'
 import { DeliveryOrderDetails } from './DeliveryOrderDetails'
 import { StatusPill } from './StatusPill'
-import { cn, displayCustName } from '@/lib/utils'
+import { cn, displayCustName, formatNumber, formatDecimal } from '@/lib/utils'
 import type { GroupedDataRow } from '../types/delivery-orders.types'
 
 export function BatchRow({
   row,
+  index,
   expanded,
   onToggle,
 }: {
   row: GroupedDataRow
+  index?: number
   expanded: boolean
   onToggle: () => void
 }) {
+  const totalWeight = Number(row.totalWeight || 0)
+  const totalM3 = Number(row.m3 || 0)
+  const satuan = (row.satuan || 'KOLI').trim()
+  const sisa = Number(row.sisa || 0)
+  const terkirim = Number(row.totalTerkirim || 0)
+  const totalQty = Number(row.totalQty || 0)
+
   return (
     <Fragment>
       <tr 
         className={cn(
-          "group cursor-pointer border-b border-[var(--color-border)] transition-colors duration-200 hover:bg-[var(--color-neutral)]",
-          expanded && "bg-[var(--color-neutral)]/70"
+          "group cursor-pointer border-b border-[var(--color-border)] transition-colors duration-200 hover:bg-[var(--color-neutral)]/50",
+          expanded && "bg-[var(--color-neutral)]/60"
         )}
         onClick={onToggle}
       >
-        <td className="py-4 pl-6 pr-4">
-          <div className="flex items-center gap-3">
+        {/* Kolom 0: Nomor Urut */}
+        {index !== undefined && (
+          <td className="py-3 px-3 text-center text-xs text-[var(--color-secondary)] font-mono">
+            {index + 1}
+          </td>
+        )}
+
+        {/* Kolom 1: List Code & Cabang / Marking */}
+        <td className="py-3 px-3">
+          <div className="flex items-center gap-2.5">
             <ChevronRight className={cn(
               "h-4 w-4 flex-shrink-0 text-[var(--color-secondary)] transition-transform duration-200",
               expanded && "rotate-90 text-[var(--color-tertiary)]"
             )} />
             <div className="flex flex-col gap-0.5">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-semibold text-[var(--color-primary)] leading-tight">{row.listCode}</p>
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold font-mono text-[var(--color-primary)] leading-tight">
+                  {row.listCode}
+                </span>
                 {row.branchCode && (
-                  <span className="flex-shrink-0 rounded border border-blue-500/30 bg-transparent px-1.5 py-0.5 text-[10px] font-bold text-blue-500 uppercase" title={row.branchName || row.branchCode}>
+                  <span
+                    className="inline-flex items-center px-1.5 py-0.2 rounded text-[10px] font-extrabold border border-sky-500/30 text-sky-600 dark:text-sky-400 uppercase tracking-wider"
+                    title={row.branchName ? `${row.branchCode} — ${row.branchName.trim()}` : row.branchCode}
+                  >
                     {row.branchCode}
                   </span>
                 )}
               </div>
-              <span className="text-xs text-[var(--color-secondary)]" title={row.markingCode}>
+              <span className="text-[11px] text-[var(--color-secondary)] truncate max-w-[160px]" title={row.markingCode}>
                 {row.markingCode}
               </span>
             </div>
           </div>
         </td>
-        <td className="py-4 px-4">
+
+        {/* Kolom 2: Customer / Resi */}
+        <td className="py-3 px-3">
           <div className="flex flex-col gap-0.5">
-            <p className="max-w-[180px] truncate text-sm font-medium text-[var(--color-primary)] leading-tight" title={displayCustName(row.customerName, '-')}>
+            <p className="max-w-[200px] truncate text-xs font-semibold text-[var(--color-primary)] leading-tight" title={displayCustName(row.customerName, '-')}>
               {displayCustName(row.customerName, '-')}
             </p>
-            <p className="max-w-[180px] truncate text-xs text-[var(--color-secondary)]" title={row.resiNo || '-'}>
-              {row.resiNo || '-'}
+            <p className="max-w-[180px] truncate text-[11px] text-[var(--color-secondary)] font-mono" title={row.resiNo || '-'}>
+              {row.resiNo || '—'}
             </p>
           </div>
         </td>
-        <td className="py-4 px-4">
-          <p className="max-w-[150px] truncate text-sm text-[var(--color-secondary)]" title={row.comodity || '-'}>
-            {row.comodity || <span className="text-[var(--color-secondary)]/50">—</span>}
+
+        {/* Kolom 3: Komoditas */}
+        <td className="py-3 px-3">
+          <p className="max-w-[170px] truncate text-xs text-[var(--color-secondary)]" title={row.comodity || row.typeComodityName || '-'}>
+            {row.comodity || row.typeComodityName || <span className="text-[var(--color-secondary)]/40">—</span>}
           </p>
         </td>
-        <td className="py-4 px-4">
-          <div className="flex flex-col gap-0.5">
-            <p className="text-sm font-medium tabular-nums text-[var(--color-primary)] leading-tight">
-              {Number(row.totalQty || 0).toLocaleString('en-US')} pkgs
-            </p>
-            <p className="text-xs tabular-nums text-[var(--color-secondary)]">
-              {Number(row.totalTerkirim || 0).toLocaleString('en-US')} delivered
-            </p>
+
+        {/* Kolom 4: Total Muatan (Qty, Berat, Volume) */}
+        <td className="py-3 px-3">
+          <div className="flex flex-col gap-0.5 text-xs tabular-nums">
+            <span className="font-bold text-[var(--color-primary)]">
+              {formatNumber(totalQty)} {satuan}
+            </span>
+            <div className="flex items-center gap-2 text-[10.5px] text-[var(--color-secondary)]">
+              {totalWeight > 0 && <span>{formatNumber(totalWeight)} kg</span>}
+              {totalM3 > 0 && <span>{formatDecimal(totalM3, 3)} m³</span>}
+            </div>
           </div>
         </td>
-        <td className="py-4 px-4 tabular-nums">
-          {Number(row.sisa || 0) > 0 ? (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-transparent text-rose-500 border border-rose-500/40">
-              {Number(row.sisa || 0).toLocaleString('en-US')} left
+
+        {/* Kolom 5: Progres Pengiriman (Terkirim vs Sisa) */}
+        <td className="py-3 px-3">
+          <div className="flex flex-col gap-1 tabular-nums">
+            <span className="text-xs text-[var(--color-secondary)]">
+              {formatNumber(terkirim)} terkirim
             </span>
-          ) : (
-            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-transparent text-emerald-500 border border-emerald-500/40">
-              0 left
-            </span>
-          )}
+            {sisa > 0 ? (
+              <span className="inline-flex items-center w-fit px-1.5 py-0.2 rounded text-[10.5px] font-bold bg-transparent text-rose-500 border border-rose-500/40">
+                {formatNumber(sisa)} sisa
+              </span>
+            ) : (
+              <span className="inline-flex items-center w-fit px-1.5 py-0.2 rounded text-[10.5px] font-semibold bg-transparent text-emerald-500 border border-emerald-500/40">
+                Lengkap
+              </span>
+            )}
+          </div>
         </td>
-        <td className="py-4 px-4">
+
+        {/* Kolom 6: Status Kirim */}
+        <td className="py-3 px-3">
           <StatusPill isSent={row.isSent} />
         </td>
-        <td className="py-4 pr-6 pl-4 text-right">
+
+        {/* Kolom 7: Aksi Expand Surat Jalan */}
+        <td className="py-3 px-3 text-right">
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); onToggle(); }}
             className={cn(
-              "inline-flex items-center justify-center p-2 text-[var(--color-secondary)] rounded-lg transition-all duration-200 cursor-pointer",
+              "inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-lg transition-all duration-200 cursor-pointer border",
               expanded 
-                ? "text-[var(--color-tertiary)] bg-[var(--color-tertiary)]/10" 
-                : "hover:text-[var(--color-tertiary)] hover:bg-[var(--color-neutral)]"
+                ? "text-[var(--color-tertiary)] border-[var(--color-tertiary)] bg-[var(--color-tertiary)]/10 shadow-xs" 
+                : "border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]"
             )}
+            title={expanded ? "Tutup rincian Surat Jalan" : "Buka rincian Surat Jalan"}
           >
-            <Eye className="w-4 h-4" />
+            <Eye className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{expanded ? 'Tutup SJ' : 'Buka SJ'}</span>
           </button>
         </td>
       </tr>
+
+      {/* Row Ekspansi: Rincian Surat Jalan Terkait */}
       {expanded && (
         <tr>
-          <td colSpan={7} className="p-0 border-b border-[var(--color-border)]">
+          <td colSpan={index !== undefined ? 8 : 7} className="p-0 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/20">
             <DeliveryOrderDetails listCode={row.listCode} />
           </td>
         </tr>

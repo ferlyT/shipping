@@ -8,18 +8,27 @@ import {
   Calendar,
   Tag,
   Plus,
-  Check,
-  ChevronDown,
   Plane,
   Ship,
   Sparkles,
   Trash2,
+  Search,
+  Loader2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import apiClient from '@/api/client'
 import { customerPriceListApi } from '../services/customerPriceList.service'
+import { customersApi } from '@/features/customers/services/customers.service'
+import { displayCustName } from '@/lib/utils'
+import { useDebounce } from '@/hooks/useDebounce'
 import type { CustomerSpecialPriceItem } from '../types'
 import { toast } from '@/stores/toastStore'
+
+interface CustomerOption {
+  fdCustCode: string
+  fdCustName: string
+  fdCityName?: string
+}
 
 interface CustomerCommodityPriceModalProps {
   isOpen: boolean
@@ -61,10 +70,14 @@ export function CustomerCommodityPriceModal({
 
   const [fdCustCode, setFdCustCode] = useState(defaultCustCode)
   const [custName, setCustName] = useState('')
+  const [selectedCustomerName, setSelectedCustomerName] = useState('')
   const [customerSearch, setCustomerSearch] = useState('')
-  const [customers, setCustomers] = useState<{ fdCustCode: string; custName: string }[]>([])
+  const [customers, setCustomers] = useState<CustomerOption[]>([])
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const custSearchInputRef = useRef<HTMLInputElement>(null)
+  const custDropdownRef = useRef<HTMLDivElement>(null)
+  const debouncedCustomerSearch = useDebounce(customerSearch, 300)
 
   const [category, setCategory] = useState('BATTERY')
   const [customCategory, setCustomCategory] = useState('')
@@ -87,37 +100,75 @@ export function CustomerCommodityPriceModal({
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const customerDropdownRef = useRef<HTMLDivElement>(null)
 
-  // Load customer list
+  // Load customer list from tbCustomers with debounce search
   useEffect(() => {
     if (!isOpen) return
-    const fetchCustomers = async () => {
-      try {
-        setIsLoadingCustomers(true)
-        const res = await customerPriceListApi.listCustomers()
-        const list = res.data.data.map((c) => ({
-          fdCustCode: c.fdCustCode.trim(),
-          custName: c.custName || c.fdCustCode.trim(),
-        }))
+    let active = true
+    setIsLoadingCustomers(true)
+
+    customersApi
+      .list({
+        search: debouncedCustomerSearch.trim(),
+        limit: 30,
+        status: 'active',
+      })
+      .then((res: any) => {
+        if (!active) return
+        const raw = res.data?.data || res.data || []
+        const list: CustomerOption[] = Array.isArray(raw)
+          ? raw.map((c: any) => ({
+              fdCustCode: (c.fdCustCode || '').trim(),
+              fdCustName: (c.fdCustName || '').trim(),
+              fdCityName: (c.fdCityName || '').trim(),
+            }))
+          : []
         setCustomers(list)
-      } catch (err) {
-        console.error('Failed to load customers', err)
-      } finally {
-        setIsLoadingCustomers(false)
-      }
+      })
+      .catch(() => {
+        if (active) setCustomers([])
+      })
+      .finally(() => {
+        if (active) setIsLoadingCustomers(false)
+      })
+
+    return () => {
+      active = false
     }
-    fetchCustomers()
-  }, [isOpen])
+  }, [isOpen, debouncedCustomerSearch])
 
   // Populate data when editing or opening
   useEffect(() => {
     if (!isOpen) return
 
     if (initialData) {
-      setFdCustCode(initialData.fdCustCode.trim())
-      setCustName(initialData.custName || initialData.fdCustCode.trim())
-      setCustomerSearch(initialData.custName || initialData.fdCustCode.trim())
+      const targetCode = initialData.fdCustCode ? initialData.fdCustCode.trim() : ''
+      setFdCustCode(targetCode)
+      setCustomerSearch('')
+
+      if (initialData.custName) {
+        const resolved = displayCustName(initialData.custName)
+        setCustName(resolved)
+        setSelectedCustomerName(resolved)
+      } else if (targetCode) {
+        customersApi
+          .detail(targetCode)
+          .then((res: any) => {
+            const c = res.data?.data || res.data
+            if (c?.fdCustName) {
+              const resolved = displayCustName(c.fdCustName)
+              setCustName(resolved)
+              setSelectedCustomerName(resolved)
+            }
+          })
+          .catch(() => {
+            setCustName(targetCode)
+            setSelectedCustomerName(targetCode)
+          })
+      } else {
+        setCustName('')
+        setSelectedCustomerName('')
+      }
 
       const catUpper = initialData.category.toUpperCase().trim()
       if (COMMON_CATEGORIES.includes(catUpper)) {
@@ -155,9 +206,30 @@ export function CustomerCommodityPriceModal({
       setNotes(initialData.notes || '')
       setAliases(initialData.aliases || [])
     } else {
-      setFdCustCode(defaultCustCode)
-      setCustName('')
+      const targetCode = defaultCustCode ? defaultCustCode.trim() : ''
+      setFdCustCode(targetCode)
       setCustomerSearch('')
+
+      if (targetCode) {
+        customersApi
+          .detail(targetCode)
+          .then((res: any) => {
+            const c = res.data?.data || res.data
+            if (c?.fdCustName) {
+              const resolved = displayCustName(c.fdCustName)
+              setCustName(resolved)
+              setSelectedCustomerName(resolved)
+            }
+          })
+          .catch(() => {
+            setCustName(targetCode)
+            setSelectedCustomerName(targetCode)
+          })
+      } else {
+        setCustName('')
+        setSelectedCustomerName('')
+      }
+
       setCategory('BATTERY')
       setCustomCategory('')
       setIsCustomCategory(false)
@@ -216,7 +288,12 @@ export function CustomerCommodityPriceModal({
   // Click outside to close customer dropdown
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node)) {
+      if (
+        custDropdownRef.current &&
+        !custDropdownRef.current.contains(e.target as Node) &&
+        custSearchInputRef.current &&
+        !custSearchInputRef.current.contains(e.target as Node)
+      ) {
         setShowCustomerDropdown(false)
       }
     }
@@ -235,11 +312,6 @@ export function CustomerCommodityPriceModal({
   }, [isOpen, onClose])
 
   if (!isOpen) return null
-
-  const filteredCustomers = customers.filter((c) => {
-    const q = customerSearch.toLowerCase().trim()
-    return !q || c.fdCustCode.toLowerCase().includes(q) || c.custName.toLowerCase().includes(q)
-  })
 
   const handleAddAlias = () => {
     const trimmed = newAlias.trim().toUpperCase()
@@ -401,92 +473,154 @@ export function CustomerCommodityPriceModal({
           )}
 
           {/* 1. Customer Selector */}
-          <div className="space-y-1.5" ref={customerDropdownRef}>
-            <label className="text-xs font-semibold text-[var(--color-primary)] flex items-center gap-1.5">
-              <Building2 size={13} className="text-[var(--color-primary)]" />
-              <span>Customer</span>
-              <span className="text-rose-500">*</span>
-            </label>
-
-            <div className="relative">
-              <div
-                onClick={() => setShowCustomerDropdown(!showCustomerDropdown)}
-                className="w-full px-3 py-2 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs flex items-center justify-between cursor-pointer hover:border-[var(--color-primary)]/40 transition-colors"
-              >
-                <div className="flex items-center gap-2 truncate">
-                  {fdCustCode ? (
-                    <>
-                      <span className="font-mono font-bold px-1.5 py-0.5 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] text-[11px]">
-                        {fdCustCode}
-                      </span>
-                      <span className="font-medium text-[var(--color-primary)] truncate">{custName || fdCustCode}</span>
-                    </>
-                  ) : (
-                    <span className="text-[var(--color-secondary)]">Pilih customer...</span>
-                  )}
-                </div>
-                <ChevronDown size={14} className="text-[var(--color-secondary)] shrink-0" />
-              </div>
-
-              {showCustomerDropdown && (
-                <div className="absolute top-full left-0 right-0 mt-1 z-50 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xl overflow-hidden max-h-56 flex flex-col animate-fadeIn">
-                  <div className="p-2 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/40">
-                    <input
-                      type="text"
-                      placeholder="Cari kode atau nama customer..."
-                      value={customerSearch}
-                      onChange={(e) => setCustomerSearch(e.target.value)}
-                      className="w-full px-2.5 py-1.5 text-xs rounded-lg bg-[var(--color-surface)] border border-[var(--color-border)] focus:outline-hidden focus:border-[var(--color-primary)] text-[var(--color-primary)]"
-                      autoFocus
-                    />
-                  </div>
-
-                  <div className="overflow-y-auto flex-1 divide-y divide-[var(--color-border)]/50">
-                    {isLoadingCustomers ? (
-                      <div className="p-3 text-center text-xs text-[var(--color-secondary)]">Memuat customer...</div>
-                    ) : filteredCustomers.length === 0 ? (
-                      <div className="p-3 text-center text-xs text-[var(--color-secondary)]">
-                        {customerSearch ? (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFdCustCode(customerSearch.trim().toUpperCase())
-                              setCustName(customerSearch.trim().toUpperCase())
-                              setShowCustomerDropdown(false)
-                            }}
-                            className="text-[var(--color-primary)] font-bold hover:underline cursor-pointer"
-                          >
-                            Gunakan &quot;{customerSearch.toUpperCase()}&quot; sebagai kode customer
-                          </button>
-                        ) : (
-                          'Tidak ada data customer'
-                        )}
-                      </div>
-                    ) : (
-                      filteredCustomers.map((c) => (
-                        <div
-                          key={c.fdCustCode}
-                          onClick={() => {
-                            setFdCustCode(c.fdCustCode)
-                            setCustName(c.custName)
-                            setShowCustomerDropdown(false)
-                          }}
-                          className={`p-2.5 text-xs flex items-center justify-between hover:bg-[var(--color-neutral)] cursor-pointer transition-colors ${
-                            fdCustCode === c.fdCustCode ? 'bg-[var(--color-primary)]/10 font-bold' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 truncate">
-                            <span className="font-mono text-[11px] text-[var(--color-secondary)]">{c.fdCustCode}</span>
-                            <span className="text-[var(--color-primary)] truncate">{c.custName}</span>
-                          </div>
-                          {fdCustCode === c.fdCustCode && <Check size={14} className="text-[var(--color-primary)]" />}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-[var(--color-primary)] flex items-center gap-1.5">
+                <Building2 size={13} className="text-[var(--color-primary)]" />
+                <span>Pilih Pelanggan (Master tbCustomers)</span>
+                <span className="text-rose-500">*</span>
+              </label>
+              {selectedCustomerName && (
+                <span className="text-[11px] font-bold text-[var(--color-primary)] bg-[var(--color-neutral)] border border-[var(--color-border)] px-2 py-0.5 rounded max-w-[240px] truncate">
+                  {selectedCustomerName}
+                </span>
               )}
             </div>
+
+            {/* Customer Selected Card OR Search Autocomplete Dropdown */}
+            {fdCustCode ? (
+              <div className="p-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] flex items-center justify-between shadow-2xs">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-8 h-8 rounded-lg bg-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center font-mono font-bold text-xs shrink-0">
+                    <Building2 size={15} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-xs text-[var(--color-primary)]">
+                        {fdCustCode}
+                      </span>
+                      <span className="text-[10px] uppercase font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.5 rounded border border-emerald-500/30">
+                        tbCustomers
+                      </span>
+                    </div>
+                    <div className="text-xs font-bold text-[var(--color-primary)] truncate">
+                      {selectedCustomerName || custName || 'Pelanggan Terpilih'}
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFdCustCode('')
+                    setCustName('')
+                    setSelectedCustomerName('')
+                    setCustomerSearch('')
+                    setShowCustomerDropdown(true)
+                    setTimeout(() => custSearchInputRef.current?.focus(), 100)
+                  }}
+                  className="px-2.5 py-1.5 rounded-lg border border-[var(--color-border)] text-xs font-semibold text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                >
+                  <X size={13} />
+                  <span>Ganti</span>
+                </button>
+              </div>
+            ) : (
+              <div className="relative">
+                <Search size={14} className="text-[var(--color-secondary)] absolute left-3 top-2.5 pointer-events-none" />
+                <input
+                  ref={custSearchInputRef}
+                  type="text"
+                  value={customerSearch}
+                  onChange={(e) => {
+                    setCustomerSearch(e.target.value)
+                    setShowCustomerDropdown(true)
+                  }}
+                  onFocus={() => setShowCustomerDropdown(true)}
+                  placeholder="Cari kode atau nama customer dari tbCustomers (contoh: D000652, MIMIMOND, INTRA)..."
+                  className="w-full pl-9 pr-9 py-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-primary)] text-xs focus:outline-hidden focus:border-[var(--color-primary)] transition-all font-medium"
+                />
+                {customerSearch && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCustomerSearch('')
+                      setShowCustomerDropdown(true)
+                      custSearchInputRef.current?.focus()
+                    }}
+                    className="absolute right-3 top-2.5 p-0.5 text-[var(--color-secondary)] hover:text-[var(--color-primary)] cursor-pointer"
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+
+                {showCustomerDropdown && (
+                  <div
+                    ref={custDropdownRef}
+                    className="absolute left-0 right-0 top-full mt-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl shadow-xl z-50 max-h-56 overflow-y-auto divide-y divide-[var(--color-border)]/50 animate-fadeIn"
+                  >
+                    {isLoadingCustomers ? (
+                      <div className="p-3 text-center text-xs text-[var(--color-secondary)] flex items-center justify-center gap-2">
+                        <Loader2 size={14} className="animate-spin text-[var(--color-primary)]" />
+                        <span>Memuat data dari tbCustomers...</span>
+                      </div>
+                    ) : customers.length > 0 ? (
+                      customers.map((cust) => (
+                        <button
+                          key={cust.fdCustCode}
+                          type="button"
+                          onMouseDown={() => {
+                            setFdCustCode(cust.fdCustCode)
+                            const formatted = displayCustName(cust.fdCustName)
+                            setCustName(formatted)
+                            setSelectedCustomerName(formatted)
+                            setShowCustomerDropdown(false)
+                            setCustomerSearch('')
+                          }}
+                          className="w-full px-3 py-2.5 text-left text-xs hover:bg-[var(--color-neutral)] flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="font-mono font-bold text-[var(--color-primary)] bg-[var(--color-neutral)] px-1.5 py-0.5 rounded border border-[var(--color-border)] text-[11px] shrink-0">
+                              {cust.fdCustCode}
+                            </span>
+                            <span className="text-[var(--color-primary)] font-semibold truncate">
+                              {displayCustName(cust.fdCustName)}
+                            </span>
+                          </div>
+                          {cust.fdCityName && (
+                            <span className="text-[10px] text-[var(--color-secondary)] shrink-0 bg-[var(--color-neutral)] px-1.5 py-0.5 rounded font-medium border border-[var(--color-border)]">
+                              {cust.fdCityName}
+                            </span>
+                          )}
+                        </button>
+                      ))
+                    ) : customerSearch ? (
+                      <div className="p-3 text-center text-xs text-[var(--color-secondary)] space-y-1.5">
+                        <div>Tidak ditemukan customer dengan kata kunci &ldquo;{customerSearch}&rdquo;.</div>
+                        <button
+                          type="button"
+                          onMouseDown={() => {
+                            const code = customerSearch.trim().toUpperCase()
+                            setFdCustCode(code)
+                            setCustName(code)
+                            setSelectedCustomerName(code)
+                            setShowCustomerDropdown(false)
+                            setCustomerSearch('')
+                          }}
+                          className="text-[var(--color-primary)] hover:underline font-semibold text-xs cursor-pointer"
+                        >
+                          Gunakan kode kustom: <strong>{customerSearch.trim().toUpperCase()}</strong>
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="p-3 text-center text-xs text-[var(--color-secondary)]">
+                        Ketik nama atau kode customer untuk mencari dari tbCustomers
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 2. Category & Moda Grid */}

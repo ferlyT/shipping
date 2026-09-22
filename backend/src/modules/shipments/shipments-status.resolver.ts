@@ -314,26 +314,57 @@ export async function buildShipmentConditions(query: Record<string, string | und
   let matchedCustCodes: string[] = []
   if (search && (searchField === 'ALL' || searchField === 'customer' || searchField === 'customer_marking')) {
     try {
-      const searchTerms = search.split(/[,\n;\r\t\s]+/).map((s) => s.trim()).filter(Boolean)
-      const orClauses = searchTerms.map((t) => Prisma.sql`fdCustName LIKE ${'%' + t + '%'}`)
-      if (orClauses.length > 0) {
-        const custs = await prisma.$queryRaw<any[]>`
-          SELECT TOP 50 RTRIM(fdCustCode) AS fdCustCode 
-          FROM tbCustomers WITH (NOLOCK) 
-          WHERE ${Prisma.join(orClauses, ' OR ')}
-        `
-        matchedCustCodes = custs.map((c) => c.fdCustCode).filter(Boolean)
+      const cleanSearch = search.replace(/[,;]+/g, ' ').replace(/\s+/g, ' ').trim()
+      // Tahap 1: Coba match phrase penuh (misal: "SADEWA EKSPRES LOGISTIK, PT" atau "SADEWA")
+      let custs = await prisma.$queryRaw<any[]>`
+        SELECT TOP 50 RTRIM(fdCustCode) AS fdCustCode 
+        FROM tbCustomers WITH (NOLOCK) 
+        WHERE (fdCustName LIKE ${'%' + cleanSearch + '%'} OR fdCustCode LIKE ${'%' + cleanSearch + '%'}) 
+          AND ISNULL(fdDiscontinued, 0) <> 1
+      `
+      // Tahap 2: Jika frase penuh tidak dapat hasil dan terdiri dari multi-kata, cari dengan AND (semua kata harus cocok)
+      if (!custs || custs.length === 0) {
+        const words = cleanSearch.split(/\s+/).map((w) => w.trim()).filter((w) => w.length >= 2)
+        // Abaikan corporate stop-words (PT, CV, TBK, dll) jika ada kata kunci spesifik lainnya
+        const corporateStopWords = new Set(['PT', 'CV', 'TBK', 'UD', 'PD'])
+        const meaningfulWords = words.length > 1 
+          ? words.filter((w) => !corporateStopWords.has(w.toUpperCase())) 
+          : words
+        const targetWords = meaningfulWords.length > 0 ? meaningfulWords : words
+
+        const andClauses = targetWords.map((w) => Prisma.sql`fdCustName LIKE ${'%' + w + '%'}`)
+        if (andClauses.length > 0) {
+          custs = await prisma.$queryRaw<any[]>`
+            SELECT TOP 50 RTRIM(fdCustCode) AS fdCustCode 
+            FROM tbCustomers WITH (NOLOCK) 
+            WHERE ${Prisma.join(andClauses, ' AND ')} AND ISNULL(fdDiscontinued, 0) <> 1
+          `
+        }
       }
+      matchedCustCodes = (custs || []).map((c) => c.fdCustCode).filter(Boolean)
     } catch {
       // safe fallback jika koneksi sempat terputus
     }
   }
 
   if (search) {
-    const terms = search
-      .split(/[,\n;\r\t]+/)
-      .map((s) => s.trim())
-      .filter(Boolean)
+    const rawTokens = search.split(/[;\n\r\t]+/).map((s) => s.trim()).filter(Boolean)
+    const terms: string[] = []
+    for (const rawToken of rawTokens) {
+      if (rawToken.includes(',')) {
+        const commaParts = rawToken.split(',').map((p) => p.trim()).filter(Boolean)
+        // Multi-code list: setiap bagian adalah token tunggal tanpa spasi (misal resi/listCode: "0939640, 0929497")
+        const isMultiCodeList = commaParts.length > 1 && commaParts.every((p) => !p.includes(' '))
+        if (isMultiCodeList) {
+          terms.push(...commaParts)
+        } else {
+          // Frase teks biasa dengan koma (misal nama perusahaan "SADEWA EKSPRES LOGISTIK, PT")
+          terms.push(rawToken.replace(/,/g, ' ').replace(/\s+/g, ' ').trim())
+        }
+      } else {
+        terms.push(rawToken)
+      }
+    }
 
     if (terms.length > 0) {
       const termConditions = terms.map((t) => buildTermCondition(t, searchField, matchedCustCodes))

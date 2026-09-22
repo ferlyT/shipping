@@ -109,7 +109,9 @@ function ItemPriceBadge({ row, validationData, expedisiList }: {
   const evalRes = evaluateItemPrice(row, {
     res: validationData,
     isAir: validationData?.fdListType === 1 || validationData?.expectedMode === 'BY AIR',
-    defaultTypeId: validationData?.defaultFdTypeComodity ?? validationData?.markingComodityType ?? null,
+    defaultTypeId: (validationData?.defaultFdTypeComodity && validationData.defaultFdTypeComodity > 0)
+      ? validationData.defaultFdTypeComodity
+      : (validationData?.markingComodityType ?? null),
     defaultComodityName: validationData?.markingComodities?.[0]?.fdComodityName || '—',
     expedisiList,
   })

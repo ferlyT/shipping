@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Package, Layers, Truck, FileText,
   ChevronLeft, ChevronDown, UserCog, Shield, BarChart2, Target, Search, Upload, History,
-  Activity, PieChart, LineChart, ListOrdered, Table, ScrollText, ClipboardCheck, Tags, Landmark, FileSearch, FileUp, BookOpen, Tag, FileSpreadsheet
+  Activity, PieChart, LineChart, ListOrdered, Table, ScrollText, ClipboardCheck, Tags, Landmark, FileSearch, FileUp, BookOpen, Tag, FileSpreadsheet, Receipt, Wallet, Ruler, Warehouse
 } from 'lucide-react'
 import { useUiStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -67,6 +67,12 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           children: [
             { label: t('nav.dashboard'), path: ROUTES.SHIPMENT_BATCHES, icon: PieChart },
             { label: t('nav.batchList'), path: ROUTES.SHIPMENT_BATCHES_LIST, icon: Table },
+            {
+              label: t('nav.batchSizeAudit'),
+              path: ROUTES.SHIPMENT_BATCH_MARKING_SIZE,
+              icon: Ruler,
+              permissionPath: ROUTES.SHIPMENT_BATCHES,
+            },
           ],
         },
         {
@@ -74,6 +80,12 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           icon: Truck,
           children: [
             { label: t('nav.dashboard'), path: ROUTES.DELIVERY_ORDERS, icon: LayoutDashboard },
+            {
+              label: t('nav.warehouseInventory'),
+              path: ROUTES.DELIVERY_ORDERS_INVENTORY,
+              icon: Warehouse,
+              permissionPath: ROUTES.DELIVERY_ORDERS,
+            },
             { label: t('nav.deliveryOrderList'), path: ROUTES.DELIVERY_ORDERS_LIST, icon: ListOrdered },
           ],
         },
@@ -94,6 +106,16 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
             { label: t('nav.validationList'), path: ROUTES.BILLING_VALIDATION_LIST, icon: ClipboardCheck },
             { label: t('nav.pairingLocalCharge'), path: ROUTES.BILLING_PAIRING_LOCAL_CHARGE, icon: FileSpreadsheet },
           ],
+        },
+        {
+          label: t('nav.cashier'),
+          path: ROUTES.CASHIER_LIST,
+          icon: Receipt,
+        },
+        {
+          label: t('nav.wallet'),
+          path: ROUTES.WALLET,
+          icon: Wallet,
         },
         {
           label: t('nav.priceList'),

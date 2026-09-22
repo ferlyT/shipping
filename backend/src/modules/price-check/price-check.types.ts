@@ -16,6 +16,7 @@ export interface PriceCheckParams {
 export type PriceStatus = 'MATCH' | 'DIFFERENT' | 'NOT_SET' | 'NO_RATE'
 
 export type PriceSourceType =
+  | 'COMMODITY_MAPPING_PRICE' // Tier 0: Tarif Langsung Pemetaan Komoditas (Direct Price / Marking / Tanggal Agen)
   | 'CUSTOMER_COMMODITY'     // Tier 1: Harga Customer Commodity (Manual Entry / Mapping Customer)
   | 'CUSTOMER_MARKING'       // Tier 2: Customer Marking Override
   | 'CUSTOMER_DEFAULT'       // Tier 3: Customer Default Upload

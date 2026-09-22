@@ -13,6 +13,7 @@ import {
   getBillingM3Check,
   getM3CustPerMarkingDetails,
   getBatchEntryListDetails,
+  getBillingDimensions,
   getBillingPartialDetails,
   getTransportValidationCheck,
   getType2ComparisonCheck,
@@ -175,6 +176,13 @@ billingRoutes.get('/entry-list-details', async (c) => {
   return successResponse(c, result)
 })
 
+billingRoutes.get('/dimensions/:listCode?', async (c) => {
+  const rawListCodes = c.req.param('listCode') || c.req.query('listCodes') || c.req.query('listCode') || ''
+  if (!rawListCodes) return errorResponse(c, 'Parameter listCode wajib diisi', 400)
+  const result = await getBillingDimensions(rawListCodes)
+  return successResponse(c, result)
+})
+
 billingRoutes.get('/suggestions', async (c) => {
   const q = c.req.query('q') || ''
   const draftOnly = c.req.query('draftOnly') === 'true' || c.req.query('draftOnly') === '1'
@@ -263,6 +271,7 @@ billingRoutes.get('/customer-history/:custCode?', async (c) => {
     status: query.status as any,
     page: query.page ? parseInt(query.page, 10) : undefined,
     limit: query.limit ? parseInt(query.limit, 10) : undefined,
+    offset: query.offset !== undefined ? parseInt(query.offset, 10) : undefined,
   })
   return successResponse(c, result)
 })

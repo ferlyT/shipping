@@ -87,6 +87,9 @@ model TbCustomers {
   addresses      vwCustomerContacts[]
   billings       TbBilling[]
   entryLists     TbEntryList[]
+  cashiers       TbCashier[]
+  tempCashiers   Tb2Cashier[]
+  wallet         TbCustomerWallet?
 
   @@map("tbCustomers")
 }
@@ -552,6 +555,10 @@ model TbCommodityMapping {
   targetCommodity   String    @db.NVarChar(200) // Target tipe/kategori price list (misal: "TEKSTIL", "LARTAS - S")
   fdTypeComodity    Int?      // Optional ID dari tbTypeComodity
   fdCustCode        String?   @db.Char(7)       // NULL = Global, String = Khusus Customer
+  price             Decimal?  @db.Decimal(18, 2) // Tarif langsung (direct price override, misal 6500000.00)
+  branch            String?   @db.NVarChar(50)  // Cabang asal (misal: "GZ", "YIWU", null = Semua cabang)
+  startMarkingCode  String?   @db.NVarChar(50)  // Marking Code mulai berlaku (misal: "26GZD53")
+  startAgentDate    DateTime? @db.DateTime2     // Tanggal Agen mulai berlaku
   priceListUploadId Int?      // Optional: Terikat ke upload price list tertentu
   effectiveDate     DateTime  @default(now()) @db.DateTime2 // Mulai berlaku pada tanggal/periode ini
   endDate           DateTime? @db.DateTime2     // Opsional: Tanggal akhir berlaku (null = seterusnya)
@@ -565,6 +572,227 @@ model TbCommodityMapping {
   @@index([commodityName])
   @@index([fdCustCode])
   @@index([effectiveDate])
+  @@index([startMarkingCode])
   @@map("tbCommodityMapping")
 }
+
+// ─── CASHIER & PELUNASAN PIUTANG MODULE ──────────────────────────
+
+model TbCashier {
+  fdCashierID   String    @id @db.Char(20)
+  fdCashierDate DateTime? @db.SmallDateTime
+  fdEmpCode     String    @db.Char(4)
+  fdCustCode    String    @db.Char(7)
+  fdPost        Int       @default(0)
+  fdCashierXX   String    @default("") @db.Char(20)
+
+  // Relations
+  customer      TbCustomers? @relation(fields: [fdCustCode], references: [fdCustCode])
+  rcvList       TbCashierRcv[]
+  detailList    TbCashierDetail[]
+
+  @@map("tbCashier")
+}
+
+model TbCashierRcv {
+  fdCashierID String    @db.Char(20)
+  fdID        String    @db.Char(7)
+  fdType      String    @db.Char(10)
+  fdCCYCode   String    @db.Char(3)
+  fdCurValue  Decimal   @db.Decimal(18, 10)
+  fdAmount    Decimal   @db.Decimal(18, 2)
+  fdBankID1   String    @db.Char(7)
+  fdGiroNo    String    @db.Char(25)
+  fdDate1     DateTime? @db.SmallDateTime
+  fdDate2     DateTime? @db.SmallDateTime
+  fdBankID2   String    @db.Char(7)
+
+  // Relations
+  cashier     TbCashier @relation(fields: [fdCashierID], references: [fdCashierID], onDelete: Cascade)
+
+  @@id([fdCashierID, fdID])
+  @@map("tbCashierRcv")
+}
+
+model TbCashierDetail {
+  fdID        String    @db.Char(7)
+  fdCashierID String    @db.Char(20)
+  fdDate      DateTime? @db.SmallDateTime
+  fdType      String    @db.Char(10)
+  fdInvNo     String    @db.Char(20)
+  fdCCYCode   String    @db.Char(3)
+  fdAmount    Decimal   @db.Decimal(18, 2)
+  fdCurValue  Decimal   @db.Decimal(18, 10)
+  fdTotal     Decimal   @db.Decimal(18, 2)
+  fdInputDate DateTime? @db.SmallDateTime
+  fdLoad      DateTime? @db.SmallDateTime
+
+  // Relations
+  cashier     TbCashier @relation(fields: [fdCashierID], references: [fdCashierID], onDelete: Cascade)
+
+  @@id([fdCashierID, fdID])
+  @@map("tbCashierDetail")
+}
+
+model Tb2Cashier {
+  fdCashierID   String    @id @db.Char(20)
+  fdCashierDate DateTime  @db.SmallDateTime
+  fdEmpCode     String    @db.Char(4)
+  fdCustCode    String    @db.Char(7)
+  fdPost        Int       @default(0)
+  fdDescr       String    @db.Char(150)
+  fdCheck       Int       @default(0)
+  fdEmpCode1    String    @db.Char(4)
+
+  // Relations
+  customer      TbCustomers? @relation(fields: [fdCustCode], references: [fdCustCode])
+  rcvList       Tb2CashierRcv[]
+  detailList    Tb2CashierDetail[]
+
+  @@map("tb2Cashier")
+}
+
+model Tb2CashierRcv {
+  fdCashierID String    @db.Char(20)
+  fdID        String    @db.Char(7)
+  fdType      String    @db.Char(10)
+  fdCCYCode   String    @db.Char(3)
+  fdCurValue  Decimal   @db.Decimal(18, 10)
+  fdAmount    Decimal   @db.Decimal(18, 2)
+  fdBankID1   String    @db.Char(7)
+  fdGiroNo    String    @db.Char(25)
+  fdDate1     DateTime? @db.SmallDateTime
+  fdDate2     DateTime? @db.SmallDateTime
+  fdBankID2   String    @db.Char(7)
+
+  // Relations
+  cashier     Tb2Cashier @relation(fields: [fdCashierID], references: [fdCashierID], onDelete: Cascade)
+
+  @@id([fdCashierID, fdID])
+  @@map("tb2CashierRcv")
+}
+
+model Tb2CashierDetail {
+  fdID        String   @db.Char(7)
+  fdCashierID String   @db.Char(20)
+  fdDate      DateTime @db.SmallDateTime
+  fdType      String   @db.Char(10)
+  fdInvNo     String   @db.Char(20)
+  fdCCYCode   String   @db.Char(3)
+  fdAmount    Decimal  @db.Decimal(18, 2)
+  fdCurValue  Decimal  @db.Decimal(18, 10)
+  fdTotal     Decimal  @db.Decimal(18, 2)
+
+  // Relations
+  cashier     Tb2Cashier @relation(fields: [fdCashierID], references: [fdCashierID], onDelete: Cascade)
+
+  @@id([fdCashierID, fdID])
+  @@map("tb2CashierDetail")
+}
+
+model TbBank {
+  fdBankCode String @id @db.Char(3)
+  fdBankName String @db.Char(35)
+
+  @@map("tbBank")
+}
+
+model TbMataUang {
+  fdCCYCode  String   @id @db.Char(3)
+  fdCCYName  String   @db.Char(35)
+  fdCCYValue Decimal  @db.Decimal(18, 2)
+  fdindex    Int
+  CodeBCA    String   @db.Char(3)
+  KursBCA    Decimal? @db.Decimal(18, 2)
+
+  @@map("tbMataUang")
+}
+
+model TbPayType {
+  fdID      String @id @db.Char(2)
+  fdPayName String @db.Char(10)
+
+  @@map("tbPayType")
+}
+
+model TbMasterCounter {
+  fdCode              String    @id @db.Char(1)
+  fdCustCounter       Int
+  fdEmpCounter        Int
+  fdItemCounter       Int
+  fdListCounter       Int
+  fdListDCounter      Int
+  fdSJCounter         Int
+  fdSJDCounter        Int
+  fdBillCounter       Int
+  fdCHCounter         Int
+  fdCRCounter         Int
+  fdCDCounter         Int
+  fdExpCounter        Int
+  fdSalesCounter      Int
+  fdListBarangCounter Int
+  fdKomplainCounter   Int
+  fdCustomersGroup    Int
+  fdGiveDatePrint     DateTime? @db.SmallDateTime
+  fdListCounterPrev   Int
+  fdBillingCek        Int
+  fdTelegramID        Int
+  fdEntryListPrev     Int
+  fdTicket            Int
+  fdResponder         Int
+  fdTicketComment     Int
+  fdTicketCategory    Int
+  fdConsignee         Int
+  fdTypeHarga         Int
+  fdListPCounter      Int
+  fdCustAgent         Int
+  fdMergeID           Int
+  fdKomplainDCounter  Int
+
+  @@map("tbMasterCounter")
+}
+
+// ─── MODUL WALLET & SALDO DEPOSIT PELANGGAN ──────────────────────
+
+model TbCustomerWallet {
+  fdWalletID    String    @id @default(uuid()) @db.NVarChar(50)
+  fdCustCode    String    @unique @db.Char(7)
+  fdBalance     Decimal   @default(0.00) @db.Decimal(18, 2)
+  fdCurrency    String    @default("RP.") @db.NVarChar(10)
+  fdStatus      String    @default("ACTIVE") @db.NVarChar(20)
+  fdLastUpdated DateTime  @default(now()) @db.DateTime
+  fdUpdatedBy   String?   @db.NVarChar(50)
+
+  // Relations
+  customer      TbCustomers @relation(fields: [fdCustCode], references: [fdCustCode])
+  ledgers       TbCustomerWalletLedger[]
+
+  @@map("tbCustomerWallet")
+}
+
+model TbCustomerWalletLedger {
+  fdLedgerID      BigInt    @id @default(autoincrement())
+  fdWalletID      String    @db.NVarChar(50)
+  fdCustCode      String    @db.Char(7)
+  fdTxType        String    @db.NVarChar(30)
+  fdDirection     String    @db.NVarChar(10)
+  fdAmount        Decimal   @db.Decimal(18, 2)
+  fdBalanceBefore Decimal   @db.Decimal(18, 2)
+  fdBalanceAfter  Decimal   @db.Decimal(18, 2)
+  fdRefType       String    @db.NVarChar(30)
+  fdRefNo         String?   @db.NVarChar(50)
+  fdNotes         String?   @db.NVarChar(255)
+  fdCreatedDate   DateTime  @default(now()) @db.DateTime
+  fdCreatedBy     String    @db.NVarChar(50)
+
+  // Relations
+  wallet          TbCustomerWallet @relation(fields: [fdWalletID], references: [fdWalletID])
+
+  @@index([fdCustCode, fdCreatedDate(sort: Desc)])
+  @@index([fdWalletID])
+  @@index([fdRefNo])
+  @@map("tbCustomerWalletLedger")
+}
+
+
 

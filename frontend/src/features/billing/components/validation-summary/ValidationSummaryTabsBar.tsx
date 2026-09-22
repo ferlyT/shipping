@@ -6,6 +6,7 @@ export interface ValidationSummaryTabsBarProps {
   activeTab: SummaryModalTab
   onTabChange: (tab: SummaryModalTab) => void
   isAir: boolean
+  isLoadingValidation?: boolean
   hasPriceDiscrepancy: boolean
   hasPhysicalDiscrepancy: boolean
   isBilledBelowMinM3?: boolean
@@ -24,6 +25,7 @@ export function ValidationSummaryTabsBar({
   activeTab,
   onTabChange,
   isAir,
+  isLoadingValidation = false,
   hasPriceDiscrepancy,
   hasPhysicalDiscrepancy,
   isBilledBelowMinM3 = false,
@@ -48,7 +50,11 @@ export function ValidationSummaryTabsBar({
       label: 'Item Tagihan & Tarif',
       icon: Layers,
       renderStatusTag: () =>
-        hasPriceDiscrepancy ? (
+        isLoadingValidation ? (
+          <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-medium text-[var(--color-secondary)] border border-[var(--color-border)]">
+            Cek...
+          </span>
+        ) : hasPriceDiscrepancy ? (
           <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
             Cek Tarif
           </span>
@@ -63,7 +69,11 @@ export function ValidationSummaryTabsBar({
       label: isAir ? 'Timbangan Fisik' : 'Validasi M3',
       icon: Box,
       renderStatusTag: () =>
-        hasPhysicalDiscrepancy ? (
+        isLoadingValidation ? (
+          <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-medium text-[var(--color-secondary)] border border-[var(--color-border)]">
+            Cek...
+          </span>
+        ) : hasPhysicalDiscrepancy ? (
           <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30">
             Selisih
           </span>
@@ -84,7 +94,11 @@ export function ValidationSummaryTabsBar({
             label: 'Overweight',
             icon: Scale,
             renderStatusTag: () =>
-              !hasOverweightIssue ? (
+              isLoadingValidation ? (
+                <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-medium text-[var(--color-secondary)] border border-[var(--color-border)]">
+                  Cek...
+                </span>
+              ) : !hasOverweightIssue ? (
                 <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">
                   ✓ Aman
                 </span>

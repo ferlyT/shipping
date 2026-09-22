@@ -9,6 +9,10 @@ export interface CommodityMappingItem {
   fdTypeComodity: number | null
   fdCustCode: string | null
   custName?: string | null
+  price?: number | null
+  branch?: string | null
+  startMarkingCode?: string | null
+  startAgentDate?: string | null
   priceListUploadId: number | null
   priceListFileName?: string | null
   effectiveDate: string
@@ -26,6 +30,10 @@ export interface CreateCommodityMappingInput {
   targetCommodity: string
   fdTypeComodity?: number | null
   fdCustCode?: string | null
+  price?: number | null
+  branch?: string | null
+  startMarkingCode?: string | null
+  startAgentDate?: string | Date | null
   priceListUploadId?: number | null
   effectiveDate?: string | Date
   endDate?: string | Date | null
@@ -40,6 +48,10 @@ export interface UpdateCommodityMappingInput {
   targetCommodity?: string
   fdTypeComodity?: number | null
   fdCustCode?: string | null
+  price?: number | null
+  branch?: string | null
+  startMarkingCode?: string | null
+  startAgentDate?: string | Date | null
   priceListUploadId?: number | null
   effectiveDate?: string | Date
   endDate?: string | Date | null

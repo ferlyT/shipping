@@ -9,6 +9,7 @@ import {
   ScrollView,
   TextInput,
   ActivityIndicator,
+  Keyboard,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
@@ -252,7 +253,11 @@ export default function FinanceScreen() {
                 suggestions={suggestions}
                 isLoading={isFetchingSuggestions}
                 title={t('finance.searchBillingPlaceholder', 'Saran Pencarian (Invoice / Customer)')}
-                onSelect={(sug) => { setSearch(sug.value); setShowSuggestions(false) }}
+                onSelect={(sug) => {
+                  Keyboard.dismiss()
+                  setSearch(sug.value)
+                  setShowSuggestions(false)
+                }}
                 onClose={() => setShowSuggestions(false)}
               />
             </>
@@ -468,6 +473,7 @@ export default function FinanceScreen() {
                         {custSuggestions.map((sug: any) => (
                           <TouchableOpacity key={sug.custCode || sug.value || sug.title}
                             onPress={() => {
+                              Keyboard.dismiss()
                               const custCode = sug.custCode || (sug.type === 'code' ? sug.value : sug.value)
                               setSelectedCustCode(custCode)
                               setSelectedCustName(sug.title)

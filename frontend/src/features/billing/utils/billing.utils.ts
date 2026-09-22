@@ -527,7 +527,10 @@ export function evaluateItemPrice(
 
   const { res, isAir, defaultTypeId, defaultComodityName = '—' } = ctx
   const listType = res?.fdListType ?? null
-  let typeId = item?.fdTypeComodity ?? defaultTypeId ?? res?.markingComodityType ?? null
+  const itemTypeId = (item?.fdTypeComodity !== null && item?.fdTypeComodity !== undefined && Number(item.fdTypeComodity) > 0)
+    ? Number(item.fdTypeComodity)
+    : null
+  let typeId = itemTypeId ?? (defaultTypeId && defaultTypeId > 0 ? defaultTypeId : null) ?? res?.markingComodityType ?? null
   let directComodityName = ''
 
   // 1. Ekstraksi teks nama barang / komoditas dari item invoice
@@ -536,6 +539,7 @@ export function evaluateItemPrice(
     : itemNameUpper.replace(/^PARCELS\s+/i, '').trim()
 
   // 1a. Cek Pemetaan Komoditas Eksplisit (tbCommodityMapping)
+  let matchedMapping: any = null
   if (res?.commodityMappings && res.commodityMappings.length > 0) {
     const custCode = res.customer?.fdCustCode?.trim().toUpperCase()
     // Prioritaskan mapping khusus customer terlebih dahulu, lalu global
@@ -547,7 +551,7 @@ export function evaluateItemPrice(
 
     const itemTokens = textAfterDash.split(',').map((t: string) => t.trim().toUpperCase()).filter(Boolean)
 
-    const matchedMapping = sortedMappings.find((m: any) => {
+    matchedMapping = sortedMappings.find((m: any) => {
       // Filter mode pengiriman: BY AIR vs BY SEA
       if (m.mode && m.mode.trim().toUpperCase() !== 'ALL') {
         const mMode = m.mode.trim().toUpperCase()
@@ -555,7 +559,38 @@ export function evaluateItemPrice(
         if (!isAir && !mMode.includes('SEA') && !mMode.includes('LAUT')) return false
       }
 
+      // Filter cabang jika diisi
+      if (m.branch && m.branch.trim().toUpperCase() !== 'ALL') {
+        const mBranch = m.branch.trim().toUpperCase()
+        const expBranch = (res?.expectedBranch || (res as any)?.branch || res?.customer?.fdBranchCode || '').trim().toUpperCase()
+        if (expBranch && mBranch !== expBranch && !expBranch.includes(mBranch) && !mBranch.includes(expBranch)) return false
+      }
+
+      // Filter customer jika diisi
       if (m.fdCustCode && custCode && m.fdCustCode.trim().toUpperCase() !== custCode) return false
+
+      // Filter marking code awal jika diisi
+      if (m.startMarkingCode && m.startMarkingCode.trim()) {
+        const reqMark = m.startMarkingCode.trim().toUpperCase()
+        const shipMark = (res?.customer?.fdMarkingCode || (res as any)?.markingCode || '').trim().toUpperCase()
+        if (shipMark && reqMark) {
+          if (shipMark.slice(0, 4) === reqMark.slice(0, 4) && shipMark < reqMark) {
+            return false
+          }
+        }
+      }
+
+      // Filter tanggal agen jika diisi
+      if (m.startAgentDate && res?.fdTglAgent) {
+        if (new Date(res.fdTglAgent) < new Date(m.startAgentDate)) return false
+      }
+
+      // Filter masa berlaku endDate jika diisi
+      if (m.endDate) {
+        const shipDate = res?.fdTglAgent ? new Date(res.fdTglAgent) : new Date()
+        if (shipDate > new Date(m.endDate)) return false
+      }
+
       const mUpper = String(m.commodityName || '').trim().toUpperCase()
 
       // Guard genuine gadget & battery: jangan petakan jika ini aksesoris / sparepart (seperti screen, charger, case)
@@ -644,6 +679,29 @@ export function evaluateItemPrice(
     }
   }
 
+  // Evaluasi Tier 0: Direct Price dari pemetaan komoditas atau marking commodities
+  const isCustMapping = Boolean(
+    matchedMapping?.fdCustCode &&
+    res?.customer?.fdCustCode &&
+    matchedMapping.fdCustCode.trim().toUpperCase() === res.customer.fdCustCode.trim().toUpperCase()
+  )
+
+  const matchedMarkingComodity = res?.markingComodities?.find((mc: any) => {
+    const mcCom = (mc.fdComodity || '').toUpperCase().trim()
+    return (
+      mcCom === textAfterDash ||
+      textAfterDash.includes(mcCom) ||
+      mcCom.includes(textAfterDash) ||
+      (isGenuineBattery(textAfterDash) && isGenuineBattery(mcCom))
+    ) && Number(mc.directPrice || 0) > 0
+  })
+
+  const tier0Price = (matchedMapping && matchedMapping.price && Number(matchedMapping.price) > 0)
+    ? Number(matchedMapping.price)
+    : (matchedMarkingComodity && Number(matchedMarkingComodity.directPrice) > 0
+      ? Number(matchedMarkingComodity.directPrice)
+      : null)
+
   const itemUnit = (item?.fdListCode || '').trim().toUpperCase()
   const isTaxReturnItem = itemNameUpper.includes('TAX RETURN') || itemNameUpper.includes('TAXRETURN')
   const isKgOverweightItem =
@@ -654,25 +712,18 @@ export function evaluateItemPrice(
   let comodityName = ''
   if (isKgOverweightItem) {
     comodityName = 'HARGA KG (PER AGEN)'
-  } else if (isGenuineBattery(itemNameUpper) || isGenuineBattery(directComodityName) || isGenuineBattery(item?.fdComodity)) {
+  } else if (directComodityName) {
+    // 💡 Prioritaskan nama komoditas hasil pemetaan eksplisit (Customer Mapping lebih dulu, lalu Global).
+    // DILARANG menimpa directComodityName dengan fallback isGenuineBattery / isGenuineIpad / isGenuineLaptop!
+    comodityName = directComodityName
+  } else if (isGenuineBattery(itemNameUpper) || isGenuineBattery(item?.fdComodity)) {
     comodityName = isAir ? 'LS & (GOODS WITH BATTERY)' : 'SEMI GARMENT'
   } else if (isGenuineIpad(itemNameUpper)) {
     comodityName = isAir ? 'TABLET' : 'KHUSUS IPAD'
   } else if (isGenuineLaptop(itemNameUpper)) {
     comodityName = !isAir && isAppleDevice(itemNameUpper) ? 'APPLE LAPTOP' : 'LAPTOP'
   } else {
-    if (directComodityName) {
-      const dirUpper = directComodityName.toUpperCase()
-      const isDirLaptop = dirUpper.includes('LAPTOP') || dirUpper.includes('MACBOOK') || dirUpper.includes('NOTEBOOK')
-      const isDirIpad = dirUpper.includes('IPAD') || dirUpper.includes('TABLET')
-      if (isDirLaptop && !isGenuineLaptop(itemNameUpper) && !isGenuineLaptop(textAfterDash)) {
-        // Abaikan directComodityName jika barang bukan unit laptop asli (misal spareparts / screen)
-      } else if (isDirIpad && !isGenuineIpad(itemNameUpper) && !isGenuineIpad(textAfterDash)) {
-        // Abaikan directComodityName jika barang bukan unit ipad asli
-      } else {
-        comodityName = directComodityName
-      }
-    } else if (typeId) {
+    if (typeId) {
       const matchType = res?.comodityTypes?.find(
         (c: any) => c.fdTypeComodity === typeId && (listType ? c.fdListType === listType : true)
       )
@@ -680,18 +731,28 @@ export function evaluateItemPrice(
         comodityName = matchType.fdComodityName
       }
     }
-    const rawTarget = directComodityName || item?.fdComodity || itemNameUpper
+    const rawTarget = (item?.fdComodity || '').trim()
     if (!comodityName) {
-      comodityName = rawTarget || defaultComodityName || '—'
+      comodityName = rawTarget || (defaultComodityName !== '—' ? defaultComodityName : '') || itemNameUpper || '—'
     }
   }
 
-  // 3. Pencocokan dengan items di Price List
+  // 3. Pencocokan dengan items di Price List atau Tarif Langsung Tier 0
   let priceItem: any | null = null
   let minTargetPrice = 0
   let maxTargetPrice = 0
+  let tierSource: string | undefined = undefined
 
-  if (!isTaxReturnItem && !isKgOverweightItem && res?.priceValidation?.items && comodityName !== '—') {
+  if (tier0Price !== null && tier0Price > 0) {
+    minTargetPrice = tier0Price
+    maxTargetPrice = tier0Price
+    tierSource = isCustMapping ? 'Pemetaan Khusus Pelanggan (Tier 0)' : 'Pemetaan Komoditas Global (Tier 0)'
+    priceItem = {
+      category: comodityName,
+      price: tier0Price,
+      sheetType: isCustMapping ? 'CUSTOMER' : 'TIER_0',
+    }
+  } else if (!isTaxReturnItem && !isKgOverweightItem && res?.priceValidation?.items && comodityName !== '—') {
     const modeFilter = res.expectedMode || (listType === 1 ? 'BY AIR' : listType === 2 ? 'BY SEA' : null)
     const branchFilter = res.expectedBranch || null
     const isMkt = isMktCustomer(res?.customer, res?.customer?.fdSalesNM || (res as any)?.sales)
@@ -747,16 +808,31 @@ export function evaluateItemPrice(
       let minP = 0
       let maxP = 0
 
-      // 3b. Prioritaskan pengecekan komoditas fisik khusus (Baterai, iPad, Laptop) sebelum sinonim umum
-      if (isGenuineBattery(itemNameUpper) || isGenuineBattery(normName) || normName.includes('SEMI GARMENT')) {
+      // 3b. Prioritaskan pengecekan komoditas fisik khusus (Baterai, iPad, Laptop, Semi Garment)
+      const isSemiGarmentComodity =
+        normName.includes('SEMI GARMENT') ||
+        normName.includes('SEMI-GARMENT') ||
+        rawTargetUpper.includes('SEMI GARMENT') ||
+        rawTargetUpper.includes('SEMI-GARMENT')
+
+      const isBatteryComodity =
+        !directComodityName && (isGenuineBattery(itemNameUpper) || isGenuineBattery(normName))
+
+      if (isSemiGarmentComodity || isBatteryComodity) {
         heuristicItem = isAir
-          ? items.find((p: any) => String(p?.category || '').toLowerCase().includes('goods with battery') || String(p?.category || '').toLowerCase().includes('ls &'))
-          : items.find((p: any) => String(p?.category || '').toLowerCase().includes('semi garment') || String(p?.category || '').toLowerCase().includes('battery'))
-      } else if (isGenuineIpad(itemNameUpper) || isGenuineIpad(normName) || normName.includes('TABLET') || normName.includes('IPAD')) {
+          ? items.find((p: any) => {
+              const c = String(p?.category || '').toLowerCase()
+              return c.includes('semi garment') || c.includes('semi-garment') || c.includes('goods with battery') || c.includes('ls &')
+            })
+          : items.find((p: any) => {
+              const c = String(p?.category || '').toLowerCase()
+              return c.includes('semi garment') || c.includes('semi-garment') || c.includes('battery')
+            })
+      } else if (!directComodityName && (isGenuineIpad(itemNameUpper) || isGenuineIpad(normName) || normName.includes('TABLET') || normName.includes('IPAD'))) {
         heuristicItem = isAir
           ? items.find((p: any) => String(p?.category || '').toLowerCase().includes('tablet') || String(p?.category || '').toLowerCase().includes('ipad'))
           : items.find((p: any) => String(p?.category || '').toLowerCase().includes('khusus ipad') || String(p?.category || '').toLowerCase().includes('ipad') || String(p?.category || '').toLowerCase().includes('tablet'))
-      } else if (isGenuineLaptop(itemNameUpper) || isGenuineLaptop(normName) || normName.includes('LAPTOP') || normName.includes('MACBOOK')) {
+      } else if (!directComodityName && (isGenuineLaptop(itemNameUpper) || isGenuineLaptop(normName) || normName.includes('LAPTOP') || normName.includes('MACBOOK'))) {
         if (isAppleDevice(itemNameUpper) || isAppleDevice(normName)) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('apple laptop') || String(p?.category || '').toLowerCase().includes('macbook'))
         }
@@ -768,8 +844,17 @@ export function evaluateItemPrice(
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('general goods') || String(p?.category || '').toUpperCase() === 'UMUM') || null
         } else if (normName.includes('BRANDED')) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('branded goods')) || null
+        } else if (normName.includes('SEMI GARMENT') || normName.includes('SEMI-GARMENT')) {
+          heuristicItem = items.find((p: any) => {
+            const c = String(p?.category || '').toLowerCase()
+            return c.includes('semi garment') || c.includes('semi-garment') || c.includes('goods with battery') || c.includes('ls &')
+          }) || null
         } else if (normName.includes('GARMENT')) {
-          heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('fabric') || String(p?.category || '').toLowerCase().includes('garment')) || null
+          // PENTING: Jika mencari GARMENT biasa, pastikan TIDAK mencocokkan SEMI GARMENT!
+          heuristicItem = items.find((p: any) => {
+            const c = String(p?.category || '').toLowerCase()
+            return (c.includes('fabric') || c.includes('garment')) && !c.includes('semi')
+          }) || null
         } else if (normName.includes('FOOD')) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('ls &') || String(p?.category || '').toLowerCase().includes('food')) || null
         }
@@ -780,21 +865,33 @@ export function evaluateItemPrice(
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('fabric') || String(p?.category || '').toUpperCase() === 'TEKSTIL') || null
         } else if (normName.includes('LARTAS N') || normName.includes('LARTAS NORMAL')) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('lartas normal') || String(p?.category || '').toUpperCase().includes('LARTAS NORMAL') || String(p?.category || '').toUpperCase().includes('LARTAS - N') || String(p?.category || '').toUpperCase().includes('LARTAS-N')) || null
-        } else if (normName.includes('ALKES') || normName.includes('MAKANAN') || normName.includes('FOOD') || normName.includes('LS')) {
-          heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('alkes') || String(p?.category || '').toLowerCase().includes('makanan') || String(p?.category || '').toLowerCase().includes('ls')) || null
+        } else if (normName.includes('ALKES') || normName.includes('MAKANAN') || normName.includes('FOOD') || /\bLS\b/i.test(normName)) {
+          heuristicItem = items.find((p: any) => {
+            const cat = String(p?.category || '').toLowerCase()
+            return cat.includes('alkes') || cat.includes('makanan') || /\bls\b/i.test(cat)
+          }) || null
         } else if (normName.includes('LARTAS S') || normName.includes('LARTAS SUPER') || normName.includes('LARTAS SPECIAL') || normName.includes('KOSMETIK')) {
           const matchedItems = items.filter((p: any) => {
             const cat = String(p?.category || '').toLowerCase()
             const catUpper = String(p?.category || '').toUpperCase()
-            return cat.includes('kosmetik') || cat.includes('obat') || cat.includes('alkes') || cat.includes('makanan') || cat.includes('ls') || catUpper.includes('LARTAS S') || catUpper.includes('LARTAS-S')
+            return cat.includes('kosmetik') || cat.includes('obat') || cat.includes('alkes') || cat.includes('makanan') || /\bls\b/i.test(cat) || catUpper.includes('LARTAS S') || catUpper.includes('LARTAS-S')
           })
           if (matchedItems.length > 0) {
             heuristicItem = matchedItems[0]
             minP = Math.min(...matchedItems.map((p: any) => Number(p?.price || 0)))
             maxP = Math.max(...matchedItems.map((p: any) => Number(p?.price || 0)))
           }
+        } else if (normName.includes('SEMI GARMENT') || normName.includes('SEMI-GARMENT')) {
+          heuristicItem = items.find((p: any) => {
+            const cat = String(p?.category || '').toLowerCase()
+            return cat.includes('semi garment') || cat.includes('semi-garment') || cat.includes('battery')
+          }) || null
         } else if (normName.includes('GARMENT')) {
-          heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('garment')) || null
+          // PENTING: Jika mencari GARMENT biasa, pastikan TIDAK mencocokkan SEMI GARMENT!
+          heuristicItem = items.find((p: any) => {
+            const cat = String(p?.category || '').toLowerCase()
+            return cat.includes('garment') && !cat.includes('semi')
+          }) || null
         }
       }
 
@@ -804,7 +901,11 @@ export function evaluateItemPrice(
 
       const substringMatched = items.find((p: any) => {
         const catUpper = String(p?.category || '').toUpperCase()
-        return catUpper && (catUpper.includes(nameUpper) || nameUpper.includes(catUpper))
+        if (!catUpper) return false
+        // PENTING: Jangan biarkan SEMI GARMENT dicocokkan dengan GARMENT biasa, atau sebaliknya!
+        if (nameUpper.includes('SEMI') && !catUpper.includes('SEMI')) return false
+        if (!nameUpper.includes('SEMI') && catUpper.includes('SEMI')) return false
+        return catUpper.includes(nameUpper) || nameUpper.includes(catUpper)
       }) || null
       if (substringMatched) {
         return { item: substringMatched, min: 0, max: 0, catName: substringMatched.category }
@@ -865,11 +966,18 @@ export function evaluateItemPrice(
     ? (profilePrice > 0 && Math.abs(billedPrice - profilePrice) < 0.01)
     : (priceItem ? (billedPrice >= minTargetPrice - 0.01 && billedPrice <= maxTargetPrice + 0.01) : false)
 
-  const hasTargetPrice = isKgOverweightItem ? profilePrice > 0 : isTaxReturnItem ? profilePrice > 0 : priceItem !== null
+  const hasTargetPrice = isKgOverweightItem
+    ? profilePrice > 0
+    : isTaxReturnItem
+    ? profilePrice > 0
+    : (priceItem !== null || (tier0Price !== null && tier0Price > 0))
+
   const targetColName = isKgOverweightItem
     ? 'Tarif KG Agen'
     : isTaxReturnItem
     ? 'Tarif Tax Return'
+    : tier0Price !== null && tier0Price > 0
+    ? (isCustMapping ? 'Tarif Khusus Cust (Tier 0)' : 'Tarif Komoditas (Tier 0)')
     : priceItem
     ? (priceItem.sheetType === 'CUSTOMER' ? 'Price List Cust' : 'Price List Master')
     : 'Tidak Ada Acuan'
@@ -879,6 +987,9 @@ export function evaluateItemPrice(
     priceListDisplay = profilePrice > 0 ? formatCurrency(profilePrice) : '—'
   } else if (isTaxReturnItem) {
     priceListDisplay = res?.profileHarga?.taxReturnPrice && res.profileHarga.taxReturnPrice > 0 ? formatCurrency(res.profileHarga.taxReturnPrice) : '—'
+  } else if (tier0Price !== null && tier0Price > 0) {
+    const sourceSuffix = isCustMapping ? ' (Cust)' : ' (Tier 0)'
+    priceListDisplay = `${formatCurrency(tier0Price)}${sourceSuffix}`
   } else if (priceItem) {
     const isCustPrice = priceItem.sheetType?.toUpperCase() === 'CUSTOMER'
     const isMktPrice = priceItem.sheetType?.toUpperCase() === 'MKT'
@@ -930,6 +1041,7 @@ export function evaluateItemPrice(
     difference,
     isUndercharge,
     isOvercharge,
+    tierSource,
   }
 }
 
@@ -1070,14 +1182,19 @@ export function resolveBranchCode(
 
 /** Returns true for auxiliary items like Tax Return, Admin, Surcharge, etc. */
 export function isAuxiliaryItem(name?: string | null): boolean {
-  const n = (name || '').toUpperCase()
+  if (!name) return false
+  const n = name.toUpperCase().trim()
+
+  // Item muatan kargo utama (PARCEL / PARCELS) bukan auxiliary item
+  if (/^PARCELS?\b/i.test(n)) return false
+
   return (
     n.includes('TAX RETURN') ||
-    n.includes('ADMIN') ||
-    n.includes('SURCHARGE') ||
-    n.includes('DISCOUNT') ||
-    n.includes('BIAYA') ||
-    n.includes('PENYESUAIAN')
+    /\bADMIN(ISTRASI)?\b/i.test(n) ||
+    /\bSURCHARGE\b/i.test(n) ||
+    /\bDISCOUNT\b/i.test(n) ||
+    /\bBIAYA\b/i.test(n) ||
+    /\bPENYESUAIAN\b/i.test(n)
   )
 }
 

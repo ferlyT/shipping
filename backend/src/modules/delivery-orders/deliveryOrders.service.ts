@@ -2,6 +2,22 @@ import { prisma } from '../../config/database'
 import { Prisma } from '@prisma/client'
 import { buildPagination, parsePagination } from '../../utils/pagination'
 import { suggestionCache } from '../../utils/cache'
+import { getBlockedFinanceStatusMap } from '../shipments/shipments-status.resolver'
+
+import type {
+  DeliveryOrderKPIResponse,
+  PeriodMetrics,
+  MonthlyTrendItem,
+  MetricComparison,
+  DeliveryOrderDetailResponse,
+  DeliveryMasterDataResponse,
+  UpdateDeliveryOrderDto,
+  PrintDeliveryOrderDto,
+  CreateDeliveryOrderDto,
+  CustomerDestination,
+  CreateCustomerDestinationDto,
+  OrderDeliveryItem,
+} from './deliveryOrders.types'
 
 // Re-export types
 export * from './deliveryOrders.types'
@@ -24,6 +40,19 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
   }
 
   if (search) {
+    const matchedCusts = await prisma.tbCustomers.findMany({
+      where: {
+        OR: [
+          { fdCustName: { contains: search } },
+          { fdCustCode: { contains: search } },
+        ],
+      },
+      select: { fdCustCode: true },
+      take: 50,
+    }).catch(() => [] as { fdCustCode: string }[])
+
+    const matchedCustCodes = matchedCusts.map((c) => c.fdCustCode)
+
     where.AND = [
       { fdSJDate: { gte: MIN_LOAD_DATE } },
       {
@@ -31,12 +60,33 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
           { fdSJNo: { contains: search } },
           { fdDescr: { contains: search } },
           { fdCustCode: { contains: search } },
+          ...(matchedCustCodes.length > 0 ? [{ fdCustCode: { in: matchedCustCodes } }] : []),
           { fdCustNameSJ: { contains: search } },
           { fdSupir: { contains: search } },
           { fdCarID: { contains: search } },
         ],
       },
     ]
+  }
+
+  if (query.sent === '1' || query.sent === '0') {
+    where.fdSent = Number(query.sent)
+  }
+  if (query.branch?.trim()) {
+    where.fdSJNo = { startsWith: `${query.branch.trim()}-` }
+  }
+  if (query.listType === '1' || query.listType === '2') {
+    where.fdListType = Number(query.listType)
+  }
+  if (query.printed === '1') {
+    where.fdPrintDate = { not: null }
+  } else if (query.printed === '0') {
+    where.fdPrintDate = null
+  }
+  if (query.ar === '1' || query.give === '1') {
+    where.fdGive = 1
+  } else if (query.ar === '0' || query.give === '0') {
+    where.fdGive = 0
   }
 
   const [data, total] = await Promise.all([
@@ -54,79 +104,838 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
         fdSupir: true,
         fdCarID: true,
         fdJmlPackSJ: true,
+        fdSatuan: true,
         fdJmlBeratSJ: true,
         fdEstimasi: true,
         fdSent: true,
+        fdSndDate: true,
+        fdPrint: true,
+        fdPrintDate: true,
+        fdGive: true,
         fdGiveDate: true,
       },
     }),
     prisma.tbDelivery.count({ where }),
   ])
 
-  return { data, meta: meta(total) }
-}
-
-export async function getDeliveryOrderById(id: string) {
-  return prisma.tbDelivery.findUnique({
-    where: { fdSJNo: id },
-  })
-}
-
-export async function getDeliveryOrdersKPIs(query: Record<string, string | undefined>) {
-  const search = query.search?.trim()
-  
-  const now = new Date()
-  const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-
-  const baseWhere: Prisma.TbDeliveryWhereInput = {
-    fdSJDate: { gte: startOfLastMonth },
+  // Single source of truth: enrich with master tbCustomers.fdCustName
+  const custCodes = [...new Set(data.map((d) => d.fdCustCode).filter(Boolean))] as string[]
+  let custMap = new Map<string, string>()
+  if (custCodes.length > 0) {
+    const custs = await prisma.tbCustomers.findMany({
+      where: { fdCustCode: { in: custCodes } },
+      select: { fdCustCode: true, fdCustName: true },
+    }).catch(() => [] as { fdCustCode: string; fdCustName: string | null }[])
+    custMap = new Map(custs.map((c) => [c.fdCustCode, c.fdCustName?.trim() || '']))
   }
 
-  const where: Prisma.TbDeliveryWhereInput = search
-    ? {
-        ...baseWhere,
-        OR: [
-          { fdSJNo: { contains: search } },
-          { fdDescr: { contains: search } },
-          { fdCustCode: { contains: search } },
-          { fdCustNameSJ: { contains: search } },
-          { fdSupir: { contains: search } },
-          { fdCarID: { contains: search } },
-        ],
-      }
-    : baseWhere
+  const enrichedData = data.map((d) => {
+    const masterName = d.fdCustCode ? custMap.get(d.fdCustCode) : undefined
+    const finalCustName = masterName || d.fdCustNameSJ?.trim() || 'Customer'
+    return {
+      ...d,
+      fdCustName: finalCustName,
+      fdCustNameSJ: finalCustName,
+      fdSatuan: d.fdSatuan ? d.fdSatuan.trim() : null,
+    }
+  })
 
-  const [totalSJ, totalAgg, sjBulanIni, onDelivery] = await Promise.all([
-    prisma.tbDelivery.count({ where }),
-    prisma.tbDelivery.aggregate({
-      where,
-      _sum: { fdJmlPackSJ: true, fdJmlBeratSJ: true },
-    }),
-    prisma.tbDelivery.count({
-      where: {
-        ...where,
-        fdSJDate: { gte: startOfMonth, lt: endOfMonth },
-      },
-    }),
-    prisma.tbDelivery.count({
-      where: {
-        ...where,
-        OR: [
-          { fdSent: 0 },
-          { fdSent: null },
-        ],
-      },
-    }),
+  return { data: enrichedData, meta: meta(total) }
+}
+
+export async function getDeliveryMasterData(): Promise<DeliveryMasterDataResponse> {
+  const [vehicles, units, paymentTypes, expeditions] = await Promise.all([
+    prisma.$queryRaw<any[]>`
+      SELECT RTRIM(fdCarID) AS fdCarID, RTRIM(fdSupir) AS fdSupir, RTRIM(fdNotel) AS fdNotel, ISNULL(fdStatus, 1) AS fdStatus
+      FROM tbKendaraan WITH (NOLOCK)
+      WHERE ISNULL(fdStatus, 1) = 1
+      ORDER BY fdCarID ASC
+    `.catch(() => []),
+    prisma.$queryRaw<any[]>`
+      SELECT RTRIM(fdUnitCode) AS fdUnitCode, RTRIM(fdUnitName) AS fdUnitName
+      FROM tbSatuan WITH (NOLOCK)
+      ORDER BY fdUnitCode ASC
+    `.catch(() => []),
+    prisma.$queryRaw<any[]>`
+      SELECT fdID, RTRIM(fdJenisPembayaran) AS fdJenisPembayaran
+      FROM tbJenisPembayaran WITH (NOLOCK)
+      ORDER BY fdID ASC
+    `.catch(() => []),
+    prisma.$queryRaw<any[]>`
+      SELECT RTRIM(fdExpID) AS fdExpID, RTRIM(fdExpName) AS fdExpName, RTRIM(fdExpAddr1) AS fdExpAddr1, RTRIM(fdTelp) AS fdTelp
+      FROM tbExpedisi WITH (NOLOCK)
+      ORDER BY fdExpName ASC
+    `.catch(() => []),
   ])
 
   return {
-    totalSJ,
-    totalPackages: totalAgg._sum.fdJmlPackSJ || 0,
-    totalWeight: totalAgg._sum.fdJmlBeratSJ || 0,
-    sjBulanIni,
-    onDelivery,
+    vehicles: vehicles.map((v) => ({
+      fdCarID: String(v.fdCarID || '').trim(),
+      fdSupir: String(v.fdSupir || '').trim(),
+      fdNotel: String(v.fdNotel || '').trim(),
+      fdStatus: Number(v.fdStatus || 1),
+    })),
+    units: units.map((u) => ({
+      fdUnitCode: String(u.fdUnitCode || '').trim(),
+      fdUnitName: String(u.fdUnitName || '').trim(),
+    })),
+    paymentTypes: paymentTypes.map((p) => ({
+      fdID: Number(p.fdID),
+      fdJenisPembayaran: String(p.fdJenisPembayaran || '').trim(),
+    })),
+    expeditions: expeditions.map((e) => ({
+      fdExpID: String(e.fdExpID || '').trim(),
+      fdExpName: String(e.fdExpName || '').trim(),
+      fdExpAddr1: String(e.fdExpAddr1 || '').trim(),
+      fdTelp: String(e.fdTelp || '').trim(),
+    })),
+  }
+}
+
+export async function getDeliveryOrderById(id: string): Promise<DeliveryOrderDetailResponse | null> {
+  const delivery = await prisma.tbDelivery.findUnique({
+    where: { fdSJNo: id },
+  })
+  if (!delivery) return null
+
+  const listCode = delivery.fdListCode ? String(delivery.fdListCode).trim() : null
+  const custCode = delivery.fdCustCode ? String(delivery.fdCustCode).trim() : null
+  const expId = delivery.fdExpID ? String(delivery.fdExpID).trim() : null
+
+  // Run parallel lookup queries
+  const [
+    custMaster,
+    entryListRows,
+    m3PackingListRows,
+    m3GudangRows,
+    m3BillRows,
+    orderDeliveryRows,
+    expeditionRows,
+    dimensionRows,
+    financeBlockedMap,
+  ] = await Promise.all([
+    // 1. Single source of truth customer
+    custCode
+      ? prisma.tbCustomers.findUnique({
+          where: { fdCustCode: custCode },
+          select: {
+            fdCustCode: true,
+            fdCustName: true,
+            fdContact: true,
+            fdAddr1: true,
+            fdAddr2: true,
+            fdCityName: true,
+            fdTelp: true,
+            fdHP: true,
+            fdBlocked: true,
+            fdBroker: true,
+            fdDiscontinued: true,
+            fdKeterangan: true,
+          },
+        }).catch(() => null)
+      : null,
+
+    // 2. EntryList (Manifest / Gudang)
+    listCode
+      ? prisma.$queryRaw<any[]>`
+          SELECT el.fdListCode, el.fdListDate, el.fdBranchCode, b.fdBranchName,
+                 el.fdContainerNo, el.fdCNo, el.fdMarkingCode, el.fdMarkingNo,
+                 el.fdJmlPack, el.fdSatuan, el.fdJmlBerat, el.fdM3,
+                 el.fdJmlPack2, el.fdSatuan2, el.fdJmlBerat2,
+                 el.fdLokasi, el.fdTgl_IN, el.fdTime_IN, el.fdDesc,
+                 el.fdDeliveryNote, el.fdTerima, el.fdPrintUkuran,
+                 el.fdInvoiceNo, el.fdComodity
+          FROM tbEntryList el WITH (NOLOCK)
+          LEFT JOIN tbCabang b WITH (NOLOCK) ON b.fdBranchCode = el.fdBranchCode
+          WHERE el.fdListCode = ${listCode}
+        `.catch(() => [])
+      : [],
+
+    // 3. M3 Packing List
+    listCode
+      ? prisma.$queryRaw<any[]>`
+          SELECT TOP 1 fdM3 FROM tbM3_packingList WITH (NOLOCK) WHERE fdListCode = ${listCode}
+        `.catch(() => [])
+      : [],
+
+    // 4. M3 Gudang (Laut -> fdM3, Udara -> fdVFC)
+    listCode
+      ? prisma.$queryRaw<any[]>`
+          SELECT TOP 1 fdM3, fdVFC FROM tbM3List_rev1 WITH (NOLOCK) WHERE fdListCode = ${listCode}
+        `.catch(() => [])
+      : [],
+
+    // 5. M3 Bill (Invoice Tagihan)
+    listCode
+      ? prisma.$queryRaw<any[]>`
+          SELECT TOP 1 fdM3Bill FROM qr_m3_bill WITH (NOLOCK) WHERE fdListCode = ${listCode}
+        `.catch(() => [])
+      : [],
+
+    // 6. Permintaan Pengiriman CS (qr_OrderDelivey)
+    listCode
+      ? prisma.$queryRaw<any[]>`
+          SELECT TOP 1 * FROM qr_OrderDelivey WITH (NOLOCK) WHERE fdListCode = ${listCode}
+        `.catch(() => [])
+      : [],
+
+    // 7. Ekspedisi Terpilih
+    expId
+      ? prisma.$queryRaw<any[]>`
+          SELECT TOP 1 RTRIM(fdExpID) AS fdExpID, RTRIM(fdExpName) AS fdExpName,
+                 RTRIM(fdExpAddr1) AS fdExpAddr1, RTRIM(fdTelp) AS fdTelp
+          FROM tbExpedisi WITH (NOLOCK)
+          WHERE fdExpID = ${expId}
+        `.catch(() => [])
+      : [],
+
+    // 8. Rincian Dimensi Fisik Koli
+    listCode
+      ? prisma.tbEntryListDetail.findMany({
+          where: { fdListCode: listCode },
+          orderBy: { fdListDCode: 'asc' },
+          select: {
+            fdListCode: true,
+            fdListDCode: true,
+            fdDescr: true,
+            fdPjg: true,
+            fdLbr: true,
+            fdTng: true,
+            fdQty: true,
+            fdLoad: true,
+          },
+        }).catch(() => [])
+      : [],
+
+    // 9. Blocked Finance (tbEntryList_Bloked_Finance -> fdBlocked = 1)
+    listCode ? getBlockedFinanceStatusMap([listCode]) : Promise.resolve(new Map()),
+  ])
+
+  const entryListRaw = entryListRows[0] || null
+  const markingCode = entryListRaw?.fdMarkingCode ? String(entryListRaw.fdMarkingCode).trim() : null
+  const financeBlockedInfo = listCode ? (financeBlockedMap as Map<string, any>).get(listCode) : null
+
+  // 9. Cek Barang Amfibi
+  let isAmfibi = false
+  if (markingCode) {
+    const amfibiRows = await prisma.$queryRaw<any[]>`
+      SELECT TOP 1 t.fdMarkingCode
+      FROM tbMarkingTransit t WITH (NOLOCK)
+      LEFT JOIN tbMarking m WITH (NOLOCK) ON m.fdMarkingCode = t.fdMarkingCode
+      WHERE t.fdMarkingTransit = ${markingCode} AND m.fdListType = 1
+    `.catch(() => [])
+    if (amfibiRows.length > 0) {
+      isAmfibi = true
+    }
+  }
+
+  // Calculate trio M3
+  const isLaut = (delivery.fdListType ?? entryListRaw?.fdListType) === 2
+  const m3PL = Number(m3PackingListRows[0]?.fdM3 ?? entryListRaw?.fdM3 ?? 0)
+  const m3Gudang = isLaut
+    ? Number(m3GudangRows[0]?.fdM3 ?? 0)
+    : Number(m3GudangRows[0]?.fdVFC ?? 0)
+  const m3Bill = Number(m3BillRows[0]?.fdM3Bill ?? 0)
+
+  // Map CS Order
+  const odRaw = orderDeliveryRows[0] || null
+  let orderDeliveryMapped = null
+  if (odRaw) {
+    const paymentCode = odRaw.fdJenisPembayaran !== null ? Number(odRaw.fdJenisPembayaran) : null
+    let paymentLabel: string | null = null
+    if (paymentCode === 1) paymentLabel = 'COD'
+    else if (paymentCode === 2) paymentLabel = 'TRANSFER'
+    else if (paymentCode === 3) paymentLabel = 'DITUNDA KIRIM DAHULU'
+
+    orderDeliveryMapped = {
+      fdTglKirim: odRaw.fdTglKirim ? new Date(odRaw.fdTglKirim).toISOString() : null,
+      fdNamaPemberiOrder: odRaw.fdNamaPemberiOrder ? String(odRaw.fdNamaPemberiOrder).trim() : null,
+      fdKeterangan: odRaw.fdKeterangan ? String(odRaw.fdKeterangan).trim() : null,
+      fdJenisPembayaran: paymentCode,
+      fdJenisPembayaranLabel: paymentLabel,
+      fdTglTransfer: odRaw.fdTglTransfer ? new Date(odRaw.fdTglTransfer).toISOString() : null,
+      fdAlamatKirim: odRaw.fdAlamatKirim ? String(odRaw.fdAlamatKirim).trim() : null,
+      fdExpID: odRaw.fdExpID ? String(odRaw.fdExpID).trim() : null,
+      fdExpName: odRaw.fdExpName ? String(odRaw.fdExpName).trim() : null,
+      fdExpAddr: odRaw.fdExpAddr1 ? String(odRaw.fdExpAddr1).trim() : null,
+      fdEksBayar: odRaw.fdEksBayar !== null ? Number(odRaw.fdEksBayar) : null,
+    }
+  }
+
+  // Map expedition
+  const expRaw = expeditionRows[0] || null
+  const expeditionMapped = expRaw
+    ? {
+        fdExpID: String(expRaw.fdExpID || '').trim(),
+        fdExpName: String(expRaw.fdExpName || '').trim(),
+        fdExpAddr1: expRaw.fdExpAddr1 ? String(expRaw.fdExpAddr1).trim() : null,
+        fdTelp: expRaw.fdTelp ? String(expRaw.fdTelp).trim() : null,
+        fdExp3: delivery.fdExp3 ?? null,
+      }
+    : null
+
+  // Map Dimensions
+  const dimensionsMapped = (dimensionRows || []).map((d) => {
+    const pjg = Number(d.fdPjg || 0)
+    const lbr = Number(d.fdLbr || 0)
+    const tng = Number(d.fdTng || 0)
+    const qty = Number(d.fdQty || 1)
+    const m3Total = Number((((pjg * lbr * tng) / 1000000) * qty).toFixed(4))
+    return {
+      fdListCode: String(d.fdListCode).trim(),
+      fdListDCode: String(d.fdListDCode).trim(),
+      fdDescr: d.fdDescr ? String(d.fdDescr).trim() : null,
+      fdPjg: pjg,
+      fdLbr: lbr,
+      fdTng: tng,
+      fdQty: qty,
+      fdLoad: d.fdLoad,
+      m3Total,
+    }
+  })
+
+  // Prioritize actual recipient on Surat Jalan (tbDelivery.fdCustNameSJ) or entryList, then fallback to master
+  const effectiveCustName = delivery.fdCustNameSJ?.trim() || custMaster?.fdCustName?.trim() || 'Customer'
+
+  return {
+    delivery: {
+      fdSJNo: delivery.fdSJNo.trim(),
+      fdSJDate: delivery.fdSJDate ? delivery.fdSJDate.toISOString() : null,
+      fdCarID: delivery.fdCarID ? delivery.fdCarID.trim() : null,
+      fdCustCode: delivery.fdCustCode ? delivery.fdCustCode.trim() : null,
+      fdDescr: delivery.fdDescr ? delivery.fdDescr.trim() : null,
+      fdListCode: delivery.fdListCode ? delivery.fdListCode.trim() : null,
+      fdListType: delivery.fdListType,
+      fdPrint: delivery.fdPrint,
+      fdSent: delivery.fdSent,
+      fdSndDate: delivery.fdSndDate ? delivery.fdSndDate.toISOString() : null,
+      fdLoad: delivery.fdLoad ? delivery.fdLoad.toISOString() : null,
+      fdJmlPackSJ: delivery.fdJmlPackSJ ? Number(delivery.fdJmlPackSJ) : null,
+      fdJmlBeratSJ: delivery.fdJmlBeratSJ ? Number(delivery.fdJmlBeratSJ) : null,
+      fdPrintDate: delivery.fdPrintDate ? delivery.fdPrintDate.toISOString() : null,
+      fdKembali: delivery.fdKembali ? delivery.fdKembali.toISOString() : null,
+      fdUpdate: delivery.fdUpdate ? delivery.fdUpdate.trim() : null,
+      fdCreated: delivery.fdCreated ? delivery.fdCreated.trim() : null,
+      fdPrintBy: delivery.fdPrintBy ? delivery.fdPrintBy.trim() : null,
+      fdTerima: delivery.fdTerima ? delivery.fdTerima.trim() : null,
+      fdGive: delivery.fdGive,
+      fdGiveDate: delivery.fdGiveDate ? delivery.fdGiveDate.toISOString() : null,
+      fdAddr: delivery.fdAddr ? delivery.fdAddr.trim() : null,
+      fdSupir: delivery.fdSupir ? delivery.fdSupir.trim() : null,
+      fdEstimasi: delivery.fdEstimasi ? delivery.fdEstimasi.toISOString() : null,
+      fdCustNameSJ: effectiveCustName,
+      fdTelp: delivery.fdTelp ? delivery.fdTelp.trim() : null,
+      fdTelpSupir: delivery.fdTelpSupir ? delivery.fdTelpSupir.trim() : null,
+      fdSatuan: delivery.fdSatuan ? delivery.fdSatuan.trim() : null,
+      fdContact: delivery.fdContact ? delivery.fdContact.trim() : null,
+      fdCity: delivery.fdCity ? delivery.fdCity.trim() : null,
+      fdHp: delivery.fdHp ? delivery.fdHp.trim() : null,
+      fdEmail: delivery.fdEmail ? delivery.fdEmail.trim() : null,
+      fdExpID: delivery.fdExpID ? delivery.fdExpID.trim() : null,
+      fdExp3: delivery.fdExp3,
+      fdKondisiBarang: delivery.fdKondisiBarang,
+    },
+    customer: custMaster
+      ? {
+          fdCustCode: custMaster.fdCustCode.trim(),
+          fdCustName: (custMaster.fdCustName || '').trim(),
+          fdContact: custMaster.fdContact ? custMaster.fdContact.trim() : null,
+          fdAddr1: custMaster.fdAddr1 ? custMaster.fdAddr1.trim() : null,
+          fdAddr2: custMaster.fdAddr2 ? custMaster.fdAddr2.trim() : null,
+          fdCityName: custMaster.fdCityName ? custMaster.fdCityName.trim() : null,
+          fdTelp: custMaster.fdTelp ? custMaster.fdTelp.trim() : null,
+          fdHP: custMaster.fdHP ? custMaster.fdHP.trim() : null,
+          fdBlocked: Number(custMaster.fdBlocked || 0),
+          fdBlockedStatusName:
+            Number(custMaster.fdBlocked) === 1
+              ? 'OK'
+              : Number(custMaster.fdBlocked) === 2
+              ? 'COD'
+              : Number(custMaster.fdBlocked) === 3
+              ? 'WARNING'
+              : Number(custMaster.fdBlocked) === 4
+              ? 'BLOCKED'
+              : Number(custMaster.fdBlocked) === 5
+              ? 'URGENT'
+              : 'NO STATUS',
+          fdBroker: Number(custMaster.fdBroker || 0),
+          fdDiscontinued: Number(custMaster.fdDiscontinued || 0),
+          fdKeterangan: custMaster.fdKeterangan ? custMaster.fdKeterangan.trim() : null,
+        }
+      : null,
+    entryList: entryListRaw
+      ? {
+          fdListCode: String(entryListRaw.fdListCode).trim(),
+          fdListDate: entryListRaw.fdListDate ? new Date(entryListRaw.fdListDate).toISOString() : null,
+          fdBranchCode: entryListRaw.fdBranchCode ? String(entryListRaw.fdBranchCode).trim() : null,
+          fdBranchName: entryListRaw.fdBranchName ? String(entryListRaw.fdBranchName).trim() : null,
+          fdContainerNo: entryListRaw.fdContainerNo ? String(entryListRaw.fdContainerNo).trim() : null,
+          fdCNo: entryListRaw.fdCNo ? String(entryListRaw.fdCNo).trim() : null,
+          fdMarkingCode: entryListRaw.fdMarkingCode ? String(entryListRaw.fdMarkingCode).trim() : null,
+          fdMarkingNo: entryListRaw.fdMarkingNo ? String(entryListRaw.fdMarkingNo).trim() : null,
+          fdJmlPack: entryListRaw.fdJmlPack !== null ? Number(entryListRaw.fdJmlPack) : null,
+          fdSatuan: entryListRaw.fdSatuan ? String(entryListRaw.fdSatuan).trim() : null,
+          fdJmlBerat: entryListRaw.fdJmlBerat !== null ? Number(entryListRaw.fdJmlBerat) : null,
+          fdJmlPack2: entryListRaw.fdJmlPack2 !== null ? Number(entryListRaw.fdJmlPack2) : null,
+          fdSatuan2: entryListRaw.fdSatuan2 ? String(entryListRaw.fdSatuan2).trim() : null,
+          fdJmlBerat2: entryListRaw.fdJmlBerat2 !== null ? Number(entryListRaw.fdJmlBerat2) : null,
+          fdLokasi: entryListRaw.fdLokasi ? String(entryListRaw.fdLokasi).trim() : null,
+          fdTgl_IN: entryListRaw.fdTgl_IN ? new Date(entryListRaw.fdTgl_IN).toISOString() : null,
+          fdTime_IN: entryListRaw.fdTime_IN ? String(entryListRaw.fdTime_IN).trim() : null,
+          fdDesc: entryListRaw.fdDesc ? String(entryListRaw.fdDesc).trim() : null,
+          fdDeliveryNote: entryListRaw.fdDeliveryNote ? String(entryListRaw.fdDeliveryNote).trim() : null,
+          fdTerima: entryListRaw.fdTerima ? String(entryListRaw.fdTerima).trim() : null,
+          fdPrintUkuran: entryListRaw.fdPrintUkuran !== null ? Number(entryListRaw.fdPrintUkuran) : null,
+          fdInvoiceNo: entryListRaw.fdInvoiceNo ? String(entryListRaw.fdInvoiceNo).trim() : null,
+          fdComodity: entryListRaw.fdComodity ? String(entryListRaw.fdComodity).trim() : null,
+        }
+      : null,
+    m3Comparison: {
+      m3PackingList: m3PL,
+      m3Gudang,
+      m3Bill,
+    },
+    orderDelivery: orderDeliveryMapped,
+    expedition: expeditionMapped,
+    dimensions: dimensionsMapped,
+    isAmfibi,
+    amfibiMarking: isAmfibi ? markingCode : null,
+    financeBlocked: financeBlockedInfo && financeBlockedInfo.isBlocked
+      ? {
+          isBlocked: true,
+          blockedBy: financeBlockedInfo.blockedBy,
+          blockedReason: financeBlockedInfo.blockedReason,
+        }
+      : null,
+  }
+}
+
+export async function updateDeliveryOrder(
+  id: string,
+  data: UpdateDeliveryOrderDto,
+  user: { username?: string; name?: string }
+) {
+  // Validate mandatory fields like FoxPro
+  if (!data.fdEstimasi || !data.fdEstimasi.trim()) {
+    throw new Error('Tanggal estimasi pengiriman wajib diisi!')
+  }
+  if (!data.fdCarID || !data.fdCarID.trim()) {
+    throw new Error('Nomor kendaraan (Plat Mobil) wajib diisi!')
+  }
+
+  const existing = await prisma.tbDelivery.findUnique({
+    where: { fdSJNo: id },
+  })
+  if (!existing) {
+    throw new Error('Surat Jalan tidak ditemukan!')
+  }
+
+  const updated = await prisma.tbDelivery.update({
+    where: { fdSJNo: id },
+    data: {
+      fdEstimasi: data.fdEstimasi ? new Date(data.fdEstimasi) : existing.fdEstimasi,
+      fdCarID: data.fdCarID.trim(),
+      fdSupir: data.fdSupir !== undefined ? (data.fdSupir ? data.fdSupir.trim() : null) : existing.fdSupir,
+      fdTelpSupir: data.fdTelpSupir !== undefined ? (data.fdTelpSupir ? data.fdTelpSupir.trim() : null) : existing.fdTelpSupir,
+      fdSndDate: data.fdSndDate ? new Date(data.fdSndDate) : (data.fdSndDate === null ? null : existing.fdSndDate),
+      fdCustNameSJ: data.fdCustNameSJ !== undefined ? (data.fdCustNameSJ ? data.fdCustNameSJ.trim() : null) : existing.fdCustNameSJ,
+      fdContact: data.fdContact !== undefined ? (data.fdContact ? data.fdContact.trim() : null) : existing.fdContact,
+      fdAddr: data.fdAddr !== undefined ? (data.fdAddr ? data.fdAddr.trim() : null) : existing.fdAddr,
+      fdCity: data.fdCity !== undefined ? (data.fdCity ? data.fdCity.trim() : null) : existing.fdCity,
+      fdTelp: data.fdTelp !== undefined ? (data.fdTelp ? data.fdTelp.trim() : null) : existing.fdTelp,
+      fdHp: data.fdHp !== undefined ? (data.fdHp ? data.fdHp.trim() : null) : existing.fdHp,
+      fdEmail: data.fdEmail !== undefined ? (data.fdEmail ? data.fdEmail.trim() : null) : existing.fdEmail,
+      fdDescr: data.fdDescr !== undefined ? (data.fdDescr ? data.fdDescr.trim() : null) : existing.fdDescr,
+      fdJmlPackSJ: data.fdJmlPackSJ !== undefined && data.fdJmlPackSJ !== null ? new Prisma.Decimal(data.fdJmlPackSJ) : existing.fdJmlPackSJ,
+      fdSatuan: data.fdSatuan !== undefined ? (data.fdSatuan ? data.fdSatuan.trim() : null) : existing.fdSatuan,
+      fdJmlBeratSJ: data.fdJmlBeratSJ !== undefined && data.fdJmlBeratSJ !== null ? new Prisma.Decimal(data.fdJmlBeratSJ) : existing.fdJmlBeratSJ,
+      fdKondisiBarang: data.fdKondisiBarang !== undefined && data.fdKondisiBarang !== null ? Number(data.fdKondisiBarang) : existing.fdKondisiBarang,
+      fdExpID: data.fdExpID !== undefined ? (data.fdExpID ? data.fdExpID.trim() : null) : existing.fdExpID,
+      fdExp3: data.fdExp3 !== undefined && data.fdExp3 !== null ? Number(data.fdExp3) : existing.fdExp3,
+      fdKembali: data.fdKembali ? new Date(data.fdKembali) : (data.fdKembali === null ? null : existing.fdKembali),
+      fdTerima: data.fdTerima !== undefined ? (data.fdTerima ? data.fdTerima.trim() : null) : existing.fdTerima,
+      fdGive: data.fdGive !== undefined && data.fdGive !== null ? Number(data.fdGive) : existing.fdGive,
+      fdGiveDate: data.fdGiveDate ? new Date(data.fdGiveDate) : (data.fdGiveDate === null ? null : existing.fdGiveDate),
+      fdUpdate: (user.username || user.name || 'SYSTEM').slice(0, 25),
+    },
+  })
+
+  return updated
+}
+
+export async function deleteDeliveryOrder(id: string, user: { role?: string; username?: string }) {
+  const existing = await prisma.tbDelivery.findUnique({
+    where: { fdSJNo: id },
+  })
+  if (!existing) {
+    throw new Error('Surat Jalan tidak ditemukan!')
+  }
+
+  // FoxPro check: if already printed, protect or require confirmation
+  if (existing.fdPrint === 1 || existing.fdPrintDate) {
+    if (user.role !== 'admin' && user.role !== 'superadmin') {
+      throw new Error('Surat Jalan sudah pernah dicetak. Hanya Admin yang dapat menghapus!')
+    }
+  }
+
+  await prisma.tbDelivery.delete({
+    where: { fdSJNo: id },
+  })
+
+  return { success: true, fdSJNo: id }
+}
+
+export async function recordDeliveryPrint(
+  id: string,
+  options: PrintDeliveryOrderDto,
+  user: { username?: string; name?: string }
+) {
+  const existing = await prisma.tbDelivery.findUnique({
+    where: { fdSJNo: id },
+  })
+  if (!existing) {
+    throw new Error('Surat Jalan tidak ditemukan!')
+  }
+
+  const printTime = new Date()
+  const printBy = (user.username || user.name || 'SYSTEM').slice(0, 25)
+
+  await prisma.tbDelivery.update({
+    where: { fdSJNo: id },
+    data: {
+      fdPrint: 1,
+      fdPrintDate: printTime,
+      fdPrintBy: printBy,
+    },
+  })
+
+  // If check1 (cetakUkuran) is selected, update tbEntryList.fdPrintUkuran = 1
+  if (options.cetakUkuran && existing.fdListCode) {
+    await prisma.$executeRaw`
+      UPDATE tbEntryList SET fdPrintUkuran = 1 WHERE fdListCode = ${existing.fdListCode.trim()}
+    `.catch(() => null)
+  }
+
+  return {
+    success: true,
+    fdSJNo: id,
+    fdPrint: 1,
+    fdPrintDate: printTime.toISOString(),
+    fdPrintBy: printBy,
+  }
+}
+
+export async function createDeliveryOrder(
+  data: CreateDeliveryOrderDto,
+  user: { username?: string; name?: string }
+) {
+  // Validate mandatory fields like FoxPro
+  if (!data.fdListCode || !data.fdListCode.trim()) {
+    throw new Error('Kode List Kargo (fdListCode) wajib diisi!')
+  }
+  if (!data.fdCarID || !data.fdCarID.trim()) {
+    throw new Error('Nomor Kendaraan (Plat Mobil) wajib diisi!')
+  }
+  if (!data.fdEstimasi || !data.fdEstimasi.trim()) {
+    throw new Error('Tanggal Estimasi Kirim wajib diisi!')
+  }
+  if (!data.fdJmlPackSJ || Number(data.fdJmlPackSJ) <= 0) {
+    throw new Error('Jumlah Koli yang dikirim harus lebih besar dari 0!')
+  }
+
+  // Lookup entryList to get default values if missing
+  const entryListRows = await prisma.$queryRaw<any[]>`
+    SELECT el.*, b.fdBranchName
+    FROM tbEntryList el WITH (NOLOCK)
+    LEFT JOIN tbCabang b WITH (NOLOCK) ON b.fdBranchCode = el.fdBranchCode
+    WHERE el.fdListCode = ${data.fdListCode.trim()}
+  `.catch(() => [])
+  const el = entryListRows[0] || null
+
+  const branchCode = (data.fdBranchCode || el?.fdBranchCode || 'GZ').trim().toUpperCase()
+
+  // Generate next counter atomically from tbMasterCounter (fdCode = 'A')
+  const nextCounterResult = await prisma.$transaction(async (tx) => {
+    const counterRows = await tx.$queryRaw<any[]>`
+      SELECT fdSJCounter FROM tbMasterCounter WITH (UPDLOCK, ROWLOCK) WHERE fdCode = 'A'
+    `
+    const currentCounter = Number(counterRows[0]?.fdSJCounter || 0)
+    const nextCounter = currentCounter + 1
+    await tx.$executeRaw`
+      UPDATE tbMasterCounter SET fdSJCounter = ${nextCounter} WHERE fdCode = 'A'
+    `
+    return nextCounter
+  })
+
+  const padNum = String(nextCounterResult).padStart(6, '0')
+  const newSJNo = `${branchCode}-${padNum}`
+
+  const now = new Date()
+  const estimasiDate = new Date(data.fdEstimasi)
+  const createdBy = (user?.name || user?.username || 'SYSTEM').slice(0, 25)
+
+  await prisma.tbDelivery.create({
+    data: {
+      fdSJNo: newSJNo,
+      fdSJDate: now,
+      fdCarID: data.fdCarID.trim().slice(0, 10),
+      fdCustCode: data.fdCustCode
+        ? data.fdCustCode.trim().slice(0, 7)
+        : (el?.fdCustCode ? String(el.fdCustCode).trim().slice(0, 7) : null),
+      fdDescr: data.fdDescr
+        ? data.fdDescr.trim().slice(0, 250)
+        : (el?.fdDeliveryNote ? String(el.fdDeliveryNote).trim().slice(0, 250) : ''),
+      fdListCode: data.fdListCode.trim().slice(0, 7),
+      fdListType: data.fdListType ?? el?.fdListType ?? 2,
+      fdPrint: 0,
+      fdSent: 0,
+      fdJmlPackSJ: Number(data.fdJmlPackSJ),
+      fdJmlBeratSJ: data.fdJmlBeratSJ !== undefined && data.fdJmlBeratSJ !== null
+        ? Number(data.fdJmlBeratSJ)
+        : (el?.fdJmlBerat ? Number(el.fdJmlBerat) : 0),
+      fdCustNameSJ: data.fdCustNameSJ
+        ? data.fdCustNameSJ.trim().slice(0, 50)
+        : (el?.fdCustName ? String(el.fdCustName).trim().slice(0, 50) : 'Customer'),
+      fdSupir: data.fdSupir ? data.fdSupir.trim().slice(0, 35) : null,
+      fdTelpSupir: data.fdTelpSupir ? data.fdTelpSupir.trim().slice(0, 50) : null,
+      fdEstimasi: estimasiDate,
+      fdAddr: data.fdAddr ? data.fdAddr.trim().slice(0, 80) : null,
+      fdCity: data.fdCity ? data.fdCity.trim().slice(0, 100) : null,
+      fdContact: data.fdContact ? data.fdContact.trim().slice(0, 50) : null,
+      fdHp: data.fdHp ? data.fdHp.trim().slice(0, 50) : null,
+      fdTelp: data.fdTelp ? data.fdTelp.trim().slice(0, 50) : null,
+      fdSatuan: data.fdSatuan
+        ? data.fdSatuan.trim().slice(0, 5)
+        : (el?.fdSatuan ? String(el.fdSatuan).trim().slice(0, 5) : 'COLY'),
+      fdTerima: el?.fdTerima ? String(el.fdTerima).trim().slice(0, 35) : null,
+      fdKondisiBarang: data.fdKondisiBarang ?? 1,
+      fdCreated: createdBy,
+      fdLoad: now,
+    },
+  })
+
+  // Mark fdSJCreated = 1 on tbEntryList if sisa will be 0
+  if (data.fdListCode) {
+    await prisma.$executeRaw`
+      UPDATE tbEntryList SET fdSJCreated = 1 WHERE fdListCode = ${data.fdListCode.trim()}
+    `.catch(() => null)
+  }
+
+  return {
+    success: true,
+    fdSJNo: newSJNo,
+    message: `Surat Jalan ${newSJNo} berhasil diterbitkan`,
+  }
+}
+
+
+const MONTH_NAMES = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+]
+
+const MONTH_SHORT_NAMES = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun',
+  'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'
+]
+
+export async function getDeliveryOrdersKPIs(query: Record<string, string | undefined>): Promise<DeliveryOrderKPIResponse> {
+  const now = new Date()
+  const targetYear = query.year && !isNaN(Number(query.year)) ? Number(query.year) : now.getFullYear()
+  const targetMonth = query.month && !isNaN(Number(query.month)) ? Math.min(12, Math.max(1, Number(query.month))) : now.getMonth() + 1
+  const search = query.search?.trim()
+
+  // 1. Current Period (Bulan Berjalan / Target)
+  const currYear = targetYear
+  const currMonth = targetMonth
+  const startOfCurr = new Date(currYear, currMonth - 1, 1)
+  const endOfCurr = new Date(currYear, currMonth, 1)
+
+  // 2. Previous Month (Bulan Sebelumnya / MoM)
+  const prevYear = currMonth === 1 ? currYear - 1 : currYear
+  const prevMonth = currMonth === 1 ? 12 : currMonth - 1
+  const startOfPrev = new Date(prevYear, prevMonth - 1, 1)
+  const endOfPrev = new Date(prevYear, prevMonth, 1)
+
+  // 3. Same Month Last Year (Bulan yang Sama Tahun Lalu / YoY)
+  const lastYear = currYear - 1
+  const lastYearMonth = currMonth
+  const startOfLastYear = new Date(lastYear, lastYearMonth - 1, 1)
+  const endOfLastYear = new Date(lastYear, lastYearMonth, 1)
+
+  // 4. Trend 12 Months Range: from 11 months before target start to target end
+  const startOf12Months = new Date(currYear, currMonth - 12, 1)
+
+  // Helper to query single period metrics using raw SQL with NOLOCK
+  const fetchPeriodMetrics = async (
+    start: Date,
+    end: Date,
+    yr: number,
+    mo: number
+  ): Promise<PeriodMetrics> => {
+    let searchSql = Prisma.empty
+    if (search) {
+      searchSql = Prisma.sql`AND (
+        fdSJNo LIKE ${'%' + search + '%'} 
+        OR fdDescr LIKE ${'%' + search + '%'} 
+        OR fdCustCode LIKE ${'%' + search + '%'} 
+        OR fdCustNameSJ LIKE ${'%' + search + '%'} 
+        OR fdSupir LIKE ${'%' + search + '%'} 
+        OR fdCarID LIKE ${'%' + search + '%'}
+      )`
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<any[]>`
+        SELECT 
+          COUNT(*) AS totalSJ,
+          ISNULL(SUM(fdJmlPackSJ), 0) AS totalPackages,
+          ISNULL(SUM(fdJmlBeratSJ), 0) AS totalWeight,
+          SUM(CASE WHEN fdSent = 1 THEN 1 ELSE 0 END) AS deliveredSJ,
+          SUM(CASE WHEN fdSent = 0 OR fdSent IS NULL THEN 1 ELSE 0 END) AS onDeliverySJ,
+          SUM(CASE WHEN fdListType = 2 THEN 1 ELSE 0 END) AS seaSJ,
+          SUM(CASE WHEN fdListType = 1 THEN 1 ELSE 0 END) AS airSJ
+        FROM tbDelivery WITH (NOLOCK)
+        WHERE fdSJDate >= ${start} AND fdSJDate < ${end}
+        ${searchSql}
+      `
+      const r = rows[0] || {}
+      return {
+        year: yr,
+        month: mo,
+        monthName: `${MONTH_NAMES[mo - 1]} ${yr}`,
+        totalSJ: Number(r.totalSJ || 0),
+        totalPackages: Number(r.totalPackages || 0),
+        totalWeight: Number(Number(r.totalWeight || 0).toFixed(2)),
+        deliveredSJ: Number(r.deliveredSJ || 0),
+        onDeliverySJ: Number(r.onDeliverySJ || 0),
+        seaSJ: Number(r.seaSJ || 0),
+        airSJ: Number(r.airSJ || 0),
+      }
+    } catch {
+      return {
+        year: yr,
+        month: mo,
+        monthName: `${MONTH_NAMES[mo - 1]} ${yr}`,
+        totalSJ: 0,
+        totalPackages: 0,
+        totalWeight: 0,
+        deliveredSJ: 0,
+        onDeliverySJ: 0,
+        seaSJ: 0,
+        airSJ: 0,
+      }
+    }
+  }
+
+  // Helper to query 12 months trends
+  const fetchMonthlyTrends = async (): Promise<MonthlyTrendItem[]> => {
+    let searchSql = Prisma.empty
+    if (search) {
+      searchSql = Prisma.sql`AND (
+        fdSJNo LIKE ${'%' + search + '%'} 
+        OR fdDescr LIKE ${'%' + search + '%'} 
+        OR fdCustCode LIKE ${'%' + search + '%'} 
+        OR fdCustNameSJ LIKE ${'%' + search + '%'} 
+        OR fdSupir LIKE ${'%' + search + '%'} 
+        OR fdCarID LIKE ${'%' + search + '%'}
+      )`
+    }
+
+    try {
+      const rows = await prisma.$queryRaw<any[]>`
+        SELECT 
+          YEAR(fdSJDate) AS yr,
+          MONTH(fdSJDate) AS mo,
+          COUNT(*) AS totalSJ,
+          ISNULL(SUM(fdJmlPackSJ), 0) AS totalPackages,
+          ISNULL(SUM(fdJmlBeratSJ), 0) AS totalWeight,
+          SUM(CASE WHEN fdSent = 1 THEN 1 ELSE 0 END) AS deliveredSJ,
+          SUM(CASE WHEN fdSent = 0 OR fdSent IS NULL THEN 1 ELSE 0 END) AS onDeliverySJ
+        FROM tbDelivery WITH (NOLOCK)
+        WHERE fdSJDate >= ${startOf12Months} AND fdSJDate < ${endOfCurr}
+        ${searchSql}
+        GROUP BY YEAR(fdSJDate), MONTH(fdSJDate)
+        ORDER BY yr ASC, mo ASC
+      `
+
+      const result: MonthlyTrendItem[] = []
+      const rowMap = new Map<string, any>()
+      for (const r of rows) {
+        rowMap.set(`${r.yr}-${String(r.mo).padStart(2, '0')}`, r)
+      }
+
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(currYear, currMonth - 1 - i, 1)
+        const y = d.getFullYear()
+        const m = d.getMonth() + 1
+        const key = `${y}-${String(m).padStart(2, '0')}`
+        const r = rowMap.get(key)
+        result.push({
+          monthKey: key,
+          name: `${MONTH_SHORT_NAMES[m - 1]} '${String(y).slice(-2)}`,
+          year: y,
+          month: m,
+          totalSJ: Number(r?.totalSJ || 0),
+          packages: Number(r?.totalPackages || 0),
+          weight: Number(Number(r?.totalWeight || 0).toFixed(2)),
+          delivered: Number(r?.deliveredSJ || 0),
+          onDelivery: Number(r?.onDeliverySJ || 0),
+        })
+      }
+      return result
+    } catch {
+      return []
+    }
+  }
+
+  // Execute all queries in parallel
+  const [currentMetrics, prevMetrics, lastYearMetrics, trends] = await Promise.all([
+    fetchPeriodMetrics(startOfCurr, endOfCurr, currYear, currMonth),
+    fetchPeriodMetrics(startOfPrev, endOfPrev, prevYear, prevMonth),
+    fetchPeriodMetrics(startOfLastYear, endOfLastYear, lastYear, lastYearMonth),
+    fetchMonthlyTrends(),
+  ])
+
+  // Comparison helper
+  const calcComp = (curr: number, prev: number, lastYr: number): MetricComparison => {
+    const momDiff = Number((curr - prev).toFixed(2))
+    const momPercent = prev > 0 ? Number((((curr - prev) / prev) * 100).toFixed(1)) : 0
+    const yoyDiff = Number((curr - lastYr).toFixed(2))
+    const yoyPercent = lastYr > 0 ? Number((((curr - lastYr) / lastYr) * 100).toFixed(1)) : 0
+    return {
+      current: curr,
+      prev: prev,
+      momDiff,
+      momPercent,
+      lastYear: lastYr,
+      yoyDiff,
+      yoyPercent,
+    }
+  }
+
+  return {
+    // Legacy backward-compatible fields
+    totalSJ: currentMetrics.totalSJ,
+    totalPackages: currentMetrics.totalPackages,
+    totalWeight: currentMetrics.totalWeight,
+    sjBulanIni: currentMetrics.totalSJ,
+    onDelivery: currentMetrics.onDeliverySJ,
+
+    // Enhanced MoM & YoY Comparison structures
+    currentMonth: currentMetrics,
+    prevMonth: prevMetrics,
+    lastYearSameMonth: lastYearMetrics,
+
+    comparisons: {
+      totalSJ: calcComp(currentMetrics.totalSJ, prevMetrics.totalSJ, lastYearMetrics.totalSJ),
+      totalPackages: calcComp(currentMetrics.totalPackages, prevMetrics.totalPackages, lastYearMetrics.totalPackages),
+      totalWeight: calcComp(currentMetrics.totalWeight, prevMetrics.totalWeight, lastYearMetrics.totalWeight),
+      deliveredSJ: calcComp(currentMetrics.deliveredSJ, prevMetrics.deliveredSJ, lastYearMetrics.deliveredSJ),
+      onDeliverySJ: calcComp(currentMetrics.onDeliverySJ, prevMetrics.onDeliverySJ, lastYearMetrics.onDeliverySJ),
+    },
+
+    monthlyTrends: trends,
   }
 }
 
@@ -138,16 +947,28 @@ export async function getDeliveryGroupedByListCode(query: Record<string, string 
   const markingCode = query.markingCode?.trim()
   const branch = query.branch?.trim()
   const listType = query.listType === '2' ? 2 : 1
+  const gudangStatus = query.gudangStatus?.trim()
 
-  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) >= ${MIN_LOAD_DATE})`
+  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND tm.fdExitDate IS NOT NULL AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) >= ${MIN_LOAD_DATE})`
   if (markingCode) {
     searchCondition = Prisma.sql`${searchCondition} AND el.fdMarkingCode = ${markingCode}`
   }
   if (branch) {
     searchCondition = Prisma.sql`${searchCondition} AND tm.fdBranchCode = ${branch}`
   }
+  if (gudangStatus === '1') {
+    searchCondition = Prisma.sql`${searchCondition} AND g.fdStatus = 1`
+  } else if (gudangStatus === '0') {
+    searchCondition = Prisma.sql`${searchCondition} AND (g.fdStatus = 0 OR g.fdStatus IS NULL)`
+  }
   if (search) {
-    searchCondition = Prisma.sql`${searchCondition} AND (el.fdListCode LIKE ${'%' + search + '%'} OR el.fdMarkingCode LIKE ${'%' + search + '%'} OR c.fdCustName LIKE ${'%' + search + '%'})`
+    searchCondition = Prisma.sql`${searchCondition} AND (
+      el.fdListCode LIKE ${'%' + search + '%'} 
+      OR el.fdMarkingCode LIKE ${'%' + search + '%'} 
+      OR c.fdCustName LIKE ${'%' + search + '%'}
+      OR el.fdTerima LIKE ${'%' + search + '%'}
+      OR el.fdComodity LIKE ${'%' + search + '%'}
+    )`
   }
 
   let havingClause = Prisma.empty
@@ -161,40 +982,97 @@ export async function getDeliveryGroupedByListCode(query: Record<string, string 
       SELECT
         el.fdListCode                         AS listCode,
         el.fdMarkingCode                      AS markingCode,
+        el.fdCustCode                         AS custCode,
+        el.fdSatuan                           AS satuan,
         el.fdJmlPAck                          AS totalQty,
-        el.fdCustName                         AS customerName,
-        el.fdTrackingNo                       AS resiNo,
-        el.fdComodity                         AS comodity,
+        COALESCE(c.fdCustName, el.fdCustName) AS customerName,
+        RTRIM(el.fdTerima)                    AS resiNo,
+        RTRIM(el.fdComodity)                  AS comodity,
+        el.fdTypeComodity                     AS typeComodityId,
+        RTRIM(tc.fdComodityName)              AS typeComodityName,
+        CASE
+          WHEN el.gudangStatus = 1 AND el.gudangBerat IS NOT NULL AND el.gudangBerat > 0 THEN el.gudangBerat
+          ELSE el.fdJmlBerat
+        END AS totalWeight,
         el.fdBranchCode                       AS branchCode,
         el.fdBranchName                       AS branchName,
         ISNULL(SUM(d.fdJmlPackSJ), 0)         AS totalTerkirim,
         (el.fdJmlPAck - ISNULL(SUM(d.fdJmlPackSJ), 0)) AS sisa,
-        ISNULL(MAX(d.fdSent), 0)              AS isSent
+        ISNULL(MAX(d.fdSent), 0)              AS isSent,
+        el.gudangStatus                       AS gudangStatus,
+        CASE 
+          WHEN el.gudangStatus = 1 THEN 
+            CASE 
+              WHEN el.gudangM3 IS NOT NULL AND el.gudangM3 > 0 THEN el.gudangM3
+              WHEN eld.detailM3 IS NOT NULL AND eld.detailM3 > 0 THEN eld.detailM3
+              ELSE ISNULL(el.fdM3, 0)
+            END
+          ELSE ISNULL(el.fdM3, 0)
+        END AS m3,
+        CASE 
+          WHEN el.gudangStatus = 1 AND ((el.gudangM3 IS NOT NULL AND el.gudangM3 > 0) OR (eld.detailM3 IS NOT NULL AND eld.detailM3 > 0)) THEN 'Gudang'
+          ELSE 'tbEntryList'
+        END AS m3Source
       FROM (
-        SELECT el.fdListCode, el.fdMarkingCode, el.fdJmlPAck, c.fdCustName, el.fdTrackingNo, el.fdComodity,
-               tm.fdBranchCode AS fdBranchCode, cb.fdBranchName AS fdBranchName
+        SELECT 
+          el.fdListCode, 
+          el.fdMarkingCode, 
+          el.fdJmlPAck, 
+          c.fdCustName, 
+          el.fdCustCode,
+          RTRIM(el.fdSatuan) AS fdSatuan,
+          el.fdTerima, 
+          el.fdComodity, 
+          el.fdTypeComodity,
+          el.fdListType,
+          el.fdJmlBerat,
+          el.fdM3,
+          ISNULL(g.fdStatus, 0) AS gudangStatus,
+          g.fdM3Gudang AS gudangM3,
+          g.fdJmlBerat AS gudangBerat,
+          tm.fdBranchCode AS fdBranchCode, 
+          cb.fdBranchName AS fdBranchName
         FROM tbEntryList el WITH (NOLOCK)
+        JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
         LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+        LEFT JOIN tbEntryListGudang g WITH (NOLOCK) ON g.fdListCode = el.fdListCode
         LEFT JOIN tbDelivery d WITH (NOLOCK) ON d.fdListCode = el.fdListCode
-        LEFT JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
         LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = tm.fdBranchCode
         ${searchCondition}
-        GROUP BY el.fdListCode, el.fdMarkingCode, el.fdJmlPAck, c.fdCustName, el.fdTrackingNo, el.fdComodity, tm.fdBranchCode, cb.fdBranchName
+        GROUP BY 
+          el.fdListCode, el.fdMarkingCode, el.fdJmlPAck, c.fdCustName, el.fdCustCode, el.fdSatuan, el.fdTerima, 
+          el.fdComodity, el.fdTypeComodity, el.fdListType, el.fdJmlBerat, el.fdM3,
+          g.fdStatus, g.fdM3Gudang, g.fdJmlBerat,
+          tm.fdBranchCode, cb.fdBranchName
         ${havingClause}
         ORDER BY el.fdListCode DESC
         OFFSET ${skip} ROWS FETCH NEXT ${take} ROWS ONLY
       ) el
+      LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
       LEFT JOIN tbDelivery d WITH (NOLOCK) ON d.fdListCode = el.fdListCode
-      GROUP BY el.fdListCode, el.fdMarkingCode, el.fdJmlPAck, el.fdCustName, el.fdTrackingNo, el.fdComodity, el.fdBranchCode, el.fdBranchName
+      LEFT JOIN tbTypeComodity tc WITH (NOLOCK) 
+        ON tc.fdTypeComodity = el.fdTypeComodity AND tc.fdListType = el.fdListType
+      OUTER APPLY (
+        SELECT 
+          ROUND(SUM(CAST(det.fdPjg AS FLOAT) * CAST(det.fdLbr AS FLOAT) * CAST(det.fdTng AS FLOAT) * CAST(det.fdQty AS FLOAT)) / 1000000.0, 4) AS detailM3
+        FROM tbEntryListDetail det WITH (NOLOCK)
+        WHERE det.fdListCode = el.fdListCode
+      ) eld
+      GROUP BY 
+        el.fdListCode, el.fdMarkingCode, el.fdCustCode, el.fdSatuan, el.fdJmlPAck, c.fdCustName, el.fdCustName, el.fdTerima, 
+        el.fdComodity, el.fdTypeComodity, tc.fdComodityName, el.fdJmlBerat, el.fdM3,
+        el.gudangStatus, el.gudangM3, el.gudangBerat,
+        el.fdBranchCode, el.fdBranchName, eld.detailM3
       ORDER BY el.fdListCode DESC
     `,
     prisma.$queryRaw`
       SELECT COUNT(*) as count FROM (
         SELECT el.fdListCode
         FROM tbEntryList el WITH (NOLOCK)
+        JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
         LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+        LEFT JOIN tbEntryListGudang g WITH (NOLOCK) ON g.fdListCode = el.fdListCode
         LEFT JOIN tbDelivery d WITH (NOLOCK) ON d.fdListCode = el.fdListCode
-        LEFT JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
         ${searchCondition}
         GROUP BY el.fdListCode
         ${havingClause}
@@ -204,13 +1082,28 @@ export async function getDeliveryGroupedByListCode(query: Record<string, string 
 
   const total = Number((totalResult as any[])[0]?.count || 0)
 
-  // Fix BigInt serialization issues before returning JSON
+  // Fix BigInt and format numbers before returning JSON
   const serializedData = (data as any[]).map((row) => {
     const newRow: any = { ...row }
     for (const key in newRow) {
       if (typeof newRow[key] === 'bigint') {
         newRow[key] = Number(newRow[key])
       }
+    }
+    if (newRow.custCode) {
+      newRow.custCode = String(newRow.custCode).trim()
+    }
+    if (newRow.satuan) {
+      newRow.satuan = String(newRow.satuan).trim()
+    }
+    if (newRow.totalWeight !== undefined && newRow.totalWeight !== null) {
+      newRow.totalWeight = Number(newRow.totalWeight)
+    }
+    if (newRow.gudangStatus !== undefined && newRow.gudangStatus !== null) {
+      newRow.gudangStatus = Number(newRow.gudangStatus)
+    }
+    if (newRow.m3 !== undefined && newRow.m3 !== null) {
+      newRow.m3 = Number(Number(newRow.m3).toFixed(4))
     }
     return newRow
   })
@@ -221,8 +1114,14 @@ export async function getDeliveryGroupedByListCode(query: Record<string, string 
 export async function getDeliveryMarkingCodeGroups(query: Record<string, string | undefined>) {
   const search = query.search?.trim()
   const listType = query.listType === '2' ? 2 : 1
+  const gudangStatus = query.gudangStatus?.trim()
 
-  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) >= ${MIN_LOAD_DATE})`
+  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND tm.fdExitDate IS NOT NULL AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) >= ${MIN_LOAD_DATE})`
+  if (gudangStatus === '1') {
+    searchCondition = Prisma.sql`${searchCondition} AND g.fdStatus = 1`
+  } else if (gudangStatus === '0') {
+    searchCondition = Prisma.sql`${searchCondition} AND (g.fdStatus = 0 OR g.fdStatus IS NULL)`
+  }
   if (search) {
     searchCondition = Prisma.sql`${searchCondition} AND (el.fdListCode LIKE ${'%' + search + '%'} OR el.fdMarkingCode LIKE ${'%' + search + '%'} OR c.fdCustName LIKE ${'%' + search + '%'})`
   }
@@ -238,9 +1137,10 @@ export async function getDeliveryMarkingCodeGroups(query: Record<string, string 
     FROM (
       SELECT el.fdMarkingCode AS markingCode, el.fdListCode
       FROM tbEntryList el WITH (NOLOCK)
+      JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
       LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+      LEFT JOIN tbEntryListGudang g WITH (NOLOCK) ON g.fdListCode = el.fdListCode
       LEFT JOIN tbDelivery d WITH (NOLOCK) ON d.fdListCode = el.fdListCode
-      LEFT JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
       ${searchCondition}
       GROUP BY el.fdMarkingCode, el.fdListCode
       ${havingClause}
@@ -260,8 +1160,14 @@ export async function getDeliveryMarkingCodeGroups(query: Record<string, string 
 export async function getDeliveryBranchGroups(query: Record<string, string | undefined>) {
   const search = query.search?.trim()
   const listType = query.listType === '2' ? 2 : 1
+  const gudangStatus = query.gudangStatus?.trim()
 
-  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) >= ${MIN_LOAD_DATE})`
+  let searchCondition = Prisma.sql`WHERE el.fdListType = ${listType} AND tm.fdExitDate IS NOT NULL AND (ISNULL(tm.fdLoadDate, tm.fdSysDate) >= ${MIN_LOAD_DATE})`
+  if (gudangStatus === '1') {
+    searchCondition = Prisma.sql`${searchCondition} AND g.fdStatus = 1`
+  } else if (gudangStatus === '0') {
+    searchCondition = Prisma.sql`${searchCondition} AND (g.fdStatus = 0 OR g.fdStatus IS NULL)`
+  }
   if (search) {
     searchCondition = Prisma.sql`${searchCondition} AND (el.fdListCode LIKE ${'%' + search + '%'} OR el.fdMarkingCode LIKE ${'%' + search + '%'} OR c.fdCustName LIKE ${'%' + search + '%'})`
   }
@@ -277,9 +1183,10 @@ export async function getDeliveryBranchGroups(query: Record<string, string | und
     FROM (
       SELECT el.fdListCode, tm.fdBranchCode AS branchCode, cb.fdBranchName AS branchName
       FROM tbEntryList el WITH (NOLOCK)
+      JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
       LEFT JOIN tbCustomers c WITH (NOLOCK) ON c.fdCustCode = el.fdCustCode
+      LEFT JOIN tbEntryListGudang g WITH (NOLOCK) ON g.fdListCode = el.fdListCode
       LEFT JOIN tbDelivery d WITH (NOLOCK) ON d.fdListCode = el.fdListCode
-      LEFT JOIN tbMarking tm WITH (NOLOCK) ON tm.fdMarkingCode = el.fdMarkingCode
       LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = tm.fdBranchCode
       ${searchCondition}
       GROUP BY el.fdListCode, tm.fdBranchCode, cb.fdBranchName
@@ -317,18 +1224,30 @@ export async function getDeliveryOrderSuggestions(keyword: string): Promise<Deli
   const searchLike = `%${cleanQ}%`
 
   try {
-    // Stage 1: Fast prefix match on fdSJNo (PK) bounded by fdSJDate >= '2023-01-01'
-    let rows: any[] = (await prisma.$queryRaw<any[]>`
-      SELECT TOP 15 
-        RTRIM(ISNULL(fdSJNo, '')) AS fdSJNo,
-        RTRIM(ISNULL(fdCustNameSJ, '')) AS fdCustNameSJ,
-        RTRIM(ISNULL(fdSupir, '')) AS fdSupir,
-        RTRIM(ISNULL(fdCarID, '')) AS fdCarID
-      FROM tbDelivery WITH (NOLOCK)
-      WHERE fdSJDate >= '2023-01-01'
-        AND fdSJNo LIKE ${prefixLike}
-      ORDER BY fdSJDate DESC
-    `.catch(() => [] as any[])) || []
+    // Stage 1: Fast parallel lookup:
+    // - tbCustomers matching keyword (Single Source of Truth)
+    // - tbDelivery prefix match on fdSJNo (PK) bounded by fdSJDate >= '2023-01-01'
+    const [custRows, stage1Rows] = await Promise.all([
+      prisma.$queryRaw<any[]>`
+        SELECT TOP 5 RTRIM(fdCustCode) AS fdCustCode, RTRIM(fdCustName) AS fdCustName
+        FROM tbCustomers WITH (NOLOCK)
+        WHERE fdCustName LIKE ${searchLike} AND ISNULL(fdDiscontinued, 0) <> 1
+        ORDER BY fdCustName ASC
+      `.catch(() => [] as any[]),
+      prisma.$queryRaw<any[]>`
+        SELECT TOP 15 
+          RTRIM(ISNULL(fdSJNo, '')) AS fdSJNo,
+          RTRIM(ISNULL(fdCustNameSJ, '')) AS fdCustNameSJ,
+          RTRIM(ISNULL(fdSupir, '')) AS fdSupir,
+          RTRIM(ISNULL(fdCarID, '')) AS fdCarID
+        FROM tbDelivery WITH (NOLOCK)
+        WHERE fdSJDate >= '2023-01-01'
+          AND fdSJNo LIKE ${prefixLike}
+        ORDER BY fdSJDate DESC
+      `.catch(() => [] as any[]),
+    ])
+
+    let rows: any[] = stage1Rows || []
 
     // Stage 2: If fewer than 5 rows, search across all relevant fields bounded by fdSJDate >= '2023-01-01'
     if (rows.length < 5) {
@@ -360,6 +1279,18 @@ export async function getDeliveryOrderSuggestions(keyword: string): Promise<Deli
     const suggestions: DeliveryOrderSuggestion[] = []
     const seen = new Set<string>()
     const qLower = cleanQ.toLowerCase()
+
+    for (const c of custRows || []) {
+      if (c.fdCustName && !seen.has(`c:${c.fdCustName}`)) {
+        seen.add(`c:${c.fdCustName}`)
+        suggestions.push({
+          type: 'customer',
+          title: c.fdCustName,
+          subtitle: `Customer (${c.fdCustCode || '—'})`,
+          value: c.fdCustName,
+        })
+      }
+    }
 
     for (const row of rows) {
       if (row.fdSJNo && row.fdSJNo.toLowerCase().includes(qLower) && !seen.has(`sj:${row.fdSJNo}`)) {
@@ -406,5 +1337,162 @@ export async function getDeliveryOrderSuggestions(keyword: string): Promise<Deli
     return result
   } catch {
     return []
+  }
+}
+
+/**
+ * Mengambil daftar alamat tujuan pengiriman customer dari tbCustomerPengiriman
+ * berdasarkan key fdCustCode.
+ */
+export async function getCustomerDestinations(custCode: string): Promise<CustomerDestination[]> {
+  if (!custCode || !custCode.trim()) return []
+  const cleanCustCode = custCode.trim()
+
+  const list = await prisma.$queryRaw<any[]>`
+    SELECT 
+      RTRIM(fdCustCode) AS fdCustCode,
+      RTRIM(fdID) AS fdID,
+      RTRIM(fdContact) AS fdContact,
+      RTRIM(fdHP) AS fdHP,
+      RTRIM(fdTelp) AS fdTelp,
+      RTRIM(fdEmail) AS fdEmail,
+      RTRIM(fdAddr) AS fdAddr,
+      RTRIM(fdCity) AS fdCity,
+      ISNULL(fdAktif, 0) AS fdAktif
+    FROM tbCustomerPengiriman WITH (NOLOCK)
+    WHERE fdCustCode = ${cleanCustCode}
+    ORDER BY ISNULL(fdAktif, 0) DESC, fdID ASC
+  `.catch(() => [])
+
+  return (list || []).map((item) => ({
+    fdCustCode: item.fdCustCode ? String(item.fdCustCode).trim() : cleanCustCode,
+    fdID: item.fdID ? String(item.fdID).trim() : '01',
+    fdContact: item.fdContact ? String(item.fdContact).trim() : null,
+    fdHP: item.fdHP ? String(item.fdHP).trim() : null,
+    fdTelp: item.fdTelp ? String(item.fdTelp).trim() : null,
+    fdEmail: item.fdEmail ? String(item.fdEmail).trim() : null,
+    fdAddr: item.fdAddr ? String(item.fdAddr).trim() : null,
+    fdCity: item.fdCity ? String(item.fdCity).trim() : null,
+    fdAktif: Number(item.fdAktif ?? 1),
+  }))
+}
+
+/**
+ * Menambahkan alamat tujuan pengiriman baru ke tbCustomerPengiriman
+ * Auto-generate fdID 2-digit ('01', '02', ...)
+ */
+export async function createCustomerDestination(
+  data: CreateCustomerDestinationDto,
+  user: { username?: string; name?: string }
+): Promise<CustomerDestination> {
+  if (!data.fdCustCode || !data.fdCustCode.trim()) {
+    throw new Error('Kode Customer (fdCustCode) wajib diisi!')
+  }
+  if (!data.fdAddr || !data.fdAddr.trim()) {
+    throw new Error('Alamat Pengiriman (fdAddr) wajib diisi!')
+  }
+
+  const cleanCustCode = data.fdCustCode.trim()
+
+  // Generate next fdID atomically
+  const maxRes = await prisma.$queryRaw<any[]>`
+    SELECT MAX(CAST(fdID AS INT)) AS maxId
+    FROM tbCustomerPengiriman WITH (UPDLOCK, HOLDLOCK)
+    WHERE fdCustCode = ${cleanCustCode} AND ISNUMERIC(fdID) = 1
+  `.catch(() => [])
+
+  const currentMax = Number(maxRes[0]?.maxId || 0)
+  const nextId = String(currentMax + 1).padStart(2, '0')
+
+  const now = new Date()
+  const username = (user?.name || user?.username || 'SYSTEM').slice(0, 20)
+
+  await prisma.$executeRaw`
+    INSERT INTO tbCustomerPengiriman (
+      fdCustCode, fdID, fdContact, fdHP, fdTelp, fdEmail, fdAddr, fdCity, fdAktif,
+      fdCreatedBy, fdCreatedDate, fdUpdateBy, fdUpdateDate
+    ) VALUES (
+      ${cleanCustCode},
+      ${nextId},
+      ${data.fdContact ? data.fdContact.trim().slice(0, 100) : ''},
+      ${data.fdHP ? data.fdHP.trim().slice(0, 25) : ''},
+      ${data.fdTelp ? data.fdTelp.trim().slice(0, 25) : ''},
+      ${data.fdEmail ? data.fdEmail.trim().slice(0, 50) : ''},
+      ${data.fdAddr.trim().slice(0, 255)},
+      ${data.fdCity ? data.fdCity.trim().slice(0, 100) : ''},
+      1,
+      ${username},
+      ${now},
+      ${username},
+      ${now}
+    )
+  `
+
+  return {
+    fdCustCode: cleanCustCode,
+    fdID: nextId,
+    fdContact: data.fdContact?.trim() || null,
+    fdHP: data.fdHP?.trim() || null,
+    fdTelp: data.fdTelp?.trim() || null,
+    fdEmail: data.fdEmail?.trim() || null,
+    fdAddr: data.fdAddr.trim(),
+    fdCity: data.fdCity?.trim() || null,
+    fdAktif: 1,
+  }
+}
+
+/**
+ * Mengambil data Instruksi Khusus Pelanggan (Permintaan Pengiriman CS)
+ * dari view qr_OrderDelivey berdasarkan fdListCode.
+ */
+export async function getOrderDeliveryByListCode(listCode: string): Promise<OrderDeliveryItem | null> {
+  if (!listCode || !listCode.trim()) return null
+  const cleanListCode = listCode.trim()
+
+  const rows = await prisma.$queryRaw<any[]>`
+    SELECT TOP 1 * FROM qr_OrderDelivey WITH (NOLOCK) WHERE fdListCode = ${cleanListCode}
+  `.catch(() => [])
+
+  const odRaw = rows[0] || null
+  if (!odRaw) return null
+
+  const hasContent = Boolean(
+    odRaw.fdTglKirim ||
+    (odRaw.fdNamaPemberiOrder && String(odRaw.fdNamaPemberiOrder).trim()) ||
+    (odRaw.fdKeterangan && String(odRaw.fdKeterangan).trim()) ||
+    (odRaw.fdAlamatKirim && String(odRaw.fdAlamatKirim).trim()) ||
+    odRaw.fdJenisPembayaran !== null ||
+    (odRaw.fdExpID && String(odRaw.fdExpID).trim()) ||
+    (odRaw.fdExpName && String(odRaw.fdExpName).trim()) ||
+    (odRaw.fdContact && String(odRaw.fdContact).trim()) ||
+    (odRaw.fdCity && String(odRaw.fdCity).trim()) ||
+    (odRaw.fdTelp && String(odRaw.fdTelp).trim()) ||
+    (odRaw.fdMobile && String(odRaw.fdMobile).trim())
+  )
+
+  if (!hasContent) return null
+
+  const paymentCode = odRaw.fdJenisPembayaran !== null ? Number(odRaw.fdJenisPembayaran) : null
+  let paymentLabel: string | null = null
+  if (paymentCode === 1) paymentLabel = 'COD'
+  else if (paymentCode === 2) paymentLabel = 'TRANSFER'
+  else if (paymentCode === 3) paymentLabel = 'DITUNDA KIRIM DAHULU'
+
+  return {
+    fdTglKirim: odRaw.fdTglKirim ? new Date(odRaw.fdTglKirim).toISOString() : null,
+    fdNamaPemberiOrder: odRaw.fdNamaPemberiOrder ? String(odRaw.fdNamaPemberiOrder).trim() : null,
+    fdKeterangan: odRaw.fdKeterangan ? String(odRaw.fdKeterangan).trim() : null,
+    fdJenisPembayaran: paymentCode,
+    fdJenisPembayaranLabel: paymentLabel,
+    fdTglTransfer: odRaw.fdTglTransfer ? new Date(odRaw.fdTglTransfer).toISOString() : null,
+    fdAlamatKirim: odRaw.fdAlamatKirim ? String(odRaw.fdAlamatKirim).trim() : null,
+    fdExpID: odRaw.fdExpID ? String(odRaw.fdExpID).trim() : null,
+    fdExpName: odRaw.fdExpName ? String(odRaw.fdExpName).trim() : null,
+    fdExpAddr: odRaw.fdExpAddr1 ? String(odRaw.fdExpAddr1).trim() : null,
+    fdEksBayar: odRaw.fdEksBayar !== null ? Number(odRaw.fdEksBayar) : null,
+    fdContact: odRaw.fdContact ? String(odRaw.fdContact).trim() : null,
+    fdCity: odRaw.fdCity ? String(odRaw.fdCity).trim() : null,
+    fdTelp: odRaw.fdTelp ? String(odRaw.fdTelp).trim() : null,
+    fdMobile: odRaw.fdMobile ? String(odRaw.fdMobile).trim() : null,
   }
 }

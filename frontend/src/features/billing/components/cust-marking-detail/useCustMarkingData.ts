@@ -110,7 +110,7 @@ export function useCustMarkingData(
       const weightGudangActual = weightSJ > 0 ? weightSJ : weightGdg
 
       // M3 versions
-      const m3PL = parseNum(['fdM3PackingList', 'M3 PL', 'M3_PL', 'fdM3PL', 'fdM3Pl'])
+      const m3PL = parseNum(['fdM3PackingList', 'M3 PL', 'M3_PL']) || parseNum(['fdM3Pl', 'fdM3PL'])
       const m3Gdg = parseNum(['fdM3', 'M3', 'm3_gdg'])
       const m3K = parseNum(['fdm3Komplain', 'fdM3Komplain', 'M3 K', 'M3_K', 'fdM3K'])
       const selisihM3 = parseNum(['fdSelisihM3', 'SelisihM3'])

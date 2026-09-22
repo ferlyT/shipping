@@ -26,6 +26,7 @@ import {
   RefreshCw,
   Camera,
   KeyRound,
+  Smartphone,
 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { Card } from '../../src/components/ui/Card'
@@ -39,12 +40,13 @@ import { biometricService } from '../../src/lib/biometrics'
 import { resolveAvatarUrl, getInitials } from '../../src/lib/utils'
 import { AvatarModal } from '../../src/components/profile/AvatarModal'
 import { ChangePasswordModal } from '../../src/components/profile/ChangePasswordModal'
+import { ThemeSelectionModal } from '../../src/components/profile/ThemeSelectionModal'
 import { APP_VERSION_CODE } from '../../src/config/version'
 
 export default function ProfileScreen() {
   const router = useRouter()
-  const { user, logout } = useAuthStore()
-  const { colors, mode, setMode } = useThemeStore()
+  const { user, token, logout } = useAuthStore()
+  const { colors, mode, preference } = useThemeStore()
   const { showToast } = useToastStore()
   const { language, setLanguage, t } = useTranslation()
   const { currentVersion, isChecking, hasUpdate, checkUpdate, openModal, updateInfo } = useUpdateStore()
@@ -55,6 +57,7 @@ export default function ProfileScreen() {
 
   const [avatarModalVisible, setAvatarModalVisible] = useState(false)
   const [passwordModalVisible, setPasswordModalVisible] = useState(false)
+  const [themeModalVisible, setThemeModalVisible] = useState(false)
 
   const handleCheckUpdate = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
@@ -85,12 +88,16 @@ export default function ProfileScreen() {
     if (value) {
       const authenticated = await biometricService.authenticate(`Aktifkan login ${biometricType}`)
       if (authenticated) {
+        if (token && user) {
+          await biometricService.saveCredentials({ username: user.username, token })
+        }
         await biometricService.setBiometricEnabled(true)
         setBiometricEnabled(true)
         showToast(`Login dengan ${biometricType} diaktifkan`, 'success')
       }
     } else {
       await biometricService.setBiometricEnabled(false)
+      await biometricService.clearSavedCredentials()
       setBiometricEnabled(false)
       showToast(`Login dengan ${biometricType} dinonaktifkan`, 'info')
     }
@@ -104,7 +111,7 @@ export default function ProfileScreen() {
       [
         { text: t('common.cancel', 'Batal'), style: 'cancel' },
         {
-          text: t('common.delete', 'Keluar'),
+          text: t('profile.logoutConfirmBtn', 'Keluar'),
           style: 'destructive',
           onPress: async () => {
             await logout()
@@ -244,18 +251,42 @@ export default function ProfileScreen() {
             activeOpacity={0.7}
             onPress={() => {
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              setMode(isDark ? 'heritage' : 'midnight')
+              setThemeModalVisible(true)
             }}
             style={styles.settingItem}
           >
             <View style={styles.settingLeft}>
-              <View style={[styles.iconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                {isDark ? <Sun size={18} color="#FBBF24" /> : <Moon size={18} color="#D97706" />}
+              <View
+                style={[
+                  styles.iconCircle,
+                  {
+                    backgroundColor:
+                      preference === 'system'
+                        ? 'rgba(56, 189, 248, 0.15)'
+                        : isDark
+                          ? 'rgba(129, 140, 248, 0.15)'
+                          : 'rgba(245, 158, 11, 0.15)',
+                  },
+                ]}
+              >
+                {preference === 'system' ? (
+                  <Smartphone size={18} color="#38BDF8" />
+                ) : isDark ? (
+                  <Moon size={18} color="#818CF8" />
+                ) : (
+                  <Sun size={18} color="#D97706" />
+                )}
               </View>
               <View>
-                <Text style={[styles.settingLabel, { color: colors.primary }]}>{t('profile.darkMode', 'Mode Tampilan')}</Text>
+                <Text style={[styles.settingLabel, { color: colors.primary }]}>
+                  {t('profile.themeTitle', 'Mode Tampilan')}
+                </Text>
                 <Text style={[styles.settingDesc, { color: colors.secondary }]}>
-                  {isDark ? 'Midnight (Dark Mode)' : 'Heritage (Light Mode)'}
+                  {preference === 'system'
+                    ? `${t('profile.themeSystem', 'Ikuti Tema Perangkat')} (${isDark ? 'Gelap' : 'Terang'})`
+                    : preference === 'midnight'
+                      ? t('profile.themeMidnight', 'Midnight (Mode Gelap)')
+                      : t('profile.themeHeritage', 'Heritage (Mode Terang)')}
                 </Text>
               </View>
             </View>
@@ -392,6 +423,10 @@ export default function ProfileScreen() {
       <ChangePasswordModal
         visible={passwordModalVisible}
         onClose={() => setPasswordModalVisible(false)}
+      />
+      <ThemeSelectionModal
+        visible={themeModalVisible}
+        onClose={() => setThemeModalVisible(false)}
       />
     </SafeAreaView>
   )

@@ -704,8 +704,115 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
   let chosenMasterUpload: any = null
   let chosenCustUpload: any = null
 
+  // ── TIER 0: Tarif Langsung Pemetaan Komoditas (Direct Price / Marking / Tanggal Agen) ──
+  // Berlaku prioritas tertinggi jika ada aturan tbCommodityMapping dengan price > 0 yang cocok
+  if (activeMappings && activeMappings.length > 0) {
+    const custCodeUpper = (custCode || '').trim().toUpperCase()
+    const targetBranchNorm = getNormalizedBranchCode(branch)
+    const shipmentDate = entryInfo?.loadDate || entryInfo?.tglAgent || targetDate
+
+    // Urutkan: Khusus customer lebih dulu daripada global
+    const eligibleDirectMappings = activeMappings
+      .filter((m: any) => Number(m.price) > 0)
+      .sort((a: any, b: any) => {
+        const aIsCust = Boolean(a.fdCustCode?.trim())
+        const bIsCust = Boolean(b.fdCustCode?.trim())
+        if (aIsCust && !bIsCust) return -1
+        if (!aIsCust && bIsCust) return 1
+        return 0
+      })
+
+    for (const m of eligibleDirectMappings) {
+      // 1. Customer check: jika m.fdCustCode diisi, harus cocok dengan custCode
+      if (m.fdCustCode && m.fdCustCode.trim().toUpperCase() !== custCodeUpper) {
+        continue
+      }
+
+      // 2. Branch check: jika m.branch diisi dan bukan 'ALL', harus cocok
+      if (m.branch && m.branch.trim().toUpperCase() !== 'ALL') {
+        const mBranchNorm = getNormalizedBranchCode(m.branch)
+        if (mBranchNorm && targetBranchNorm && mBranchNorm !== targetBranchNorm) {
+          continue
+        }
+      }
+
+      // 3. Mode check: jika m.mode diisi dan bukan 'ALL', harus cocok
+      if (m.mode && m.mode.trim().toUpperCase() !== 'ALL') {
+        const mMode = m.mode.trim().toUpperCase()
+        if (isAirMode && !mMode.includes('AIR') && !mMode.includes('UDARA')) continue
+        if (!isAirMode && !mMode.includes('SEA') && !mMode.includes('LAUT')) continue
+      }
+
+      // 4. Commodity check: nama komoditas harus cocok
+      const mCommodity = String(m.commodityName || '').trim().toUpperCase()
+      const mTarget = String(m.targetCommodity || '').trim().toUpperCase()
+      const isMBattery = isGenuineBattery(mCommodity)
+      const isMIpad = isGenuineIpad(mCommodity)
+      const isMLaptop = isGenuineLaptop(mCommodity)
+
+      const matchesCommodity = categoryCandidates.some((cat) => {
+        const cUpper = cat.toUpperCase().trim()
+        if (
+          cUpper === mCommodity ||
+          cUpper.includes(mCommodity) ||
+          mCommodity.includes(cUpper) ||
+          cUpper === mTarget
+        ) {
+          return true
+        }
+        if (isMBattery && isGenuineBattery(cUpper)) return true
+        if (isMIpad && isGenuineIpad(cUpper)) return true
+        if (isMLaptop && isGenuineLaptop(cUpper)) return true
+        return false
+      })
+      if (!matchesCommodity) continue
+
+      // 5. Marking Code check: jika m.startMarkingCode diisi, shipment marking harus >= startMarkingCode
+      if (m.startMarkingCode && m.startMarkingCode.trim()) {
+        const reqMarking = m.startMarkingCode.trim().toUpperCase()
+        if (!markingCode) {
+          continue // Shipment tidak punya marking code, tidak bisa match aturan berbasis marking
+        }
+        const isGe = await isMarkingGreaterOrEqual(markingCode, reqMarking, modeStr, branch)
+        if (!isGe) {
+          continue // Marking shipment belum mencapai startMarkingCode
+        }
+      }
+
+      // 6. Tanggal Agen / Effective Date check:
+      if (m.startAgentDate) {
+        const sAgent = new Date(m.startAgentDate)
+        const agentDt = entryInfo?.tglAgent ? new Date(entryInfo.tglAgent) : shipmentDate
+        if (agentDt < sAgent) continue
+      } else if (!m.startMarkingCode && m.effectiveDate) {
+        const effDate = new Date(m.effectiveDate)
+        if (shipmentDate < effDate) continue
+      }
+
+      // 7. End Date check (jika ada)
+      if (m.endDate && new Date(m.endDate) < shipmentDate) {
+        continue
+      }
+
+      // MATCHED TIER 0!
+      dbPrice = Number(m.price)
+      priceSource = 'COMMODITY_MAPPING_PRICE'
+      priceSourceLabel = `Tier 0: Tarif Khusus Komoditas (${m.commodityName} @ ${Number(m.price).toLocaleString('id-ID')}${m.startMarkingCode ? ' Mulai ' + m.startMarkingCode : ''})`
+      appliedTier = 'TIER_0_COMMODITY_MAPPING'
+      appliedTierLabel = 'Tier 0: Direct Commodity Price'
+      matchedWith = m.fdCustCode ? 'CUSTOMER' : 'MASTER_CS'
+      effectiveDate = m.effectiveDate ? new Date(m.effectiveDate).toISOString() : null
+      matchedCategory = m.targetCommodity || m.commodityName
+      if (m.startMarkingCode) {
+        isMarkingOverride = true
+        matchedMarkingCode = m.startMarkingCode.trim().toUpperCase()
+      }
+      break
+    }
+  }
+
   // ── TIER 1: Harga Customer Commodity (Manual Entry / Mapping Spesifik Customer) ──
-  if (custCode && allCustUploads.length > 0) {
+  if (dbPrice === 0 && custCode && allCustUploads.length > 0) {
     const custUploads = allCustUploads.filter(
       (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
     )

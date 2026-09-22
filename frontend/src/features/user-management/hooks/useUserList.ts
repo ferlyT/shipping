@@ -59,6 +59,14 @@ export function useUserList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewMode])
 
+  const getErrMsg = (err: any, fallback: string) => {
+    const data = err?.response?.data
+    if (typeof data?.error === 'string') return data.error
+    if (typeof data?.message === 'string') return data.message
+    if (typeof data?.error?.message === 'string') return data.error.message
+    return fallback
+  }
+
   const handleStatusChange = async (userId: string, currentStatus: boolean) => {
     try {
       await userManagementApi.updateUserStatus(userId, !currentStatus)
@@ -67,7 +75,7 @@ export function useUserList() {
       )
       toast.success(t('users.statusSuccess'))
     } catch (err: any) {
-      toast.error(err.response?.data?.error ?? err.response?.data?.message ?? 'Gagal mengubah status pengguna.')
+      toast.error(getErrMsg(err, 'Gagal mengubah status pengguna.'))
     }
   }
 
@@ -79,7 +87,7 @@ export function useUserList() {
       )
       toast.success(t('users.roleSuccess'))
     } catch (err: any) {
-      toast.error(err.response?.data?.error ?? err.response?.data?.message ?? 'Gagal mengubah peran pengguna.')
+      toast.error(getErrMsg(err, 'Gagal mengubah peran pengguna.'))
     }
   }
 
@@ -96,7 +104,7 @@ export function useUserList() {
       )
       toast.success('Mapping karyawan berhasil diperbarui.')
     } catch (err: any) {
-      toast.error(err.response?.data?.error ?? err.response?.data?.message ?? 'Gagal memperbarui mapping karyawan.')
+      toast.error(getErrMsg(err, 'Gagal memperbarui mapping karyawan.'))
     }
   }
 

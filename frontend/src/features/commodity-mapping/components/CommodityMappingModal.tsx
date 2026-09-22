@@ -12,12 +12,24 @@ import {
   FileSpreadsheet,
   Check,
   ChevronDown,
+  Search,
+  Loader2,
+  Banknote,
+  MapPin,
+  Hash,
 } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import { commodityMappingApi } from '../services/commodity-mapping.service'
-import { customerPriceListApi } from '@/features/customer-price-list/services/customerPriceList.service'
+import { customersApi } from '@/features/customers/services/customers.service'
+import { displayCustName, formatCurrency } from '@/lib/utils'
+import { useDebounce } from '@/hooks/useDebounce'
 import type { CommodityMappingItem, PriceListOptionItem } from '../types/commodity-mapping.types'
-import type { CustomerPriceListUploadRow } from '@/features/customer-price-list/types'
+
+interface CustomerOption {
+  fdCustCode: string
+  fdCustName: string
+  fdCityName?: string
+}
 
 interface CommodityMappingModalProps {
   isOpen: boolean
@@ -65,11 +77,21 @@ export function CommodityMappingModal({
   const [fdCustCode, setFdCustCode] = useState(defaultCustCode)
   const [mode, setMode] = useState<string>('ALL')
 
-  // Customer List for Dropdown
-  const [customers, setCustomers] = useState<CustomerPriceListUploadRow[]>([])
+  // Direct Price & Origin Branch & Starting Condition
+  const [price, setPrice] = useState('')
+  const [branch, setBranch] = useState('ALL')
+  const [startMarkingCode, setStartMarkingCode] = useState('')
+  const [startAgentDate, setStartAgentDate] = useState('')
+
+  // Customer List from tbCustomers for Dropdown
+  const [customers, setCustomers] = useState<CustomerOption[]>([])
   const [isLoadingCustomers, setIsLoadingCustomers] = useState(false)
   const [customerSearch, setCustomerSearch] = useState('')
+  const [selectedCustomerName, setSelectedCustomerName] = useState('')
   const [showCustomerDropdown, setShowCustomerDropdown] = useState(false)
+  const custSearchInputRef = useRef<HTMLInputElement>(null)
+  const custDropdownRef = useRef<HTMLDivElement>(null)
+  const debouncedCustomerSearch = useDebounce(customerSearch, 300)
 
   // Price List Dropdown & Effective Date
   const [priceListOptions, setPriceListOptions] = useState<PriceListOptionItem[]>([])
@@ -111,15 +133,45 @@ export function CommodityMappingModal({
     }
   }, [isOpen, onClose])
 
-  // Fetch customers on open
+  // Close customer dropdown when clicking outside
   useEffect(() => {
-    if (!isOpen) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        custDropdownRef.current &&
+        !custDropdownRef.current.contains(e.target as Node) &&
+        custSearchInputRef.current &&
+        !custSearchInputRef.current.contains(e.target as Node)
+      ) {
+        setShowCustomerDropdown(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  // Fetch customers from tbCustomers when modal is open and scope is customer
+  useEffect(() => {
+    if (!isOpen || scope !== 'customer') return
     let active = true
     setIsLoadingCustomers(true)
-    customerPriceListApi
-      .listCustomers()
-      .then((res) => {
-        if (active) setCustomers(res.data.data || [])
+
+    customersApi
+      .list({
+        search: debouncedCustomerSearch.trim(),
+        limit: 30,
+        status: 'active',
+      })
+      .then((res: any) => {
+        if (!active) return
+        const raw = res.data?.data || res.data || []
+        const list: CustomerOption[] = Array.isArray(raw)
+          ? raw.map((c: any) => ({
+              fdCustCode: (c.fdCustCode || '').trim(),
+              fdCustName: (c.fdCustName || '').trim(),
+              fdCityName: (c.fdCityName || '').trim(),
+            }))
+          : []
+        setCustomers(list)
       })
       .catch(() => {
         if (active) setCustomers([])
@@ -131,7 +183,7 @@ export function CommodityMappingModal({
     return () => {
       active = false
     }
-  }, [isOpen])
+  }, [isOpen, scope, debouncedCustomerSearch])
 
   // Auto focus input when modal opens
   useEffect(() => {
@@ -186,9 +238,32 @@ export function CommodityMappingModal({
         setCustomTarget(initialData.targetCommodity || '')
       }
 
-      setScope(initialData.fdCustCode ? 'customer' : 'global')
-      setFdCustCode(initialData.fdCustCode || '')
+      const targetCustCode = initialData.fdCustCode ? initialData.fdCustCode.trim() : ''
+      setScope(targetCustCode ? 'customer' : 'global')
+      setFdCustCode(targetCustCode)
+      setCustomerSearch('')
+
+      if (initialData.custName) {
+        setSelectedCustomerName(displayCustName(initialData.custName))
+      } else if (targetCustCode) {
+        customersApi
+          .detail(targetCustCode)
+          .then((res: any) => {
+            const c = res.data?.data || res.data
+            if (c?.fdCustName) setSelectedCustomerName(displayCustName(c.fdCustName))
+          })
+          .catch(() => {})
+      } else {
+        setSelectedCustomerName('')
+      }
+
       setMode(initialData.mode || 'ALL')
+      setPrice(initialData.price != null ? String(initialData.price) : '')
+      setBranch(initialData.branch || 'ALL')
+      setStartMarkingCode(initialData.startMarkingCode || '')
+      setStartAgentDate(
+        initialData.startAgentDate ? initialData.startAgentDate.slice(0, 10) : ''
+      )
       setSelectedUploadId(initialData.priceListUploadId || null)
       setEffectiveDate(
         initialData.effectiveDate ? initialData.effectiveDate.slice(0, 10) : new Date().toISOString().slice(0, 10)
@@ -203,8 +278,27 @@ export function CommodityMappingModal({
       setIsCustomTarget(false)
       setCustomTarget('')
       setScope(defaultScope)
-      setFdCustCode(defaultCustCode)
+      const targetCustCode = defaultCustCode ? defaultCustCode.trim() : ''
+      setFdCustCode(targetCustCode)
+      setCustomerSearch('')
+
+      if (targetCustCode) {
+        customersApi
+          .detail(targetCustCode)
+          .then((res: any) => {
+            const c = res.data?.data || res.data
+            if (c?.fdCustName) setSelectedCustomerName(displayCustName(c.fdCustName))
+          })
+          .catch(() => {})
+      } else {
+        setSelectedCustomerName('')
+      }
+
       setMode('ALL')
+      setPrice('')
+      setBranch('ALL')
+      setStartMarkingCode('')
+      setStartAgentDate('')
       setSelectedUploadId(null)
       setIsCustomDate(false)
       setEffectiveDate(new Date().toISOString().slice(0, 10))
@@ -252,31 +346,37 @@ export function CommodityMappingModal({
       return
     }
 
+    const cleanPrice = price.trim().replace(/,/g, '')
+    const parsedPrice = cleanPrice !== '' ? Number(cleanPrice) : null
+    if (parsedPrice !== null && (isNaN(parsedPrice) || parsedPrice < 0)) {
+      setError('Harga satuan komoditas langsung harus berupa angka valid (>= 0).')
+      return
+    }
+
     setIsSubmitting(true)
     try {
+      const payload = {
+        commodityName: commodityName.trim().toUpperCase(),
+        targetCommodity: resolvedFinalTarget,
+        fdCustCode: scope === 'customer' ? fdCustCode.trim().toUpperCase() : null,
+        priceListUploadId: isCustomDate ? null : selectedUploadId,
+        effectiveDate,
+        mode: mode === 'ALL' ? null : mode,
+        price: parsedPrice,
+        branch: branch === 'ALL' ? null : branch.trim().toUpperCase(),
+        startMarkingCode: startMarkingCode.trim().toUpperCase() || null,
+        startAgentDate: startAgentDate ? startAgentDate : null,
+        applyToNewUploads,
+        notes: notes.trim() || null,
+      }
+
       if (isEdit && initialData) {
         await commodityMappingApi.update(initialData.id, {
-          commodityName: commodityName.trim().toUpperCase(),
-          targetCommodity: resolvedFinalTarget,
-          fdCustCode: scope === 'customer' ? fdCustCode.trim().toUpperCase() : null,
-          priceListUploadId: isCustomDate ? null : selectedUploadId,
-          effectiveDate,
-          mode: mode === 'ALL' ? null : mode,
-          applyToNewUploads,
-          notes: notes.trim() || null,
+          ...payload,
           scopeChangeOption,
         })
       } else {
-        await commodityMappingApi.create({
-          commodityName: commodityName.trim().toUpperCase(),
-          targetCommodity: resolvedFinalTarget,
-          fdCustCode: scope === 'customer' ? fdCustCode.trim().toUpperCase() : null,
-          priceListUploadId: isCustomDate ? null : selectedUploadId,
-          effectiveDate,
-          mode: mode === 'ALL' ? null : mode,
-          applyToNewUploads,
-          notes: notes.trim() || null,
-        })
+        await commodityMappingApi.create(payload)
       }
 
       onSuccess()
@@ -286,15 +386,6 @@ export function CommodityMappingModal({
       setIsSubmitting(false)
     }
   }
-
-  // Filtered customers list
-  const filteredCustomers = customers.filter(
-    (c) =>
-      c.fdCustCode.toLowerCase().includes(customerSearch.toLowerCase()) ||
-      (c.custName && c.custName.toLowerCase().includes(customerSearch.toLowerCase()))
-  )
-
-  const selectedCustomerInfo = customers.find((c) => c.fdCustCode.toUpperCase() === fdCustCode.trim().toUpperCase())
 
   if (!isOpen) return null
 
@@ -420,71 +511,145 @@ export function CommodityMappingModal({
                   <span>Pilih Pelanggan (Customer Code & Nama)</span>
                   <span className="text-red-500">*</span>
                 </label>
-                {selectedCustomerInfo && (
-                  <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded">
-                    {selectedCustomerInfo.custName}
+                {selectedCustomerName && (
+                  <span className="text-[11px] font-bold text-purple-700 dark:text-purple-300 bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 rounded max-w-[220px] truncate">
+                    {selectedCustomerName}
                   </span>
                 )}
               </div>
 
-              {/* Customer Input & Autocomplete Dropdown */}
-              <div className="relative">
-                <input
-                  type="text"
-                  value={fdCustCode}
-                  onChange={(e) => {
-                    const val = e.target.value.toUpperCase()
-                    setFdCustCode(val)
-                    setCustomerSearch(val)
-                    setShowCustomerDropdown(true)
-                  }}
-                  onFocus={() => {
-                    setCustomerSearch(fdCustCode)
-                    setShowCustomerDropdown(true)
-                  }}
-                  onBlur={() => {
-                    setTimeout(() => setShowCustomerDropdown(false), 250)
-                  }}
-                  placeholder={isLoadingCustomers ? 'Memuat daftar customer...' : 'Ketik kode / nama customer (contoh: D000652, A001456, JDL)...'}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all uppercase tracking-wider font-semibold shadow-xs"
-                />
-
-                {showCustomerDropdown && customers.length > 0 && (
-                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-gray-850 border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl z-30 max-h-48 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800 animate-fade-in">
-                    {filteredCustomers.length > 0 ? (
-                      filteredCustomers.map((cust) => (
-                        <button
-                          key={cust.fdCustCode}
-                          type="button"
-                          onMouseDown={() => {
-                            setFdCustCode(cust.fdCustCode)
-                            setShowCustomerDropdown(false)
-                          }}
-                          className="w-full px-3.5 py-2 text-left text-xs hover:bg-purple-50 dark:hover:bg-purple-900/30 flex items-center justify-between gap-2 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-2">
-                            <span className="font-mono font-bold text-purple-700 dark:text-purple-300">
-                              {cust.fdCustCode}
-                            </span>
-                            <span className="text-gray-700 dark:text-gray-300 font-medium">
-                              {cust.custName || '-'}
-                            </span>
-                          </div>
-                          <span className="text-[10px] text-gray-400 font-mono">
-                            {cust.itemCount} items
-                          </span>
-                        </button>
-                      ))
-                    ) : (
-                      <div className="p-2.5 text-center text-xs text-gray-400 italic">
-                        Ketik untuk mendaftarkan kode kustom: <strong>{fdCustCode}</strong>
+              {/* Customer Selected Card OR Search Autocomplete Dropdown */}
+              {fdCustCode ? (
+                <div className="p-3 rounded-xl border border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-850 flex items-center justify-between shadow-xs">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-purple-600 text-white flex items-center justify-center font-mono font-bold text-xs shrink-0 shadow-xs">
+                      <Building2 className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-xs text-purple-700 dark:text-purple-300">
+                          {fdCustCode}
+                        </span>
+                        <span className="text-[10px] uppercase font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/40 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800">
+                          tbCustomers
+                        </span>
                       </div>
-                    )}
+                      <div className="text-xs font-bold text-gray-900 dark:text-white truncate">
+                        {selectedCustomerName || 'Pelanggan Terpilih'}
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFdCustCode('')
+                      setSelectedCustomerName('')
+                      setCustomerSearch('')
+                      setShowCustomerDropdown(true)
+                      setTimeout(() => custSearchInputRef.current?.focus(), 100)
+                    }}
+                    className="px-2.5 py-1.5 rounded-lg border border-purple-200 dark:border-purple-700 text-xs font-semibold text-purple-700 dark:text-purple-300 hover:bg-purple-50 dark:hover:bg-purple-900/40 transition-colors flex items-center gap-1 cursor-pointer shrink-0"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    <span>Ganti</span>
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-3 pointer-events-none" />
+                  <input
+                    ref={custSearchInputRef}
+                    type="text"
+                    value={customerSearch}
+                    onChange={(e) => {
+                      setCustomerSearch(e.target.value)
+                      setShowCustomerDropdown(true)
+                    }}
+                    onFocus={() => setShowCustomerDropdown(true)}
+                    placeholder="Cari kode atau nama customer dari tbCustomers (contoh: D000652, A001456, MITRA)..."
+                    className="w-full pl-9 pr-9 py-2.5 rounded-xl border border-purple-200 dark:border-purple-800 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all font-medium shadow-xs"
+                  />
+                  {customerSearch && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCustomerSearch('')
+                        setShowCustomerDropdown(true)
+                        custSearchInputRef.current?.focus()
+                      }}
+                      className="absolute right-3 top-2.5 p-0.5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+
+                  {showCustomerDropdown && (
+                    <div
+                      ref={custDropdownRef}
+                      className="absolute left-0 right-0 top-full mt-1.5 bg-white dark:bg-gray-850 border border-purple-200 dark:border-purple-800 rounded-xl shadow-xl z-30 max-h-56 overflow-y-auto divide-y divide-gray-100 dark:divide-gray-800 animate-fade-in"
+                    >
+                      {isLoadingCustomers ? (
+                        <div className="p-4 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
+                          <Loader2 className="w-4 h-4 animate-spin text-purple-600" />
+                          <span>Memuat data dari tbCustomers...</span>
+                        </div>
+                      ) : customers.length > 0 ? (
+                        customers.map((cust) => (
+                          <button
+                            key={cust.fdCustCode}
+                            type="button"
+                            onMouseDown={() => {
+                              setFdCustCode(cust.fdCustCode)
+                              setSelectedCustomerName(displayCustName(cust.fdCustName))
+                              setShowCustomerDropdown(false)
+                              setCustomerSearch('')
+                            }}
+                            className="w-full px-3.5 py-2.5 text-left text-xs hover:bg-purple-50 dark:hover:bg-purple-900/30 flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span className="font-mono font-bold text-purple-700 dark:text-purple-300 bg-purple-50 dark:bg-purple-950/50 px-1.5 py-0.5 rounded border border-purple-200 dark:border-purple-800 shrink-0">
+                                {cust.fdCustCode}
+                              </span>
+                              <span className="text-gray-800 dark:text-gray-200 font-semibold truncate">
+                                {displayCustName(cust.fdCustName)}
+                              </span>
+                            </div>
+                            {cust.fdCityName && (
+                              <span className="text-[10px] text-gray-400 shrink-0 bg-gray-100 dark:bg-gray-800 px-1.5 py-0.5 rounded font-medium">
+                                {cust.fdCityName}
+                              </span>
+                            )}
+                          </button>
+                        ))
+                      ) : customerSearch ? (
+                        <div className="p-3 text-center text-xs text-gray-400 space-y-1.5">
+                          <div>Tidak ditemukan data customer dengan kata kunci &ldquo;{customerSearch}&rdquo;.</div>
+                          <button
+                            type="button"
+                            onMouseDown={() => {
+                              const code = customerSearch.trim().toUpperCase()
+                              setFdCustCode(code)
+                              setSelectedCustomerName(code)
+                              setShowCustomerDropdown(false)
+                              setCustomerSearch('')
+                            }}
+                            className="text-purple-600 dark:text-purple-400 hover:underline font-semibold text-xs cursor-pointer"
+                          >
+                            Gunakan kode kustom: <strong>{customerSearch.trim().toUpperCase()}</strong>
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="p-3 text-center text-xs text-gray-400">
+                          Ketik nama atau kode customer untuk mencari
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                Pilih customer dari daftar atau ketik langsung kode customer.
+                Pilih pelanggan dari database master <strong>tbCustomers</strong> atau cari berdasarkan kode / nama.
               </p>
             </div>
           )}
@@ -635,11 +800,117 @@ export function CommodityMappingModal({
             </div>
           </div>
 
-          {/* Section 3: Period & Parameters */}
+          {/* Section 3: Direct Price & Marking Condition (Tier 0) */}
+          <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-800/60 bg-emerald-50/30 dark:bg-emerald-950/20 space-y-3.5">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300 flex items-center gap-1.5">
+                <Banknote className="w-3.5 h-3.5 text-emerald-600" />
+                <span>3. Tarif Langsung & Kondisi Efektif (Khusus / Tier 0)</span>
+              </div>
+              <span className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-100/70 dark:bg-emerald-900/40 px-2 py-0.5 rounded">
+                Opsional
+              </span>
+            </div>
+
+            <p className="text-[11px] text-gray-600 dark:text-gray-400">
+              Jika diisi, validasi tagihan akan langsung menggunakan tarif ini (Tier 0 Prioritas Tertinggi) tanpa perlu mencocokkan lembar master Price List.
+            </p>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Direct Price Input */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center justify-between">
+                  <span>Harga Satuan Langsung (Rp)</span>
+                  {price && !isNaN(Number(price.replace(/,/g, ''))) && Number(price.replace(/,/g, '')) > 0 && (
+                    <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400">
+                      {formatCurrency(Number(price.replace(/,/g, '')))}
+                    </span>
+                  )}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-2.5 text-xs font-bold text-gray-400">Rp</span>
+                  <input
+                    type="text"
+                    value={price}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/[^0-9]/g, '')
+                      setPrice(val)
+                    }}
+                    placeholder="Contoh: 6500000"
+                    className="w-full pl-9 pr-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs font-semibold focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition-all shadow-xs"
+                  />
+                </div>
+                <p className="text-[10px] text-gray-500">
+                  Kosongkan jika hanya memetakan nama kategori price list umum.
+                </p>
+              </div>
+
+              {/* Branch Selection */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                  <MapPin className="w-3 h-3 text-emerald-600" />
+                  <span>Cabang Asal (Origin Branch)</span>
+                </label>
+                <select
+                  value={branch}
+                  onChange={(e) => setBranch(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs font-medium focus:ring-2 focus:ring-emerald-500 transition-all shadow-xs"
+                >
+                  <option value="ALL">Semua Cabang (ALL)</option>
+                  <option value="GZ">Guangzhou (GZ)</option>
+                  <option value="YIWU">Yiwu (YIWU)</option>
+                  <option value="SHANGHAI">Shanghai</option>
+                  <option value="SHENZHEN">Shenzhen</option>
+                </select>
+                <p className="text-[10px] text-gray-500">
+                  Pilih cabang pengiriman yang berhak mendapatkan tarif ini.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t border-emerald-100 dark:border-emerald-900/30">
+              {/* Start Marking Code */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                  <Hash className="w-3 h-3 text-emerald-600" />
+                  <span>Mulai Marking Code (Acuan Operasional)</span>
+                </label>
+                <input
+                  type="text"
+                  value={startMarkingCode}
+                  onChange={(e) => setStartMarkingCode(e.target.value.toUpperCase())}
+                  placeholder="Misal: 26GZD53"
+                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs font-mono font-bold focus:ring-2 focus:ring-emerald-500 uppercase transition-all shadow-xs"
+                />
+                <p className="text-[10px] text-gray-500">
+                  Tarif berlaku untuk marking &ge; kode ini (misal: 26GZD53).
+                </p>
+              </div>
+
+              {/* Start Agent Date */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-emerald-600" />
+                  <span>Mulai Tanggal Penerimaan Agen</span>
+                </label>
+                <input
+                  type="date"
+                  value={startAgentDate}
+                  onChange={(e) => setStartAgentDate(e.target.value)}
+                  className="w-full px-3.5 py-2 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-900 dark:text-white text-xs focus:ring-2 focus:ring-emerald-500 transition-all shadow-xs"
+                />
+                <p className="text-[10px] text-gray-500">
+                  Atau berlaku untuk barang yang diterima agen &ge; tanggal ini.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 4: Period & Parameters */}
           <div className="space-y-4">
             <div className="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-1.5">
               <Calendar className="w-3.5 h-3.5 text-blue-600" />
-              <span>3. Periode & Parameter Tarif</span>
+              <span>4. Periode & Parameter Tarif</span>
             </div>
 
             {/* Price List binding vs Custom Date Card */}
@@ -760,7 +1031,7 @@ export function CommodityMappingModal({
             </div>
           </div>
 
-          {/* Section 4: Scope of change for Edit Mode */}
+          {/* Section 5: Scope of change for Edit Mode */}
           {isEdit && (
             <div className="p-4 bg-amber-50/80 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-xl space-y-2.5 text-xs animate-fade-in">
               <div className="font-bold text-amber-900 dark:text-amber-200 flex items-center gap-1.5">
@@ -805,7 +1076,7 @@ export function CommodityMappingModal({
             </div>
           )}
 
-          {/* Section 5: Notes */}
+          {/* Section 6: Notes */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1">
               <span>Catatan / Keterangan (Opsional)</span>

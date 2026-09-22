@@ -190,7 +190,12 @@ export default function PrintPage() {
   ).replace(/^[A-Za-z0-9]+\s*-\\s*/, '') || rawBillTo || (data.fdCustCode || '').trim()
 
   const salesName = (data.customer?.fdSalesCode || data.customer?.fdSalesNM || data.employee?.fdEmpName || '').trim()
-  const collectorName = (data.giveEmployee?.fdEmpName || '').trim()
+  // Collector: LEFT(ALLTRIM(fdEmpName), 2) dari tbCustomer
+  const custEmpName = (data.customer?.fdEmpName || '').trim()
+  const collectorName = (
+    data.customer?.fdCollector ||
+    (custEmpName ? custEmpName.slice(0, 2).toUpperCase() : '')
+  ).trim()
 
   const markingCode = (data.fdMarkingCode || '').trim()
   const markingNo = (data.fdMarkingNo || '').trim()
@@ -593,13 +598,19 @@ export default function PrintPage() {
           border-right: none;
         }
 
+        /* Row height & compact spacing to comfortably fit up to 10 items */
+        .bill-table tbody tr:not(.spacer-row):not(.footer-row) {
+          height: 5.5mm;
+          max-height: 5.8mm;
+        }
+
         /* Cells */
         .bill-table td {
           border-right: 1px solid #000;
-          padding: 3px 6px;
+          padding: 1px 6px;
           vertical-align: middle;
-          line-height: 1.2;
-          font-size: 10pt;
+          line-height: 1.25;
+          font-size: 9pt;
           border-bottom: none;
         }
         .bill-table td:last-child {
@@ -612,48 +623,52 @@ export default function PrintPage() {
           align-items: center;
           justify-content: flex-end;
           width: 100%;
-          line-height: 1.35;
-          padding-right: 6px;
+          line-height: 1.25;
+          padding-right: 4px;
         }
         .qty-val {
           flex: 1;
           text-align: right;
           font-family: ${printMode === 'matrix' ? config.matrixFontFamily : "Arial, 'Helvetica Neue', Helvetica, sans-serif"};
-          font-size: 10pt;
+          font-size: 9pt;
           font-weight: normal;
-          line-height: 1.35;
+          line-height: 1.25;
         }
         .qty-unit {
-          width: 38px;
+          width: 36px;
           text-align: left;
-          margin-left: 5px;
+          margin-left: 4px;
           flex-shrink: 0;
           font-family: ${printMode === 'matrix' ? config.matrixFontFamily : "Arial, 'Helvetica Neue', Helvetica, sans-serif"};
-          font-size: 10pt;
+          font-size: 9pt;
           font-weight: normal;
-          line-height: 1.35;
+          line-height: 1.25;
         }
 
         .cell-desc {
-          padding: 2px 6px 2px 8px !important;
-          vertical-align: middle;
+          padding: 1.5px 6px 1.5px 8px !important;
+          vertical-align: middle !important;
+          overflow: visible !important;
+          white-space: nowrap !important;
         }
         .split-desc {
-          display: block;
+          display: flex;
+          align-items: center;
           width: 100%;
-          line-height: 1.25;
+          line-height: 1.35;
+          overflow: visible !important;
+          white-space: nowrap !important;
         }
         .desc-text {
-          white-space: normal;
-          word-break: break-word;
-          overflow: visible;
+          white-space: nowrap !important;
+          overflow: visible !important;
           width: 100%;
           display: block;
           text-transform: uppercase;
           font-family: ${printMode === 'matrix' ? config.matrixFontFamily : "Arial, 'Helvetica Neue', Helvetica, sans-serif"};
-          font-size: 10pt;
+          font-size: 9pt;
           font-weight: normal;
-          line-height: 1.25;
+          line-height: 1.35;
         }
         
         .split-currency {
@@ -662,22 +677,22 @@ export default function PrintPage() {
           align-items: center;
           width: 100%;
           padding: 0 4px;
-          line-height: 1.35;
+          line-height: 1.25;
           white-space: nowrap;
         }
         .currency-lbl {
           font-family: ${printMode === 'matrix' ? config.matrixFontFamily : "Arial, 'Helvetica Neue', Helvetica, sans-serif"};
-          font-size: 10pt;
+          font-size: 9pt;
           font-weight: normal;
-          line-height: 1.35;
+          line-height: 1.25;
         }
         .price-val,
         .amount-val {
           font-family: ${printMode === 'matrix' ? config.matrixFontFamily : "Arial, 'Helvetica Neue', Helvetica, sans-serif"};
-          font-size: 10pt;
+          font-size: 9pt;
           font-weight: normal;
           text-align: right;
-          line-height: 1.35;
+          line-height: 1.25;
           white-space: nowrap;
         }
 
@@ -983,6 +998,12 @@ export default function PrintPage() {
                   }
                   desc = desc.toUpperCase()
 
+                  // Paksa strictly 1 baris: jika teks panjang melebihi kapasitas kolom, potong rapi dengan elipsis (...)
+                  const maxDescLength = Math.max(38, Math.round((config.colDescWidthPct || 45.4) * 1.05))
+                  if (desc.length > maxDescLength) {
+                    desc = desc.slice(0, maxDescLength - 3).trim() + '...'
+                  }
+
                   return (
                     <tr key={row.fdID}>
                       <td className="cell-qty">
@@ -991,26 +1012,10 @@ export default function PrintPage() {
                           <span className="qty-unit">{unitStr}</span>
                         </div>
                       </td>
-                      <td style={{
-                        borderRight: '1px solid #000',
-                        borderBottom: 'none',
-                        borderTop: 'none',
-                        borderLeft: 'none',
-                        padding: '3px 6px 3px 8px',
-                        verticalAlign: 'middle',
-                        overflow: 'hidden',
-                      }}>
-                        <span style={{
-                          display: 'block',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          textTransform: 'uppercase',
-                          fontFamily: "Arial, 'Helvetica Neue', Helvetica, sans-serif",
-                          fontSize: '9pt',
-                          fontWeight: 'normal',
-                          lineHeight: 1.2,
-                        }}>{desc}</span>
+                      <td className="cell-desc">
+                        <div className="split-desc">
+                          <span className="desc-text">{desc}</span>
+                        </div>
                       </td>
                       <td>
                         {unitPrice > 0 ? (

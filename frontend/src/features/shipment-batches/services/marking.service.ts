@@ -23,6 +23,18 @@ export const markingApi = {
   searchManifest: (id: string, q: string) => {
     return apiClient.get(`/marking/${id}/manifest/search`, { params: { q } })
   },
+  searchSuggestions: (q: string) => {
+    return apiClient.get('/marking/suggestions', { params: { q } })
+  },
+  getSizeAudit: (code: string, sort: 1 | 2 = 1) => {
+    return apiClient.get(`/marking/size-audit/${encodeURIComponent(code)}`, { params: { sort } })
+  },
+  getBoxDimensions: (listCode: string) => {
+    return apiClient.get(`/marking/box-dimensions/${encodeURIComponent(listCode)}`)
+  },
+  getAllBatchDimensions: (code: string) => {
+    return apiClient.get(`/marking/size-audit/${encodeURIComponent(code)}/all-dimensions`)
+  },
 }
 
 export interface ExitHistoryDay {

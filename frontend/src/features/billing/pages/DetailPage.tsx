@@ -73,6 +73,7 @@ export default function DetailPage() {
   const { addToast } = useToastStore()
 
   const [isCopied, setIsCopied] = useState(false)
+  const [isInvCopied, setIsInvCopied] = useState(false)
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
   const [isResiModalOpen, setIsResiModalOpen] = useState(false)
 
@@ -81,6 +82,25 @@ export default function DetailPage() {
     user?.role === 'admin' ||
     user?.role === 'superadmin' ||
     Boolean(user?.permissions?.includes('billing.view_consignee'))
+
+  const handleCopyInvNo = async (invNo?: string | null) => {
+    const text = (invNo || '').trim()
+    if (!text) return
+    const success = await copyToClipboard(text)
+    if (success) {
+      setIsInvCopied(true)
+      addToast({
+        type: 'success',
+        message: t('billing.detail.copySuccess', { invNo: text }),
+      })
+      setTimeout(() => setIsInvCopied(false), 2000)
+    } else {
+      addToast({
+        type: 'error',
+        message: t('billing.detail.copyError'),
+      })
+    }
+  }
 
   const handleCopyMarkingInfo = async () => {
     const markingCode = data?.fdMarkingCode || '—'
@@ -100,13 +120,13 @@ export default function DetailPage() {
       setIsCopied(true)
       addToast({
         type: 'success',
-        message: 'Data customer, marking, komoditi & tgl agent berhasil disalin!',
+        message: t('billing.detail.copyMarkingSuccess'),
       })
       setTimeout(() => setIsCopied(false), 2000)
     } else {
       addToast({
         type: 'error',
-        message: 'Gagal menyalin data ke clipboard',
+        message: t('billing.detail.copyDataError'),
       })
     }
   }
@@ -169,6 +189,26 @@ export default function DetailPage() {
     <div className="p-3 sm:p-6 lg:p-8 w-full space-y-6 animate-fadeIn pb-24 font-[var(--font-body)]">
       <PageHeader
         title={`Invoice: ${data.fdInvNo}`}
+        badge={
+          <button
+            type="button"
+            onClick={() => handleCopyInvNo(data.fdInvNo)}
+            className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold rounded-lg bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] border border-[var(--color-border)] shadow-2xs transition-all cursor-pointer select-none active:scale-95"
+            title={t('billing.detail.copyInvoiceTitle')}
+          >
+            {isInvCopied ? (
+              <>
+                <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
+                <span className="text-emerald-600 dark:text-emerald-400 font-bold">{t('common.copied')}</span>
+              </>
+            ) : (
+              <>
+                <Copy className="w-3.5 h-3.5" />
+                <span>{t('common.copy')}</span>
+              </>
+            )}
+          </button>
+        }
         subtitle={`${t('billing.detail.subtitle')} (${displayCustName(data.customer?.fdCustName || data.fdCustCode)})`}
         breadcrumbs={[
           { label: t('module.finance'), path: ROUTES.BILLING },
@@ -240,6 +280,29 @@ export default function DetailPage() {
             {/* Card 2: Status & Waktu Invoice (Tanggal Invoice, Tanggal Terbit, Pembuat Bill, Penyerah) */}
             <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-3 sm:p-4 shadow-xs flex flex-col justify-between space-y-2">
               <div className="space-y-2">
+                <div className="flex items-center justify-between pb-1.5 border-b border-[var(--color-border)]/60">
+                  <span className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">
+                    {t('billing.invNo')}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-mono font-bold text-[var(--color-primary)]">
+                      {data.fdInvNo}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleCopyInvNo(data.fdInvNo)}
+                      className="p-1 rounded hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+                      title={t('billing.detail.copyInvoiceTitle')}
+                    >
+                      {isInvCopied ? (
+                        <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />
+                      ) : (
+                        <Copy className="w-3.5 h-3.5" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] uppercase tracking-wider font-[var(--font-label)] text-[var(--color-secondary)]">
                     {t('billing.detail.invoiceDate')}
@@ -387,7 +450,7 @@ export default function DetailPage() {
                       type="button"
                       onClick={handleCopyMarkingInfo}
                       className="p-1 rounded-md text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer"
-                      title="Salin Data Customer, Marking Code, Marking No & Tgl Agent"
+                      title={t('billing.detail.copyMarkingTitle')}
                     >
                       {isCopied ? (
                         <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />

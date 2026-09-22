@@ -251,14 +251,15 @@ export function useBillingValidation({
       const nameUpper = (d.fdItemName || '').toUpperCase()
       if (!unit && nameUpper.includes('(M3)')) unit = 'M3'
       if (!unit && (nameUpper.includes('(KG)') || nameUpper.includes('PARCELS TO JAKARTA (KG)'))) unit = 'KG'
+      if (!unit && nameUpper.includes('(PCS)')) unit = 'PCS'
 
       const isM3 =
         unit === 'M3' ||
-        (unit !== 'KG' && nameUpper.includes('(M3)')) ||
-        (unit !== 'KG' && nameUpper.includes('PARCEL') && !nameUpper.includes('(KG)') && !nameUpper.includes('PARCELS TO JAKARTA (KG)'))
+        (unit !== 'KG' && unit !== 'PCS' && nameUpper.includes('(M3)')) ||
+        (unit !== 'KG' && unit !== 'PCS' && nameUpper.includes('PARCEL') && !nameUpper.includes('(KG)') && !nameUpper.includes('(PCS)') && !nameUpper.includes('PARCELS TO JAKARTA (KG)'))
       const isKg =
         unit === 'KG' ||
-        (unit !== 'M3' && (nameUpper.includes('(KG)') || nameUpper.includes('PARCELS TO JAKARTA (KG)')))
+        (unit !== 'M3' && unit !== 'PCS' && (nameUpper.includes('(KG)') || nameUpper.includes('PARCELS TO JAKARTA (KG)')))
 
       if (isM3) m3 += Number(d.fdQty || 0)
       else if (isKg) kg += Number(d.fdQty || 0)
@@ -546,7 +547,10 @@ export function useBillingValidation({
   const isBilledBelowMinM3 = !isAir && billedM3 > 0 && billedM3 < (effectiveMinChargeM3 - 0.0001)
 
   // 6. Commodity & Item Pricing Evaluation
-  const defaultTypeId = billingData?.fdTypeComodity ?? res?.defaultFdTypeComodity ?? res?.markingComodityType ?? null
+  const billTypeId = (billingData?.fdTypeComodity !== null && billingData?.fdTypeComodity !== undefined && Number(billingData.fdTypeComodity) > 0)
+    ? Number(billingData.fdTypeComodity)
+    : null
+  const defaultTypeId = billTypeId ?? (res?.defaultFdTypeComodity && res.defaultFdTypeComodity > 0 ? res.defaultFdTypeComodity : null) ?? res?.markingComodityType ?? null
   const defaultMatchType = res?.comodityTypes?.find(
     (c) => c.fdTypeComodity === defaultTypeId && (res?.fdListType ? c.fdListType === res.fdListType : true)
   )

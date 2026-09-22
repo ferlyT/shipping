@@ -44,17 +44,21 @@ usersRoutes.patch('/:id/status', zValidator('json', statusSchema), async (c) => 
 })
 
 const roleSchema = z.object({
-  role: z.enum(['admin', 'viewer'])
+  role: z.string().min(1, 'Role wajib diisi'),
 })
 
-usersRoutes.patch('/:id/role', zValidator('json', roleSchema), async (c) => {
+usersRoutes.patch('/:id/role', async (c) => {
   try {
     const id = c.req.param('id')
-    const { role } = c.req.valid('json')
-    const user = await updateUserRole(id, role)
+    const body = await c.req.json()
+    const parsed = roleSchema.safeParse(body)
+    if (!parsed.success) {
+      return errorResponse(c, parsed.error.issues[0]?.message || 'Peran tidak valid', 400)
+    }
+    const user = await updateUserRole(id, parsed.data.role)
     return successResponse(c, user)
-  } catch (err) {
-    return errorResponse(c, (err as Error).message, 500)
+  } catch (err: any) {
+    return errorResponse(c, err.message, 500)
   }
 })
 

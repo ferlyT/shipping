@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import * as SecureStore from 'expo-secure-store'
+import { biometricService } from '../lib/biometrics'
 
 export interface User {
   id: string

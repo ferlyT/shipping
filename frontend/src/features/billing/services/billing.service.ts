@@ -1,4 +1,5 @@
 import apiClient from '@/api/client'
+import type { BillingDimensionsResponse } from '../types/billing.types'
 
 export const billingApi = {
   list: (params?: Record<string, string | number>) =>
@@ -28,6 +29,9 @@ export const billingApi = {
 
   m3Check: (listCode: string) =>
     apiClient.get('/billing/m3-check', { params: { listCode } }),
+
+  getDimensions: (listCode: string) =>
+    apiClient.get<{ data: BillingDimensionsResponse }>(`/billing/dimensions/${encodeURIComponent(listCode)}`),
 
   m3CustMarkingDetails: (custCode: string, markingCode: string) =>
     apiClient.get('/billing/m3-cust-marking-details', { params: { custCode, markingCode } }),

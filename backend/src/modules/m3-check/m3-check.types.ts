@@ -63,6 +63,12 @@ export interface UnifiedM3CheckResult {
     fdTypeComodity: number | null
     fdCustCode: string | null
     mode?: string | null
+    price?: number | null
+    branch?: string | null
+    startMarkingCode?: string | null
+    startAgentDate?: string | null
+    effectiveDate?: string | null
+    endDate?: string | null
   }>
   fdTglAgent: string | null
   expectedMode: string | null

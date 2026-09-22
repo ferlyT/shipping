@@ -13,7 +13,7 @@ Dokumen ini menjelaskan secara menyeluruh seluruh halaman pada aplikasi mobile *
 - **Server State & Caching**: TanStack React Query v5 (dengan refetching & cache invalidation)
 - **Komunikasi REST**: Axios via `mobile/src/api/client.ts`
 - **Penyimpanan Kredensial**: `expo-secure-store` (Enkripsi KeyStore Android / Keychain iOS)
-- **Versi Rilis Saat Ini**: `v1.2.1` (Build/VersionCode: `13`, Force Update: `true`, `minVersion: "1.2.1"`, Single Source of Truth di `mobile/src/config/version.ts`)
+- **Versi Rilis Saat Ini**: `v1.2.2` (Build/VersionCode: `14`, Force Update: `true`, `minVersion: "1.2.2"`, Single Source of Truth di `mobile/src/config/version.ts`)
 - **Integrasi Perangkat Keras**:
   - `expo-camera`: Pemindai barcode/QR resi fisik
   - `expo-local-authentication`: Autentikasi biometrik FaceID / Fingerprint
@@ -68,6 +68,15 @@ mobile/
 >
 > **Catatan Safe Area Toast Notification**:
 > Pada `ToastContainer.tsx`, posisi vertikal dihitung dengan `topOffset = Math.max(insets.top, StatusBar.currentHeight || 0, 24) + 12`, sehingga notifikasi melayang anggun di bawah jam status bar dan punch-hole kamera perangkat tanpa saling bertumpuk.
+>
+> **Catatan Preferensi Tema & Deteksi Tema Perangkat (`themeStore.ts` & `ThemeSelectionModal.tsx`)**:
+> - **Penyimpanan Aman**: Preferensi tema disimpan secara persisten di memori perangkat menggunakan `expo-secure-store` (key `mshipping_theme_preference`).
+> - **Default Otomatis Ikuti Tema Perangkat**: Jika pengguna belum memilih tema atau memilih opsi `system`, aplikasi secara bawaan mendeteksi dan mengikuti pengaturan tema HP pengguna (`Appearance.getColorScheme()`: Gelap $\to$ `midnight`, Terang $\to$ `heritage`).
+> - **Listener Dinamis Sistem**: Menggunakan `Appearance.addChangeListener` sehingga ketika ponsel berganti mode gelap/terang saat aplikasi berjalan, tema aplikasi langsung menyesuaikan secara real-time.
+> - **Modal Pemilih Tema**: Melalui Tab Profil, pengguna dapat memilih 3 opsi tema via `ThemeSelectionModal`:
+>   1. `system`: Ikuti Tema Perangkat (Otomatis)
+>   2. `midnight`: Mode Gelap (Midnight)
+>   3. `heritage`: Mode Terang (Heritage)
 
 ---
 
@@ -111,10 +120,11 @@ Autentikasi staf dan pengguna lapangan menggunakan kredensial username/password 
      - Diarahkan ke `/(tabs)/overview`.
 2. **Autentikasi Biometrik (Fingerprint / FaceID)**:
    - Pada saat halaman dimuat, `checkBiometrics()` memeriksa ketersediaan sensor hardware via `expo-local-authentication`.
-   - Jika biometrik aktif dan token sebelumnya tersimpan di perangkat:
-     - Membuka prompt sistem biometrik (sidik jari/FaceID).
-     - Memvalidasi token ke endpoint `GET /api/auth/me`.
-     - Jika token masih valid, otomatis login tanpa input ulang password.
+   - Tombol biometrik **hanya ditampilkan** jika hardware tersedia dan terdapat token tersimpan yang valid (`isEnabled && saved?.token`).
+   - Tipe biometrik (`Fingerprint` / `Face ID`) diteruskan secara langsung ke prompt sistem untuk menghindari keterlambatan render state (*race condition*).
+   - Memvalidasi token tersimpan ke endpoint `GET /api/auth/me`.
+   - Jika token masih valid, otomatis login tanpa input ulang password.
+   - Saat pengguna melakukan `logout()`, `authStore.ts` secara otomatis membersihkan kredensial biometrik (`clearSavedCredentials()`) untuk mencegah potensi kebocoran sesi akun antar-pengguna.
 3. **Penanganan Error**:
    - Galat kredensial salah: menampilkan toast *"Username atau password salah"*.
    - Galat jaringan (server offline / tanpa koneksi): menampilkan toast spesifik *"Network Error"*.
@@ -394,6 +404,10 @@ Pusat manajemen operasional muatan fisik di lapangan, pelacakan resi, pemantauan
       - Nama Customer (`displayCustName(fdCustName)`) dan Badge Nama Sales (`fdSalesNM`).
       - Informasi Komoditas & Tipe Komoditas: Kotak panel bergaris tepi memuat Badge Tipe Komoditas (`typeComodityName` / `fdComodityName`) dan deskripsi barang (`fdComodity`) yang dibungkus rapi (*natural word wrap*) tanpa pemotongan / overflow horizontal.
       - Rincian fisik: Jumlah Koli & Satuan (`fdJmlPack`, `fdSatuan`), Berat (`fdJmlBerat` kg), dan Kubikasi (`fdM3` m³).
+    - **Pencarian Real-Time Manifest (`searchQuery`)**:
+      - Kolom pencarian instan di bawah 4-Metric KPI Grid dengan placeholder bilingual (`t('logistics.searchManifestPlaceholder')`).
+      - Memfilter daftar item manifest secara langsung (*client-side instant filtering*) mencakup: nomor resi (`fdTerima`, `fdListCode`), tanda marking (`fdMarkingNo`), nama customer (`fdCustName`), deskripsi & tipe komoditas (`fdComodity`, `typeComodityName`), sales PIC (`fdSalesNM`), dan kode cabang (`fdBranchCode`).
+      - Menampilkan indikator hitung item tersaring: *"Menampilkan X dari Y item"* dan tombol hapus cepat (`X`).
 
 ##### 3. Data Surat Jalan (Delivery Order)
 - **Method**: `GET`
@@ -443,8 +457,11 @@ Manajemen piutang dan tagihan pelanggan, audit validasi kebenaran tarif dan ukur
         4. **Marking & Komoditi**: Marking code & no, badge consignee (dengan verifikasi hak akses role `canViewConsignee`), badge `PARSIAL`, chips nomor resi (`resiSummary.resiList`), komoditi (dengan layout auto-wrap multi-baris agar tidak overflow) & tipe komoditi, tanggal agent, serta tombol salin info marking lengkap.
       - **Rincian Item Tagihan**: Tabel / baris item lengkap (`fdItemName`, kuantiti & unit `fdListCode`, harga satuan `fdItemPrice`, dan total `fdTotal`).
       - **Footer Ringkasan & Total**: Breakdown akumulasi per satuan (TOTAL KG, TOTAL M3, TOTAL VOLUME FREIGHT CHARGES VFC) serta nominal **TOTAL TAGIHAN** tebal dengan format mata uang yang tepat.
-      - **Aksi Dokumen**:
-        - Tombol *"Salin Nomor Invoice"*: Menyalin nomor invoice ke clipboard dengan haptic feedback.
+      - **Aksi Dokumen Terpadu (Dilindungi Biometrik)**:
+        - **Cetak PDF (`Print.printAsync`)**: Membuka dialog cetak native Android/iOS (ke printer WiFi/Bluetooth atau simpan ke memori). Dilindungi **verifikasi biometrik** (Fingerprint / Face ID) sebelum dialog terbuka.
+        - **Bagikan PDF (`Sharing.shareAsync`)**: Mengompilasi PDF dan membuka pemilih berbagi native (WhatsApp, Telegram, Gmail, Google Drive). Dilindungi **verifikasi biometrik** sebelum file dibagikan.
+        - **Format Dokumen 100% Identik Web (`PrintPage.tsx`)**: Menggunakan generator HTML di `billing-pdf.utils.ts` dengan spesifikasi A5 Landscape ($210\,\text{mm} \times 148\,\text{mm}$), 2 boks header proporsional ($62.4\%$ vs $37.6\%$), tabel 4 kolom dengan angka rata kanan & satuan rata kiri, baris pengisi (*spacer row*), footer terbilang otomatis Bahasa Indonesia via `terbilang.ts`, watermark `"COPY"`, serta catatan `"Printed by"`.
+        - **Salin Nomor Invoice**: Menyalin nomor invoice ke clipboard dengan haptic feedback.
 3. **Sub-Tab 2: Audit Validasi Tagihan (Sinkron Penuh dengan ERP Web)**:
    - Akses sub-tab Audit Validasi ini dilindungi oleh kontrol izin akses (`canViewBillingValidation`), hanya muncul jika pengguna memiliki hak akses role validasi atau admin.
    - Menampilkan daftar antrean validasi aktif sinkron dengan `http://36.93.22.142/mshipping/finance/billing/validation/list`.
@@ -538,8 +555,8 @@ Direktori data pelanggan resmi (*Single Source of Truth* `tbCustomers`) yang dir
    - **Aksi Cepat Komunikasi**:
      - Tombol **Telepon**: Membuka dialer telepon ponsel langsung (`tel:...`)
      - Tombol **WhatsApp**: Membuka WhatsApp langsung dengan standarisasi kode negara 62 (`https://wa.me/...`)
-2. **Modal Detail Customer 5-Tab (Sama Persis Seperti Frontend Web)**:
-   Modal dialog tinggi statis (`height: 86%`) dengan internal scroll yang memuat 5 tab navigasi:
+2. **Modal Detail Customer 3-Tab (Sama Persis Seperti Frontend Web)**:
+   Modal dialog tinggi statis (`height: 86%`) dengan internal scroll yang memuat 3 tab navigasi ringkas:
    - **Tab 1: Ringkasan (`info`)**:
      - Kartu Contact Person & Kartu Sales Representative
      - Rincian Saluran Kontak: Telepon Kantor, Handphone / WA (dengan tombol Panggil & WA instan), Email, Kota Operasional
@@ -549,26 +566,7 @@ Direktori data pelanggan resmi (*Single Source of Truth* `tbCustomers`) yang dir
      - Kartu Tier Aktif, Omset Tahunan Berjalan, dan Total Invoice
      - Progress Bar ke Tier Berikutnya (persentase & nominal sisa target belanja)
      - Tabel Riwayat Finansial & Omzet Billing per Tahun (`financialStats`: Tahun, Omzet Rupiah, Jumlah Invoice, Tier)
-   - **Tab 3: Pengiriman (`pengiriman`)**:
-     - Nama Penerima (`fdNamaPengiriman`)
-     - Nomor HP Pengiriman (`fdHpPengiriman`) + tombol Telepon & WA Penerima
-     - Kota Pengiriman (`fdKotaPengiriman`)
-     - Kotak Alamat Lengkap Pengiriman (`fdAlamatPengiriman`)
-     - Peringatan Instruksi Khusus Pengiriman (`fdKetPengiriman`) berlatar aksen amber
-   - **Tab 4: Penagihan (`penagihan`) — Form Detail Penagihan**:
-     - Sesuai dengan form master penagihan resmi (`tbCustomerPenagihan` & master `tbCustomers`):
-     - Nama (`fdBillTo` / `fdCustName`)
-     - Nama PIC (`penagihanDetail.pic` / `fdContact`)
-     - Alamat Lengkap Penagihan (`penagihanDetail.alamat` / `fdBillAddr1`)
-     - Kota Penagihan (`penagihanDetail.kota` / `fdBillCityName`)
-     - HP Penagihan (`penagihanDetail.hp` / `fdHpPenagihan`) dengan aksi telepon langsung
-     - Email Penagihan (`penagihanDetail.email` / `fdEmailPenagihan`)
-     - Finance: Kode staf finance & Nama lengkap staf (`fdFinCode` + lookup `tbEmployees`)
-     - Notif Penagihan: Pilihan radio pill (`HP`, `Email`, `Kolektor`) yang menandai metode notifikasi aktif
-     - Kolektor: Kode kolektor & Nama lengkap staf (`fdKodePenagih` + lookup `tbEmployees`)
-     - Keterangan Khusus Penagihan (`fdKeteranganPenagihan`)
-     - Tetap menyertakan data NPWP, TOP, dan Batas Kredit jika tersedia di database.
-   - **Tab 5: Daftar Alamat (`alamat`)**:
+   - **Tab 3: Daftar Alamat (`alamat`)**:
      - Daftar kartu alamat resmi (`addresses` / `vwCustomerContacts`):
      - Badge Jenis Alamat (`PENGHUBUNG`, `PENGIRIMAN`, `PENAGIHAN`)
      - Badge Status Keaktifan (`Aktif` / `Non-Aktif`)

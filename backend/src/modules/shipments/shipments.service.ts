@@ -54,16 +54,27 @@ export async function getShipments(query: Record<string, string | undefined>) {
   const data = rawData
   const total = Number(countRes[0]?.count || 0)
 
-  // Ambil status kirim (loaddate, etd, eta, exit, gudang) dari tbMarking + status lanjutan dari tbDelivery + status billing + blocked status dari finance
-  const [markingMap, deliveryMap, billingMap, blockedMap] = await Promise.all([
+  // Ambil status kirim (loaddate, etd, eta, exit, gudang) dari tbMarking + status lanjutan dari tbDelivery + status billing + blocked status dari finance + master customer lookup
+  const custCodes = [...new Set(data.map((d) => d.fdCustCode).filter(Boolean))] as string[]
+
+  const [markingMap, deliveryMap, billingMap, blockedMap, custRows] = await Promise.all([
     getMarkingStatusMap(data.map((d) => d.fdMarkingCode ?? '')),
     getDeliveryStatusMap(data.map((d) => d.fdListCode ?? '')),
     getBillingStatusMap(data.map((d) => d.fdListCode ?? '')),
     getBlockedFinanceStatusMap(data.map((d) => d.fdListCode ?? '')),
+    custCodes.length > 0
+      ? prisma.tbCustomers.findMany({
+          where: { fdCustCode: { in: custCodes } },
+          select: { fdCustCode: true, fdCustName: true },
+        }).catch(() => [] as { fdCustCode: string; fdCustName: string | null }[])
+      : Promise.resolve([] as { fdCustCode: string; fdCustName: string | null }[]),
   ])
+
+  const custMap = new Map((custRows || []).map((c) => [c.fdCustCode.trim(), c.fdCustName?.trim() || '']))
 
   const dataWithStatus = data.map((row) => ({
     ...row,
+    fdCustName: (row.fdCustCode && custMap.get(row.fdCustCode.trim())) || row.fdCustName,
     shipmentStatus: resolveShipmentStatus(
       row.fdMarkingCode ? markingMap.get(row.fdMarkingCode.trim()) : null,
       row.fdListCode ? deliveryMap.get(row.fdListCode.trim()) : null,

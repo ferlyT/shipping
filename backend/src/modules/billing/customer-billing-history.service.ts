@@ -97,6 +97,7 @@ export interface CustomerBillingHistoryResponse {
   pagination: {
     page: number
     limit: number
+    offset?: number
     totalItems: number
     totalPages: number
     hasNextPage: boolean
@@ -292,12 +293,15 @@ export async function getCustomerBillingHistory(
     status?: 'issued' | 'draft' | 'lunas' | 'partial' | 'overdue' | 'unpaid' | 'all'
     page?: number | string
     limit?: number | string
+    offset?: number | string
   }
 ): Promise<CustomerBillingHistoryResponse> {
   const cleanCustCode = custCode.trim()
-  const page = Math.max(1, parseInt(String(options?.page || 1), 10) || 1)
-  const limit = Math.min(Math.max(1, parseInt(String(options?.limit || 30), 10) || 30), 100)
-  const offset = (page - 1) * limit
+  const limit = Math.min(Math.max(1, parseInt(String(options?.limit || 15), 10) || 15), 100)
+  const offset = options?.offset !== undefined && options?.offset !== null && options?.offset !== ''
+    ? Math.max(0, parseInt(String(options.offset), 10) || 0)
+    : (Math.max(1, parseInt(String(options?.page || 1), 10) || 1) - 1) * limit
+  const page = Math.floor(offset / limit) + 1
 
   if (!cleanCustCode) {
     return {
@@ -576,8 +580,8 @@ export async function getCustomerBillingHistory(
     FETCH NEXT ${limit} ROWS ONLY
   `
 
-  // 3. Overall Summary & Metadata queries (evaluated on page 1 for maximum efficiency)
-  const isFirstPage = page === 1
+  // 3. Overall Summary & Metadata queries (evaluated on first page / offset 0 for maximum efficiency)
+  const isFirstPage = offset === 0
 
   const summarySql = isFirstPage
     ? `
@@ -723,7 +727,7 @@ export async function getCustomerBillingHistory(
 
   const totalItems = Number(countRes[0]?.total || 0)
   const totalPages = Math.ceil(totalItems / limit)
-  const hasNextPage = page < totalPages
+  const hasNextPage = offset + rawBillings.length < totalItems
 
   // Batch fetch details for the current page only (maximum 30 items)
   const invNos = rawBillings.map((b) => String(b.fdInvNo).trim()).filter(Boolean)
@@ -1037,6 +1041,7 @@ export async function getCustomerBillingHistory(
     pagination: {
       page,
       limit,
+      offset,
       totalItems,
       totalPages,
       hasNextPage,

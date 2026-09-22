@@ -20,8 +20,14 @@ let lastToastSigTime = 0
 export const useToastStore = create<ToastState>((set) => ({
   toasts: [],
   addToast: (toast) => {
+    const rawMsg = (toast as any).message
+    const cleanMessage =
+      typeof rawMsg === 'string'
+        ? rawMsg
+        : rawMsg?.message || (typeof rawMsg === 'object' ? JSON.stringify(rawMsg) : String(rawMsg || ''))
+
     const now = Date.now()
-    const sig = `${toast.type}:${toast.message}`
+    const sig = `${toast.type}:${cleanMessage}`
     if (sig === lastToastSig && now - lastToastSigTime < 1000) {
       return
     }
@@ -29,7 +35,7 @@ export const useToastStore = create<ToastState>((set) => ({
     lastToastSigTime = now
 
     const id = Math.random().toString(36).substring(2, 9)
-    set((state) => ({ toasts: [...state.toasts, { ...toast, id }] }))
+    set((state) => ({ toasts: [...state.toasts, { ...toast, message: cleanMessage, id }] }))
     
     // Auto remove after 3 seconds
     setTimeout(() => {
@@ -42,8 +48,8 @@ export const useToastStore = create<ToastState>((set) => ({
 
 // Helper object for easy access
 export const toast = {
-  success: (message: string) => useToastStore.getState().addToast({ type: 'success', message }),
-  error: (message: string) => useToastStore.getState().addToast({ type: 'error', message }),
-  info: (message: string) => useToastStore.getState().addToast({ type: 'info', message }),
-  warning: (message: string) => useToastStore.getState().addToast({ type: 'warning', message }),
+  success: (message: any) => useToastStore.getState().addToast({ type: 'success', message: typeof message === 'string' ? message : message?.message || JSON.stringify(message) }),
+  error: (message: any) => useToastStore.getState().addToast({ type: 'error', message: typeof message === 'string' ? message : message?.message || JSON.stringify(message) }),
+  info: (message: any) => useToastStore.getState().addToast({ type: 'info', message: typeof message === 'string' ? message : message?.message || JSON.stringify(message) }),
+  warning: (message: any) => useToastStore.getState().addToast({ type: 'warning', message: typeof message === 'string' ? message : message?.message || JSON.stringify(message) }),
 }

@@ -607,3 +607,325 @@ export async function getMarkingSuggestions(keyword: string): Promise<MarkingSug
     return []
   }
 }
+
+/**
+ * Audit Ukuran & Tonase per Batch Marking (sp_tbEntryListDetail_permarking)
+ */
+export async function getMarkingSizeAudit(
+  markingCode: string,
+  sortById: 1 | 2 = 1
+): Promise<import('./marking.types').MarkingSizeAuditResponse> {
+  const cleanCode = markingCode.trim().replace(/'/g, "''")
+
+  // 1. Fetch Header Info from tbMarking
+  let headerRow: any = null
+  try {
+    const headerRows: any[] = await prisma.$queryRawUnsafe(`
+      SELECT TOP 1 
+        RTRIM(fdMarkingCode) AS fdMarkingCode,
+        fdListType,
+        RTRIM(fdContSize) AS fdContSize,
+        RTRIM(fdContNo) AS fdContNo,
+        fdExitDate,
+        fdLoadDate,
+        fdETA AS fdEtaDate,
+        ISNULL(fdM3, 0) AS fdM3,
+        ISNULL(fdJmlPack, 0) AS fdJmlPack
+      FROM tbMarking WITH (NOLOCK)
+      WHERE RTRIM(fdMarkingCode) = '${cleanCode}'
+    `)
+    headerRow = headerRows[0] || null
+  } catch (err) {
+    logger.warn(`Failed to fetch tbMarking header for ${cleanCode}, continuing with defaults:`, err)
+  }
+
+  // 2. Fetch Details via Stored Procedure sp_tbEntryListDetail_permarking
+  let rawRows: any[] = []
+  try {
+    rawRows = await prisma.$queryRawUnsafe(`
+      EXEC sp_tbEntryListDetail_permarking @ID = ${sortById === 2 ? 2 : 1}, @fdMarkCode = '${cleanCode}'
+    `)
+  } catch (err) {
+    logger.error(`Error executing sp_tbEntryListDetail_permarking for ${cleanCode}:`, err)
+    // Retry once
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 300))
+      rawRows = await prisma.$queryRawUnsafe(`
+        EXEC sp_tbEntryListDetail_permarking @ID = ${sortById === 2 ? 2 : 1}, @fdMarkCode = '${cleanCode}'
+      `)
+    } catch (retryErr) {
+      logger.error(`Retry failed for sp_tbEntryListDetail_permarking ${cleanCode}:`, retryErr)
+      throw new Error(`Gagal memuat data ukuran batch ${markingCode}`)
+    }
+  }
+
+  // 2b. Cek apakah ada record di tbEntryListDetailOri (menandakan ukuran fisik di-markup)
+  let markupSet = new Set<string>()
+  try {
+    const markupRows = await prisma.$queryRawUnsafe<Array<{ fdListCode: string }>>(`
+      SELECT DISTINCT RTRIM(o.fdListCode) AS fdListCode
+      FROM tbEntryListDetailOri o WITH (NOLOCK)
+      INNER JOIN tbEntryList e WITH (NOLOCK) ON o.fdListCode = e.fdListCode
+      WHERE RTRIM(e.fdMarkingCode) = '${cleanCode}'
+    `)
+    markupSet = new Set((markupRows || []).map((r) => String(r.fdListCode || '').trim()))
+  } catch (err) {
+    logger.warn(`Failed to check markup status from tbEntryListDetailOri for ${cleanCode}:`, err)
+  }
+
+  // 3. Normalize Rows and verify Single Source of Truth for customer names
+  let totalPackGdg = 0
+  let totalM3Gdg = 0
+  let totalM3Komplain = 0
+  let totalBeratList = 0
+  let totalBeratGdg = 0
+  let totalBeratSJ = 0
+  let totalBeratKomplain = 0
+
+  const items: import('./marking.types').MarkingSizeDetailItem[] = rawRows.map((r: any) => {
+    const fdListCode = String(r.fdListCode || '').trim()
+    const fdJmlPack = Number(r.fdJmlPack) || 0
+    const fdTotalQty = Number(r.fdTotalQty) || 0
+    const fdM3List = Number(r.fdM3List) || 0
+    const fdM3 = Number(r.fdM3) || 0
+    const fdM3PL = Number(r.fdM3PL) || 0
+    const fdm3Komplain = Number(r.fdm3Komplain) || 0
+    const fdJmlBerat = Number(r.fdJmlBerat) || 0
+    const fdJmlBeratGudang = Number(r.fdJmlBeratGudang) || 0
+    const fdJmlBeratSJ = Number(r.fdJmlBeratSJ) || 0
+    const fdJmlBeratKomplain = Number(r.fdJmlBeratKomplain) || 0
+    const fdSelisihM3 = Number(r.fdSelisihM3) || 0
+    const fdSelisihBerat = Number(r.fdSelisihBerat) || 0
+    const hasMarkup = markupSet.has(fdListCode)
+
+    totalPackGdg += fdTotalQty
+    totalM3Gdg += fdM3
+    totalM3Komplain += fdm3Komplain
+    totalBeratList += fdJmlBerat
+    totalBeratGdg += fdJmlBeratGudang
+    totalBeratSJ += fdJmlBeratSJ
+    totalBeratKomplain += fdJmlBeratKomplain
+
+    return {
+      fdCustName: String(r.fdCustName || '').trim(),
+      fdListCode,
+      fdJmlBerat,
+      fdListType: Number(r.fdListType) || (headerRow?.fdListType ?? 2),
+      fdMarkingCode: String(r.fdMarkingCode || '').trim(),
+      fdMarkingNo: String(r.fdMarkingNo || '').trim(),
+      fdJmlPack,
+      fdM3List,
+      fdComodity: String(r.fdComodity || '').trim(),
+      fdDesc: String(r.fdDesc || '').trim(),
+      fdTotalQty,
+      fdM3,
+      fdExitDate: r.fdExitDate ? new Date(r.fdExitDate).toISOString() : null,
+      fdM3PL,
+      fdJmlBeratSJ,
+      fdm3Komplain,
+      fdJmlBeratKomplain,
+      fdJmlBeratGudang,
+      fdKeterangan: String(r.fdKeterangan || '').trim(),
+      fdSelisihM3,
+      fdSelisihBerat,
+      hasMarkup,
+    }
+  })
+
+  // 4. Calculate Master Header & Summary Metrics
+  const listType = Number(headerRow?.fdListType ?? (items[0]?.fdListType ?? 2))
+  const totalPackPL = Number(headerRow?.fdJmlPack) || items.reduce((acc, it) => acc + it.fdJmlPack, 0)
+  const totalM3PL = Number(headerRow?.fdM3) || (items[0]?.fdM3PL ?? items.reduce((acc, it) => acc + it.fdM3List, 0))
+  const selisihPack = totalPackPL - totalPackGdg
+  const totalM3Net = Math.max(0, totalM3Gdg - totalM3Komplain)
+  const selisihM3 = totalM3Gdg - totalM3PL
+  const persenSelisihM3 = totalM3PL > 0 ? (selisihM3 / totalM3PL) * 100 : 0
+  const totalBeratNet = Math.max(0, (totalBeratGdg || totalBeratList) - totalBeratKomplain)
+
+  return {
+    header: {
+      fdMarkingCode: headerRow?.fdMarkingCode || cleanCode,
+      fdListType: listType,
+      fdContSize: headerRow?.fdContSize || null,
+      fdContNo: headerRow?.fdContNo || null,
+      fdExitDate: headerRow?.fdExitDate ? new Date(headerRow.fdExitDate).toISOString() : null,
+      fdLoadDate: headerRow?.fdLoadDate ? new Date(headerRow.fdLoadDate).toISOString() : null,
+      fdEtaDate: headerRow?.fdEtaDate ? new Date(headerRow.fdEtaDate).toISOString() : null,
+      fdM3: Number(totalM3PL.toFixed(4)),
+      fdJmlPack: totalPackPL,
+    },
+    summary: {
+      markingCode: headerRow?.fdMarkingCode || cleanCode,
+      listType,
+      contSize: headerRow?.fdContSize || null,
+      contNo: headerRow?.fdContNo || null,
+      exitDate: headerRow?.fdExitDate ? new Date(headerRow.fdExitDate).toISOString() : null,
+      loadDate: headerRow?.fdLoadDate ? new Date(headerRow.fdLoadDate).toISOString() : null,
+      etaDate: headerRow?.fdEtaDate ? new Date(headerRow.fdEtaDate).toISOString() : null,
+      totalPackPL,
+      totalPackGdg,
+      selisihPack,
+      totalM3PL: Number(totalM3PL.toFixed(4)),
+      totalM3Gdg: Number(totalM3Gdg.toFixed(4)),
+      totalM3Komplain: Number(totalM3Komplain.toFixed(4)),
+      totalM3Net: Number(totalM3Net.toFixed(4)),
+      selisihM3: Number(selisihM3.toFixed(4)),
+      persenSelisihM3: Number(persenSelisihM3.toFixed(2)),
+      totalBeratList: Number(totalBeratList.toFixed(2)),
+      totalBeratGdg: Number(totalBeratGdg.toFixed(2)),
+      totalBeratSJ: Number(totalBeratSJ.toFixed(2)),
+      totalBeratKomplain: Number(totalBeratKomplain.toFixed(2)),
+      totalBeratNet: Number(totalBeratNet.toFixed(2)),
+      totalVFC: Number((((totalM3Gdg * 1000000) / 6000)).toFixed(2)),
+      totalRowCount: items.length,
+      totalMarkupCount: markupSet.size,
+    },
+    items,
+  }
+}
+
+/**
+ * Drilldown Dimensi Fisik Koli:
+ * - tbEntryListDetail (Gudang Fisik Aktif)
+ * - tbEntryListDetailOri (Data Asli Gudang sebelum markup)
+ * - tbEntryListDetail_PackingList (Data Packing List)
+ * - tbEntryListDetail_Komplain (Data Komplain)
+ */
+export async function getMarkingBoxDimensions(
+  listCode: string
+): Promise<import('./marking.types').BoxDimensionDetailResponse> {
+  const cleanListCode = listCode.trim().replace(/'/g, "''")
+
+  try {
+    const [gudangRows, asliRows, plRows, komplainRows] = await Promise.all([
+      prisma.$queryRawUnsafe<any[]>(`
+        SELECT RTRIM(fdListDCode) AS fdListDCode, fdPjg, fdLbr, fdTng, fdQty, RTRIM(ISNULL(fdDescr, '')) AS fdDescr
+        FROM tbEntryListDetail WITH (NOLOCK)
+        WHERE RTRIM(fdListCode) = '${cleanListCode}'
+        ORDER BY fdListDCode ASC
+      `),
+      prisma.$queryRawUnsafe<any[]>(`
+        SELECT RTRIM(fdListDCode) AS fdListDCode, fdPjg, fdLbr, fdTng, fdQty, RTRIM(ISNULL(fdDescr, '')) AS fdDescr
+        FROM tbEntryListDetailOri WITH (NOLOCK)
+        WHERE RTRIM(fdListCode) = '${cleanListCode}'
+        ORDER BY fdListDCode ASC
+      `),
+      prisma.$queryRawUnsafe<any[]>(`
+        SELECT RTRIM(fdListDCode) AS fdListDCode, fdPjg, fdLbr, fdTng, fdQty, RTRIM(ISNULL(fdDescr, '')) AS fdDescr
+        FROM tbEntryListDetail_PackingList WITH (NOLOCK)
+        WHERE RTRIM(fdListCode) = '${cleanListCode}'
+        ORDER BY fdListDCode ASC
+      `),
+      prisma.$queryRawUnsafe<any[]>(`
+        SELECT RTRIM(fdListDCode) AS fdListDCode, fdPjg, fdLbr, fdTng, fdQty, RTRIM(ISNULL(fdDescr, '')) AS fdDescr
+        FROM tbEntryListDetail_Komplain WITH (NOLOCK)
+        WHERE RTRIM(fdListCode) = '${cleanListCode}'
+        ORDER BY fdListDCode ASC
+      `),
+    ])
+
+    const mapBoxItem = (r: any, idx: number): import('./marking.types').BoxDimensionItem => {
+      const p = Number(r.fdPjg) || 0
+      const l = Number(r.fdLbr) || 0
+      const t = Number(r.fdTng) || 0
+      const q = Number(r.fdQty) || 0
+      const m3 = Number(((p * l * t * q) / 1000000).toFixed(4))
+      const vfc = Number(((p * l * t * q) / 6000).toFixed(2))
+
+      return {
+        no: idx + 1,
+        fdListDCode: r.fdListDCode ? String(r.fdListDCode).trim() : null,
+        fdPjg: p,
+        fdLbr: l,
+        fdTng: t,
+        fdQty: q,
+        m3,
+        vfc,
+        fdDescr: r.fdDescr ? String(r.fdDescr).trim() : null,
+      }
+    }
+
+    const asliGudang = (asliRows || []).map(mapBoxItem)
+    const hasMarkup = asliGudang.length > 0
+
+    return {
+      listCode: cleanListCode,
+      gudang: (gudangRows || []).map(mapBoxItem),
+      asliGudang,
+      packingList: (plRows || []).map(mapBoxItem),
+      komplain: (komplainRows || []).map(mapBoxItem),
+      hasMarkup,
+      original: asliGudang, // alias untuk backward compatibility
+    }
+  } catch (error) {
+    logger.error(`Error in getMarkingBoxDimensions for listCode ${listCode}:`, error)
+    return {
+      listCode: cleanListCode,
+      gudang: [],
+      asliGudang: [],
+      packingList: [],
+      komplain: [],
+      hasMarkup: false,
+      original: [],
+    }
+  }
+}
+
+/**
+ * Ambil semua dimensi box untuk seluruh listcode dalam batch marking (untuk ekspor Excel)
+ */
+export async function getMarkingBatchAllDimensions(markingCode: string) {
+  const cleanCode = markingCode.trim().replace(/'/g, "''")
+
+  try {
+    const [gudangRows, oriRows, plRows, komplainRows] = await Promise.all([
+      prisma.$queryRawUnsafe<any[]>(`
+        SELECT RTRIM(d.fdListCode) AS fdListCode, RTRIM(d.fdListDCode) AS fdListDCode, d.fdPjg, d.fdLbr, d.fdTng, d.fdQty, RTRIM(ISNULL(d.fdDescr, '')) AS fdDescr
+        FROM tbEntryListDetail d WITH (NOLOCK)
+        INNER JOIN tbEntryList e WITH (NOLOCK) ON d.fdListCode = e.fdListCode
+        WHERE RTRIM(e.fdMarkingCode) = '${cleanCode}'
+        ORDER BY d.fdListCode, d.fdListDCode ASC
+      `),
+      prisma.$queryRawUnsafe<any[]>(`
+        SELECT RTRIM(d.fdListCode) AS fdListCode, RTRIM(d.fdListDCode) AS fdListDCode, d.fdPjg, d.fdLbr, d.fdTng, d.fdQty, RTRIM(ISNULL(d.fdDescr, '')) AS fdDescr
+        FROM tbEntryListDetailOri d WITH (NOLOCK)
+        INNER JOIN tbEntryList e WITH (NOLOCK) ON d.fdListCode = e.fdListCode
+        WHERE RTRIM(e.fdMarkingCode) = '${cleanCode}'
+        ORDER BY d.fdListCode, d.fdListDCode ASC
+      `),
+      prisma.$queryRawUnsafe<any[]>(`
+        SELECT RTRIM(d.fdListCode) AS fdListCode, RTRIM(d.fdListDCode) AS fdListDCode, d.fdPjg, d.fdLbr, d.fdTng, d.fdQty, RTRIM(ISNULL(d.fdDescr, '')) AS fdDescr
+        FROM tbEntryListDetail_PackingList d WITH (NOLOCK)
+        INNER JOIN tbEntryList e WITH (NOLOCK) ON d.fdListCode = e.fdListCode
+        WHERE RTRIM(e.fdMarkingCode) = '${cleanCode}'
+        ORDER BY d.fdListCode, d.fdListDCode ASC
+      `),
+      prisma.$queryRawUnsafe<any[]>(`
+        SELECT RTRIM(d.fdListCode) AS fdListCode, RTRIM(d.fdListDCode) AS fdListDCode, d.fdPjg, d.fdLbr, d.fdTng, d.fdQty, RTRIM(ISNULL(d.fdDescr, '')) AS fdDescr
+        FROM tbEntryListDetail_Komplain d WITH (NOLOCK)
+        INNER JOIN tbEntryList e WITH (NOLOCK) ON d.fdListCode = e.fdListCode
+        WHERE RTRIM(e.fdMarkingCode) = '${cleanCode}'
+        ORDER BY d.fdListCode, d.fdListDCode ASC
+      `),
+    ])
+
+    return {
+      markingCode: cleanCode,
+      gudang: gudangRows || [],
+      original: oriRows || [],
+      asliGudang: oriRows || [],
+      packingList: plRows || [],
+      komplain: komplainRows || [],
+    }
+  } catch (error) {
+    logger.error(`Error in getMarkingBatchAllDimensions for marking ${markingCode}:`, error)
+    return {
+      markingCode: cleanCode,
+      gudang: [],
+      original: [],
+      komplain: [],
+    }
+  }
+}
+
+

@@ -7,6 +7,9 @@ export interface BillingCustomer {
   fdSalesNM?: string | null
   fdSalesCode?: string | null
   fdBroker?: number | null
+  fdEmpName?: string | null
+  fdEmpCode?: string | null
+  fdCollector?: string | null
 }
 
 export interface BillingEmployee {
@@ -714,8 +717,21 @@ export interface M3CheckResponse {
   fdListType?: number | null
   defaultFdTypeComodity?: number | null
   markingComodityType?: number | null
-  markingComodities?: { fdTypeComodity: number | null; fdComodity: string | null; fdComodityName?: string | null }[]
-  commodityMappings?: { id: number; commodityName: string; targetCommodity: string; fdTypeComodity: number | null; fdCustCode: string | null }[]
+  markingComodities?: { fdTypeComodity: number | null; fdComodity: string | null; fdComodityName?: string | null; directPrice?: number | null }[]
+  commodityMappings?: {
+    id: number
+    commodityName: string
+    targetCommodity: string
+    fdTypeComodity: number | null
+    fdCustCode: string | null
+    mode?: string | null
+    price?: number | null
+    branch?: string | null
+    startMarkingCode?: string | null
+    startAgentDate?: string | null
+    effectiveDate?: string | null
+    endDate?: string | null
+  }[]
   fdTglAgent?: string | null
   expectedMode?: string | null
   expectedBranch?: string | null
@@ -824,5 +840,34 @@ export interface FlatDetailTraceItem {
   berat: number
   m3: number
 }
+
+export interface DimensionItem {
+  fdListCode: string
+  fdListDCode: string
+  fdDescr: string
+  fdPjg: number
+  fdLbr: number
+  fdTng: number
+  fdQty: number
+  fdM3: number
+  fdMarkingCode?: string
+  fdComodity?: string
+  fdLoad?: string | null
+}
+
+export interface DimensionGroup {
+  items: DimensionItem[]
+  totalQty: number
+  totalM3: number
+  count: number
+}
+
+export interface BillingDimensionsResponse {
+  listCode: string
+  entryList: DimensionGroup
+  packingList: DimensionGroup
+  komplain: DimensionGroup
+}
+
 
 

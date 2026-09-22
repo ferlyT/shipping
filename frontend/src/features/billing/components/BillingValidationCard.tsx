@@ -21,6 +21,7 @@ import {
   FileText,
   Plane,
   Ship,
+  Ruler,
 } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { Badge } from '@/components/ui/Badge'
@@ -32,6 +33,7 @@ import { useOverweightValidation } from '../hooks/useOverweightValidation'
 import type { BillingValidationState } from '../hooks/useBillingValidation'
 import { PriceListDetailModal } from './PriceListDetailModal'
 import { CustMarkingDetailModal } from './CustMarkingDetailModal'
+import { DimensionDetailModal, type DimensionSourceKey } from './DimensionDetailModal'
 import type { M3CheckResponse } from '../types/billing.types'
 import { BILL_TYPES, type BillType } from '../constants/billing.constants'
 import { Type2ComparisonPanel } from './Type2ComparisonPanel'
@@ -103,6 +105,8 @@ export function BillingValidationCard({
   const { t } = useTranslation()
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isCustMarkingModalOpen, setIsCustMarkingModalOpen] = useState(false)
+  const [isDimensionModalOpen, setIsDimensionModalOpen] = useState(false)
+  const [dimensionInitialSource, setDimensionInitialSource] = useState<DimensionSourceKey>('entryList')
   const [userSelectedTab, setUserSelectedTab] = useState<ValidationCardTab | null>(null)
 
   const { data: internalRes, isLoading: isInternalLoading, isError: isInternalError, refetch, isFetching } = useQuery({
@@ -1278,9 +1282,23 @@ export function BillingValidationCard({
                   /* JIKA LAUT (fdListType = 2 / !isAir) -> Tampilkan M3 Per ListCode */
                   <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-2.5 sm:p-3 flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-1 mb-2">
-                      <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
-                        {t('billing.validation.referenceGroup') || 'Per ListCode'}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-[10px] uppercase font-bold font-[var(--font-label)] text-[var(--color-secondary)]">
+                          {t('billing.validation.referenceGroup') || 'Per ListCode'}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDimensionInitialSource('entryList')
+                            setIsDimensionModalOpen(true)
+                          }}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 border border-blue-500/30 transition-colors cursor-pointer"
+                          title="Lihat Rincian Dimensi (P x L x T x Qty) & Volume M3 dari tbEntryListDetail, tbEntryListDetail_PackingList, dan tbEntryListDetail_Komplain"
+                        >
+                          <Ruler className="w-3 h-3" />
+                          <span>Detail Dimensi</span>
+                        </button>
+                      </div>
                       <div className="flex items-center gap-1.5">
                         {hasWeightMismatch && (
                           <Badge variant="warning" className="text-[10px] px-2 py-0.5 font-semibold flex items-center gap-1">
@@ -1312,9 +1330,23 @@ export function BillingValidationCard({
                             : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
                           }`}
                       >
-                        <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                          {t('billing.validation.listBatch')}
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                            {t('billing.validation.listBatch')}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDimensionInitialSource('entryList')
+                              setIsDimensionModalOpen(true)
+                            }}
+                            className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-0.5"
+                            title="Buka rincian dimensi tbEntryListDetail"
+                          >
+                            <Ruler className="w-2.5 h-2.5" />
+                            <span>Dimensi</span>
+                          </button>
+                        </div>
                         <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
                           {listBatchValues.length > 0 ? `${formatDecimal(listBatchValues[0], 4)} m³` : '—'}
                         </p>
@@ -1342,9 +1374,23 @@ export function BillingValidationCard({
                             : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
                           }`}
                       >
-                        <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                          {t('billing.validation.pl')}
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                            {t('billing.validation.pl')}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDimensionInitialSource('packingList')
+                              setIsDimensionModalOpen(true)
+                            }}
+                            className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-0.5"
+                            title="Buka rincian dimensi tbEntryListDetail_PackingList"
+                          >
+                            <Ruler className="w-2.5 h-2.5" />
+                            <span>Dimensi</span>
+                          </button>
+                        </div>
                         <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
                           {plValues.length > 0 ? `${formatDecimal(plValues[0], 4)} m³` : '—'}
                         </p>
@@ -1402,9 +1448,23 @@ export function BillingValidationCard({
                             : 'border-[var(--color-border)] bg-[var(--color-neutral)]'
                           }`}
                       >
-                        <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
-                          {t('billing.validation.komplain')}
-                        </p>
+                        <div className="flex items-center justify-between">
+                          <p className="text-[9px] uppercase font-semibold font-[var(--font-label)] text-[var(--color-secondary)]">
+                            {t('billing.validation.komplain')}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDimensionInitialSource('komplain')
+                              setIsDimensionModalOpen(true)
+                            }}
+                            className="text-[9px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer flex items-center gap-0.5"
+                            title="Buka rincian dimensi tbEntryListDetail_Komplain"
+                          >
+                            <Ruler className="w-2.5 h-2.5" />
+                            <span>Dimensi</span>
+                          </button>
+                        </div>
                         <p className="mt-0.5 text-xs sm:text-sm font-semibold text-[var(--color-primary)] tabular-nums">
                           {komplainValues.length > 0 ? `${formatDecimal(komplainValues[0], 4)} m³` : '—'}
                         </p>
@@ -2041,6 +2101,14 @@ export function BillingValidationCard({
         custCode={custCodeProp || res.customer?.fdCustCode || null}
         custName={displayCustName(customerNameProp || res.customer?.fdCustName)}
         markingCode={res.customer?.fdMarkingCode || res.fdListCode || listCode}
+      />
+
+      <DimensionDetailModal
+        isOpen={isDimensionModalOpen}
+        onClose={() => setIsDimensionModalOpen(false)}
+        listCode={(res?.fdListCode || listCode || '').trim()}
+        customerName={displayCustName(customerNameProp || res?.customer?.fdCustName)}
+        initialSource={dimensionInitialSource}
       />
     </div>
   )

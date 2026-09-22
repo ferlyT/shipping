@@ -1,5 +1,5 @@
 import React from 'react'
-import { View, Text, TouchableOpacity, StyleSheet, ViewStyle } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, ViewStyle, Keyboard } from 'react-native'
 import {
   Receipt,
   User,
@@ -150,6 +150,7 @@ export const SearchSuggestionsDropdown: React.FC<SearchSuggestionsDropdownProps>
               key={`${sug.type}-${sug.value}-${idx}`}
               onPress={() => {
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                Keyboard.dismiss()
                 onSelect(sug)
               }}
               style={[

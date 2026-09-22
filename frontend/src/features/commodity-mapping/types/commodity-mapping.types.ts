@@ -14,6 +14,10 @@ export interface CommodityMappingItem {
   effectiveDate: string
   endDate: string | null
   mode: string | null
+  price?: number | null
+  branch?: string | null
+  startMarkingCode?: string | null
+  startAgentDate?: string | null
   applyToNewUploads: boolean
   notes: string | null
   createdBy: string | null
@@ -30,6 +34,10 @@ export interface CreateCommodityMappingPayload {
   effectiveDate?: string
   endDate?: string | null
   mode?: string | null
+  price?: number | null
+  branch?: string | null
+  startMarkingCode?: string | null
+  startAgentDate?: string | null
   applyToNewUploads?: boolean
   notes?: string | null
 }
@@ -43,6 +51,10 @@ export interface UpdateCommodityMappingPayload {
   effectiveDate?: string
   endDate?: string | null
   mode?: string | null
+  price?: number | null
+  branch?: string | null
+  startMarkingCode?: string | null
+  startAgentDate?: string | null
   applyToNewUploads?: boolean
   notes?: string | null
   scopeChangeOption?: 'specific_effective_date' | 'all_active_future' | 'retroactive'

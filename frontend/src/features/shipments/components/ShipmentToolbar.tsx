@@ -1,34 +1,20 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import {
-  X, Search, Rows3, LayoutGrid, List, ChevronDown,
-  Layers, HelpCircle, Sparkles, Tag, User, Receipt, Info
-} from 'lucide-react'
+import { X, Search, Rows3, LayoutGrid, List, Layers } from 'lucide-react'
 import apiClient from '@/api/client'
 import { useDebounce } from '@/hooks/useDebounce'
+import { useTranslation } from '@/hooks/useTranslation'
 import { SearchSuggestionsDropdown } from '@/components/ui/SearchSuggestionsDropdown'
 import { cn } from '@/lib/utils'
 import type { SearchFieldType } from '../services/shipments.service'
 
 type ViewMode = 'table' | 'grid' | 'compact'
 
-export const SEARCH_SCOPES: { value: SearchFieldType; label: string; placeholder: string }[] = [
-  { value: 'ALL', label: 'Semua Field', placeholder: 'Cari customer, marking, marking no, resi, tracking, list code...' },
-  { value: 'customer_marking', label: 'Customer & Marking', placeholder: 'Cari kombinasi customer & marking (contoh: PT Maju MRK-01)...' },
-  { value: 'customer', label: 'Customer', placeholder: 'Cari customer (contoh: PT Maju, CV Sinar)...' },
-  { value: 'marking', label: 'Marking (Semua)', placeholder: 'Cari kode / no marking (contoh: MRK-1, MRK-2)...' },
-  { value: 'markingNo', label: 'Marking No', placeholder: 'Cari spesifik nomor marking (contoh: 01, 102, 999)...' },
-  { value: 'markingCode', label: 'Marking Code', placeholder: 'Cari kode marking (contoh: MRK, JKT)...' },
-  { value: 'resi', label: 'No. Resi', placeholder: 'Cari resi (contoh: TR-001, TR-002)...' },
-  { value: 'tracking', label: 'Tracking', placeholder: 'Cari tracking lokal (contoh: TK01, TK02)...' },
-  { value: 'listCode', label: 'No. List', placeholder: 'Cari no. list (contoh: L01, L02, L03)...' },
-]
-
 interface ShipmentToolbarProps {
   search: string
   onSearchChange: (v: string) => void
-  searchField: SearchFieldType
-  onSearchFieldChange: (field: SearchFieldType) => void
+  searchField?: SearchFieldType
+  onSearchFieldChange?: (field: SearchFieldType) => void
   viewMode: ViewMode
   onViewModeChange: (v: ViewMode) => void
   limit: number
@@ -43,7 +29,6 @@ interface ShipmentToolbarProps {
 export function ShipmentToolbar({
   search,
   onSearchChange,
-  searchField,
   onSearchFieldChange,
   viewMode,
   onViewModeChange,
@@ -54,9 +39,7 @@ export function ShipmentToolbar({
   total,
   isLoading,
 }: ShipmentToolbarProps) {
-  const [showTooltip, setShowTooltip] = useState(false)
-  const tooltipRef = useRef<HTMLDivElement>(null)
-  const currentScope = SEARCH_SCOPES.find((s) => s.value === searchField) || SEARCH_SCOPES[0]
+  const { t } = useTranslation()
 
   // Suggestion State & Query
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -85,19 +68,6 @@ export function ShipmentToolbar({
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  // Close tooltip on click outside
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (tooltipRef.current && !tooltipRef.current.contains(e.target as Node)) {
-        setShowTooltip(false)
-      }
-    }
-    if (showTooltip) {
-      document.addEventListener('mousedown', handleClickOutside)
-      return () => document.removeEventListener('mousedown', handleClickOutside)
-    }
-  }, [showTooltip])
-
   // Detect multi-tokens in search input
   const tokens = search
     .split(/[,\n;\r\t]+/)
@@ -105,75 +75,54 @@ export function ShipmentToolbar({
     .filter(Boolean)
   const isMultiSearch = tokens.length > 1
 
-  const applyExample = (text: string, scope?: SearchFieldType) => {
-    onSearchChange(text)
-    if (scope) onSearchFieldChange(scope)
-    setShowTooltip(false)
-  }
-
   return (
-    <div className="bg-[var(--color-surface)] px-3.5 sm:px-5 py-2.5 sm:py-3">
+    <div className="bg-[var(--color-surface)] px-3.5 sm:px-5 py-2.5 sm:py-3 border-b border-[var(--color-border)] rounded-t-xl">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
-        {/* Left: Scoped multi-value search bar + Info Tooltip */}
-        <div className="flex items-center gap-2 flex-1 sm:max-w-[560px]">
+        {/* Left: Universal Search bar with autocomplete */}
+        <div className="flex items-center gap-2 flex-1 sm:max-w-[480px]">
           <div ref={searchContainerRef} className="relative flex-1">
             <div className="relative flex items-center rounded-xl border border-[var(--color-border)] focus-within:border-[var(--color-primary)] focus-within:ring-2 focus-within:ring-[var(--color-primary)]/20 transition-all bg-[var(--color-surface)] shadow-2xs overflow-hidden">
-              {/* Scope selector */}
-              <div className="relative shrink-0 border-r border-[var(--color-border)] bg-[var(--color-neutral)] hover:opacity-90 transition-colors max-w-[110px] sm:max-w-none">
-                <select
-                  value={searchField}
-                  onChange={(e) => onSearchFieldChange(e.target.value as SearchFieldType)}
-                  className="appearance-none bg-transparent pl-2.5 sm:pl-3 pr-6 sm:pr-7 py-2 text-xs font-semibold text-[var(--color-text)] cursor-pointer outline-none w-full truncate"
+              <Search size={14} className="absolute left-3 text-[var(--color-secondary)] pointer-events-none shrink-0" />
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => {
+                  onSearchChange(e.target.value)
+                  if (e.target.value.trim().length >= 2) setShowSuggestions(true)
+                  else setShowSuggestions(false)
+                }}
+                onFocus={() => {
+                  if (search.trim().length >= 2) setShowSuggestions(true)
+                }}
+                placeholder={t('shipments.searchPlaceholder')}
+                className="w-full pl-9 pr-14 py-2 text-xs sm:text-sm text-[var(--color-text)] outline-none bg-transparent placeholder:text-[var(--color-secondary)] font-medium"
+              />
+
+              {/* Multi-item badge count */}
+              {isMultiSearch && (
+                <span
+                  className="absolute right-7 sm:right-8 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 text-[10px] font-bold"
+                  title={`${tokens.length} keyword pencarian terdeteksi`}
                 >
-                  {SEARCH_SCOPES.map((sc) => (
-                    <option key={sc.value} value={sc.value}>{sc.label}</option>
-                  ))}
-                </select>
-                <ChevronDown size={12} className="absolute right-1.5 sm:right-2 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none" />
-              </div>
+                  <Layers size={10} />
+                  {tokens.length}
+                </span>
+              )}
 
-              {/* Search Input */}
-              <div className="relative flex-1 flex items-center min-w-0">
-                <Search size={14} className="absolute left-2.5 sm:left-3 text-[var(--color-secondary)] pointer-events-none" />
-                <input
-                  value={search}
-                  onChange={(e) => {
-                    onSearchChange(e.target.value)
-                    if (e.target.value.trim().length >= 2) setShowSuggestions(true)
-                    else setShowSuggestions(false)
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onSearchChange('')
+                    if (onSearchFieldChange) onSearchFieldChange('ALL')
+                    setShowSuggestions(false)
                   }}
-                  onFocus={() => {
-                    if (search.trim().length >= 2) setShowSuggestions(true)
-                  }}
-                  placeholder={currentScope.placeholder}
-                  className="w-full pl-8 sm:pl-9 pr-12 sm:pr-14 py-2 text-xs sm:text-sm text-[var(--color-text)] outline-none bg-transparent placeholder:text-[var(--color-secondary)]"
-                />
-
-                {/* Multi-item badge count */}
-                {isMultiSearch && (
-                  <span
-                    className="absolute right-7 sm:right-8 top-1/2 -translate-y-1/2 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[var(--color-primary)]/10 text-[var(--color-primary)] border border-[var(--color-primary)]/20 text-[10px] font-bold"
-                    title={`${tokens.length} keyword pencarian terdeteksi`}
-                  >
-                    <Layers size={10} />
-                    {tokens.length}
-                  </span>
-                )}
-
-                {search && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onSearchChange('')
-                      setShowSuggestions(false)
-                    }}
-                    className="absolute right-2 sm:right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-text)] p-0.5 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer transition-colors"
-                    title="Hapus pencarian"
-                  >
-                    <X size={13} />
-                  </button>
-                )}
-              </div>
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-text)] p-0.5 rounded-md hover:bg-[var(--color-neutral)] cursor-pointer transition-colors"
+                  title="Hapus pencarian"
+                >
+                  <X size={13} />
+                </button>
+              )}
             </div>
 
             {/* Dropdown Suggestions */}
@@ -183,125 +132,22 @@ export function ShipmentToolbar({
               isLoading={isFetchingSuggestions}
               title="Saran Pencarian (Resi / Customer / Marking)"
               onSelect={(item) => {
-                if (item.type === 'customer') {
-                  onSearchFieldChange('customer')
-                } else if (item.type === 'marking') {
-                  onSearchFieldChange('marking')
-                } else if (item.type === 'resi') {
-                  onSearchFieldChange('resi')
-                } else {
-                  onSearchFieldChange('ALL')
+                if (onSearchFieldChange) {
+                  if (item.type === 'customer') {
+                    onSearchFieldChange('customer')
+                  } else if (item.type === 'marking') {
+                    onSearchFieldChange('marking')
+                  } else if (item.type === 'resi') {
+                    onSearchFieldChange('resi')
+                  } else {
+                    onSearchFieldChange('ALL')
+                  }
                 }
                 onSearchChange(item.value)
                 setShowSuggestions(false)
               }}
               onClose={() => setShowSuggestions(false)}
             />
-          </div>
-
-          {/* Interactive Search Guide Tooltip Trigger */}
-          <div className="relative shrink-0" ref={tooltipRef}>
-            <button
-              type="button"
-              onClick={() => setShowTooltip((prev) => !prev)}
-              className={cn(
-                'inline-flex items-center justify-center w-8 h-8 rounded-xl border transition-all cursor-pointer select-none',
-                showTooltip
-                  ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] border-[var(--color-primary)] shadow-xs'
-                  : 'bg-[var(--color-surface)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 border-[var(--color-border)]'
-              )}
-              title="Petunjuk & Contoh Pencarian"
-              aria-label="Petunjuk pencarian"
-            >
-              <HelpCircle size={15} />
-            </button>
-
-            {/* Tooltip / Popover Panel */}
-            {showTooltip && (
-              <>
-                {/* Backdrop on mobile */}
-                <div className="fixed inset-0 bg-black/40 z-30 sm:hidden" onClick={() => setShowTooltip(false)} />
-                <div className="fixed sm:absolute inset-x-4 sm:inset-x-auto sm:left-auto sm:right-0 top-20 sm:top-full sm:mt-2 sm:w-[min(380px,calc(100vw-2rem))] z-40 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-xl shadow-black/10 p-4 text-xs animate-in fade-in-50 zoom-in-95 duration-150 max-h-[80vh] overflow-y-auto">
-                  {/* Header */}
-                  <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-[var(--color-border)] mb-3">
-                    <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] text-sm">
-                      <Sparkles size={14} className="text-[var(--color-primary)]" />
-                      <span>Panduan Pencarian Cerdas</span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setShowTooltip(false)}
-                      className="text-[var(--color-secondary)] hover:text-[var(--color-text)] p-1 rounded-md hover:bg-[var(--color-neutral)]"
-                    >
-                      <X size={13} />
-                    </button>
-                  </div>
-
-                  {/* Guide Items */}
-                  <div className="space-y-3 text-[var(--color-secondary)]">
-                    {/* 1. Customer + Marking */}
-                    <div className="p-2.5 bg-[var(--color-primary)]/5 rounded-xl border border-[var(--color-primary)]/15">
-                      <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] mb-1">
-                        <User size={12} className="text-[var(--color-primary)]" />
-                        <span>Kombinasi Customer & Marking</span>
-                      </div>
-                      <p className="text-xs text-[var(--color-secondary)] leading-snug mb-1.5">
-                        Ketik nama customer dan marking dipisahkan spasi untuk mencari data yang cocok pada keduanya.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => applyExample('PT Maju MRK-01', 'customer_marking')}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--color-surface)] hover:bg-[var(--color-primary)]/10 border border-[var(--color-primary)]/20 rounded-md font-mono text-[11px] font-semibold text-[var(--color-primary)] transition-colors cursor-pointer"
-                      >
-                        <span>Contoh:</span> <span className="underline">PT Maju MRK-01</span>
-                      </button>
-                    </div>
-
-                    {/* 2. Multi-Item / Bulk Search */}
-                    <div className="p-2.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)]">
-                      <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] mb-1">
-                        <Receipt size={12} className="text-[var(--color-secondary)]" />
-                        <span>Multi Nomor Resi / No. List</span>
-                      </div>
-                      <p className="text-xs text-[var(--color-secondary)] leading-snug mb-1.5">
-                        Cari banyak nomor sekaligus dengan pemisah koma (<code className="bg-[var(--color-border)]/40 px-1 rounded">,</code>) atau baris baru (*paste multi-line*).
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => applyExample('TR-2026-001, TR-2026-002, TR-2026-003', 'resi')}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md font-mono text-[11px] font-semibold text-[var(--color-text)] transition-colors cursor-pointer truncate max-w-full"
-                      >
-                        <span>Contoh:</span> <span className="underline truncate">TR-2026-001, TR-2026-002</span>
-                      </button>
-                    </div>
-
-                    {/* 3. Multi Marking */}
-                    <div className="p-2.5 bg-[var(--color-neutral)] rounded-xl border border-[var(--color-border)]">
-                      <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] mb-1">
-                        <Tag size={12} className="text-amber-500" />
-                        <span>Multi Marking Code</span>
-                      </div>
-                      <p className="text-xs text-[var(--color-secondary)] leading-snug mb-1.5">
-                        Ketik beberapa kode marking sekaligus untuk menampilkan seluruh resi terkait.
-                      </p>
-                      <button
-                        type="button"
-                        onClick={() => applyExample('MRK-A, MRK-B', 'marking')}
-                        className="inline-flex items-center gap-1 px-2 py-1 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-md font-mono text-[11px] font-semibold text-[var(--color-text)] transition-colors cursor-pointer"
-                      >
-                        <span>Contoh:</span> <span className="underline">MRK-A, MRK-B</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Footer Note */}
-                  <div className="mt-3 pt-2 border-t border-[var(--color-border)] flex items-center gap-1.5 text-[10px] text-[var(--color-secondary)]">
-                    <Info size={11} className="shrink-0" />
-                    <span>Gunakan dropdown di kiri untuk mengunci lingkup pencarian tertentu.</span>
-                  </div>
-                </div>
-              </>
-            )}
           </div>
         </div>
 

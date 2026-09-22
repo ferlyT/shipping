@@ -21,6 +21,9 @@ Dokumen ini menjelaskan secara menyeluruh arsitektur, seluruh modul halaman, log
   - `xlsx`: Parsing import Excel tarif dan ekspor data pairing local charge
 - **Pustaka Komponen UI Primitif Terpusat**: Terstandarisasi di `src/components/ui/` (`Modal`, `StatCard`, `StatusBadge`, `ConfirmModal`, `Table`, `Pagination`, dll) sebagai Single Source of Truth antarmuka yang ramah 5 tema dinamis dan Midnight Dark Mode.
 - **Dual-Bahasa (i18n)**: Sistem kamus bilingual mandiri (`src/lib/i18n/id.json` & `en.json`) via custom hook `useTranslation()`
+- **Identitas Visual & Favicon**:
+  - **App Logo**: Ikon kotak paket 3D Lucide `Package` (`w-8 h-8 rounded-lg bg-[var(--color-primary)] text-[var(--color-surface)]`) terpasang pada brand header navigasi sidebar (`Sidebar.tsx`) dengan teks `M-Shipping`.
+  - **Favicon Terpadu**: Berkas `public/favicon.svg` (vektor scalable berbasis Lucide `Package` dengan latar rounded slate `#1e293b` $\to$ `#0f172a` dan border kontras ramah tab gelap/terang) serta `public/favicon.ico` multi-resolusi (16, 32, 48, 64, 128, 256 px) disinkronkan 100% dengan logo aplikasi di `index.html`.
 
 ### Konfigurasi Jaringan & Keamanan
 - **Environment File**: `frontend/.env`
@@ -52,7 +55,9 @@ Dokumen ini menjelaskan secara menyeluruh arsitektur, seluruh modul halaman, log
     │   │   ├── /logistics/shipments/list     # Tabel Data Resi & Pelacakan Dimensi Fisik
     │   │   ├── /logistics/shipment-batches   # Dashboard Kontainer & Batch Marking
     │   │   ├── /logistics/shipment-batches/list # Tabel Batch Marking & Manifest Muatan
+    │   │   ├── /logistics/shipment-batches/marking-size # Audit Ukuran & Tonase per Marking (M³ Laut & Kg Udara)
     │   │   ├── /logistics/delivery-orders    # Dashboard Surat Jalan & Armada Lapangan
+    │   │   ├── /logistics/delivery-orders/inventory # Inventori Stok Kargo Gudang & Pembuatan SJ
     │   │   ├── /logistics/delivery-orders/list # Tabel Pengiriman Surat Jalan
     │   │   ├── /logistics/delivery-orders/:id # Rincian Muatan Surat Jalan
     │   │   ├── /finance/billing              # Dashboard Keuangan & Tren Piutang
@@ -72,6 +77,9 @@ Dokumen ini menjelaskan secara menyeluruh arsitektur, seluruh modul halaman, log
     │   │   ├── /finance/customer-price-list/:custCode # Riwayat & Tarif Aktif Customer
     │   │   ├── /finance/customer-price-list/uploads/:id # Diff Upload Excel Customer
     │   │   ├── /finance/commodity-mapping    # Normalisasi Nama Komoditas ke Master
+    │   │   ├── /finance/cashier              # Registrasi Kasir Resmi (RR-) & Sementara (TR-)
+    │   │   ├── /finance/cashier/:id          # Meja Kerja Kasir (Zero-Diff Balancing & Faktur)
+    │   │   ├── /finance/wallet               # Customer Wallet & Saldo Deposit Pelanggan (Buku Besar)
     │   │   └── /master/customers             # Direktori Master Pelanggan & Tier
     │   │
     │   └── (AdminGuard)                      # Khusus Pengguna Berperan 'admin'
@@ -186,11 +194,12 @@ Dokumen ini menjelaskan secara menyeluruh arsitektur, seluruh modul halaman, log
 #### B. Halaman Daftar Resi Shipment (`pages/ListPage.tsx`)
 - **Tujuan & Alur**: Pencarian dan pelacakan seluruh resi fisik pengiriman barang secara mendalam.
 - **Fitur Utama**:
-  - Filter multibasis: Keyword, Field Selector (`ALL`, `customer`, `resi`, `marking`, `tracking`), Cabang, dan Moda (`Udara`/`Laut`).
-  - **Toolbar Pencarian & Dropdown Saran Cerdas (`ShipmentToolbar.tsx`)**:
+  - Filter multibasis: Universal Smart Search, Cabang, dan Moda (`Udara`/`Laut`).
+  - **Toolbar Universal Smart Search & Dropdown Saran Cerdas (`ShipmentToolbar.tsx`)**:
+    - **Universal Search Tanpa Dropdown Tipe (Clean & Modern UI)**: Menghilangkan selektor manual scope pencarian yang redundan, digantikan oleh satu kolom pencarian terpadu (*Universal Search Bar*) selebar penuh dengan placeholder bilingual (`t('shipments.searchPlaceholder')`), counter badge multi-token (`Layers`), dan tombol hapus instan (`X`).
     - Terintegrasi langsung dengan `SearchSuggestionsDropdown.tsx` (`GET /api/shipments/suggestions?q=...`).
     - **Pencarian Ter-Debounce (300ms)**: Menggunakan custom hook `useDebounce(search, 300)` untuk mencegah banjir permintaan API selama pengetikan cepat.
-    - **Sinkronisasi Otomatis Lingkup Pencarian (`searchField`)**: Saat pengguna memilih salah satu saran dari dropdown, `searchField` disinkronkan secara otomatis berdasarkan tipe item yang dipilih (`customer` $\to$ `'customer'`, `marking` $\to$ `'marking'`, `resi` $\to$ `'resi'`) sebelum menyetel teks pencarian, mengeliminasi masalah *zero-result mismatch* (faktur/resi tidak ditemukan akibat ketidaksesuaian kolom filter SQL).
+    - **Sinkronisasi Otomatis Lingkup Pencarian Backend (`searchField`)**: Saat pengguna memilih salah satu saran dari dropdown, sistem secara otomatis mengunci `searchField` ke tipe yang sesuai (`customer` $\to$ `'customer'`, `marking` $\to$ `'marking'`, `resi` $\to$ `'resi'`) atau mengembalikan ke `'ALL'` saat dikosongkan, memastikan backend query selalu terarah secara presisi tanpa memerlukan intervensi manual dari pengguna.
     - Menampilkan saran terstruktur dengan badge kategori (`Customer`, `Resi`, `Marking`) dan aksi klik langsung.
   - Indikator badge status resi.
   - **Modal Rincian Dimensi Fisik & Logistik (`ShipmentDetailModal.tsx`)**:
@@ -249,50 +258,195 @@ Dokumen ini menjelaskan secara menyeluruh arsitektur, seluruh modul halaman, log
   - `GET /api/marking/groups`: Pengelompokan batch berdasarkan cabang atau periode.
   - `GET /api/marking/:id/manifest`: Rincian seluruh resi dalam batch (`vwShipment`), status finansial, dan status pemblokiran finance (`tbEntryList_Bloked_Finance`).
 
+#### C. Halaman Audit Ukuran & Tonase per Marking (`MarkingSizePage.tsx`)
+- **Tujuan & Alur**: Modernisasi form warisan FoxPro `frm_entrylistdetail_per_marking.scx` ("Ukuran per Marking") untuk melakukan audit komparasi ukuran kubikasi volume (M³) untuk kargo moda laut (`listType !== 1`) dan tonase berat (Kg) untuk kargo moda udara (`listType === 1`).
+- **Fitur Utama**:
+  1. **Navigasi Sidebar & Toolbar Kontrol Autocomplete (`Sidebar.tsx` & `MarkingSizeToolbar.tsx`)**:
+     - **Navigasi Sidebar ERP**: Tersedia langsung di bawah menu **Batch Marking** $\to$ **Audit Ukuran & Tonase** (`ROUTES.SHIPMENT_BATCH_MARKING_SIZE`, icon `Ruler`).
+     - **State Awal Bersih (Clean Initialization)**: Input pencarian tidak lagi memaksakan kode marking default tertentu saat halaman dibuka langsung tanpa query param URL. Jika kosong, tabel menampilkan pesan panduan ramah pengguna untuk memilih/mencari kode batch marking.
+     - Pencarian cepat kode marking / kontainer dengan autocomplete real-time (`/api/marking/suggestions`), navigasi keyboard (Arrow Up/Down/Enter), dan sinkronisasi URL query param (`?code=...`).
+     - Pengurutan data: Sortir berdasarkan `ListCode` (Sort 1) vs `Nama Customer` (Sort 2).
+     - Filter instan dalam tabel data (ListCode, Customer, Marking No, Komoditas, Keterangan).
+     - Tombol ekspor Excel multi-sheet dan tombol refresh data.
+  2. **Kartu KPI Ringkasan Adaptif (`MarkingSizeKpiSection.tsx`)**:
+     - Menampilkan 5 kartu metrik proporsional yang beradaptasi secara otomatis berdasarkan moda pengiriman:
+       - **Moda Laut**: Ukuran Kontainer (`contSize`), Total Koli PL vs Gudang (dengan badge selisih), Total M³ Gudang (dengan M³ PL & Net Komplain), Selisih M³ (persentase deviasi PL vs Gudang), dan Total Tonase Berat (kg).
+       - **Moda Udara**: Batch Udara (AWB / No Kontainer), Total Koli (Pack), Total Berat Gudang (kg) vs List vs Net, Selisih Berat (kg & deviasi), dan Total Berat Surat Jalan (kg).
+   3. **Tabel Audit Komparasi 16 Kolom (`MarkingSizeTable.tsx`)**:
+      - Kolom identitas: No, ListCode, Customer (`displayCustName` Single Source of Truth `tbCustomers`), Marking No, Komoditas.
+      - **Tag Deteksi Mark Up Dimensi (`MARK UP`)**:
+        - Jika kargo memiliki data pada tabel ukuran asli gudang (`tbEntryListDetailOri`), artinya kargo tersebut telah mengalami penyesuaian/markup dimensi.
+        - Menampilkan badge outline semantik `MARK UP` (ikon `Sparkles`, warna amber) tepat di samping nomor ListCode.
+        - Badge bersifat interaktif: mengklik tag `MARK UP` langsung membuka modal dimensi dengan tab *Gudang Asli (Ori)* aktif secara instan.
+      - Kolom Koli: Pack PL vs Qty Gudang (dengan alert merah jika ada selisih koli).
+      - Kolom Kubikasi M³: M³ PL vs M³ Gudang (dengan alert merah jika ada selisih M³) vs M³ Komplain (alert merah jika > 0).
+      - **Tombol Aksi Drilldown Terpadu (`Detil`)**:
+        - Menggabungkan kolom `Detil` dan `Komp` menjadi satu kolom aksi tunggal yang proporsional.
+        - Menampilkan ikon `AlertCircle` merah (dengan border merah lembut) dan membuka tab *Komplain* secara default jika kargo memiliki komplain ukuran/berat.
+        - Menampilkan ikon `Layers` standar dan membuka tab *Gudang Fisik* jika kargo normal tanpa komplain.
+        - Pengguna tetap dapat berpindah ke salah satu dari 4 tab (*Gudang*, *Gudang Asli*, *Packing List*, *Komplain*) di dalam modal pop-up.
+      - Kolom Tonase Berat: Berat List vs Berat Gudang vs Berat SJ vs Berat Komplain.
+      - Sticky footer `tfoot` dengan kalkulasi akumulatif seluruh kolom kuantitas, M³, dan berat.
+  4. **Modal Drilldown Dimensi Fisik Koli (`MarkingBoxDimensionModal.tsx`)**:
+     - Modal pop-up dengan desain **responsif mobile**:
+       - Tampilan dialog fleksibel: *bottom sheet* bersudut membulat di mobile (`rounded-t-2xl max-h-[92vh]`) dan modal terpusat di desktop (`sm:rounded-2xl sm:max-h-[88vh]`).
+       - **4 Tab Dimensi Fisik Terintegrasi (Horizontal Scrollable)**:
+         - **Gudang Fisik (`gudang`)**: Dimensi fisik aktif saat ini dari `tbEntryListDetail`.
+         - **Gudang Asli / Ori (`asliGudang`)**: Dimensi fisik asli sebelum markup dari `tbEntryListDetailOri`, dilengkapi counter badge amber jika kargo memiliki data asli.
+         - **Packing List (`packingList`)**: Dimensi dokumen packing list pelanggan/pengirim dari `tbEntryListDetail_PackingList`.
+         - **Komplain (`komplain`)**: Dimensi revisi komplain dari `tbEntryListDetail_Komplain`.
+       - **Banner Peringatan Mark Up**: Jika `hasMarkup: true`, modal menampilkan alert banner di atas rincian data yang memperingatkan bahwa ukuran aktif saat ini merupakan hasil mark up dari ukuran asli gudang.
+       - **Mini KPI Summary Grid**: 3 kartu metrik kompak di atas rincian data (Total Koli, Total Volume M³, dan Total VFC kg untuk udara / Varian ukuran untuk laut).
+       - **Dual Presentation**: Tampilan **Mobile Cards List** (`block sm:hidden`) dengan kartu kompak per box ($P \times L \times T$ cm, Qty, Vol M³, VFC kg) dan **Desktop Table** (`hidden sm:block`) dengan tabel 8-kolom lengkap berserta sticky footer total.
+       - **Pengurutan Data Standar**: Seluruh rincian box dimensi fisik diurutkan secara konsisten berdasarkan **`fdListDCode ASC`** (Kode Rincian Detail) pada backend dan frontend di seluruh tab.
+  5. **Ekspor Excel 4 Sheet Sesuai Standar FoxPro (`markingSizeExcel.ts`)**:
+     - Menghasilkan berkas Excel `.xlsx` komprehensif berisi 4 sheet:
+       - Sheet 1: `DETAIL` (Rincian dimensi coly fisik gudang per listcode).
+       - Sheet 2: `ORIGINAL` (Rincian ukuran koli asli dari `tbEntryListDetailOri`).
+       - Sheet 3: `KOMPLAIN` (Rincian dimensi revisi komplain).
+       - Sheet 4: `REKAP` (Tabel audit perbandingan 17 kolom + header info kontainer dan akumulasi total).
+- **Endpoint Terkait**:
+  - `GET /api/marking/size-audit/:code`: Mengambil ringkasan header batch, 5 kartu KPI metrik (termasuk deteksi `hasMarkup` dan `totalMarkupCount`), dan tabel 17 kolom via Stored Procedure `sp_tbEntryListDetail_permarking`.
+  - `GET /api/marking/box-dimensions/:listCode`: Mengambil rincian dimensi koli 4 tab (`gudang`, `asliGudang`, `packingList`, `komplain`) dan status `hasMarkup`.
+  - `GET /api/marking/size-audit/:code/all-dimensions`: Mengambil seluruh dimensi koli dalam 1 batch marking untuk keperluan ekspor Excel multi-sheet.
+
 ---
 
 ### 3.5. Modul Surat Jalan & Inventori Gudang / Delivery Orders (`src/features/delivery-orders/`)
 
-#### A. Halaman Dashboard & Inventori Gudang (`DashboardPage.tsx`)
-- **Tujuan & Alur**: Bertindak sebagai *Warehouse Inventory & Delivery Orders Control Center* yang memadukan pemantauan stok kargo mengendap di gudang (*on-hand inventory*) dengan alur distribusi surat jalan armada lokal.
+#### A. Halaman Dashboard Pengantaran (`DashboardPage.tsx`)
+- **Tujuan & Alur**: Pusat komando kendali distribusi surat jalan dan evaluasi performa operasional bulanan (MTD vs MoM vs YoY) yang terhubung langsung dengan modul Inventori Kargo Gudang dan Daftar Surat Jalan.
 - **Fitur Utama**:
-  1. **5 Kartu KPI Eksekutif Terintegrasi Gudang**:
-     - **Stok Kargo Gudang (On-Hand)**: Total manifes kargo yang masih mengendap di gudang (belum selesai didistribusikan / `sent=0`), dilengkapi breakdown real-time Moda Laut vs Udara.
-     - **Total Koli Terkirim**: Akumulasi koli yang telah sukses diserahkan ke pelanggan / tujuan.
-     - **Total Surat Jalan**: Jumlah fisik surat jalan terbit yang terdaftar di sistem.
-     - **Tonase Berat Terkirim**: Total berat aktual kargo terkirim (kg).
-     - **Dalam Pengantaran (On Delivery)**: Jumlah surat jalan yang armadanya sedang bertugas di jalan dan belum selesai diserahkan (proses kirim / `fdSent = 0`). Menghilangkan redundansi dengan Total Surat Jalan.
+  1. **Pemantauan Analitik Bulan Berjalan (MTD) vs MoM & YoY (`DeliveryMomYoySection.tsx`)**:
+     - **Navigasi Periode Interaktif**: Selector tahun dan bulan (`selectedYear`, `selectedMonth`) dengan kontrol navigasi panah (`<`, `>`) dan tombol pintas *"Bulan Berjalan"* untuk kembali ke bulan/tahun saat ini secara instan.
+     - **5 Kartu Metrik Komparatif MTD**:
+       - **Total Surat Jalan (SJ)**: Jumlah fisik surat jalan terbit pada periode terpilih beserta indikator pertumbuhan MoM & YoY.
+       - **Total Koli / Packages**: Akumulasi koli paket terdistribusi beserta persentase fluktuasi pertumbuhan.
+       - **Tonase Berat (kg)**: Total tonase berat kargo terdistribusi (kg) lengkap dengan perbandingan MoM & YoY.
+       - **Surat Jalan Sukses Terkirim (Delivered)**: Jumlah surat jalan yang telah berhasil diserahkan (`fdSent = 1`) beserta rasio sukses pengantaran.
+       - **Rata-rata Koli per SJ**: Rata-rata densitas koli yang dimuat per surat jalan armada.
+     - **Pill Pertumbuhan Dinamis (Growth Badges)**: Menampilkan persentase selisih `+X%` (hijau) jika meningkat, `-X%` (merah/amber) jika menurun, serta penanda netral (`0%` / `—`) jika data basis pembanding bernilai nol.
+     - **Grafik Tren 12 Bulan (Recharts `ComposedChart`)**: Visualisasi pergerakan 12 bulan memadukan Bar Chart (Total SJ) dan Dual Line Chart (Total Koli & Tonase Berat kg) ramah tema Midnight Dark.
+     - **Matriks Ringkasan Perbandingan 3 Periode**: Tabel komparasi berdampingan antara Bulan Terpilih (MTD), Bulan Sebelumnya (MoM), dan Bulan Sama Tahun Lalu (YoY).
   2. **Banner Alur Tahapan Gudang (Workflow Stage Cards)**:
-     - Kartu Tahap 1: *Stok Mengendap di Gudang (Waiting Delivery)* — Menyorot volume kargo yang siap dijadwalkan pengiriman.
-     - Kartu Tahap 2: *Kargo Selesai Terkirim (Fulfilled Deliveries)* — Rekapitulasi distribusi barang yang telah tuntas.
-  3. **Tabel Inventori Stok Kargo di Gudang (Warehouse Inventory On-Hand)**:
-     - **Switcher Moda Tab**: `[ 🚢 Kargo Laut ]` | `[ ✈️ Kargo Udara ]`
-     - **Filter Status Stok**: `[ 📦 Di Gudang (On-Hand) ]` (`sent=0`), `[ ✅ Selesai Kirim ]` (`sent=1`), `[ Semua Kargo ]`.
-     - **Live Search & Pagination**: Pencarian instan debounced (350ms) berdasarkan No. List (`fdListCode`), Marking, Resi, atau Customer.
-     - **Kolom Tabel Lengkap**: No. List / Manifest Code, Marking & Customer, Komoditi & Cabang Asal, Total Masuk Gudang (Qty), Terkirim, Sisa On-Hand di Gudang, Visual Progress Bar Keterisian/Pengiriman, Status Badge (`100% In-Stock`, `Parsial`, `Selesai`), dan Tombol Aksi Cepat Buat Surat Jalan.
+     - Kartu 1: *Stok Mengendap di Gudang (Ready to Ship)* — Menampilkan total kargo on-hand (Laut + Udara) dengan tautan langsung menuju halaman `ROUTES.DELIVERY_ORDERS_INVENTORY`.
+     - Kartu 2: *Kargo Selesai Terkirim (Delivered)* — Rekapitulasi total koli yang sukses diserahterimakan dengan tautan ke `ROUTES.DELIVERY_ORDERS_LIST`.
+  3. **4 Kartu Pintasan Modul Logistik (Quick Navigation Cards)**:
+     - Tautan instan ke Inventori Stok Gudang, Daftar & Riwayat DO, Pengiriman Logistik, dan Batch Marking Kontainer.
 - **Endpoint Terkait**:
-  - `GET /api/delivery-orders/kpi`: Ringkasan metrik status pengantaran armada & surat jalan.
-  - `GET /api/delivery-orders/grouped`: Menggabungkan manifest inbound kargo (`tbEntryList`) dan outbound delivery (`tbDelivery`) dengan parameter `listType`, `sent`, `search`, `page`, dan `limit`.
+  - `GET /api/delivery-orders/kpi`: Mengembalikan ringkasan MTD, MoM, YoY, tren 12 bulan, dan status pengiriman armada.
+  - `GET /api/delivery-orders/grouped`: Digunakan untuk menghitung kuantitas kargo pending laut dan udara on-hand.
 
-#### B. Halaman Daftar Surat Jalan (`ListPage.tsx`) & Detail (`DetailPage.tsx`)
-- **Fitur & Logika**:
-  - **Toolbar Pencarian & Dropdown Saran Surat Jalan (`DeliveryOrderToolbar.tsx`)**:
+#### B. Halaman Inventori Stok Kargo di Gudang / Buat Surat Jalan (`pages/InventoryPage.tsx`)
+- **Tujuan & Alur**: Halaman mandiri di sidebar Logistik dengan label *"Buat Surat Jalan"* (`/mshipping/logistics/delivery-orders/inventory`) yang berfungsi sebagai **titik awal operasional pembuatan Surat Jalan berdasarkan manifest kargo gudang (`fdListCode`)**. Halaman ini secara spesifik berfokus murni pada **kargo on-hand di gudang yang belum dikirim (`sent = '0'`)**.
+- **Fitur Utama**:
+  1. **Switcher Moda Terpadu**: Tab toggle `[ 🚢 Kapal / Laut ]` dan `[ ✈️ Udara ]` dengan live counter jumlah kargo on-hand di gudang transit.
+  2. **Filter Status Fisik Gudang**:
+     - `Semua Stok`: Menampilkan seluruh kargo belum terkirim.
+     - `🏢 Di Gudang` (`gudangStatus = '1'`): Kargo yang fisik barangnya sudah dikonfirmasi berada di gudang transit.
+     - `⏳ Belum Konfirm` (`gudangStatus = '0'`): Kargo yang status fisiknya masih pending / belum konfirmasi masuk gudang.
+  3. **Live Search & Quick Pagination**: Pencarian instan (debounced 350ms) mencakup marking, customer, invoice, resi, atau list code.
+  4. **Tabel Inventori Cerdas**:
+     - Kolom data: Marking & Cabang, Customer, Komoditi & Tipe, Resi / List Code, Berat (kg) & Volume (m³ beserta sumber dimensi Gudang vs tbEntryList), Stok Gudang (progress meter kuantitas sisa/total koli), Status Fisik & Distribusi, serta Kelola Surat Jalan.
+  5. **Titik Awal Pembuatan & Pengelolaan Surat Jalan Berdasarkan `fdListCode`**:
+     - **Link "Buka SJ" ke Riwayat**: Baris kargo yang telah memiliki Surat Jalan dilengkapi tombol *"Buka SJ"* berupa `<Link>` dengan query parameter `?listCode=...` yang langsung mengarahkan pengguna ke halaman Daftar Surat Jalan (`ROUTES.DELIVERY_ORDERS_LIST`) dengan filter kargo tersebut sudah terisi otomatis (mengeliminasi redundansi tampilan riwayat di halaman inventori).
+     - **Tombol "+ Buat SJ" & Modal Penerbitan (`CreateDeliveryOrderModal.tsx`)**:
+       - Hanya muncul pada baris kargo yang **masih memiliki sisa stok di gudang (`sisa > 0`)**. Jika kargo sudah berstatus **Lengkap Terkirim** (`sisa <= 0`), tombol ini otomatis disembunyikan sehingga mencegah penerbitan ganda.
+        - Menginisialisasi form pembuatan Surat Jalan baru dari kargo terpilih (`fdListCode`, `fdMarking`, nama customer, sisa koli, dan berat).
+        - Menggunakan `createPortal(..., document.body)` dengan `fixed inset-0 z-[100]` dan flex centering sehingga modal selalu tampil presisi di tengah monitor (*true center viewport*).
+        - Memuat data armada (`tbKendaraan`), supir, no telepon supir, tanggal estimasi, tanggal kirim, dan catatan pengiriman.
+        - **Satuan Kargo Otomatis dari `tbEntryList` (`fdSatuan`)**:
+          - Dropdown pilihan Satuan dan nilai default `formData.fdSatuan` secara otomatis mengambil nilai satuan aktual yang tercatat pada `tbEntryList.fdSatuan` kargo terkait (bukan di-hardcode `COLY`).
+          - Jika kargo memiliki satuan di luar opsi standar (`COLY`, `KOLI`, `PCS`, `BOX`, `ROLL`) maupun master `tbSatuan` (seperti `PKGS`, `PLTS`, `CT`, `BAGS`, `DRUMS`, `CRATE`), opsi satuan tersebut otomatis disuntikkan ke dalam pilihan dropdown dengan label `(dari tbEntryList)` sehingga nilai satuan selalu terpilih dengan tepat tanpa terpotong atau tertukar.
+          - Context Bar ringkasan kargo di atas formulir serta label kuantitas kirim dan helper text sisa stok secara konsisten mengadopsi satuan kargo (`sisa / total {cargo.satuan}`).
+        - **Card Instruksi Khusus Pelanggan (Permintaan Pengiriman CS - `qr_OrderDelivey`)**:
+          - Menampilkan instruksi khusus yang diinput oleh tim Customer Service / Sales dari view SQL Server `qr_OrderDelivey` berdasarkan `fdListCode`.
+          - **Otomatis Terbuka (Auto-Open)**: Jika kargo memiliki instruksi pengiriman khusus dari CS, card ini langsung muncul di posisi paling atas form dan terbuka secara default agar staf operasional segera mengetahui instruksi khusus tersebut.
+          - **Otomatis Tersembunyi (Auto-Hide)**: Jika kargo tidak memiliki instruksi khusus (`qr_OrderDelivey` kosong), card ini disembunyikan sepenuhnya sehingga tampilan formulir tetap ringkas dan bersih.
+          - **Aksi Cepat (Quick Apply)**: Dilengkapi tombol *"Gunakan Instruksi CS Ini pada Form"* dan *"Terapkan Alamat ke Form"* untuk menyalin alamat kirim, kota, PIC kontak, tanggal estimasi, dan catatan CS langsung ke input form dalam 1-klik.
+        - **Integrasi Master Alamat Tujuan (`tbCustomerPengiriman`)**:
+          - Bagian *Tujuan & Penerima Barang* dilengkapi combo dropdown select yang mengambil **seluruh** daftar alamat tujuan customer dari tabel `tbCustomerPengiriman` menggunakan key `fdCustCode`.
+          - **Auto-Select Default (`fdAktif = 1`)**: Baris alamat dengan `fdAktif = 1` secara otomatis dianggap sebagai alamat default utama. Saat modal dibuka, combo langsung mengunci opsi default tersebut (`★ [DEFAULT]`) dan otomatis mengisi data modal penerima (kontak PIC, nomor HP/telepon, kota, dan alamat pengiriman lengkap).
+          - **Tampilkan Semua Opsi**: Dropdown combo menampilkan semua alamat tersimpan (aktif maupun non-aktif) sehingga pengguna bebas memilih alternatif alamat cabang pengiriman lain jika diperlukan.
+          - **Tombol "+ Tambah Alamat" (Quick Add)**: Disediakan tombol tambah alamat jika data tujuan belum ada atau ingin mendaftarkan cabang/gudang penerima baru. Sub-form interaktif langsung menyimpan record baru ke `tbCustomerPengiriman` dengan auto-generate 2-digit `fdID` (`'01'`, `'02'`, ...) dan otomatis memilih alamat tersebut untuk Surat Jalan yang sedang dibuat.
+        - Terintegrasi dengan endpoint `POST /api/delivery-orders` yang secara atomik mengambil nomor auto-counter FoxPro berikutnya dari `tbMasterCounter` (`fdCode = 'A'`, format `[Branch]-[Pad6Digits]`, e.g. `GZ-949650`), mengunci transaksi, dan menerbitkan Surat Jalan baru ke `tbDelivery`.
+- **Endpoint Terkait**:
+  - `GET /api/delivery-orders/grouped`: Mengambil data inventori kargo manifest masuk dengan filter moda dan status fisik (menyertakan `custCode` master dan `satuan` dari `tbEntryList.fdSatuan`).
+  - `GET /api/delivery-orders/by-listcode/:listCode`: Mengambil riwayat nomor Surat Jalan yang telah diterbitkan untuk list code tertentu.
+  - `GET /api/delivery-orders/order-delivery/:listCode`: Mengambil instruksi khusus pengiriman pelanggan (CS) dari `qr_OrderDelivey`.
+  - `GET /api/delivery-orders/customer-destinations/:custCode`: Mengambil daftar alamat tujuan pengiriman customer dari `tbCustomerPengiriman`.
+  - `POST /api/delivery-orders/customer-destinations`: Menambahkan alamat tujuan pengiriman baru ke `tbCustomerPengiriman` dengan atomic next `fdID`.
+  - `POST /api/delivery-orders`: Menerbitkan Surat Jalan baru dengan nomor otomatis atomic increment.
+
+#### C. Halaman Daftar Surat Jalan (`ListPage.tsx`) & Detail (`DetailPage.tsx`)
+- **Revamp Tampilan Daftar Surat Jalan & Manifest Kargo (`ListPage.tsx`)**:
+  - **Sistem Tab Terpadu (Pending vs Delivered)**:
+    - **Tab Pending (Dalam Pengiriman)**: Menampilkan kargo manifest yang masih dalam proses pengantaran atau belum lengkap terkirim (`sent = '0'`), lengkap dengan live counter badge per total kargo pending.
+    - **Tab Delivered (Lengkap Terkirim)**: Menampilkan kargo manifest yang seluruh muatannya telah selesai diantarkan (`sent = '1'`), lengkap dengan live counter badge per total kargo delivered.
+    - Menggantikan tampilan accordion ganda bertumpuk lama dengan tab selektif yang fokus dan responsif.
+  - **Baris Filter Horizontal Cabang Pengirim (Group Pills Cabang)**:
+    - Baris horizontal scrollable ramah mobile/desktop (`no-scrollbar`) yang memuat pil cabang dari API `GET /api/delivery-orders/branch-groups`:
+      - **Pill "Semua Cabang"**: Menampilkan seluruh data cabang dengan badge total sesuai tab status aktif.
+      - **Pill Cabang Spesifik** (`GZ`, `SG`, `HK`, `YW`, `LM`, `SH`, `SZ`, `EX`, `LG`, dll.): Menampilkan kode cabang, tooltip nama cabang, dan badge jumlah kargo cabang tersebut pada tab aktif.
+      - Menampilkan status aktif dengan border aksen brand semantik (`border-[var(--color-tertiary)]`) tanpa tombol solid putih, ramah multi-tema dan Midnight Dark Mode.
+  - **Sub-Toolbar Filter & Pencarian Kargo**:
+    - **Moda Switcher**: Tombol toggle instan `BY SEA (Laut)` (`listType = 2`) dan `BY AIR (Udara)` (`listType = 1`).
+    - **Pencarian Ter-Debounce (350ms)**: Mencakup pencarian multi-kolom (List Code, Marking Code, Nama Customer, Resi Terima, dan Nama Komoditas).
+    - **Active Context Bar**: Menampilkan ringkasan filter aktif (Status Tab, Moda, Cabang, kata kunci pencarian) dan tombol cepat *"Reset Filter"*.
+  - **Tabel Manifest Kargo & Ekspansi Rincian Surat Jalan (`BatchTable.tsx` & `BatchRow.tsx`)**:
+    - Header 8 kolom terstandarisasi: Nomor Urut (`#`), List Code / Cabang / Marking, Customer / Resi, Komoditas, Total Muatan (Qty, Satuan `fdSatuan`, Berat kg, Volume m³), Progres Pengiriman (Terkirim vs Sisa dengan badge semantik), Status Kirim (`StatusPill`), dan Aksi Expand SJ.
+    - Loading wireframe terstandarisasi menggunakan `.skeleton-shimmer` (`BatchTableSkeleton`), bebas dari spinner bulat fullscreen.
+    - Baris kargo dapat diekspansi langsung untuk melihat seluruh nomor Surat Jalan fisik terkait beserta link detail, armada, supir, status cetak, dan status AR (`DeliveryOrderDetails.tsx`).
+  - **Sistem Pagination Presisi & Limit Selector (`TableFooter.tsx`)**:
+    - Terintegrasi di footer tabel dengan tampilan counter presisi: `Menampilkan X–Y dari Z data`.
+    - Selector baris per halaman: `10`, `20`, `50`, `100`.
+    - Tombol navigasi halaman *Prev* dan *Next* serta indikator `page / totalPages`.
+  - **Dukungan Dual-View (Manifest Kargo vs Surat Jalan Fisik Flat)**:
+    - Pengguna tetap dapat beralih ke mode **Surat Jalan Fisik (Flat)** untuk mencari nomor Surat Jalan tertentu secara spesifik menggunakan `DeliveryOrderToolbar` dan `DeliveryOrderTable`.
+  - **Toolbar Pencarian & Dropdown Saran Surat Jalan Flat (`DeliveryOrderToolbar.tsx`)**:
     - Terhubung langsung dengan `SearchSuggestionsDropdown` yang mengonsumsi endpoint `/api/delivery-orders/suggestions`.
     - **Debounce 300ms**: Menggunakan `useDebounce(search, 300)` untuk mempercepat pengetikan tanpa membebani server backend.
     - Menampilkan saran terstruktur untuk nomor surat jalan (`sj`), pelanggan (`customer`), staf pengemudi (`supir`), dan plat nomor kendaraan (`car`).
-    - Dilengkapi penutup dropdown saat klik di luar kontainer (*click-outside listener*).
-  - Status Pengantaran Otomatis:
-    - **Delivered** (Hijau): Jika `fdSent === 1`.
-    - **On Delivery** (Biru): Jika tanggal sekarang $\ge$ `fdEstimasi` dan `fdSent === 0`.
-    - **Scheduled / Pending** (Kuning): Jika tanggal sekarang $<$ `fdEstimasi` dan `fdSent === 0`.
-  - Pengelompokan data berdasarkan Cabang (`branch-groups`) atau Marking (`marking-groups`).
-  - Halaman detail menampilkan seluruh daftar resi fisik dan jumlah pack/berat muatan yang diangkut pada surat jalan terpilih.
+  - **Indikator Status Siklus Surat Jalan (Lifecycle Badges)**:
+    - **Status Pengiriman (Delivery)**: `Terkirim` (`fdSent = 1`) vs `Proses Kirim` (`fdSent = 0`).
+    - **Status Cetak Fisik (Print)**: `Printed` (`fdPrintDate IS NOT NULL`) vs `Belum Cetak`.
+    - **Hirarki Posisi Dokumen**: `GUDANG` $\to$ `BILLING` $\to$ `AR`.
+    - **Status Penyerahan AR**: `AR` (`fdGive = 1`) vs `Belum AR`.
+  - **Pusat Kendali Surat Jalan Terintegrasi FoxPro (`DetailPage.tsx`)**:
+    - **Data Manifest Akurat via JOIN `tbEntryList` + `tbCabang`**:
+      - Menggunakan query JOIN langsung ke tabel kargo masuk `tbEntryList` dan tabel cabang resmi `tbCabang` (bukan `tbBranch` warisan).
+      - Menampilkan Nomor Invoice (`fdInvoiceNo`) dan Komoditas (`fdComodity`) aktual pada Manifest Context Bar 8 kolom.
+    - **Prioritas Penerima Kargo Aktual di Surat Jalan**:
+      - Nama penerima utama diprioritaskan dari dokumen fisik aktual Surat Jalan (`delivery.fdCustNameSJ`), bukan dipaksakan override dari tabel master `tbCustomers`. Nama master akun tetap ditampilkan sebagai referensi jika berbeda.
+    - **Dual Mode Interaktif (View Mode $\leftrightarrow$ Edit Mode $\leftrightarrow$ Save)**: Form edit armada `tbKendaraan`, supir, tanggal estimasi, alamat kirim, kota, dan catatan pengiriman.
+    - **Pencetakan Surat Jalan Terpadu (`PrintDeliveryOrderModal.tsx` & `PrintPage.tsx`)**:
+      - **Media Cetak Standar**: Format presisi untuk kertas continuous form ukuran **lebar 23 cm × tinggi 16.5 cm (Landscape)** (`@page { size: 230mm 165mm landscape; margin: 0; }`).
+      - **3 Pilihan Dokumen Terpadu (Single / Combined Sheet)**:
+        1. **SJ + Lampiran Ukuran (Keduanya)**: Mencetak 2 lembar continuous form sekaligus secara berurutan dengan pemisah halaman (`pageBreakAfter: 'always'`). Lembar 1 adalah Surat Jalan Resmi, lembar 2 adalah Lampiran Ukuran Marking.
+        2. **Hanya Surat Jalan Resmi (`rpf_delivery_2022.frx`)**: Format dokumen fisik legal 1 lembar dengan identitas No. SJ, No. Mobil, No. Resi, Marking, Penerima, Alamat Tujuan, Tabel Muatan (Qty, Berat, Satuan, Koli), 3 butir ketentuan keluhan/perhatian, checkbox packing original, dan 3 kolom tanda terima fisik (Penerima, Pengirim/Supir, Petugas Gudang).
+        3. **Hanya Lampiran Ukuran Marking (`rpt_deliverysize_bill_2023.FRX`)**: Format tabel rincian dimensi fisik koli 1 lembar memuat Nomor SJ, Nama Customer, Kode Marking, No. Marking, Tanggal, Tabel kolom `No # | Panjang | Lebar | Tinggi | Jumlah | Total (M3/VFC) | Keterangan`, baris Grand Total, dan tanda tangan Petugas Ukur & Gudang.
+      - **4 Opsi Cetak Sesuai Form Warisan FoxPro (`frm_input_surat_jalan_view_2021.scx`)**:
+        - `cetakUkuran`: Menampilkan rincian sub-ukuran coly (maks 5 baris) di badan lembar Surat Jalan utama.
+        - `cetakKeterangan`: Menampilkan catatan/deskripsi barang dan instruksi pengiriman pada baris kargo.
+        - `cetakSupir`: Mencetak nama pengemudi fisik pada kolom tanda terima.
+        - `cetakSJKosong`: Format blangko formulir kosong untuk pengisian darurat lapangan.
+      - **Halaman Cetak Mandiri (`PrintPage.tsx` / `DeliveryOrderPrintPage`)**:
+        - Terdaftar pada rute `ROUTES.DELIVERY_PRINT(':id')` (`/mshipping/logistics/delivery-orders/:id/print`) di luar `AppLayout` tanpa gangguan sidebar/navbar.
+        - Toolbar kontrol cetak interaktif: Pemilih dokumen live (`both`, `sj`, `ukuran`), tombol pintas opsi cetak, judul file otomatis, tombol print utama, serta live sheet preview 1:1 format continuous form.
+        - Terhubung dengan `deliveryOrdersApi.recordPrint` untuk mencatat riwayat cetak ke database backend (`fdPrint = 1`, `fdPrintDate`, `fdPrintBy`).
+    - **Penghapusan Dokumen (`ConfirmModal`)**: Proteksi surat jalan yang telah dicetak.
+    - **Banner Peringatan Sistem**: Banner Barang Amfibi dan Banner Finance Blocked (`tbEntryList_Bloked_Finance`).
 - **Endpoint Terkait**:
-  - `GET /api/delivery-orders`: Query `{ page, limit, search }`.
-  - `GET /api/delivery-orders/:id`: Detail nomor surat jalan dan item resi terkait.
+  - `GET /api/delivery-orders`: Query `{ page, limit, search, sent, printed, ar }`.
+  - `GET /api/delivery-orders/master-data`: Master armada `tbKendaraan`, satuan `tbSatuan`, jenis bayar `tbJenisPembayaran`, dan ekspedisi `tbExpedisi`.
+  - `GET /api/delivery-orders/:id`: Detail nomor surat jalan dengan relasi `tbDelivery`, `tbEntryList` + `tbCabang`, `tbCustomers`, `tbEntryListDetail`, `qr_OrderDelivey`, `m3Comparison`, `tbExpedisi`, amfibi check.
+  - `PUT /api/delivery-orders/:id`: Memperbarui data operasional surat jalan.
+  - `DELETE /api/delivery-orders/:id`: Menghapus surat jalan dengan proteksi dokumen yang telah dicetak.
+  - `POST /api/delivery-orders/:id/print`: Mencatat konfirmasi cetak surat jalan dan opsi cetak ukuran.
   - `GET /api/delivery-orders/grouped`: Agregasi pengelompokan surat jalan.
   - `GET /api/delivery-orders/marking-groups`: Pengelompokan berbasis batch marking.
   - `GET /api/delivery-orders/branch-groups`: Pengelompokan berbasis cabang.
+
 
 ---
 
@@ -319,12 +473,14 @@ Modul paling komprehensif pada sistem mshipping yang mencakup siklus hidup penag
 - **Fitur Utama**:
   - **Toolbar Pencarian & Dropdown Saran Billing (`BillingToolbar.tsx`)**:
     - Terhubung langsung dengan `SearchSuggestionsDropdown` yang mengonsumsi endpoint `/api/billing/suggestions`.
-    - **Pencarian Ter-Debounce (300ms)**: Menggunakan `useDebounce(search, 300)` untuk responsivitas tinggi tanpa membebani database backend.
-    - **Sinkronisasi Otomatis Cakupan (`searchField`)**: Saat pengguna memilih saran nomor faktur (`invoice`), pelanggan (`customer`), atau marking (`marking`), `searchField` disinkronkan secara otomatis (`'invNo'`, `'customer'`, atau `'marking'`) sebelum teks dimasukkan ke query pencarian, mencegah kesalahan hasil kosong (*empty result*).
+    - **Preservasi Teks Pencarian & Filter Pelanggan Presisi (`selectedCustCode`)**: Saat pengguna memilih saran pelanggan dari dropdown, kolom teks pencarian tetap menampilkan nama pelanggan (`fdCustName`, misal: `RICO`) sesuai yang dipilih pengguna. Di balik layar, sistem mengirimkan parameter `custCode` (`R000470`) ke backend `getBillings` sehingga daftar faktur langsung memfilter faktur milik pelanggan tersebut secara 100% presisi tanpa mengganti teks input menjadi kode. Jika pengguna mengetik ulang atau menghapus teks, filter `selectedCustCode` otomatis di-reset kembali ke pencarian multi-kolom bebas.
     - Dilengkapi panduan pencarian popover interaktif dan penutup otomatis klik di luar (*click-outside listener*).
   - Pemilihan karyawan penagih (*Billing Staff / Collector*).
   - Aksi *Issue Invoice*: Mengunci tagihan dengan tanggal penyerahan resmi (`fdGiveDate`), nomor invoice, dan ID penagih.
   - Edit item tagihan tersimpan (`PUT /api/billing/:id/details`).
+  - **Dukungan Dual-Bahasa (i18n) & Fitur Salin Cepat Nomor Invoice (`DetailPage.tsx`)**:
+    - Tombol badge salin cepat pada samping nomor invoice header serta tombol mikro pada baris No. Invoice di Card 2 (Status & Waktu Invoice).
+    - Seluruh label visual tombol, tooltip, dan pesan feedback toast terhubung penuh ke kamus i18n (`common.copy`, `common.copied`, `billing.invNo`, `billing.detail.copyInvoiceTitle`, `billing.detail.copySuccess`, dll).
   - Navigasi cepat ke Cetak Dokumen dan Audit Validasi.
 - **Endpoint**:
   - `GET /api/billing`: Pagination & filter search.
@@ -337,6 +493,10 @@ Modul paling komprehensif pada sistem mshipping yang mencakup siklus hidup penag
 - **Tujuan**: Mencegah kebocoran pendapatan perusahaan dan komplain pelanggan dengan memeriksa akurasi tarif master serta kesesuaian fisik muatan sebelum faktur dikirimkan.
 - **3 Aturan Audit Utama**:
   1. **Validasi Harga Master (`Price Check`)**: Membandingkan tarif yang ditagihkan dengan tabel master tarif umum atau tarif khusus pelanggan.
+     - **Resolusi Komoditi & Pemetaan (`evaluateItemPrice`)**:
+       - Jika item tidak memiliki `fdTypeComodity` khusus atau bernilai `0`, sistem otomatis fallback ke komoditi header invoice (`defaultTypeId`) atau komoditi default marking (`UMUM`, `GENERAL`, dll).
+       - Pencocokan heuristik kata kunci komoditi (seperti singkatan `LS` pada *Alkes, Makanan & LS Lainnya*) menggunakan regex batas kata (`/\bLS\b/i`) sehingga kata seperti `PARCELS`, `TOOLS`, dsb tidak memicu false positive kategori tarif yang salah.
+       - Item `PARCELS TO JAKARTA (PCS)` tidak diperlakukan sebagai M3 kubikasi.
   2. **Validasi Hirarki Volume M3 (`M3 Check`)**:
      - **Single Bill**: `Komplain` (`fdM3Komplain`) $\to$ `Gudang` (`fdM3Gudang`) $\to$ `PL` (`fdM3`).
      - **Bill Gabung** (`isGabungan`): `Komplain (Marking)` $\to$ `Gudang (Marking)` (`m3CustPerMarking`) $\to$ `PL (Marking)`.
@@ -376,11 +536,38 @@ Modul paling komprehensif pada sistem mshipping yang mencakup siklus hidup penag
          - Kontainer utama kartu validasi menggunakan `flex flex-col h-full min-h-0`, dengan header kartu dan bar navigasi tab terkunci di atas (`shrink-0`).
          - Kontainer utama tab perbandingan (*main comparison body*) menggunakan `flex-1 min-h-0 overflow-y-auto` dengan padding bawah lapang (`pb-8 sm:pb-10`).
          - Memastikan seluruh konten panjang pada seluruh tab (Item & Tarif, Validasi M3 / Compare M3:KG, Overweight, Freight Charge, dan Ekspedisi) dapat di-scroll vertikal secara mulus tanpa terpotong batas layar atau terhalang tombol FAB drawer.
-       - Menghitung nilai ideal tarif M3 vs aktual tagihan dan mendeteksi kondisi: **`EQUAL` (Sesuai)**, **`OVERWEIGHT`**, **`OVERCHARGE`**, atau **`UNDERCHARGE`**.
+       - **Modal Rincian Dimensi Fisik & Perhitungan Volume M3 (`DimensionDetailModal.tsx`)**:
+         - Pada kartu **Per ListCode** di tab Validasi M3 (`BillingValidationCard.tsx`), disediakan tombol primer **`Detail Dimensi`** di header kartu serta tombol tautan mikro **`Dimensi`** di setiap kotak sumber data (*EntryList / ListBatch*, *Packing List*, dan *Komplain*).
+         - Membuka modal terstandar ERP (`size="2xl"`) yang mengintegrasikan data fisik per koli dari 3 tabel basis data terkait:
+           1. **EntryList** (`tbEntryListDetail`): Dimensi fisik koli saat diterima dan diukur di gudang.
+           2. **Packing List** (`tbEntryListDetail_PackingList`): Dimensi koli menurut dokumen packing list pengirim (beserta kode marking & komoditas).
+           3. **Komplain** (`tbEntryListDetail_Komplain`): Dimensi fisik koli hasil komplain atau revisi pengukuran.
+         - **Kartu Metrik KPI**: Total Volume M3 (`18px tabular-nums`), Total Koli / Qty, Jumlah Baris Rincian, serta banner panduan rumus konversi $(P \times L \times T \times Qty) \div 1.000.000$.
+       - **Tabel Rincian Lengkap**: Menampilkan kolom No, Kode Detail (`fdListDCode`), Deskripsi / Marking / Komoditas, Panjang P (cm), Lebar L (cm), Tinggi T (cm), Qty (Koli), serta Hasil Hitungan Volume M3 dengan background aksen dan baris ringkasan footer total.
+         - Dilengkapi filter pencarian teks instan (kode detail, deskripsi, marking, nama barang) dan tombol segarkan data (*refresh*).
+       - **Modal Ringkasan Validasi Faktur (`BillingValidationSummaryModal.tsx`)**:
+         - Membuka modal ringkasan audit penagihan menyeluruh yang menggabungkan audit fisik (`PhysicalAuditTab.tsx`) dan audit finansial (`FinancialAuditTab.tsx`).
+         - Dilengkapi indikator proteksi loading state (`isLoadingValidation`) untuk mencegah penilaian selisih kubikasi prematur saat data fisik gudang masih dimuat di latar belakang.
+         - **Audit Fisik & Penanda Data Acuan Tagihan (`PhysicalAuditTab.tsx`)**:
+           - Pada kartu metrik KPI ukuran fisik (Volume/Berat Ditagihkan, Volume/Berat Gudang, Volume Packing List, Volume/Berat Komplain), kartu sumber data fisik yang dipakai sebagai acuan tagihan (`isUsedGudang`, `isUsedPL`, `isUsedKomplain`) diberi **highlight border hijau tegas** (`border-emerald-500/70` / `ring-1 ring-emerald-500/20`), latar halus (`bg-emerald-500/5`), dan badge penanda **`Dipakai Bill`**.
+           - Kartu pertama (**Nilai Tagihan / Ditagihkan**) juga diberi border semantik responsif: warna aksen brand (`border-[var(--color-tertiary)]/70`) dengan badge **`Ditagihkan`** saat data cocok, border kuning-amber saat berada di bawah minimum charge (`< Min M3`), atau border merah-rose saat terdapat deviasi/selisih fisik (`Selisih`).
+           - Mengoper prop `matchedSourceKey` dari hasil validasi `useBillingValidation` (`v.seaPrimaryMatch?.sourceKey` / `v.airPrimaryMatch?.sourceKey`) yang disinkronkan dengan fallback pencocokan angka toleransi.
+         - **Audit Finansial (`FinancialAuditTab.tsx` & `evaluateItemPrice` di `billing.utils.ts`)**:
+            - **Prioritas Pemetaan Komoditas Eksplisit**:
+              - Sistem memprioritaskan Pemetaan Khusus Pelanggan (`tbCommodityMapping` dengan `fdCustCode = custCode`) di atas Pemetaan Global (`fdCustCode IS NULL`).
+              - Target komoditas hasil pemetaan (`directComodityName`, misal: `BATTERY` $\to$ `UMUM`) dipertahankan sebagai acuan nama komoditas dan **tidak ditimpa** oleh fallback default (seperti `isGenuineBattery` yang mengarahkan ke `SEMI GARMENT`).
+              - Fallback bawaan kata kunci komoditas (`SEMI GARMENT`, `KHUSUS IPAD`, `LAPTOP`) murni hanya digunakan jika tidak ditemukan aturan pemetaan pelanggan maupun global.
+            - **Dukungan Tarif Langsung Pemetaan (Tier 0 Direct Price)**:
+              - Jika pemetaan komoditas memiliki nilai tarif langsung (`price > 0`), sistem menggunakannya sebagai acuan validasi tarif tertinggi (`Tier 0: Tarif Khusus Pelanggan / Tier 0`) tanpa mencari ke master upload Excel.
+              - Status tarif dievaluasi langsung terhadap nominal Tier 0 tersebut (`MATCH` / `LOWER` / `HIGHER`).
+            - Membandingkan tarif tagihan dengan tarif acuan master dan menghitung selisih finansial per baris item penagihan.
+            - **Tampilan 2 Baris Kolom Sumber Acuan**: Rincian acuan tarif (`item.priceListDisplay`) di-split secara terstruktur menjadi 2 baris (Baris 1: Nominal Harga / Rentang Tarif, Baris 2: Keterangan Acuan Sheet seperti `(Cust)`, `(Tier 0)`, `(CS)`, `(tbExpIndo)`, dll) menggunakan parser cerdas `parsePriceDisplay`.
+        - Menghitung nilai ideal tarif M3 vs aktual tagihan dan mendeteksi kondisi: **`EQUAL` (Sesuai)**, **`OVERWEIGHT`**, **`OVERCHARGE`**, atau **`UNDERCHARGE`**.
 - **Endpoint Terkait**:
   - `GET /api/billing?hasAmount=true&draftOnly=true&noPagination=true&minYear=2023`: Daftar seluruh invoice antrean validasi draft.
   - `GET /api/billing/type2-compare-check`: Komparasi komprehensif M3 vs KG faktur.
   - `GET /api/billing/m3-check`: Evaluasi hirarki ukuran M3 per list code.
+  - `GET /api/billing/dimensions/:listCode`: Mengambil rincian ukuran fisik per koli dari 3 tabel dimensi (`tbEntryListDetail`, `tbEntryListDetail_PackingList`, `tbEntryListDetail_Komplain`) beserta total kuantitas dan kalkulasi volume M3.
   - `GET /api/billing/m3-cust-marking-details`: Rincian ukuran marking customer.
   - `GET /api/billing/transport-check`: Evaluasi biaya transportasi.
   - `GET /api/billing/customer-tariff-audit/:custCode`: Audit tarif menyeluruh customer.
@@ -453,19 +640,42 @@ Untuk mencegah *God Components* (>2.000 baris) dan kode *spaghetti*, seluruh mod
 3. **`BillingValidationSummaryModal` (`src/features/billing/components/validation-summary/`)**:
    - Modal audit multi-aspek komprehensif sebelum faktur disetujui dan diterbitkan.
    - **Standar Ukuran & Kompak ERP**: Menggunakan `size="2xl" className="h-[85vh] max-h-[85vh] flex flex-col"` (`max-w-6xl` dengan tinggi statis 85vh agar modal stabil tidak naik-turun saat ganti tab), padding kompak `px-3.5 sm:px-4 py-2 sm:py-2.5`, tab bar kompak `text-[11.5px] px-2.5 py-1`, kartu KPI `16-17px tabular-nums`, dan tabel data berpadding `py-1.5 px-2.5` sesuai hierarki desain ERP.
+   - **Proteksi Loading Prematur (`isLoadingValidation`)**:
+     - Dilengkapi penanganan status pemuatan asinkron data fisik operasional (`/billing/m3-check`).
+     - Selama `isLoadingValidation: true`, header, tabs bar, dan footer alert bar menampilkan status evaluasi netral/shimmer (*"Memvalidasi Data Fisik & Acuan Tarif..."*), tombol "Terbitkan Invoice" dinonaktifkan sementara, dan status selisih fisik/tarif dicegah agar tidak memunculkan peringatan palsu (*false discrepancy warning*) sebelum data operasional selesai dimuat.
    - **Struktur Modular**:
      - `types.ts`: Tipe data kategori validasi audit (`SummaryModalTab`).
-     - `ValidationSummaryHeader.tsx`: Header ringkasan audit dan status keseluruhan.
-     - `ValidationSummaryTabsBar.tsx`: Navigasi tab status audit (`Item Tagihan & Tarif`, `Timbangan Fisik / Validasi M3`, `Overweight`, `Freight Charge`, `Transport & Ekspedisi`) yang dilengkapi semantic status tag pada masing-masing tab (`✓ Valid` / `Cek Tarif`, `✓ Sesuai` / `Selisih`, `✓ Aman` / `Perlu Cek`, `{totalFc} {curr}` / `Nihil`, `✓ Sesuai` / `Perlu Tagih`).
+     - `ValidationSummaryHeader.tsx`: Header ringkasan audit dan status keseluruhan (mendukung `isLoadingValidation`).
+     - `ValidationSummaryTabsBar.tsx`: Navigasi tab status audit (`Item Tagihan & Tarif`, `Timbangan Fisik / Validasi M3`, `Overweight`, `Freight Charge`, `Transport & Ekspedisi`) yang dilengkapi semantic status tag pada masing-masing tab (`✓ Valid` / `Cek Tarif`, `✓ Sesuai` / `Selisih`, `✓ Aman` / `Perlu Cek`, `{totalFc} {curr}` / `Nihil`, `✓ Sesuai` / `Perlu Tagih`, serta tag `Cek...` saat memuat).
      - `FinancialAuditTab.tsx`: Panel audit tarif & komparasi ideal vs aktual tagihan. Seluruh kolom angka/tarif (`Tarif Tagihan`, `Tarif Acuan`, `Selisih`, `Sumber Acuan`, `Status Audit`, `Qty`, `No`) dilindungi dengan `whitespace-nowrap` dan min-width terdefinisi (`min-w-[125px]`, `min-w-[120px]`, `min-w-[130px]`) sehingga nominal mata uang (seperti `Rp. 10,000,000.00` dan `+Rp. 1,000,000.00`) tidak ter-wrap antar-baris, dan tabel secara mulus dapat digulir horizontal jika diperlukan.
      - `PhysicalAuditTab.tsx`: Panel audit M3 vs KG & single/bill gabungan.
      - `OverweightAuditTab.tsx`: Panel audit batas toleransi tonase muatan armada.
      - `FreightAuditTab.tsx`: Panel audit biaya Freight Charge valas dan ringkasan list batch EntryList operasional.
      - `TransportAuditTabContent.tsx`: Panel audit biaya ekspedisi lokal (tbExpIndo) & status penagihan transport.
-      - `ValidationSummaryFooter.tsx`: Footer aksi persetujuan (*issue/approve*) dengan tombol proporsional seimbang berbasis pustaka UI primitif terpusat `<Button>` (`size="sm"`, `rounded-[var(--radius-md)]` 6px agar tidak berbentuk pill lonjong/kapsul). Tombol "Terbitkan Invoice" beraksen emerald dengan ikon `<Send />`, serta tombol "Tutup" sekunder bertema dinamis yang menutup modal sebelum memicu aksi `onOpenIssueModal`.
+     - `ValidationSummaryFooter.tsx`: Footer aksi persetujuan (*issue/approve*) dengan verdict alert bar dinamis ramah loading dan tombol proporsional seimbang berbasis pustaka UI primitif terpusat `<Button>` (`size="sm"`, `rounded-[var(--radius-md)]` 6px agar tidak berbentuk pill lonjong/kapsul). Tombol "Terbitkan Invoice" beraksen emerald dengan ikon `<Send />`, serta tombol "Tutup" sekunder bertema dinamis yang menutup modal sebelum memicu aksi `onOpenIssueModal`.
 
-4. **Sentralisasi Tipe TypeScript (`src/features/billing/types/billing.types.ts`)**:
-   - Seluruh tipe data inti (`M3CheckResponse`, `MarkingDetailItem`, `PriceItem`, `FlatDetailTraceItem`, `CustomerBillingHistoryItem`, `ValidationCategory`, dll) dipusatkan di berkas ini sebagai **Single Source of Truth (SSOT)**. Komponen `.tsx` dilarang mendefinisikan interface yang digunakan lintas berkas.
+4. **`CustMarkingDetailModal` & Ekspor Excel (`src/features/billing/components/cust-marking-detail/`)**:
+   - Dialog rincian muatan & komparasi fisik vs invoice per customer & marking.
+   - **Tabel Data Transaksi & Redesign (`CustMarkingDataTable.tsx`)**:
+     - Tampilan tabel kompak, bersih, dan berstandar ERP (`text-xs`, tabular nums, sticky header & sticky footer).
+     - **Dieliminasi**: Kolom `Rasio` dan `Overweight` dihapus dari tampilan tabel sesuai preferensi operasional penagihan kargo.
+     - **Penyederhanaan Tax Return**: Kolom `Tax Return` disederhanakan menjadi indikator tag status ringkas (`TAX` hijau emerald ber-border tipis vs `NON` netral dengan border putus-putus), dilengkapi tooltip detail nominal jika terdapat nilai tax return.
+     - **Grouping Cabang Rapi**: Baris pemisah cabang dengan badge visual modern di sisi kiri dan akumulasi berat serta kubikasi cabang di sisi kanan.
+     - **Sticky Footer Total Terpadu (`tfoot`)**: Akumulasi total kuantitas coly, berat gudang, kubikasi M³ gudang, M³ packing list, data komplain, selisih kubikasi, total tagihan rupiah, serta jumlah transaksi dengan status TAX.
+   - **Ekspor Excel Terpadu (`custMarkingExcel.ts`)**:
+     - **Sheet 1 ('Ringkasan Marking')**: Tabel komprehensif data shipment (Invoice, Tgl, Cabang, Listcode, Resi `fdTerima`, Marking No, Komoditas, Qty, Berat, Volume, VFC, Nilai Tagihan, Status).
+     - **Sheet 2 ('Detail Ukuran Fisik')**: Redesign tata letak sesuai kebutuhan audit pelanggan:
+       - **Identitas Kargo Vertikal (5 baris)**: `Customer Name`, `Marking`, `Marking No`, `Resi (fdTerima)`, `Komoditas`. (Menghilangkan `LISTCODE` dan `INVOICE` dari header fisik).
+       - **Tabel Ukuran Fisik Horizontal**: `No`, `Panjang (cm)`, `Lebar (cm)`, `Tinggi (cm)`, `Qty`, `Volume (m³)`.
+       - **Baris Terakhir**: Akumulasi total kuantitas coly dan `Total m³`.
+       - Lebar kolom terstandar proporsional (`!cols`).
+
+5. **Sentralisasi Tipe & Utilitas Billing (`src/features/billing/types/` & `src/features/billing/utils/`)**:
+   - Seluruh tipe data inti (`M3CheckResponse`, `MarkingDetailItem`, `PriceItem`, `FlatDetailTraceItem`, `CustomerBillingHistoryItem`, `ValidationCategory`, dll) dipusatkan di `billing.types.ts` sebagai **Single Source of Truth (SSOT)**.
+   - **Evaluasi Auxiliary Item (`isAuxiliaryItem`)**: Mendeteksi biaya pelengkap non-muatan (biaya admin, tax return, surcharge, diskon). Wajib menggunakan *word boundary* regex `/\bADMIN(ISTRASI)?\b/i` dan proteksi awalan `PARCEL`/`PARCELS` agar komoditas barang yang mengandung substring serupa (seperti `"BADMINTON RACKET"`) tidak salah diabaikan dari perhitungan kubikasi tagihan.
+   - **Evaluasi Tarif Komoditi (`evaluateItemPrice`)**:
+     - Memprioritaskan penentuan komoditas berdasarkan hasil pemetaan eksplisit (*Customer Mapping* dahulu, lalu *Global Mapping* atau *Marking Commodities*).
+     - **Disambiguasi Presisi SEMI GARMENT vs GARMENT**: Memisahkan secara ketat pencocokan komoditas `SEMI GARMENT` (`Semi Garment / Battery / Powerbank (MSDS required)`) dari `GARMENT` reguler (`Fabric / Garment`). Mencegah komoditas Semi Garment (misal pada rute Singapore/SG MKT @ Rp 8.500.000) salah mencocokkan kategori Garment umum (@ Rp 9.500.000), serta memproteksi pencarian substring agar tidak terjadi salah pasang silang antara kedua kategori tersebut.
 
 ---
 
@@ -497,8 +707,19 @@ Untuk mencegah *God Components* (>2.000 baris) dan kode *spaghetti*, seluruh mod
 2. **Histori & Riwayat Customer (`HistoryPage.tsx`)**: Riwayat penyesuaian tarif per pelanggan tertentu beserta status aktif/kedaluwarsa.
 3. **Upload Tarif Khusus Pelanggan (`UploadPage.tsx`)**: Upload Excel daftar harga khusus satu pelanggan tertentu (`POST /api/customer-price-list/:custCode/upload`).
 4. **Visual Diff Pelanggan (`DiffPage.tsx`)**: Bedah komparasi tarif baru vs tarif lama khusus kontrak pelanggan bersangkutan.
-5. **Special Commodity Price CRUD**: Manajemen harga khusus untuk varian komoditas tertentu pelanggan (misal: kosmetik, baterai, cairan) dengan status *Active* / *Expired*.
+5. **Modal Input Harga Komoditi Khusus Customer (`CustomerCommodityPriceModal.tsx`)**:
+   - **Pencarian Master Customer dari Single Source of Truth `tbCustomers`**:
+     - Input pemilihan customer terhubung langsung ke master **`tbCustomers`** melalui `customersApi.list` (`GET /api/customers?search=...&limit=30&status=active`), sehingga staf dapat memilih pelanggan mana saja yang terdaftar di sistem ERP tanpa harus menunggu pelanggan tersebut pernah mengunggah file Excel tarif.
+     - **Pencarian Real-Time & Debounce (300ms)**: Menggunakan `useDebounce(customerSearch, 300)` untuk pencarian kode (`fdCustCode`) maupun nama customer (`fdCustName`).
+     - **Pembersihan FoxPro String (`displayCustName`)**: Menggunakan `displayCustName` dari `@/lib/utils` untuk menormalisasi karakter warisan FoxPro (`^` $\to$ `'`).
+     - **Kartu Pelanggan Terpilih (Selected Customer Card)**: Menampilkan badge kode monospaced, badge emerald `tbCustomers`, nama customer resmi, serta tombol `"Ganti"` untuk beralih atau mereset pilihan.
+     - **Auto-Resolution Pelanggan**: Saat modal dibuka dalam mode edit (`initialData`) atau dengan `defaultCustCode`, nama customer resmi diselesaikan secara otomatis melalui `customersApi.detail(targetCode)`.
+     - **Fallback Kode Kustom**: Menyediakan tombol pintas penggunaan kode kustom bila staf ingin memasukkan kode pelanggan spesifik secara langsung.
+   - **Pengaturan Multi-Alias Komoditi**: Penambahan alias nama barang operasional (misal: `LAPTOP BATTERY`, `POWERBANK`) yang otomatis disinkronkan ke kategori komoditas terkait.
+   - **Masa Berlaku Fleksibel**: Pilihan tanggal mulai berlaku (*Effective Date*) dan batas waktu opsional (*End Date* / ongoing).
 - **Endpoint Terkait**:
+  - `GET /api/customers`: Pencarian master customer dari `tbCustomers` (Single Source of Truth).
+  - `GET /api/customers/:id`: Detail customer untuk resolusi nama resmi.
   - `GET /api/customer-price-list`: Daftar pelanggan bertarif khusus.
   - `GET /api/customer-price-list/:custCode/active`: Tarif aktif pelanggan saat ini.
   - `GET /api/customer-price-list/:custCode/uploads`: Riwayat upload per customer.
@@ -513,17 +734,33 @@ Untuk mencegah *God Components* (>2.000 baris) dan kode *spaghetti*, seluruh mod
 ### 3.9. Modul Commodity Mapping (`src/features/commodity-mapping/`)
 
 #### A. Tujuan & Logika
-Menghubungkan variasi penulisan nama komoditas yang tidak beraturan dari data mentah packing list/lapangan (misal: `"BAJU ANAK"`, `"KAOS KATUN"`, `"TEKSTIL"`) ke kategori master tarif resmi perusahaan (misal: `"GARMENT"`).
+Menghubungkan variasi penulisan nama komoditas yang tidak beraturan dari data mentah packing list/lapangan (misal: `"BAJU ANAK"`, `"KAOS KATUN"`, `"TEKSTIL"`) ke kategori master tarif resmi perusahaan (misal: `"GARMENT"`), serta memungkinkan penetapan **tarif langsung (*direct price*)** per komoditas dengan batasan cabang asal dan kondisi mulai marking code / tanggal agen.
 - **Scope Pemetaan**:
   - `global`: Berlaku untuk seluruh pengiriman umum.
   - `customer`: Berlaku khusus hanya untuk pengiriman pelanggan tertentu.
 - **Fitur Utama**:
-  - Auto-suggestions pencarian nama komoditas lapangan.
+  - **Tarif Langsung & Acuan Operasional (Tier 0 - Prioritas Tertinggi)**:
+    - Memungkinkan staf menetapkan nominal **Harga Langsung (Rp)** (`price`), **Cabang Asal** (`branch`: `ALL`, `GZ`, `YIWU`, `SHANGHAI`, `SHENZHEN`), **Mulai Marking Code** (`startMarkingCode`, e.g. `>= 26GZD53`), dan/atau **Mulai Tanggal Agen** (`startAgentDate`).
+    - **Integrasi Mesin Cek Tarif (*Price Check & Billing Validation*)**:
+      - Sistem audit tarif (`evaluatePriceCheck` di `price-check.service.ts` & `m3-check.service.ts`) mengevaluasi pemetaan komoditas bertarif sebagai **Tier 0 (`COMMODITY_MAPPING_PRICE`)**.
+      - Menggunakan `isMarkingGreaterOrEqual` dari `marking-matcher.ts` untuk membandingkan urutan marking code kapal secara presisi.
+      - Jika memenuhi syarat (customer, cabang asal, moda, dan marking $\ge$ `startMarkingCode` atau tanggal agen $\ge$ `startAgentDate`), sistem langsung menetapkan tarif tersebut tanpa perlu mencari lembar master upload Excel.
+  - **Pilih Pelanggan dari Master `tbCustomers` (`CommodityMappingModal.tsx`)**:
+    - Pada modal Tambah/Edit Pemetaan Khusus Pelanggan (`scope === 'customer'`), daftar pilihan pelanggan diambil langsung dari master data **`tbCustomers`** melalui `customersApi.list` (`GET /api/customers`) dengan status aktif (`fdDiscontinued <> 1`).
+    - **Pencarian Real-time & Debounce**: Dilengkapi pencarian kode/nama pelanggan dengan debounce 300ms (`useDebounce`) dan dropdown autocomplete yang menampilkan kode pelanggan (`fdCustCode`), nama resmi (`displayCustName(fdCustName)`), dan kota (`fdCityName`).
+    - **Selected Customer Card**: Setelah customer dipilih, ditampilkan kartu informasi pelanggan terpilih lengkap dengan badge `tbCustomers`, nama terformat, dan tombol `"Ganti"` untuk mengubah pilihan secara cepat.
+    - **Penyelesaian Otomatis (*Auto-Resolution*)**: Bila modal dibuka dengan parameter awal atau dalam mode edit, nama pelanggan otomatis diselaraskan melalui `customersApi.detail(custCode)` dari tabel `tbCustomers`.
+  - **Tampilan Tabel Modern (`CommodityMappingPage.tsx`)**:
+    - Dilengkapi kolom khusus **"Tarif Khusus (Tier 0)"** yang menampilkan badge harga langsung (`formatCurrency(item.price)`), kode marking awal (`🏷️ Mulai: >= 26GZD53`), dan tanggal agen.
+    - Kolom **"Moda & Cabang"** menampilkan pill moda transportasi dan badge cabang asal (`GZ`, `YIWU`, dll).
+  - Auto-suggestions pencarian nama komoditas lapangan (`commodityMappingApi.getSuggestions`).
   - Tombol aksi *"Apply Mappings to Upload"*: Mengaplikasikan aturan mapping langsung ke berkas upload tarif yang sudah ada di database.
 - **Endpoint Terkait**:
-  - `GET /api/commodity-mapping`: List mapping dengan pagination & filter search.
+  - `GET /api/commodity-mapping`: List mapping dengan pagination & filter search (menyertakan `price`, `branch`, `startMarkingCode`, `startAgentDate`, serta nama resmi dari `tbCustomers`).
   - `GET /api/commodity-mapping/suggestions?q=...`: Saran nama komoditas.
-  - `POST /api/commodity-mapping`: Buat aturan mapping baru.
+  - `GET /api/customers`: Pencarian dan pemilihan data master pelanggan dari `tbCustomers`.
+  - `GET /api/customers/:id`: Detail customer untuk resolusi nama Single Source of Truth.
+  - `POST /api/commodity-mapping`: Buat aturan mapping baru (mendukung `price`, `branch`, `startMarkingCode`, `startAgentDate`).
   - `PUT /api/commodity-mapping/:id`: Update aturan pemetaan.
   - `DELETE /api/commodity-mapping/:id`: Hapus aturan.
   - `POST /api/commodity-mapping/apply-to-upload`: Payload `{ uploadId, scope, custCode }`.
@@ -540,7 +777,11 @@ Menghubungkan variasi penulisan nama komoditas yang tidak beraturan dari data me
     - **Debounce 300ms**: Menggunakan `useDebounce(search, 300)` untuk mempercepat pencarian data saran nama pelanggan, kode pelanggan, dan kontak telepon secara instan dan efisien.
     - Dilengkapi shortcut keyboard `Ctrl+K` untuk langsung fokus ke input pencarian, filter status pelanggan (Aktif / Discontinued / Semua), combobox pemilihan sales, filter kategori/tier, serta switch tampilan (Tabel, Grid, Shortlist).
   - Tabel master customer dengan kode pelanggan (`fdCustCode`), nama resmi (`fdCustName`), kontak PIC, alamat gudang/kantor, kota, nomor telepon, tier pelanggan (`VIP`, `Priority`, `Regular`), dan sales in-charge (`fdSalesNM`).
-  - Modal rincian profil pelanggan.
+  - **Modal Detail Pelanggan (`CustomerDetailModal.tsx`)**:
+    - Modal dialog komprehensif 3-tab ringkas yang menyajikan informasi terpusat pelanggan:
+      1. **Ringkasan & Kontak (`info`)**: Kartu PIC & Sales, informasi kontak (Telepon, WA, Email, Kota), alamat kantor utama, catatan operasional, serta badge status keaktifan/blokir (`fdBlocked`).
+      2. **Tier & Finansial (`finansial`)**: Kartu tier aktif, omset tahunan berjalan, progress bar kenaikan tier, dan tabel riwayat transaksi multi-tahun.
+      3. **Daftar Alamat (`alamat`)**: Daftar kartu alamat kontak/cabang operasional lengkap (`vwCustomerContacts`).
 - **Endpoint Terkait**:
   - `GET /api/customers`: Pagination `{ page, limit, search }`.
   - `GET /api/customers/suggestions`: Saran autocomplete pencarian pelanggan, kode (`custCode`), dan kontak (< 50ms).
@@ -572,7 +813,7 @@ Modul eksklusif Administrator yang dilindungi oleh `AdminGuard`.
 #### B. Manajemen Role & Matriks Hak Akses (`RoleManagementPage.tsx`)
 - **Fitur**:
   - Pembuatan role baru.
-  - Matriks checkbox hak akses per rute halaman (Can View / Tidak).
+  - Matriks checkbox hak akses per rute halaman (`AVAILABLE_PATHS` terpusat di `userManagement.types.ts`, mencakup seluruh domain ERP: Overview, Logistik, Keuangan termasuk Kasir & Pelunasan Piutang serta Commodity Mapping, Master Data, dan Administrasi).
   - Penentuan rute default (*Default Route*) per role untuk pengalihan saat login pertama kali.
 - **Endpoint Terkait**:
   - `GET /api/roles`: Daftar nama role sistem.
@@ -610,6 +851,95 @@ Modul eksklusif Administrator yang dilindungi oleh `AdminGuard`.
 
 ---
 
+### 3.13. Modul Kasir & Pelunasan Piutang (`src/features/cashier/`)
+
+Modul ini mengadopsi sistem pencatatan pembayaran piutang dan alokasi faktur (Cashier Register) dari sistem Visual FoxPro dengan arsitektur **Two-Tier Receipt System**:
+1. **Kasir Resmi (`RR-` Series)**:
+   - Nomor registrasi resmi: `RR-XXXXXX-MM-YYYY` (reset otomatis setiap awal bulan baru).
+   - Dikelola oleh Finance & Accounting untuk pelunasan piutang resmi dan posting akuntansi.
+2. **Kasir Sementara (`TR-` Series)**:
+   - Nomor registrasi sementara: `TR-XXXXXX-MM-YYYY` (reset bulanan, buffer lapangan/front office).
+   - Fitur **Attach**: Mengonversi kasir sementara menjadi kasir resmi secara atomik tanpa re-input manual.
+
+#### A. Halaman Daftar Transaksi Kasir (`ListPage.tsx`)
+- **Fitur & Komponen**:
+  - **Segmented Control Mode**: Tab **"Kasir Resmi (RR)"** vs **"Kasir Sementara (TR)"**.
+  - **Kartu Metrik KPI (`CashierKpiCards.tsx`)**: Menampilkan Penerimaan Hari Ini, Pelunasan Faktur Hari Ini, Kasir Belum Seimbang (*unbalanced*), dan Antrean Kasir Sementara Pending.
+  - **Toolbar Filter (`CashierToolbar.tsx`)**: Pencarian cepat nomor kasir / pelanggan, filter rentang tanggal, filter status posting (Open/Posted), dan tombol aksi pembuatan kasir baru.
+  - **Tabel Transaksi (`CashierTable.tsx`)**: Daftar registrasi kasir dengan penjaminan *Single Source of Truth* nama pelanggan dari master `tbCustomers.fdCustName`, total uang masuk vs alokasi faktur, badge indikator keseimbangan (*Zero-Difference*), status posting, dan tombol aksi detail/attach.
+  - **Modal Pembuatan (`CashierHeaderModal.tsx` & `TempCashierModal.tsx`)**: Pembuatan transaksi baru dengan auto-number bulanan dan opsi langsung menarik kasir sementara.
+  - **Modal Konversi (`AttachTempReceiptModal.tsx`)**: Konversi kasir sementara ke resmi.
+  - **Loading State Wireframe**: Menerapkan `CashierListSkeleton` dengan class `.skeleton-shimmer`.
+
+#### B. Halaman Meja Kerja Kasir (`DetailPage.tsx`)
+- **Fitur & Komponen**:
+  - **Kartu Ringkasan Header**: Nomor registrasi, tanggal kasir, customer resmi, operator kasir, referensi kasir sementara, dan status posting/kunci data.
+  - **Indikator Keseimbangan Finansial (`BalanceIndicatorBar.tsx`)**: Visual bar interaktif yang memantau total uang masuk (Grid 1) vs total alokasi faktur (Grid 2) dan selisihnya (*Zero-Difference Rule*).
+  - **Grid 1: Penerimaan Uang (Kas / Bank / Giro)**:
+    - Menampilkan baris instrumen pembayaran, mata uang, nilai kurs, nominal IDR, akun bank penampung, nomor warkat giro, jatuh tempo, tanggal kliring, dan bank asal warkat.
+    - Dialog input (`PaymentReceivedModal.tsx`): Form dinamis cerdas yang mengaktifkan/menonaktifkan input warkat dan bank secara otomatis berdasarkan tipe pembayaran (CASH, TRANSFER BCA/Mandiri, atau GIRO).
+  - **Grid 2: Alokasi Pelunasan Faktur Invoice**:
+    - Menampilkan nomor invoice yang dipotong, tanggal faktur, mata uang, kurs, dan nominal alokasi pelunasan.
+    - Dialog alokasi (`InvoiceAllocationModal.tsx`): Checklist interaktif faktur piutang customer yang belum lunas (`fdJumlah - fdBayar > 0`) dengan alokasi otomatis atau kustom.
+  - **Aksi Transaksi**: Tombol Cetak Bukti Kasir, Hapus Transaksi, dan Hapus Baris Rincian yang dilindungi proteksi posting akuntansi (`fdPost = 1`).
+
+- **Endpoint Terkait**:
+  - `GET /api/cashier`: Mengambil daftar kasir resmi paginated.
+  - `GET /api/cashier/temp`: Mengambil daftar kasir sementara paginated.
+  - `GET /api/cashier/temp/unattached`: Mengambil daftar kasir sementara yang belum di-attach.
+  - `GET /api/cashier/stats`: Mengambil statistik KPI kasir.
+  - `GET /api/cashier/master-data`: Mengambil master bank penampung, mata uang, dan tipe pembayaran.
+  - `GET /api/cashier/next-number`: Pratinjau auto-number bulanan berikutnya (`RR-` atau `TR-`).
+  - `GET /api/cashier/:id`: Mengambil detail lengkap header, rincian uang masuk, alokasi faktur, dan status balance.
+  - `GET /api/cashier/unpaid-invoices/:custCode`: Mengambil faktur piutang customer yang belum lunas.
+  - `POST /api/cashier`: Membuat kasir resmi baru.
+  - `POST /api/cashier/temp`: Membuat kasir sementara baru.
+  - `POST /api/cashier/attach`: Mengonversi kasir sementara ke kasir resmi.
+  - `PUT /api/cashier/:id`: Mengubah header kasir (jika belum terkunci).
+  - `DELETE /api/cashier/:id`: Menghapus transaksi kasir beserta seluruh itemnya.
+  - `POST /api/cashier/:id/rcv`: Menambahkan baris uang masuk kas/bank/giro.
+  - `DELETE /api/cashier/:id/rcv/:rcvId`: Menghapus baris penerimaan uang.
+  - `POST /api/cashier/:id/allocate`: Batch insert alokasi faktur invoice.
+  - `POST /api/cashier/:id/details`: Batch insert alokasi faktur invoice.
+  - `DELETE /api/cashier/:id/details/:detailId`: Menghapus baris alokasi invoice.
+  - `POST /api/cashier/:id/overpayment-deposit`: Mengalihkan surplus uang masuk (overpayment) ke saldo deposit pelanggan dalam 1 klik untuk mencapai *Zero-Difference (Rp 0)*.
+
+---
+
+### 3.14. Modul Customer Wallet & Saldo Deposit Pelanggan (`src/features/wallet/`)
+
+Modul ini mengelola saldo deposit di muka (*Advance Deposit*) milik pelanggan, pencatatan mutasi kredit/debit secara atomik (*Double-Entry Immutable Ledger*), dan integrasi penuh dengan modul kasir pelunasan piutang:
+1. **Penyimpanan Saldo & Integritas**:
+   - Saldo aktif disimpan pada tabel `[dbo].[tbCustomerWallet]` (`fdCustCode` 7-digit, `fdBalance`, `fdStatus`).
+   - Setiap perubahan saldo (top-up, pembayaran kasir, pengalihan overpayment, refund pembatalan kasir, penarikan/withdrawal, atau koreksi memo) dicatat secara mutlak pada tabel buku besar `[dbo].[tbCustomerWalletLedger]` (`CREDIT` / `DEBIT`, `fdAmount`, `fdBalanceBefore`, `fdBalanceAfter`, `fdRefType`, `fdRefNo`, `fdCreatedBy`).
+2. **Integrasi Meja Kerja Kasir (Zero-Difference Rp 0)**:
+   - **Pembayaran via Deposit (`WALLET`)**: Staf kasir dapat memilih instrumen pembayaran `WALLET (SALDO DEPOSIT)`. Sistem otomatis memvalidasi saldo aktif pelanggan dan mendebit deposit secara aman dalam transaksi database.
+   - **1-Click Overpayment Redirect**: Jika uang masuk melebihi total faktur (`totalRcv > totalDetail`), tombol *"Alihkan Surplus ke Deposit"* muncul di meja kerja kasir. Saat diklik, kelebihan bayar langsung ditambahkan ke deposit pelanggan dan baris penyeimbang `DEPOSIT` dicatat di alokasi kasir sehingga selisih kasir tepat Rp 0 (*Zero-Difference*).
+   - **Refund Otomatis Pembatalan**: Jika baris uang masuk berinstrumen `WALLET` dihapus dari kasir, saldo yang sebelumnya terpotong otomatis dikembalikan (*refund*) ke akun deposit pelanggan.
+
+#### A. Halaman Direktori Saldo & Mutasi (`ListPage.tsx`)
+- **Fitur & Komponen**:
+  - **Kartu Metrik KPI**: Menampilkan Total Saldo Deposit Aktif Perusahaan (Rp), Jumlah Pelanggan Bersaldo (> 0), Total Topup Masuk Hari Ini (Rp), dan Total Terpakai/Keluar Hari Ini (Rp).
+  - **Tab 1: Saldo Pelanggan**:
+    - Tabel saldo seluruh pelanggan dengan pencarian nama/kode, filter hanya yang memiliki saldo, status akun, tanggal update terakhir, dan tombol aksi cepat (+ Topup, - Tarik, Koreksi, Lihat Mutasi).
+  - **Tab 2: Buku Besar Mutasi (Ledger Audit Trail)**:
+    - Log audit transaksi mutasi mendalam dengan filter tipe transaksi (`TOPUP`, `PAYMENT`, `OVERPAYMENT`, `WITHDRAWAL`, `REFUND`, `ADJUSTMENT`), badge jenis transaksi outline, penanda kredit (+) hijau / debit (-) merah, nomor referensi, catatan, dan identitas staf operator (`fdCreatedBy`).
+  - **Modal Setoran Deposit (`TopupModal.tsx`)**: Dialog top-up deposit dengan selektor customer, pilihan metode pembayaran (Transfer, Tunai, Giro), bank tujuan, nomor referensi bukti transfer, dan catatan.
+  - **Modal Penarikan Dana (`WithdrawModal.tsx`)**: Dialog pengembalian dana ke rekening bank pelanggan dengan validasi plafon saldo, informasi bank/rekening/atas nama, dan tombol *Tarik Semua*.
+  - **Modal Penyesuaian Saldo (`AdjustModal.tsx`)**: Dialog koreksi audit (Kredit/Debit) khusus Finance/Supervisor dengan alasan penyesuaian memo wajib.
+
+- **Endpoint Terkait**:
+  - `GET /api/wallet/stats`: Mengambil statistik ringkasan deposit.
+  - `GET /api/wallet/customers`: Mengambil daftar saldo deposit pelanggan paginated.
+  - `GET /api/wallet/customer/:custCode`: Mengambil detail saldo & 10 mutasi terakhir customer.
+  - `GET /api/wallet/ledger`: Mengambil riwayat buku besar mutasi paginated & filtered.
+  - `POST /api/wallet/topup`: Menambah saldo deposit customer.
+  - `POST /api/wallet/withdraw`: Menarik saldo deposit ke rekening pelanggan.
+  - `POST /api/wallet/adjust`: Penyesuaian koreksi saldo kredit/debit manual.
+  - `POST /api/wallet/overpayment`: Mengalihkan kelebihan kasir ke deposit customer.
+
+---
+
 ## 📊 4. Matriks Ringkasan Seluruh Endpoint API Backend Web Frontend
 
 | No | Modul / Fitur | Endpoint API | HTTP Method | Parameter / Payload Kunci | Output Data & Deskripsi |
@@ -631,11 +961,14 @@ Modul eksklusif Administrator yang dilindungi oleh `AdminGuard`.
 | **13b** | Marking | `/api/marking/suggestions` | `GET` | `q` | Saran autocomplete batch marking, kontainer, B/L, AWB (< 50ms) |
 | **14** | Marking | `/api/marking/:id/manifest` | `GET` | Path `id` (`fdMarkingCode`) | Seluruh resi shipment (`vwShipment`) dalam batch |
 | **15** | Marking | `/api/marking/:id/manifest/search` | `GET` | Path `id`, `q` | Pencarian langsung dalam manifest batch |
-| **16** | Delivery Orders | `/api/delivery-orders/kpi` | `GET` | `search` | Agregasi status pengiriman surat jalan armada |
+| **15b** | Marking Size Audit | `/api/marking/size-audit/:code` | `GET` | Path `code`, query `sort` (1/2) | Audit komparasi ukuran & tonase batch (17 kolom data + 5 KPI metrik) |
+| **15c** | Marking Size Audit | `/api/marking/size-audit/:code/all-dimensions` | `GET` | Path `code` | Seluruh dimensi box 1 batch kargo untuk ekspor Excel 4 sheet |
+| **15d** | Marking Size Audit | `/api/marking/box-dimensions/:listCode` | `GET` | Path `listCode` | Rincian dimensi fisik per box ($P \times L \times T$) 3 tab (Gudang, PL, Komplain) |
+| **16** | Delivery Orders | `/api/delivery-orders/kpi` | `GET` | `year`, `month`, `search` | Agregasi KPI MTD, komparasi MoM & YoY, tren 12 bulan, dan status pengiriman armada |
 | **17** | Delivery Orders | `/api/delivery-orders` | `GET` | `page`, `limit`, `search` | Daftar surat jalan, supir, plat mobil, estimasi |
 | **17b** | Delivery Orders | `/api/delivery-orders/suggestions` | `GET` | `q` | Saran autocomplete surat jalan, customer, supir, mobil (< 50ms) |
 | **18** | Delivery Orders | `/api/delivery-orders/:id` | `GET` | Path `id` | Rincian muatan resi pada surat jalan |
-| **19** | Delivery Orders | `/api/delivery-orders/grouped` | `GET` | Params query | Pengelompokan agregat surat jalan |
+| **19** | Delivery Orders | `/api/delivery-orders/grouped` | `GET` | `listType`, `sent`, `search`, `page`, `limit` | Inventori stok kargo di gudang (inbound `tbEntryList`, fisik `tbEntryListDetail`, tipe komoditi, status outbound delivery) |
 | **20** | Billing | `/api/billing/kpi` | `GET` | `search` | Ringkasan piutang, omzet, rasio lunas |
 | **21** | Billing | `/api/billing/chart/by-employee-daily` | `GET` | `days` | Tren performa penagihan harian per sales |
 | **22** | Billing | `/api/billing/chart/trends` | `GET` | `days` | Tren pergerakan nilai faktur per periode |
@@ -688,6 +1021,29 @@ Modul eksklusif Administrator yang dilindungi oleh `AdminGuard`.
 | **67** | Profile | `/api/profile/password` | `PUT` | `{ currentPassword, newPassword, confirmPassword }` | Mengubah kata sandi mandiri pengguna |
 | **68** | Profile | `/api/profile/avatar` | `POST` | FormData (`avatar`) | Mengunggah dan menyimpan berkas foto profil avatar |
 | **69** | Profile | `/api/profile/avatar` | `DELETE` | None | Menghapus foto profil avatar kembali ke inisial |
+| **70** | Cashier | `/api/cashier` | `GET` | `page`, `limit`, `search`, `startDate`, `endDate`, `status`, `type` | Daftar transaksi kasir resmi (`RR-`) & sementara (`TR-`) |
+| **71** | Cashier | `/api/cashier/stats` | `GET` | `startDate`, `endDate` | Statistik ringkasan KPI kasir resmi & sementara |
+| **72** | Cashier | `/api/cashier/next-number` | `GET` | `type` (`OFFICIAL` / `TEMPORARY`), `date` | Pratinjau nomor otomatis kasir berikutnya (`RR-`/`TR-`) |
+| **73** | Cashier | `/api/cashier/master-data` | `GET` | None | Master opsi bank, mata uang (`valuta`), dan pay types |
+| **74** | Cashier | `/api/cashier/temp/unattached` | `GET` | `custCode`, `search` | Daftar kasir sementara berstatus unattached |
+| **75** | Cashier | `/api/cashier/invoices/unpaid` | `GET` | `custCode`, `search` | Daftar faktur/invoice berstatus belum lunas (outstanding) |
+| **76** | Cashier | `/api/cashier/official` | `POST` | Payload Header Kasir Resmi | Registrasi transaksi kasir resmi baru |
+| **77** | Cashier | `/api/cashier/temp` | `POST` | Payload Header Kasir Sementara | Registrasi transaksi kasir sementara baru |
+| **78** | Cashier | `/api/cashier/attach` | `POST` | `{ tempCashierId, officialDate, descr }` | Mengaitkan kasir sementara mandiri menjadi kasir resmi |
+| **79** | Cashier | `/api/cashier/:id` | `GET` / `DELETE` | Path `id`, query `type` | Detail meja kerja kasir & pembatalan transaksi |
+| **80** | Cashier | `/api/cashier/:id/rcv` | `POST` | Payload Instrumen Pembayaran | Menambah baris penerimaan uang (Kas/Bank/Giro/Wallet) |
+| **81** | Cashier | `/api/cashier/:id/rcv/:rcvId` | `DELETE` | Path `id`, `rcvId`, query `type` | Menghapus baris penerimaan uang kasir & auto-refund jika WALLET |
+| **82** | Cashier | `/api/cashier/:id/details` | `POST` | Payload Alokasi Faktur | Mengalokasikan pembayaran ke nomor invoice |
+| **83** | Cashier | `/api/cashier/:id/details/:detailId` | `DELETE` | Path `id`, `detailId`, query `type` | Menghapus baris alokasi faktur kasir |
+| **84** | Cashier | `/api/cashier/:id/overpayment-deposit` | `POST` | `{ amount }` | Mengalihkan kelebihan kasir ke saldo deposit customer (Zero-Difference Rp 0) |
+| **85** | Customer Wallet | `/api/wallet/stats` | `GET` | None | Ringkasan saldo agregat, pelanggan aktif, mutasi kredit/debit hari ini |
+| **86** | Customer Wallet | `/api/wallet/customers` | `GET` | `page`, `limit`, `search`, `hasBalance` | Daftar saldo deposit pelanggan beserta status dan tanggal update |
+| **87** | Customer Wallet | `/api/wallet/customer/:custCode` | `GET` | Path `custCode` | Detail saldo deposit pelanggan aktif & 10 mutasi buku besar terakhir |
+| **88** | Customer Wallet | `/api/wallet/ledger` | `GET` | `page`, `limit`, `search`, `txType`, `direction`, `startDate`, `endDate` | Daftar riwayat buku besar mutasi transaksi (audit trail) |
+| **89** | Customer Wallet | `/api/wallet/topup` | `POST` | `{ custCode, amount, paymentMethod, bankId, refNo, notes }` | Setoran dana deposit pelanggan di muka (Advance Deposit) |
+| **90** | Customer Wallet | `/api/wallet/withdraw` | `POST` | `{ custCode, amount, bankName, accountNo, accountName, notes }` | Penarikan dana deposit kembali ke rekening bank pelanggan |
+| **91** | Customer Wallet | `/api/wallet/adjust` | `POST` | `{ custCode, direction, amount, reason }` | Koreksi memo audit penyesuaian saldo manual (Kredit/Debit) |
+| **92** | Customer Wallet | `/api/wallet/overpayment` | `POST` | `{ custCode, amount, cashierId }` | Pengalihan kelebihan bayar kasir langsung ke saldo deposit |
 
 ---
 
@@ -804,10 +1160,7 @@ Untuk menjamin performa pencarian yang responsif (< 50ms) tanpa membebani server
      - Menghubungkan dropdown dengan saran nomor Surat Jalan (`sj`), nama pelanggan (`customer`), nama supir (`supir`), dan plat kendaraan (`car`).
    - **`BillingToolbar.tsx`** (`GET /api/billing/suggestions`):
      - Menghubungkan dropdown dengan saran nomor invoice faktur (`invoice`), pelanggan (`customer`), dan kode marking (`marking`).
-     - Memilih saran `invoice` otomatis menyinkronkan `searchField` ke `'invNo'`.
-     - Memilih saran `customer` otomatis menyinkronkan `searchField` ke `'customer'`.
-     - Memilih saran `marking` otomatis menyinkronkan `searchField` ke `'marking'`.
-     - Fallback otomatis ke `'ALL'`.
+     - Memilih saran secara langsung menerapkan nilai pencarian (`search`), menutup dropdown, mereset halaman ke 1, dan mengeksekusi filter secara instan tanpa perlu pemilihan scope manual.
 
 4. **Penanganan Interaksi Klik di Luar (*Click-Outside Listener*)**:
    - Setiap toolbar membungkus kotak pencarian dan dropdown dalam kontainer referensi `searchContainerRef = useRef<HTMLDivElement>(null)`.

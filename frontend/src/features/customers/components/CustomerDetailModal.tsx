@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { createPortal } from 'react-dom'
 import {
   X, Check, Copy, User, Phone, Mail, MapPin,
-  Truck, Receipt, MapPinned, FileText, ExternalLink, Calendar,
+  MapPinned, FileText, ExternalLink, Calendar,
   ChevronLeft, ChevronRight, TrendingUp, CheckCircle2
 } from 'lucide-react'
 import { cn, formatCurrency, formatCompactRupiah, displayCustName, copyToClipboard as copyTextToClipboard } from '@/lib/utils'
@@ -156,9 +156,9 @@ interface CustomerDetailModalProps {
   canViewTier?: boolean
 }
 
-type TabType = 'info' | 'finansial' | 'pengiriman' | 'penagihan' | 'alamat'
+type TabType = 'info' | 'finansial' | 'alamat'
 
-const TAB_KEYS: TabType[] = ['info', 'finansial', 'pengiriman', 'penagihan', 'alamat']
+const TAB_KEYS: TabType[] = ['info', 'finansial', 'alamat']
 
 export function CustomerDetailModal({
   customer,
@@ -172,8 +172,6 @@ export function CustomerDetailModal({
   const tabButtonRefs = useRef<Record<TabType, HTMLButtonElement | null>>({
     info: null,
     finansial: null,
-    pengiriman: null,
-    penagihan: null,
     alamat: null,
   })
 
@@ -237,8 +235,6 @@ export function CustomerDetailModal({
   const tabs: { key: TabType; label: string; icon: React.ElementType; badge?: number }[] = [
     { key: 'info', label: 'Ringkasan & Kontak', icon: User },
     { key: 'finansial', label: 'Tier & Finansial', icon: TrendingUp },
-    { key: 'pengiriman', label: 'Info Pengiriman', icon: Truck },
-    { key: 'penagihan', label: 'Info Penagihan', icon: Receipt },
     { key: 'alamat', label: 'Daftar Alamat', icon: MapPinned, badge: addressCount },
   ]
 
@@ -633,98 +629,7 @@ export function CustomerDetailModal({
                 </div>
               )}
 
-              {/* TAB 3: INFO PENGIRIMAN */}
-              {activeTab === 'pengiriman' && (
-                <div className="p-4 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs divide-y divide-[var(--color-border)]">
-                  <div className="py-2.5 flex items-center justify-between text-xs first:pt-0">
-                    <span className="text-[var(--color-secondary)]">Nama Penerima / Pengiriman</span>
-                    <span className="font-bold text-[var(--color-primary)]">
-                      {customer.fdNamaPengiriman || '—'}
-                    </span>
-                  </div>
-
-                  <div className="py-2.5 flex items-center justify-between text-xs">
-                    <span className="text-[var(--color-secondary)]">Nomor HP Pengiriman</span>
-                    <span className="font-mono font-semibold text-[var(--color-primary)]">
-                      {customer.fdHpPengiriman || '—'}
-                    </span>
-                  </div>
-
-                  <div className="py-2.5 flex items-center justify-between text-xs">
-                    <span className="text-[var(--color-secondary)]">Kota Pengiriman</span>
-                    <span className="font-semibold text-[var(--color-primary)] flex items-center gap-1">
-                      <MapPin size={12} className="hidden sm:inline-block text-[var(--color-secondary)]" />
-                      {customer.fdKotaPengiriman || '—'}
-                    </span>
-                  </div>
-
-                  <div className="py-2.5 flex flex-col gap-1.5 text-xs">
-                    <span className="text-[var(--color-secondary)]">Alamat Lengkap Pengiriman</span>
-                    <p className="font-medium text-[var(--color-primary)] leading-relaxed bg-[var(--color-neutral)]/60 p-2.5 rounded-lg border border-[var(--color-border)] whitespace-pre-wrap break-words">
-                      {customer.fdAlamatPengiriman || '—'}
-                    </p>
-                  </div>
-
-                  {customer.fdKetPengiriman && (
-                    <div className="py-2.5 flex items-start justify-between gap-4 text-xs last:pb-0">
-                      <span className="text-[var(--color-secondary)] shrink-0">Instruksi Khusus</span>
-                      <span className="text-amber-600 dark:text-amber-400 text-right font-medium">
-                        {customer.fdKetPengiriman}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* TAB 4: INFO PENAGIHAN */}
-              {activeTab === 'penagihan' && (
-                <div className="p-4 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] shadow-xs divide-y divide-[var(--color-border)]">
-                  <div className="py-2.5 flex items-center justify-between text-xs first:pt-0">
-                    <span className="text-[var(--color-secondary)]">Nomor HP Penagihan</span>
-                    <span className="font-mono font-semibold text-[var(--color-primary)]">
-                      {customer.fdHpPenagihan || '—'}
-                    </span>
-                  </div>
-
-                  <div className="py-2.5 flex items-center justify-between text-xs">
-                    <span className="text-[var(--color-secondary)]">Email Penagihan</span>
-                    {customer.fdEmailPenagihan ? (
-                      <a
-                        href={`mailto:${customer.fdEmailPenagihan}`}
-                        className="font-mono font-semibold text-[var(--color-tertiary)] hover:underline flex items-center gap-1"
-                      >
-                        <Mail size={12} className="hidden sm:inline-block" />
-                        {customer.fdEmailPenagihan}
-                      </a>
-                    ) : (
-                      <span className="text-[var(--color-secondary)]">—</span>
-                    )}
-                  </div>
-
-                  <div className="py-2.5 flex items-center justify-between text-xs">
-                    <span className="text-[var(--color-secondary)]">Notifikasi Tagihan</span>
-                    <span className={cn(
-                      'inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase',
-                      customer.fdNotifPenagihan === 1
-                        ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20'
-                        : 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)]'
-                    )}>
-                      {customer.fdNotifPenagihan === 1 ? 'Aktif' : 'Non-Aktif'}
-                    </span>
-                  </div>
-
-                  {customer.fdKeteranganPenagihan && (
-                    <div className="py-2.5 flex items-start justify-between gap-4 text-xs last:pb-0">
-                      <span className="text-[var(--color-secondary)] shrink-0">Catatan Penagihan</span>
-                      <span className="text-[var(--color-primary)] text-right font-medium">
-                        {customer.fdKeteranganPenagihan}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* TAB 5: DAFTAR ALAMAT TAMBAHAN */}
+              {/* TAB 3: DAFTAR ALAMAT TAMBAHAN */}
               {activeTab === 'alamat' && (
                 <div className="space-y-3">
                   {customer.addresses && customer.addresses.length > 0 ? (

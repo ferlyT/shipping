@@ -6,6 +6,7 @@ export interface ValidationSummaryFooterProps {
   verdictDescription: string
   isOverallValid: boolean
   hasWarning: boolean
+  isLoadingValidation?: boolean
   onOpenIssueModal?: () => void
   onClose: () => void
   canIssue?: boolean
@@ -16,6 +17,7 @@ export function ValidationSummaryFooter({
   verdictDescription,
   isOverallValid,
   hasWarning,
+  isLoadingValidation = false,
   onOpenIssueModal,
   onClose,
   canIssue = true,
@@ -30,15 +32,19 @@ export function ValidationSummaryFooter({
       {/* Verdict Alert Bar */}
       <div
         className={`p-2.5 rounded-lg border flex items-start gap-2.5 transition-colors ${
-          isOverallValid
-            ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400'
-            : hasWarning
-              ? 'bg-amber-500/10 border-amber-500/25 text-amber-600 dark:text-amber-400'
-              : 'bg-rose-500/10 border-rose-500/25 text-rose-600 dark:text-rose-400'
+          isLoadingValidation
+            ? 'bg-blue-500/10 border-blue-500/25 text-blue-600 dark:text-blue-400'
+            : isOverallValid
+              ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-600 dark:text-emerald-400'
+              : hasWarning
+                ? 'bg-amber-500/10 border-amber-500/25 text-amber-600 dark:text-amber-400'
+                : 'bg-rose-500/10 border-rose-500/25 text-rose-600 dark:text-rose-400'
         }`}
       >
         <div className="shrink-0 mt-0.5">
-          {isOverallValid ? (
+          {isLoadingValidation ? (
+            <div className="w-4 h-4 rounded skeleton-shimmer" />
+          ) : isOverallValid ? (
             <CheckCircle2 className="w-4 h-4" />
           ) : hasWarning ? (
             <AlertTriangle className="w-4 h-4" />
@@ -66,9 +72,10 @@ export function ValidationSummaryFooter({
               type="button"
               variant="primary"
               size="sm"
+              disabled={isLoadingValidation}
               onClick={handleIssueClick}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs px-3.5 py-1.5 flex items-center gap-1.5 cursor-pointer whitespace-nowrap"
-              title="Terbitkan invoice menjadi status Issued"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs px-3.5 py-1.5 flex items-center gap-1.5 cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+              title={isLoadingValidation ? "Menunggu validasi data fisik selesai..." : "Terbitkan invoice menjadi status Issued"}
             >
               <Send size={13} className="shrink-0" />
               <span>Terbitkan Invoice</span>

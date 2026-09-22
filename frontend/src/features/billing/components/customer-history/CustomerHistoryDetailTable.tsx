@@ -164,7 +164,7 @@ export function CustomerHistoryDetailTable({
         {isFetchingNextPage ? (
           <div className="flex items-center gap-2 text-xs text-[var(--color-secondary)]">
             <div className="w-3.5 h-3.5 rounded-full border-2 border-[var(--color-tertiary)] border-t-transparent animate-spin" />
-            <span>Memuat rincian berikutnya...</span>
+            <span>Memuat 10 invoice berikutnya...</span>
           </div>
         ) : hasNextPage ? (
           <Button
@@ -173,7 +173,7 @@ export function CustomerHistoryDetailTable({
             onClick={() => onLoadMore?.()}
             className="text-[11px] text-[var(--color-tertiary)] hover:bg-[var(--color-neutral)]/50 cursor-pointer"
           >
-            Muat lebih banyak
+            Muat 10 invoice lagi
           </Button>
         ) : items.length > 0 ? (
           <div className="text-[11px] text-[var(--color-secondary)] opacity-70">

@@ -1,16 +1,15 @@
 {
-  "version": "1.2.1",
-  "versionCode": 13,
-  "minVersion": "1.2.1",
+  "version": "1.2.2",
+  "versionCode": 14,
+  "minVersion": "1.2.2",
   "forceUpdate": true,
   "downloadUrl": "http://36.93.22.142/mshipping/mshipping.apk",
   "webDownloadUrl": "http://36.93.22.142/mshipping/download/",
   "releaseNotes": [
-    "Akselerasi & optimalisasi pencarian autocomplete di seluruh modul (< 35ms)",
-    "Integrasi in-memory cache dan debouncing 300ms pada pencarian",
-    "Perbaikan filter pencarian validasi tagihan hanya menampilkan draft belum tervalidasi",
-    "Perbaikan lookup tarif khusus pelanggan langsung berdasarkan kode customer",
-    "Penyelarasan filter tanggal surat jalan dan master pelanggan aktif"
+    "Fitur Cetak & Bagikan PDF Invoice Tagihan (format resmi A5 Landscape 100% identik web)",
+    "Verifikasi Biometrik (Fingerprint / Face ID) sebelum mencetak atau membagikan invoice",
+    "Perbaikan bug biometrik login: eliminasi race condition nama sensor dan pembersihan kredensial saat logout",
+    "Penyelarasan otomatis penyimpanan kredensial saat mengaktifkan biometrik di profil"
   ],
-  "publishedAt": "2026-09-17T05:25:00.000Z"
+  "publishedAt": "2026-09-20T07:15:00.000Z"
 }

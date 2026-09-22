@@ -4,6 +4,7 @@ import {
   Text,
   FlatList,
   StyleSheet,
+  Keyboard,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
@@ -96,6 +97,7 @@ export default function MasterDataScreen() {
             isLoading={isFetchingSuggestions}
             title={t('master.suggestions', 'Saran Pelanggan')}
             onSelect={(sug) => {
+              Keyboard.dismiss()
               setSearch(sug.value)
               setShowSuggestions(false)
             }}

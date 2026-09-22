@@ -68,6 +68,8 @@ export const rolesService = {
       '/mshipping/shipment-batches',
       '/mshipping/delivery-orders',
       '/mshipping/billing',
+      '/mshipping/finance/cashier',
+      '/mshipping/finance/commodity-mapping',
     ]
 
     await prisma.$transaction(async (tx) => {

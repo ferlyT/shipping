@@ -1,6 +1,6 @@
-import React from 'react'
-import { View, Text, Modal, FlatList, TouchableOpacity } from 'react-native'
-import { X, ShieldAlert } from 'lucide-react-native'
+import React, { useState, useMemo, useEffect } from 'react'
+import { View, Text, Modal, FlatList, TouchableOpacity, TextInput } from 'react-native'
+import { X, ShieldAlert, Search } from 'lucide-react-native'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { SkeletonShimmer } from '@/components/ui/SkeletonShimmer'
@@ -22,6 +22,35 @@ export function BatchManifestSheet({ selectedBatch, onClose, setSelectedBatch }:
   const isDark = mode === 'midnight'
 
   const { manifestData, isManifestLoading, manifestSummary } = useBatchManifest(selectedBatch, setSelectedBatch)
+  const [searchQuery, setSearchQuery] = useState('')
+
+  useEffect(() => {
+    setSearchQuery('')
+  }, [selectedBatch])
+
+  const filteredManifestData = useMemo(() => {
+    if (!manifestData) return []
+    const q = searchQuery.trim().toLowerCase()
+    if (!q) return manifestData
+    return manifestData.filter((item: any) => {
+      const resi = (item.fdTerima || item.fdListCode || '').toLowerCase()
+      const markingNo = (item.fdMarkingNo || '').toLowerCase()
+      const cust = (item.fdCustName || '').toLowerCase()
+      const comodity = (item.fdComodity || '').toLowerCase()
+      const comodityType = (item.typeComodityName || item.fdComodityName || '').toLowerCase()
+      const sales = (item.fdSalesNM || '').toLowerCase()
+      const branch = (item.fdBranchCode || '').toLowerCase()
+      return (
+        resi.includes(q) ||
+        markingNo.includes(q) ||
+        cust.includes(q) ||
+        comodity.includes(q) ||
+        comodityType.includes(q) ||
+        sales.includes(q) ||
+        branch.includes(q)
+      )
+    })
+  }, [manifestData, searchQuery])
 
   return (
     <Modal
@@ -123,6 +152,53 @@ export function BatchManifestSheet({ selectedBatch, onClose, setSelectedBatch }:
             </View>
           </View>
 
+          {/* Search Filter Bar */}
+          {!isManifestLoading && manifestData && manifestData.length > 0 && (
+            <View style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 }}>
+              <View style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 10,
+                backgroundColor: isDark ? 'rgba(255,255,255,0.04)' : '#F8FAFC',
+                paddingHorizontal: 10,
+                height: 38,
+              }}>
+                <Search size={14} color={colors.secondary} style={{ marginRight: 8 }} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder={t('logistics.searchManifestPlaceholder', 'Cari resi, marking, customer, komoditas...')}
+                  placeholderTextColor={colors.secondary}
+                  returnKeyType="search"
+                  style={{
+                    flex: 1,
+                    fontSize: 12,
+                    color: colors.primary,
+                    paddingVertical: 0,
+                  }}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchQuery('')}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ padding: 4 }}
+                  >
+                    <X size={14} color={colors.secondary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+              {searchQuery.trim().length > 0 && (
+                <View style={{ marginTop: 4, paddingHorizontal: 2 }}>
+                  <Text style={{ fontSize: 11, color: colors.secondary }}>
+                    Menampilkan <Text style={{ fontWeight: '700', color: colors.primary }}>{filteredManifestData.length}</Text> dari {manifestData.length} item
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
           {/* Manifest Items List */}
           {isManifestLoading ? (
             <View style={{ padding: 16, gap: 10 }}>
@@ -132,9 +208,18 @@ export function BatchManifestSheet({ selectedBatch, onClose, setSelectedBatch }:
             </View>
           ) : manifestData && manifestData.length > 0 ? (
             <FlatList
-              data={manifestData}
+              data={filteredManifestData}
               keyExtractor={(item, idx) => item.fdTerima || item.fdListCode || String(idx)}
               contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 36 }}
+              ListEmptyComponent={
+                <View style={{ padding: 32, alignItems: 'center' }}>
+                  <Text style={{ color: colors.secondary, fontSize: 12, textAlign: 'center' }}>
+                    {searchQuery.trim()
+                      ? `Tidak ada manifest yang cocok dengan "${searchQuery.trim()}"`
+                      : 'Tidak ada manifest ditemukan dalam batch ini.'}
+                  </Text>
+                </View>
+              }
               renderItem={({ item, index }) => {
                 const finBadge = getFinancialStatusBadge(item.financialStatus, item.isBlocked)
                 const isItemBlocked = finBadge.label === 'BLOCKED'

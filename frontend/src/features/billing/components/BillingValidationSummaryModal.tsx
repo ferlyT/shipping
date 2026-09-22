@@ -150,8 +150,9 @@ export function BillingValidationSummaryModal({
     isOverallValid,
   } = v
 
-  const hasUnderchargePrice = underchargedItems.length > 0
-  const hasWarning = !isOverallValid || Boolean(v.isBilledBelowMinM3)
+  const hasUnderchargePrice = !isLoadingValidation && underchargedItems.length > 0
+  const hasUnbilledTransportActive = !isLoadingValidation && hasUnbilledTransport
+  const hasWarning = !isLoadingValidation && (!isOverallValid || Boolean(v.isBilledBelowMinM3))
 
   // Auto-select tab logic based on discrepancy priority
   useEffect(() => {
@@ -172,14 +173,14 @@ export function BillingValidationSummaryModal({
       return
     }
 
-    if (res && hasAutoSelectedRef.current !== String(billingData.fdInvNo)) {
+    if (res && !isLoadingValidation && hasAutoSelectedRef.current !== String(billingData.fdInvNo)) {
       if (!isMatch) {
         setActiveTab('m3_weight')
       } else if (overweight.isOverweight && !overweight.isBilledOverweightMatch) {
         setActiveTab('overweight')
       } else if (hasUnderchargePrice) {
         setActiveTab('items')
-      } else if (hasUnbilledTransport) {
+      } else if (hasUnbilledTransportActive) {
         setActiveTab('transport')
       } else {
         setActiveTab('items')
@@ -192,11 +193,12 @@ export function BillingValidationSummaryModal({
     billingData.fdInvNo,
     isType2,
     res,
+    isLoadingValidation,
     isMatch,
     overweight.isOverweight,
     overweight.isBilledOverweightMatch,
     hasUnderchargePrice,
-    hasUnbilledTransport,
+    hasUnbilledTransportActive,
   ])
 
   // Resolve Customer Name (Single Source of Truth)
@@ -205,39 +207,44 @@ export function BillingValidationSummaryModal({
   )
 
   // Verdict calculation
-  const verdictTitle = isOverallValid && !v.isBilledBelowMinM3
-    ? 'Tagihan Sesuai dengan Data Fisik & Acuan Tarif'
-    : hasUnderchargePrice
-      ? `Ditemukan Tarif di Bawah Acuan (Undercharge: ${underchargedItems.map((u) => u.itemName).join(', ')})`
-      : hasUnbilledTransport
-        ? `Biaya Ekspedisi (${formatCurrency(totalUnbilledTransportAmount)}) Belum Ditagihkan`
-        : !isMatch
-          ? isAir
-            ? 'Selisih Berat Tagihan dengan Data Timbangan'
-            : 'Selisih Kubikasi (M3) Tagihan dengan Data Fisik'
-          : v.isBilledBelowMinM3
-            ? `Peringatan: Volume Ditagihkan (${formatDecimal(billedM3, 4)} m³) di Bawah Min. Charge (${formatDecimal(v.minChargeM3, 3)} m³)`
-            : 'Terdapat Catatan Validasi Pada Invoice Ini'
+  const verdictTitle = isLoadingValidation
+    ? 'Memvalidasi Data Fisik & Acuan Tarif...'
+    : isOverallValid && !v.isBilledBelowMinM3
+      ? 'Tagihan Sesuai dengan Data Fisik & Acuan Tarif'
+      : hasUnderchargePrice
+        ? `Ditemukan Tarif di Bawah Acuan (Undercharge: ${underchargedItems.map((u) => u.itemName).join(', ')})`
+        : hasUnbilledTransportActive
+          ? `Biaya Ekspedisi (${formatCurrency(totalUnbilledTransportAmount)}) Belum Ditagihkan`
+          : !isMatch
+            ? isAir
+              ? 'Selisih Berat Tagihan dengan Data Timbangan'
+              : 'Selisih Kubikasi (M3) Tagihan dengan Data Fisik'
+            : v.isBilledBelowMinM3
+              ? `Peringatan: Volume Ditagihkan (${formatDecimal(billedM3, 4)} m³) di Bawah Min. Charge (${formatDecimal(v.minChargeM3, 3)} m³)`
+              : 'Terdapat Catatan Validasi Pada Invoice Ini'
 
-  const verdictDescription = isOverallValid && !v.isBilledBelowMinM3
-    ? 'Seluruh kubikasi, berat timbangan, dan tarif item telah cocok dengan data operasional dan price list.'
-    : hasUnderchargePrice
-      ? `Terdapat harga item invoice yang lebih rendah dari acuan resmi price list.`
-      : hasUnbilledTransport
-        ? `Terdapat catatan ekspedisi operasional di tbExpIndo yang berstatus Harus Tagih namun belum dimasukkan ke invoice.`
-        : !isMatch
-          ? `Nilai yang ditagihkan tidak cocok dengan dokumen fisik gudang/packing list.`
-          : v.isBilledBelowMinM3
-            ? `Volume tagihan lebih rendah dari batas minimum charge (${formatDecimal(v.minChargeM3, 4)} m³). Pastikan apakah penagihan volume riil ini disengaja.`
-            : 'Harap periksa rincian pada tab audit di atas sebelum menerbitkan invoice.'
+  const verdictDescription = isLoadingValidation
+    ? 'Sedang memuat data operasional gudang, timbangan, dan acuan tarif master...'
+    : isOverallValid && !v.isBilledBelowMinM3
+      ? 'Seluruh kubikasi, berat timbangan, dan tarif item telah cocok dengan data operasional dan price list.'
+      : hasUnderchargePrice
+        ? `Terdapat harga item invoice yang lebih rendah dari acuan resmi price list.`
+        : hasUnbilledTransportActive
+          ? `Terdapat catatan ekspedisi operasional di tbExpIndo yang berstatus Harus Tagih namun belum dimasukkan ke invoice.`
+          : !isMatch
+            ? `Nilai yang ditagihkan tidak cocok dengan dokumen fisik gudang/packing list.`
+            : v.isBilledBelowMinM3
+              ? `Volume tagihan lebih rendah dari batas minimum charge (${formatDecimal(v.minChargeM3, 4)} m³). Pastikan apakah penagihan volume riil ini disengaja.`
+              : 'Harap periksa rincian pada tab audit di atas sebelum menerbitkan invoice.'
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} size="2xl" className="h-[85vh] max-h-[85vh] flex flex-col" zIndex="z-[100]">
       <ValidationSummaryHeader
         billingData={billingData}
         customerName={resolvedCustName}
-        isOverallValid={isOverallValid}
+        isOverallValid={!isLoadingValidation && isOverallValid}
         hasWarning={hasWarning}
+        isLoadingValidation={isLoadingValidation}
         onClose={onClose}
       />
 
@@ -245,11 +252,12 @@ export function BillingValidationSummaryModal({
         activeTab={activeTab}
         onTabChange={setActiveTab}
         isAir={isAir}
-        hasPriceDiscrepancy={hasPriceDiscrepancy}
-        hasPhysicalDiscrepancy={!isMatch}
-        isBilledBelowMinM3={v.isBilledBelowMinM3}
-        hasOverweightIssue={overweight.isOverweight && !overweight.isBilledOverweightMatch}
-        hasUnbilledTransport={hasUnbilledTransport}
+        isLoadingValidation={isLoadingValidation}
+        hasPriceDiscrepancy={!isLoadingValidation && hasPriceDiscrepancy}
+        hasPhysicalDiscrepancy={!isLoadingValidation && !isMatch}
+        isBilledBelowMinM3={!isLoadingValidation && v.isBilledBelowMinM3}
+        hasOverweightIssue={!isLoadingValidation && (overweight.isOverweight && !overweight.isBilledOverweightMatch)}
+        hasUnbilledTransport={!isLoadingValidation && hasUnbilledTransport}
         hasFreightCharge={Boolean(res?.freightChargeSummary?.totalFc && res.freightChargeSummary.totalFc > 0)}
         freightChargeSummary={res?.freightChargeSummary}
         itemCount={details.length}
@@ -282,6 +290,7 @@ export function BillingValidationSummaryModal({
                 matchLabel={matchLabel}
                 minChargeM3={v.minChargeM3}
                 isBilledBelowMinM3={v.isBilledBelowMinM3}
+                matchedSourceKey={isAir ? v.airPrimaryMatch?.sourceKey : v.seaPrimaryMatch?.sourceKey}
               />
             )}
 
@@ -309,8 +318,9 @@ export function BillingValidationSummaryModal({
       <ValidationSummaryFooter
         verdictTitle={verdictTitle}
         verdictDescription={verdictDescription}
-        isOverallValid={isOverallValid}
+        isOverallValid={!isLoadingValidation && isOverallValid}
         hasWarning={hasWarning}
+        isLoadingValidation={isLoadingValidation}
         onOpenIssueModal={onOpenIssueModal}
         onClose={onClose}
         canIssue={Number(billingData.fdGive) !== 1}

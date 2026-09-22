@@ -45,19 +45,26 @@ export default function LoginPage() {
       setBiometricType(type)
       const isEnabled = await biometricService.isBiometricEnabled()
       const saved = await biometricService.getSavedCredentials()
-      if (isEnabled && saved) {
+      if (isEnabled && saved && saved.token) {
         setBiometricAvailable(true)
-        // Auto prompt biometrics on mount
-        handleBiometricLogin()
-      } else if (isAvail) {
-        setBiometricAvailable(true)
+        if (saved.username) {
+          setUsername(saved.username)
+        }
+        // Auto prompt biometrics on mount with the retrieved hardware type
+        handleBiometricLogin(type)
+      } else {
+        setBiometricAvailable(false)
       }
+    } else {
+      setBiometricAvailable(false)
     }
   }
 
-  const handleBiometricLogin = async () => {
+  const handleBiometricLogin = async (typeOverride?: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    const success = await biometricService.authenticate(`Masuk dengan ${biometricType}`)
+    const effectiveType =
+      typeof typeOverride === 'string' && typeOverride ? typeOverride : biometricType || 'Biometrik'
+    const success = await biometricService.authenticate(`Masuk dengan ${effectiveType}`)
     if (success) {
       const saved = await biometricService.getSavedCredentials()
       if (saved && saved.token) {
@@ -235,7 +242,7 @@ export default function LoginPage() {
             {biometricAvailable && (
               <TouchableOpacity
                 activeOpacity={0.75}
-                onPress={handleBiometricLogin}
+                onPress={() => handleBiometricLogin()}
                 style={[
                   styles.biometricBtn,
                   {

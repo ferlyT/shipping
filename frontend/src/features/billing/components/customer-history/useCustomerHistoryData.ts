@@ -52,11 +52,11 @@ export function useCustomerHistoryData(
       selectedStatus,
       debouncedSearch,
     ],
-    queryFn: async ({ pageParam = 1 }) => {
+    queryFn: async ({ pageParam = { offset: 0, limit: 15 } }: { pageParam?: { offset: number; limit: number } }) => {
       if (!custCode) return null
       const res = await billingApi.customerBillingHistory(custCode, {
-        page: pageParam,
-        limit: 30,
+        offset: pageParam.offset,
+        limit: pageParam.limit,
         year: selectedYear,
         branch: selectedBranch,
         typeComodity: selectedTypeComodity,
@@ -67,10 +67,12 @@ export function useCustomerHistoryData(
       })
       return (res.data as { data?: CustomerBillingHistoryResponse })?.data || null
     },
-    initialPageParam: 1,
-    getNextPageParam: (lastPage) => {
-      if (lastPage?.pagination?.hasNextPage) {
-        return (lastPage.pagination.page || 1) + 1
+    initialPageParam: { offset: 0, limit: 15 },
+    getNextPageParam: (lastPage, allPages) => {
+      if (!lastPage?.pagination) return undefined
+      const totalLoaded = allPages.reduce((acc, p) => acc + (p?.items?.length || 0), 0)
+      if (lastPage.pagination.hasNextPage && totalLoaded < (lastPage.pagination.totalItems || 0)) {
+        return { offset: totalLoaded, limit: 10 }
       }
       return undefined
     },

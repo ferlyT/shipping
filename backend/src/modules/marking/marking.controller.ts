@@ -9,7 +9,43 @@ import {
   getMarkingKPIs,
   getMarkingExitHistory,
   getMarkingSuggestions,
+  getMarkingSizeAudit,
+  getMarkingBoxDimensions,
+  getMarkingBatchAllDimensions,
 } from './marking.service'
+
+export async function getMarkingSizeAuditController(c: Context) {
+  try {
+    const code = c.req.param('code') || ''
+    const sort = Number(c.req.query('sort')) === 2 ? 2 : 1
+    const data = await getMarkingSizeAudit(code, sort)
+    return successResponse(c, data)
+  } catch (error: any) {
+    return errorResponse(c, error.message || 'Gagal memuat data ukuran marking', 500)
+  }
+}
+
+export async function getMarkingBoxDimensionsController(c: Context) {
+  try {
+    const listCode = c.req.param('listCode') || ''
+    const data = await getMarkingBoxDimensions(listCode)
+    return successResponse(c, data)
+  } catch (error: any) {
+    return errorResponse(c, error.message || 'Gagal memuat rincian dimensi koli', 500)
+  }
+}
+
+export async function getMarkingBatchAllDimensionsController(c: Context) {
+  try {
+    const code = c.req.param('code') || ''
+    const data = await getMarkingBatchAllDimensions(code)
+    return successResponse(c, data)
+  } catch (error: any) {
+    return errorResponse(c, error.message || 'Gagal memuat semua dimensi koli batch', 500)
+  }
+}
+
+
 
 export async function getMarkingSuggestionsController(c: Context) {
   try {

@@ -517,6 +517,11 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
         if (fdComodity && Array.isArray(commodityMappingRows) && commodityMappingRows.length > 0) {
           const comUpper = fdComodity.toUpperCase().trim()
           const matchedMapping = commodityMappingRows.find((m: any) => {
+            if (m.branch && m.branch !== 'ALL' && expectedBranch) {
+              const mB = m.branch.toUpperCase().trim()
+              const eB = expectedBranch.toUpperCase().trim()
+              if (mB !== eB && !eB.includes(mB) && !mB.includes(eB)) return false
+            }
             if (m.mode && m.mode !== 'ALL') {
               const mMode = m.mode.toUpperCase()
               if (resolvedListType === 1 && !mMode.includes('AIR') && !mMode.includes('UDARA')) return false
@@ -546,12 +551,20 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
               fdTypeComodity = Number(matchedMapping.fdTypeComodity)
             }
           }
+
+          return {
+            fdTypeComodity,
+            fdComodity,
+            fdComodityName,
+            directPrice: matchedMapping && matchedMapping.price ? Number(matchedMapping.price) : null,
+          }
         }
 
         return {
           fdTypeComodity,
           fdComodity,
           fdComodityName,
+          directPrice: null,
         }
       })
     : []
@@ -799,6 +812,12 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
           fdTypeComodity: m.fdTypeComodity !== null && m.fdTypeComodity !== undefined ? Number(m.fdTypeComodity) : null,
           fdCustCode: m.fdCustCode ? String(m.fdCustCode).trim() : null,
           mode: m.mode ? String(m.mode).trim().toUpperCase() : null,
+          price: m.price !== null && m.price !== undefined ? Number(m.price) : null,
+          branch: m.branch ? String(m.branch).trim() : null,
+          startMarkingCode: m.startMarkingCode ? String(m.startMarkingCode).trim() : null,
+          startAgentDate: m.startAgentDate ? m.startAgentDate.toISOString() : null,
+          effectiveDate: m.effectiveDate ? m.effectiveDate.toISOString() : null,
+          endDate: m.endDate ? m.endDate.toISOString() : null,
         }))
       : [],
     fdTglAgent: agentDate ? agentDate.toISOString() : null,

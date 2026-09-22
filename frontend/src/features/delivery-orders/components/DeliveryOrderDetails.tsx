@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Loader2 } from 'lucide-react'
+import { Loader2, CheckCircle2, Clock, Printer, FileCheck } from 'lucide-react'
 import { deliveryOrdersApi } from '../services/delivery-orders.service'
 import { ROUTES } from '@/lib/constants'
 import { formatDate, displayCustName } from '@/lib/utils'
@@ -47,7 +47,7 @@ export function DeliveryOrderDetails({ listCode }: { listCode: string }) {
             onClick={() => navigate(ROUTES.DELIVERY_DETAIL(sj.fdSJNo))}
             className="group cursor-pointer rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4 transition-all duration-200 hover:border-[var(--color-tertiary)] hover:shadow-sm"
           >
-            <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
               <p className="truncate text-sm font-semibold text-[var(--color-primary)] group-hover:text-[var(--color-tertiary)] transition-colors">
                 {sj.fdSJNo}
               </p>
@@ -55,6 +55,42 @@ export function DeliveryOrderDetails({ listCode }: { listCode: string }) {
                 {sj.fdJmlPackSJ ?? 0} qty
               </span>
             </div>
+
+            {/* Status Badges */}
+            <div className="flex items-center gap-1 flex-wrap mb-2">
+              {sj.fdSent === 1 ? (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
+                  <CheckCircle2 size={9} className="shrink-0 text-emerald-500" />
+                  <span>Terkirim</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400">
+                  <Clock size={9} className="shrink-0 text-amber-500" />
+                  <span>Proses</span>
+                </span>
+              )}
+
+              {sj.fdPrintDate && (
+                <span
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-sky-500/10 border border-sky-500/40 text-sky-600 dark:text-sky-400"
+                  title={`Dicetak: ${formatDate(sj.fdPrintDate)}`}
+                >
+                  <Printer size={9} className="shrink-0 text-sky-500" />
+                  <span>Printed</span>
+                </span>
+              )}
+
+              {sj.fdGive === 1 && (
+                <span
+                  className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-purple-500/10 border border-purple-500/40 text-purple-600 dark:text-purple-400"
+                  title={sj.fdGiveDate ? `Diserahkan ke AR: ${formatDate(sj.fdGiveDate)}` : 'AR'}
+                >
+                  <FileCheck size={9} className="shrink-0 text-purple-500" />
+                  <span>AR{sj.fdGiveDate ? ` (${formatDate(sj.fdGiveDate)})` : ''}</span>
+                </span>
+              )}
+            </div>
+
             <p className="truncate text-xs text-[var(--color-secondary)] mb-3" title={displayCustName(sj.fdCustNameSJ || sj.fdCustCode)}>
               {displayCustName(sj.fdCustNameSJ || sj.fdCustCode, 'No Customer')}
             </p>
