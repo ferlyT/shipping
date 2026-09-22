@@ -31,7 +31,7 @@ export default function ShipmentBatchesDashboardPage() {
         breadcrumbs={[
           { label: t('module.logistics'), path: ROUTES.SHIPMENT_BATCHES },
           { label: t('nav.batchMarking') },
-          { label: t('nav.dashboard') },
+          { label: t('nav.batchDashboard') },
         ]}
       />
 

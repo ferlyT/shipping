@@ -6,8 +6,6 @@ import {
   RefreshCw,
   ArrowRight,
   ListChecks,
-  Layers,
-  Truck,
   CheckCircle2,
 } from 'lucide-react'
 import { deliveryOrdersApi } from '../services/delivery-orders.service'
@@ -81,25 +79,25 @@ export default function DashboardPage() {
     <div className="p-3.5 sm:p-6 lg:p-8 w-full min-w-0 space-y-6 font-[var(--font-body)] animate-fadeIn pb-24">
       {/* ── Page Header ── */}
       <PageHeader
-        title={t('do.inventoryTitle') || 'Distribusi & Pengantaran Lokal (Delivery Orders)'}
-        subtitle={t('do.inventorySubtitle') || 'Pusat kendali distribusi surat jalan, evaluasi performa bulanan (MoM & YoY), dan inventori kargo gudang.'}
+        title={t('do.dashboardTitle')}
+        subtitle={t('do.dashboardSubtitle')}
         breadcrumbs={[
           { label: t('module.logistics'), path: ROUTES.DELIVERY_ORDERS },
-          { label: 'Distribusi & DO' },
-          { label: t('nav.dashboard') },
+          { label: t('nav.deliveryOrder') },
+          { label: t('nav.deliveryOrderDashboard') },
         ]}
         actions={
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
             <Link to={ROUTES.DELIVERY_ORDERS_INVENTORY}>
               <Button variant="primary" size="sm" className="gap-1.5 cursor-pointer shadow-xs font-semibold">
                 <Warehouse size={14} />
-                <span>Inventori Stok Gudang</span>
+                <span>{t('nav.warehouseInventory')}</span>
               </Button>
             </Link>
             <Link to={ROUTES.DELIVERY_ORDERS_LIST}>
               <Button variant="secondary" size="sm" className="gap-1.5 cursor-pointer shadow-xs font-semibold">
                 <ListChecks size={14} />
-                <span>Daftar Surat Jalan</span>
+                <span>{t('nav.deliveryOrderList')}</span>
               </Button>
             </Link>
             <Button
@@ -137,10 +135,10 @@ export default function DashboardPage() {
               </div>
               <div className="min-w-0">
                 <h4 className="text-sm sm:text-base font-bold text-[var(--color-primary)] truncate">
-                  Stok Mengendap di Gudang (Ready to Ship)
+                  {t('do.warehouseStockTitle')}
                 </h4>
                 <p className="text-xs text-[var(--color-secondary)] mt-0.5 leading-snug">
-                  Kargo manifest yang telah tiba di gudang dan siap diterbitkan surat jalan pengiriman kepada customer.
+                  {t('do.warehouseStockDesc')}
                 </p>
               </div>
             </div>
@@ -150,13 +148,13 @@ export default function DashboardPage() {
           </div>
           <div className="pt-2 border-t border-[var(--color-border)] flex items-center justify-between flex-wrap gap-2">
             <span className="text-xs text-[var(--color-secondary)]">
-              Pantau kargo masuk yang belum dikirim
+              {t('do.warehouseStockMonitor')}
             </span>
             <Link
               to={ROUTES.DELIVERY_ORDERS_INVENTORY}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-tertiary)] hover:underline cursor-pointer"
             >
-              <span>Kelola Stok & Buat Surat Jalan</span>
+              <span>{t('do.warehouseStockAction')}</span>
               <ArrowRight size={13} />
             </Link>
           </div>
@@ -171,10 +169,10 @@ export default function DashboardPage() {
               </div>
               <div className="min-w-0">
                 <h4 className="text-sm sm:text-base font-bold text-[var(--color-primary)] truncate">
-                  Kargo Selesai Terkirim (Delivered)
+                  {t('do.deliveredCargoTitle')}
                 </h4>
                 <p className="text-xs text-[var(--color-secondary)] mt-0.5 leading-snug">
-                  Surat jalan pengiriman yang telah berhasil diserahterimakan dan ditandatangani oleh penerima kargo.
+                  {t('do.deliveredCargoDesc')}
                 </p>
               </div>
             </div>
@@ -184,21 +182,21 @@ export default function DashboardPage() {
           </div>
           <div className="pt-2 border-t border-[var(--color-border)] flex items-center justify-between flex-wrap gap-2">
             <span className="text-xs text-[var(--color-secondary)]">
-              Arsip riwayat surat jalan lengkap
+              {t('do.deliveredCargoArchive')}
             </span>
             <Link
               to={ROUTES.DELIVERY_ORDERS_LIST}
               className="inline-flex items-center gap-1.5 text-xs font-semibold text-[var(--color-tertiary)] hover:underline cursor-pointer"
             >
-              <span>Buka Riwayat Terkirim</span>
+              <span>{t('do.deliveredCargoAction')}</span>
               <ArrowRight size={13} />
             </Link>
           </div>
         </div>
       </div>
 
-      {/* Navigation Shortcut Cards to Logistics Modules */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+      {/* Navigation Shortcut Cards — hanya ke halaman dalam modul Delivery Orders */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
         <Link
           to={ROUTES.DELIVERY_ORDERS_INVENTORY}
           className="group flex flex-col justify-between bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 shadow-xs hover:border-[var(--color-tertiary)] hover:shadow-sm transition-all"
@@ -209,15 +207,15 @@ export default function DashboardPage() {
             </div>
             <div>
               <h4 className="text-sm font-bold text-[var(--color-primary)] group-hover:text-[var(--color-tertiary)] transition-colors">
-                Inventori Stok Gudang
+                {t('nav.warehouseInventory')}
               </h4>
               <p className="text-xs text-[var(--color-secondary)] mt-1 line-clamp-2">
-                Kelola kargo tiba di gudang dan terbitkan Surat Jalan pengiriman per listcode.
+                {t('do.warehouseStockDesc')}
               </p>
             </div>
           </div>
           <div className="mt-4 flex items-center text-xs font-semibold text-[var(--color-tertiary)] gap-1">
-            <span>Buka Inventori</span>
+            <span>{t('do.openInventory')}</span>
             <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
           </div>
         </Link>
@@ -232,61 +230,15 @@ export default function DashboardPage() {
             </div>
             <div>
               <h4 className="text-sm font-bold text-[var(--color-primary)] group-hover:text-[var(--color-tertiary)] transition-colors">
-                Daftar & Riwayat DO
+                {t('nav.deliveryOrderList')}
               </h4>
               <p className="text-xs text-[var(--color-secondary)] mt-1 line-clamp-2">
-                Eksplorasi tabel surat jalan, pencarian nomor SJ, tracking pengantaran, dan cetak DO.
+                {t('do.deliveredCargoArchive')}
               </p>
             </div>
           </div>
           <div className="mt-4 flex items-center text-xs font-semibold text-[var(--color-tertiary)] gap-1">
-            <span>Buka Halaman</span>
-            <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-
-        <Link
-          to={ROUTES.SHIPMENTS}
-          className="group flex flex-col justify-between bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 shadow-xs hover:border-[var(--color-tertiary)] hover:shadow-sm transition-all"
-        >
-          <div className="flex items-start gap-3.5">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-indigo-500/10 text-indigo-500 shrink-0">
-              <Truck className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-[var(--color-primary)] group-hover:text-[var(--color-tertiary)] transition-colors">
-                Pengiriman Logistik
-              </h4>
-              <p className="text-xs text-[var(--color-secondary)] mt-1 line-clamp-2">
-                Monitoring kargo pengiriman, tracking resi, dan rincian fisik paket yang dikirimkan.
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 flex items-center text-xs font-semibold text-[var(--color-tertiary)] gap-1">
-            <span>Buka Modul</span>
-            <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
-          </div>
-        </Link>
-
-        <Link
-          to={ROUTES.SHIPMENT_BATCHES}
-          className="group flex flex-col justify-between bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl p-5 shadow-xs hover:border-[var(--color-tertiary)] hover:shadow-sm transition-all"
-        >
-          <div className="flex items-start gap-3.5">
-            <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-500 shrink-0">
-              <Layers className="w-5 h-5" />
-            </div>
-            <div>
-              <h4 className="text-sm font-bold text-[var(--color-primary)] group-hover:text-[var(--color-tertiary)] transition-colors">
-                Batch Marking Kontainer
-              </h4>
-              <p className="text-xs text-[var(--color-secondary)] mt-1 line-clamp-2">
-                Pantau kedatangan batch marking kontainer kapal dan status sortir muatan gudang.
-              </p>
-            </div>
-          </div>
-          <div className="mt-4 flex items-center text-xs font-semibold text-[var(--color-tertiary)] gap-1">
-            <span>Buka Modul</span>
+            <span>{t('do.openListDO')}</span>
             <ArrowRight size={13} className="group-hover:translate-x-1 transition-transform" />
           </div>
         </Link>

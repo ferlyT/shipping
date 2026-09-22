@@ -462,7 +462,7 @@ export function ValidationListPage() {
               className="flex items-center gap-1.5 cursor-pointer"
             >
               <LayoutGrid className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span>{t('nav.dashboard') || 'Dashboard'}</span>
+              <span>{t('nav.billingDashboard')}</span>
             </Button>
             <Button
               variant="secondary"
@@ -711,7 +711,7 @@ export function ValidationListPage() {
                     className="flex items-center gap-1.5 cursor-pointer"
                   >
                     <LayoutGrid className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                    <span>{t('nav.dashboard') || 'Dashboard'}</span>
+                    <span>{t('nav.billingDashboard')}</span>
                   </Button>
                   <Button
                     variant="primary"

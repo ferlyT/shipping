@@ -10,13 +10,35 @@
 ### 🕐 Terakhir Diperbarui
 - **Tanggal**: 2026-09-22
 - **Oleh**: Antigravity AI
-- **Sesi**: Refactor InventoryPage — Pisahkan Fokus Halaman, Hapus Overlap dengan ListPage
+- **Sesi**: Cleanup Menu Delivery Orders — Perbaikan Label Sidebar, Hardcoded Strings, & Shortcut Card Lintas Modul
 
 ---
 
 ## 📍 Pekerjaan Terakhir Yang Dikerjakan
 
-- [x] **Refactor InventoryPage — Hilangkan Overlap dengan ListPage & Perbaiki Navigasi**:
+- [x] **Cleanup & Perbaikan Relevansi Menu Delivery Orders (Opsi A)**:
+  - **Latar Belakang & Permintaan User**: User menanyakan apakah menu Delivery Orders dan submenu-nya masih relevan.
+  - **Analisis**: Setelah audit menyeluruh, ditemukan 4 masalah pada DashboardPage:
+    1. Label sidebar generik "Dashboard" tidak menjelaskan konteks → seharusnya "Dashboard Surat Jalan"
+    2. DashboardPage menggunakan key i18n yang salah (`do.inventoryTitle`) padahal ada `do.dashboardTitle` yang lebih tepat
+    3. Breadcrumb Level 2 hardcoded `'Distribusi & DO'` — belum pakai `t()`
+    4. Shortcut card ke `ROUTES.SHIPMENTS` dan `ROUTES.SHIPMENT_BATCHES` di DashboardPage DO — membingungkan karena lintas modul
+  - **Perubahan Terpasang**:
+    - **`frontend/src/components/layout/Sidebar.tsx`** (line 82): Label submenu Dashboard DO diganti dari `t('nav.dashboard')` → `t('nav.deliveryOrderDashboard')` ("Dashboard Surat Jalan")
+    - **`frontend/src/features/delivery-orders/pages/DashboardPage.tsx`**:
+      - Judul halaman: dari `t('do.inventoryTitle')` → `t('do.dashboardTitle')`
+      - Subtitle: dari `t('do.inventorySubtitle')` → `t('do.dashboardSubtitle')`
+      - Breadcrumb Level 2: dari hardcoded `'Distribusi & DO'` → `t('nav.deliveryOrder')`
+      - Breadcrumb Level 3: dari `t('nav.dashboard')` → `t('nav.deliveryOrderDashboard')`
+      - Action button labels: dari hardcoded → `t('nav.warehouseInventory')` dan `t('nav.deliveryOrderList')`
+      - Card titles/descriptions/actions: semua via `t()` — tidak ada lagi hardcoded string
+      - Grid shortcut cards: dari `4 kolom (lg:grid-cols-4)` → `2 kolom (sm:grid-cols-2)` karena card Shipments & Batch Marking dihapus
+      - **Hapus shortcut card ke Shipments** ("Pengiriman Logistik") dan **Batch Marking** ("Batch Marking Kontainer") — tidak relevan di halaman Delivery Orders
+      - **Hapus unused imports** `Layers` dan `Truck` dari lucide-react
+    - **`frontend/src/lib/i18n/id.json`**: Tambah 12 key baru: `do.dashboardTitle/Subtitle`, `do.warehouseStockTitle/Desc/Action/Monitor`, `do.deliveredCargoTitle/Desc/Action/Archive`, `do.openInventory`, `do.openListDO`
+    - **`frontend/src/lib/i18n/en.json`**: Sinkronisasi keys setara id.json (12 key baru)
+  - **Verifikasi**: `npm run build` sukses 100% tanpa galat TypeScript (`built in 11.79s`).
+
   - **Latar Belakang & Permintaan User**: User meminta evaluasi apakah `/delivery-orders/inventory` dan `/delivery-orders/list` redundant, apa yang perlu diperbaiki, dan apakah navigasi logis.
   - **Analisis**: Kedua halaman punya tujuan berbeda (Inventory = buat SJ baru dari stok gudang; List = riwayat SJ yang sudah terbit), namun ada overlap yang membingungkan: filter "Terkirim"/"Semua" ada di InventoryPage, dan "Buka SJ" inline accordion di InventoryPage membuat user melihat riwayat di tempat yang salah.
   - **Perubahan Terpasang**:

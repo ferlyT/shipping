@@ -71,7 +71,7 @@ export default function DashboardPage() {
         breadcrumbs={[
           { label: t('module.finance'), path: ROUTES.BILLING },
           { label: t('nav.billing'), path: ROUTES.BILLING },
-          { label: t('nav.dashboard') },
+          { label: t('nav.billingDashboard') },
         ]}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
@@ -82,7 +82,7 @@ export default function DashboardPage() {
               className="flex items-center gap-1.5 cursor-pointer"
             >
               <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-              <span>{t('nav.validationList') || 'Validasi Tagihan'}</span>
+              <span>{t('nav.validationList')}</span>
             </Button>
             <Button
               variant="secondary"
@@ -91,7 +91,7 @@ export default function DashboardPage() {
               className="flex items-center gap-1.5 cursor-pointer"
             >
               <ScrollText className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              <span>{t('nav.billingList') || 'Daftar Tagihan'}</span>
+              <span>{t('nav.billingList')}</span>
             </Button>
           </div>
         }

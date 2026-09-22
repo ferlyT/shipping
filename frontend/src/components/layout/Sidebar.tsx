@@ -57,7 +57,7 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           label: t('nav.shipment'),
           icon: Package,
           children: [
-            { label: t('nav.dashboard'), path: ROUTES.SHIPMENTS, icon: Activity },
+            { label: t('nav.shipmentDashboard'), path: ROUTES.SHIPMENTS, icon: Activity },
             { label: t('nav.shipmentList'), path: ROUTES.SHIPMENTS_LIST, icon: ListOrdered },
           ],
         },
@@ -65,7 +65,7 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           label: t('nav.batchMarking'),
           icon: Layers,
           children: [
-            { label: t('nav.dashboard'), path: ROUTES.SHIPMENT_BATCHES, icon: PieChart },
+            { label: t('nav.batchDashboard'), path: ROUTES.SHIPMENT_BATCHES, icon: PieChart },
             { label: t('nav.batchList'), path: ROUTES.SHIPMENT_BATCHES_LIST, icon: Table },
             {
               label: t('nav.batchSizeAudit'),
@@ -79,7 +79,7 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           label: t('nav.deliveryOrder'),
           icon: Truck,
           children: [
-            { label: t('nav.dashboard'), path: ROUTES.DELIVERY_ORDERS, icon: LayoutDashboard },
+            { label: t('nav.deliveryOrderDashboard'), path: ROUTES.DELIVERY_ORDERS, icon: LayoutDashboard },
             {
               label: t('nav.warehouseInventory'),
               path: ROUTES.DELIVERY_ORDERS_INVENTORY,
@@ -100,7 +100,7 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           label: t('nav.billing'),
           icon: FileText,
           children: [
-            { label: t('nav.dashboard'), path: ROUTES.BILLING, icon: LineChart },
+            { label: t('nav.billingDashboard'), path: ROUTES.BILLING, icon: LineChart },
             { label: t('nav.targetBill'), path: ROUTES.BILLING_TARGET, icon: Target },
             { label: t('nav.billingList'), path: ROUTES.BILLING_LIST, icon: ScrollText },
             { label: t('nav.validationList'), path: ROUTES.BILLING_VALIDATION_LIST, icon: ClipboardCheck },

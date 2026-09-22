@@ -373,11 +373,11 @@ export default function ShipmentsDashboardPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <PageHeader
           title={t('shipments.title')}
-          subtitle={`${t('shipments.subtitle')} • Tahun ${kpis?.year || new Date().getFullYear()} (Berdasarkan Tgl Loading)`}
+          subtitle={`${t('shipments.subtitle')} • ${t('shipments.subtitleYear', { year: kpis?.year || new Date().getFullYear() })}`}
           breadcrumbs={[
             { label: t('module.logistics'), path: ROUTES.SHIPMENTS },
             { label: t('nav.shipment') },
-            { label: t('nav.dashboard') },
+            { label: t('nav.shipmentDashboard') },
           ]}
         />
 
