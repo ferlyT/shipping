@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { Pagination } from '@/components/ui/Pagination'
@@ -9,6 +9,7 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { useTranslation } from '@/hooks/useTranslation'
 import { customersApi } from '../services/customers.service'
 import { ROUTES } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 import { useCustomerTierPermission } from '../hooks/useCustomerTierPermission'
 import type { Customer, CustomerGroupKey, CustomerGroupCounts, CustomerSalesItem } from '../types/customers.types'
 import {
@@ -28,13 +29,18 @@ export default function CustomersPage() {
   const initialStatus = (statusParam === 'discontinued' ? 'discontinued' : statusParam === 'all' ? 'all' : 'active') as 'active' | 'discontinued' | 'all'
   const initialSales = searchParams.get('sales') || 'all'
   const initialGroup = (searchParams.get('group') as CustomerGroupKey) || 'all'
+  const initialSearch = searchParams.get('search') || searchParams.get('q') || ''
 
   const canViewTier = useCustomerTierPermission()
   const [statusFilter, setStatusFilter] = useState<'active' | 'discontinued' | 'all'>(initialStatus)
   const [activeSales, setActiveSales] = useState<string>(initialSales)
   const [activeGroup, setActiveGroup] = useState<CustomerGroupKey>(initialGroup)
-  const [search, setSearch] = useState('')
-  const debouncedSearch = useDebounce(search, 500)
+  const [search, setSearch] = useState(initialSearch)
+  const [immediateSearch, setImmediateSearch] = useState<string | null>(initialSearch ? initialSearch : null)
+  const debouncedSearch = useDebounce(search, 250)
+
+  // Use immediateSearch if triggered by Enter/suggestion, else debouncedSearch
+  const activeSearch = immediateSearch !== null ? immediateSearch : debouncedSearch
 
   const [viewMode, setViewMode] = useState<'table' | 'grid' | 'shortlist'>(() => {
     if (typeof window !== 'undefined') {
@@ -77,17 +83,44 @@ export default function CustomersPage() {
 
   const handleSearchChange = (value: string) => {
     setSearch(value)
-    goToPage(1)
+    setImmediateSearch(null)
   }
 
+  const handleSearchSubmit = (value: string) => {
+    setSearch(value)
+    setImmediateSearch(value)
+  }
+
+  // Reset page to 1 when search query changes
+  useEffect(() => {
+    goToPage(1)
+  }, [activeSearch])
+
+  // Sync search state to URL search parameters with change guard
+  useEffect(() => {
+    const currentParam = searchParams.get('search') || searchParams.get('q') || ''
+    const target = activeSearch.trim()
+    if (currentParam !== target) {
+      setSearchParams((prev) => {
+        if (target) {
+          prev.set('search', target)
+        } else {
+          prev.delete('search')
+          prev.delete('q')
+        }
+        return prev
+      }, { replace: true })
+    }
+  }, [activeSearch])
+
   const { data, isLoading, isFetching } = useQuery({
-    queryKey: ['customers', page, limit, debouncedSearch, sortField, sortDir, statusFilter, activeSales, activeGroup],
+    queryKey: ['customers', page, limit, activeSearch, sortField, sortDir, statusFilter, activeSales, activeGroup],
     placeholderData: keepPreviousData,
     queryFn: async () => {
       const res = await customersApi.list({
         page,
         limit,
-        search: debouncedSearch,
+        search: activeSearch,
         sortBy: sortField,
         sortDir,
         status: statusFilter,
@@ -149,6 +182,7 @@ export default function CustomersPage() {
     setActiveSales('all')
     setActiveGroup('all')
     setSearch('')
+    setImmediateSearch('')
     goToPage(1)
     setSearchParams({})
   }
@@ -186,6 +220,7 @@ export default function CustomersPage() {
         groupCounts={groupCounts}
         search={search}
         onSearchChange={handleSearchChange}
+        onSearchSubmit={handleSearchSubmit}
         onResetFilters={handleResetFilters}
         hasActiveFilters={hasActiveFilters}
         viewMode={viewMode}
@@ -198,8 +233,8 @@ export default function CustomersPage() {
       <div className="flex-1 flex flex-col bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-xs overflow-hidden min-h-0 relative z-10">
 
         {/* Data Content: Loading Skeleton vs Empty State vs Table vs Grid vs Shortlist */}
-        <div className="flex-1 overflow-auto min-h-0 bg-[var(--color-surface)]">
-          {isInitialLoading || isRefreshing ? (
+        <div className={cn("flex-1 overflow-auto min-h-0 bg-[var(--color-surface)] transition-opacity", isRefreshing && "opacity-60")}>
+          {isInitialLoading ? (
             <CustomerTableSkeleton rows={limit} />
           ) : customersList.length === 0 ? (
             <div className="p-12 text-center">
@@ -207,7 +242,9 @@ export default function CustomersPage() {
                 title="Tidak Ada Data Customer"
                 description={
                   hasActiveFilters
-                    ? "Tidak ditemukan customer yang sesuai kriteria pencarian dan filter aktif."
+                    ? (search.trim()
+                        ? `Tidak ditemukan customer dengan kata kunci "${search.trim()}". Coba periksa ejaan atau gunakan kata kunci lain.`
+                        : "Tidak ditemukan customer yang sesuai kriteria pencarian dan filter aktif.")
                     : "Belum ada data customer terdaftar pada sistem."
                 }
                 action={

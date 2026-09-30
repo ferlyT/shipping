@@ -40,8 +40,12 @@ export function getLastNDays(
       label = `${dateStr} (${dayStr})`
     }
 
+    const year = start.getFullYear()
+    const month = String(start.getMonth() + 1).padStart(2, '0')
+    const date = String(start.getDate()).padStart(2, '0')
+
     days.push({
-      date: start.toISOString().slice(0, 10),
+      date: `${year}-${month}-${date}`,
       start,
       end,
       label,
@@ -60,7 +64,7 @@ export function getLastNMonths(n: number): MonthRange[] {
     months.push({
       start,
       end,
-      label: start.toLocaleString('id-ID', { month: 'short', year: '2-digit' }),
+      label: start.toLocaleString('id-ID', { month: 'short', year: 'numeric' }),
     })
   }
   return months

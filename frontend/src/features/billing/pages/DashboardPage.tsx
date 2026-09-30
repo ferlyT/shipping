@@ -15,6 +15,7 @@ import { useBillingDashboard } from '../hooks/useBillingDashboard'
 import { useSwipeTab } from '../hooks/useSwipeTab'
 
 type MetricMode = 'count' | 'value'
+type TrendModeFilter = 'all' | 'udara' | 'laut'
 type ChartTab = 'harian' | 'bulanan' | 'karyawan' | 'sj-vs-bill'
 
 export default function DashboardPage() {
@@ -23,9 +24,11 @@ export default function DashboardPage() {
   const isMobile = useIsMobile()
   const [activeTab, setActiveTab] = useState<ChartTab>('harian')
   const [trendMetric, setTrendMetric] = useState<MetricMode>('count')
+  const [trendMode, setTrendMode] = useState<TrendModeFilter>('all')
   const [employeeMetric, setEmployeeMetric] = useState<MetricMode>('count')
   const [activeSjPic, setActiveSjPic] = useState<string>('all')
   const [daysFilter, setDaysFilter] = useState<7 | 14 | 30>(30)
+  const [showYoY, setShowYoY] = useState<boolean>(true)
 
   const {
     kpis,
@@ -49,6 +52,11 @@ export default function DashboardPage() {
   const metricOptions: { value: MetricMode; label: string }[] = [
     { value: 'count', label: t('billing.metric.count') },
     { value: 'value', label: t('billing.metric.value') },
+  ]
+  const trendModeOptions: { value: TrendModeFilter; label: string }[] = [
+    { value: 'all', label: t('billing.trend.filterAll') },
+    { value: 'udara', label: `✈️ ${t('billing.trend.filterAir')}` },
+    { value: 'laut', label: `🚢 ${t('billing.trend.filterSea')}` },
   ]
 
   const { handleTouchStart, handleTouchEnd } = useSwipeTab(chartTabs, activeTab, setActiveTab)
@@ -200,7 +208,7 @@ export default function DashboardPage() {
             className="w-full sm:w-auto overflow-x-auto"
             fullWidth={isMobile}
           />
-          {(activeTab === 'karyawan' || activeTab === 'sj-vs-bill') && (
+          {(activeTab === 'harian' || activeTab === 'karyawan' || activeTab === 'sj-vs-bill') && (
             <div className="flex items-center justify-between sm:justify-start gap-2.5 w-full sm:w-auto animate-fadeIn">
               <label className="text-xs font-semibold text-[var(--color-secondary)] uppercase tracking-wider shrink-0">
                 {t('billing.timeRange')}
@@ -221,24 +229,94 @@ export default function DashboardPage() {
           {activeTab === 'harian' && (
             <>
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-6">
-                <h2 className="text-base sm:text-lg font-medium text-[var(--color-primary)] font-[var(--font-display)]">
-                  {t('billing.title')}
-                </h2>
-                <SegmentedControl options={metricOptions} value={trendMetric} onChange={setTrendMetric} fullWidth={isMobile} />
+                <div>
+                  <h2 className="text-base sm:text-lg font-medium text-[var(--color-primary)] font-[var(--font-display)]">
+                    {t('billing.dailyBillTitle', { days: daysFilter })}
+                  </h2>
+                  <p className="text-xs text-[var(--color-secondary)] mt-0.5">
+                    {trendMetric === 'count' ? t('billing.metric.count') : t('billing.metric.value')} • {trendMode === 'all' ? t('billing.trend.proportion') : trendMode === 'udara' ? t('billing.targetAir') : t('billing.targetSea')}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <SegmentedControl
+                    options={trendModeOptions}
+                    value={trendMode}
+                    onChange={(val) => setTrendMode(val as TrendModeFilter)}
+                    className="shrink-0"
+                    fullWidth={isMobile}
+                  />
+                  <SegmentedControl
+                    options={metricOptions}
+                    value={trendMetric}
+                    onChange={setTrendMetric}
+                    className="shrink-0"
+                    fullWidth={isMobile}
+                  />
+                </div>
               </div>
-              <TrendChart data={daily} isLoading={isLoadingTrends} emptyMessage={t('billing.noDataDays', { days: 30 })} isMobile={isMobile} metric={trendMetric} />
+              <TrendChart
+                data={daily}
+                isLoading={isLoadingTrends}
+                emptyMessage={t('billing.noDataDays', { days: daysFilter })}
+                isMobile={isMobile}
+                metric={trendMetric}
+                modeFilter={trendMode}
+              />
             </>
           )}
 
           {activeTab === 'bulanan' && (
             <>
               <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4 sm:mb-6">
-                <h2 className="text-base sm:text-lg font-medium text-[var(--color-primary)] font-[var(--font-display)]">
-                  {t('billing.monthlyBillTitle')}
-                </h2>
-                <SegmentedControl options={metricOptions} value={trendMetric} onChange={setTrendMetric} fullWidth={isMobile} />
+                <div>
+                  <h2 className="text-base sm:text-lg font-medium text-[var(--color-primary)] font-[var(--font-display)]">
+                    {t('billing.monthlyBillTitle')}
+                  </h2>
+                  <p className="text-xs text-[var(--color-secondary)] mt-0.5">
+                    {trendMetric === 'count' ? t('billing.metric.count') : t('billing.metric.value')} • {trendMode === 'all' ? t('billing.trend.proportion') : trendMode === 'udara' ? t('billing.targetAir') : t('billing.targetSea')}
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => setShowYoY((prev) => !prev)}
+                    className={cn(
+                      "px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0 select-none",
+                      showYoY
+                        ? "bg-amber-500/10 border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/15"
+                        : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]"
+                    )}
+                    title="Tampilkan / sembunyikan garis perbandingan Tahun Lalu (YoY)"
+                  >
+                    <span className={cn("w-2 h-2 rounded-full transition-colors", showYoY ? "bg-amber-500 animate-pulse" : "bg-slate-400")} />
+                    <span>YoY {showYoY ? 'Aktif' : 'Off'}</span>
+                  </button>
+                  <SegmentedControl
+                    options={trendModeOptions}
+                    value={trendMode}
+                    onChange={(val) => setTrendMode(val as TrendModeFilter)}
+                    className="shrink-0"
+                    fullWidth={isMobile}
+                  />
+                  <SegmentedControl
+                    options={metricOptions}
+                    value={trendMetric}
+                    onChange={setTrendMetric}
+                    className="shrink-0"
+                    fullWidth={isMobile}
+                  />
+                </div>
               </div>
-              <TrendChart data={monthly} isLoading={isLoadingTrends} emptyMessage={t('billing.noData12Months')} isMobile={isMobile} metric={trendMetric} />
+              <TrendChart
+                data={monthly}
+                isLoading={isLoadingTrends}
+                emptyMessage={t('billing.noData12Months')}
+                isMobile={isMobile}
+                metric={trendMetric}
+                modeFilter={trendMode}
+                showYoY={showYoY}
+                isMonthly={true}
+              />
             </>
           )}
 

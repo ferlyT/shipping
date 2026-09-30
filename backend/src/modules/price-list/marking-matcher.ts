@@ -103,24 +103,32 @@ export async function findGeneralMarkingOverrideUpload(
   const shipmentInfo = await getMarkingInfo(markingCode)
   const shipmentDate = shipmentInfo?.loadDate || filters?.targetDate || new Date()
 
-  // Ambil upload aktif yang memiliki marking override, diurutkan terbaru
-  const uploadsWithMarkings = await prisma.tbPriceListUpload.findMany({
-    where: {
-      status: { not: 'FAILED' },
-      isSuperseded: false,
-      markings: { some: {} },
-    },
-    include: { markings: true },
-    orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
-  })
-
-  // Cek jika ada upload umum baru (tanpa marking) yang tanggal efektifnya sudah berlaku untuk shipmentDate ini
-  const newerGeneralUpload = await prisma.tbPriceListUpload.findFirst({
+  // 1. Ambil upload master terbaru yang sudah berlaku pada shipmentDate
+  const latestMasterUpload = await prisma.tbPriceListUpload.findFirst({
     where: {
       status: { not: 'FAILED' },
       isSuperseded: false,
       effectiveDate: { lte: shipmentDate },
     },
+    orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
+  })
+
+  if (!latestMasterUpload) return null
+
+  // 2. Ambil upload yang memiliki marking override dan effectiveDate >= latestMasterUpload.effectiveDate
+  // Jika sudah ada upload master baru (misal 1 Sep 2026), marking override dari upload lama (misal 17 Juli 2026)
+  // TIDAK BERLAKU LAGI karena sudah digantikan oleh price list baru.
+  const uploadsWithMarkings = await prisma.tbPriceListUpload.findMany({
+    where: {
+      status: { not: 'FAILED' },
+      isSuperseded: false,
+      markings: { some: {} },
+      effectiveDate: {
+        lte: shipmentDate,
+        gte: latestMasterUpload.effectiveDate,
+      },
+    },
+    include: { markings: true },
     orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
   })
 
@@ -161,12 +169,30 @@ export async function findCustomerMarkingOverrideUpload(
   const shipmentInfo = await getMarkingInfo(markingCode)
   const shipmentDate = shipmentInfo?.loadDate || filters?.targetDate || new Date()
 
+  // 1. Ambil upload customer terbaru yang sudah berlaku pada shipmentDate
+  const latestCustUpload = await prisma.tbCustomerPriceListUpload.findFirst({
+    where: {
+      fdCustCode: cleanCust,
+      status: { not: 'FAILED' },
+      isSuperseded: false,
+      effectiveDate: { lte: shipmentDate },
+    },
+    orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
+  })
+
+  if (!latestCustUpload) return null
+
+  // 2. Ambil upload customer yang memiliki marking override dan effectiveDate >= latestCustUpload.effectiveDate
   const uploadsWithMarkings = await prisma.tbCustomerPriceListUpload.findMany({
     where: {
       fdCustCode: cleanCust,
       status: { not: 'FAILED' },
       isSuperseded: false,
       markings: { some: {} },
+      effectiveDate: {
+        lte: shipmentDate,
+        gte: latestCustUpload.effectiveDate,
+      },
     },
     include: { markings: true },
     orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],

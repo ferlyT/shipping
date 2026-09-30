@@ -11,7 +11,7 @@ import {
 import { getBillType, BILL_TYPES } from '../constants/billing.constants'
 import { useOverweightValidation, type OverweightValidationResult } from './useOverweightValidation'
 import { formatDecimal } from '@/lib/utils'
-import type { Billing, BillingDetail, M3CheckResponse } from '../types/billing.types'
+import type { Billing, BillingDetail, M3CheckResponse, RelatedBillsSummary } from '../types/billing.types'
 
 export interface UnderchargedItem {
   itemName: string
@@ -146,11 +146,25 @@ export interface BillingValidationState {
   minChargeM3: number
   isBilledBelowMinM3: boolean
 
+  // Fallback Validasi M3 Berbasis No Invoice Terkait (Induk & Anak)
+  relatedBillsSummary: RelatedBillsSummary | null
+  isChildBillMerged: boolean
+  isRelatedBillsMatch: boolean
+
   // Kesimpulan / Overall Verdict
   isPhysicalValid: boolean
   isFinancialValid: boolean
   isOverallValid: boolean
   validationIssues: string[]
+
+  // Deteksi Kesalahan Input Mata Uang (fdJumlah2 terisi valas tapi tidak ada item bervalas)
+  isCurrencyInputError: boolean
+  currencyInputErrorDetail?: {
+    foreignCurr: string
+    fdJumlah2: number
+    matchedItemName?: string
+    correctTotalRp: number
+  }
 }
 
 const parseQty = (val: any): number | null => {
@@ -209,7 +223,7 @@ export function useBillingValidation({
   // 2. Metrik Unit & Tagihan
   const unitTotals = useMemo(() => {
     const acc = details.reduce<Record<string, number>>((map, row) => {
-      if (isAuxiliaryItem(row.fdItemName)) return map
+      if (isAuxiliaryItem(row.fdItemName, billingData?.fdBranchCode, billingData?.fdInvNo)) return map
 
       const nameUpper = (row.fdItemName || '').toUpperCase()
       let unit = row.fdListCode?.trim()?.toUpperCase()
@@ -238,12 +252,12 @@ export function useBillingValidation({
       return map
     }, {})
     return acc
-  }, [details])
+  }, [details, billingData?.fdBranchCode, billingData?.fdInvNo])
 
   const { rawM3, rawKg, rawVfc } = useMemo(() => {
     let m3 = 0, kg = 0, vfc = 0
     for (const d of details) {
-      if (isAuxiliaryItem(d.fdItemName)) continue
+      if (isAuxiliaryItem(d.fdItemName, billingData?.fdBranchCode, billingData?.fdInvNo)) continue
       if (isVfcItem(d.fdItemName, d.fdListCode)) { vfc += Number(d.fdQty || 0); continue }
       if (isFreightChargeItem(d.fdItemName, d.fdListCode)) continue
 
@@ -338,17 +352,35 @@ export function useBillingValidation({
   const isQtyGudangDiff = hasQtyMismatch && qtyGudang !== null && activeQtys.some((q) => q.key !== 'Gudang' && q.val !== qtyGudang)
   const isQtyKomplainDiff = hasQtyMismatch && qtyKomplain !== null && qtyKomplain > 0 && activeQtys.some((q) => q.key !== 'Komplain' && q.val !== qtyKomplain)
 
-  // 5. Volume & Weight Candidates
+  // 5. Relasi Bill Terkait & Volume/Weight Candidates
+  const relatedBills = res?.relatedBillsSummary || null
+  const hasRelatedBills = Boolean(relatedBills?.hasRelatedBills)
+
+  // Kasus invoice pecahan anak yang digabung ke invoice induk
+  const isChildBillMerged = Boolean(
+    !isAir &&
+    relatedBills?.isChild &&
+    billedM3 === 0 &&
+    details.some((d) => (d.fdItemName || '').toUpperCase().startsWith('GABUNG'))
+  )
+
   const beratMarking = (res?.totalBeratPerMarking !== undefined && res?.totalBeratPerMarking !== null && Number(res.totalBeratPerMarking) > 0)
     ? Number(res.totalBeratPerMarking)
     : null
-  const beratList = isGabungan && beratMarking !== null
-    ? beratMarking
-    : (res?.fdBeratList ? Number(res.fdBeratList) : 0)
+  const beratRelatedBills = (hasRelatedBills && (relatedBills?.sumBerat ?? 0) > 0)
+    ? Number(relatedBills!.sumBerat)
+    : null
+  const beratList = beratRelatedBills !== null
+    ? beratRelatedBills
+    : (isGabungan && beratMarking !== null
+        ? beratMarking
+        : (res?.fdBeratList ? Number(res.fdBeratList) : 0))
   const beratKomplain = res?.fdJmlBeratKomplain ? Number(res.fdJmlBeratKomplain) : 0
-  const beratSJ = isGabungan
-    ? (res?.totalJmlBeratSJ ?? 0)
-    : ((res?.fdBeratSJ && res.fdBeratSJ > 0) ? res.fdBeratSJ : (res?.totalJmlBeratSJ ?? 0))
+  const beratSJ = beratRelatedBills !== null
+    ? beratRelatedBills
+    : (isGabungan
+        ? (res?.totalJmlBeratSJ ?? 0)
+        : ((res?.fdBeratSJ && res.fdBeratSJ > 0) ? res.fdBeratSJ : (res?.totalJmlBeratSJ ?? 0)))
   const minChargeKg = res?.profileHarga?.minChargeKg && res?.profileHarga.minChargeKg > 0
     ? res.profileHarga.minChargeKg
     : (res?.minChargeKg ?? 3)
@@ -356,11 +388,11 @@ export function useBillingValidation({
   // Evaluasi Perbedaan Berat Fisik (List vs Surat Jalan vs Komplain)
   const activeWeights = useMemo(() => {
     const list: { key: string; label: string; val: number }[] = []
-    if (beratList > 0) list.push({ key: 'List', label: isGabungan ? 'Berat List (Marking)' : 'Berat List', val: beratList })
-    if (beratSJ > 0) list.push({ key: 'SJ', label: isGabungan ? 'Berat SJ (Marking)' : 'Berat Surat Jalan', val: beratSJ })
+    if (beratList > 0) list.push({ key: 'List', label: hasRelatedBills ? 'Berat Bill Terkait' : isGabungan ? 'Berat List (Marking)' : 'Berat List', val: beratList })
+    if (beratSJ > 0) list.push({ key: 'SJ', label: hasRelatedBills ? 'Berat SJ (Terkait)' : isGabungan ? 'Berat SJ (Marking)' : 'Berat Surat Jalan', val: beratSJ })
     if (beratKomplain > 0) list.push({ key: 'Komplain', label: 'Berat Komplain', val: beratKomplain })
     return list
-  }, [beratList, beratSJ, beratKomplain, isGabungan])
+  }, [beratList, beratSJ, beratKomplain, isGabungan, hasRelatedBills])
 
   const isWeightListDiff = Boolean(
     beratList > 0 && activeWeights.some((w) => w.key !== 'List' && Math.abs(w.val - beratList) > 0.1)
@@ -403,6 +435,7 @@ export function useBillingValidation({
     isAir,
     isGabungan,
     refM3Fallback,
+    isChildBillMerged,
   })
 
   const airPrimaryMatch = isAir
@@ -418,6 +451,7 @@ export function useBillingValidation({
       ...(hasValidPlQty ? plValues.map((v) => ({ sourceKey: 'PL', sourceName: 'Packing List', val: normM3(v), rawVal: v })) : []),
       ...gudangValues.map((v) => ({ sourceKey: 'Gudang', sourceName: 'Gudang', val: normM3(v), rawVal: v })),
       ...komplainValues.map((v) => ({ sourceKey: 'Komplain', sourceName: 'Komplain', val: normM3(v), rawVal: v })),
+      ...custMarkingValues.map((v) => ({ sourceKey: 'GudangPerMarking', sourceName: 'M3 Gudang Per Marking', val: normM3(v), rawVal: v })),
       ...plPerMarkingValues.map((v) => ({ sourceKey: 'PLPerMarking', sourceName: 'Packing List (Per Marking)', val: normM3(v), rawVal: v })),
       ...komplainPerMarkingValues.map((v) => ({ sourceKey: 'KomplainPerMarking', sourceName: 'M3 Komplain Per Marking', val: normM3(v), rawVal: v })),
       ...listBatchValues.map((v) => ({ sourceKey: 'ListBatch', sourceName: 'List Batch', val: normM3(v), rawVal: v })),
@@ -427,8 +461,26 @@ export function useBillingValidation({
         val: normM3(res!.m3KomplainPlusGudang!),
         rawVal: res!.m3KomplainPlusGudang!,
       }] : []),
+      ...(hasRelatedBills && (relatedBills?.sumM3Gudang ?? 0) > 0 ? [{
+        sourceKey: 'RelatedBillsGudang',
+        sourceName: `M3 Bill Terkait Gudang (${relatedBills!.relatedInvoices.map((i) => i.invNo).join(' + ')})`,
+        val: normM3(relatedBills!.sumM3Gudang),
+        rawVal: relatedBills!.sumM3Gudang,
+      }] : []),
+      ...(hasRelatedBills && (relatedBills?.sumM3PL ?? 0) > 0 ? [{
+        sourceKey: 'RelatedBillsPL',
+        sourceName: `M3 Bill Terkait PL (${relatedBills!.relatedInvoices.map((i) => i.invNo).join(' + ')})`,
+        val: normM3(relatedBills!.sumM3PL),
+        rawVal: relatedBills!.sumM3PL,
+      }] : []),
+      ...(hasRelatedBills && (relatedBills?.sumM3Komplain ?? 0) > 0 ? [{
+        sourceKey: 'RelatedBillsKomplain',
+        sourceName: `M3 Bill Terkait Komplain (${relatedBills!.relatedInvoices.map((i) => i.invNo).join(' + ')})`,
+        val: normM3(relatedBills!.sumM3Komplain),
+        rawVal: relatedBills!.sumM3Komplain,
+      }] : []),
     ]
-  }, [hasValidPlQty, plValues, gudangValues, komplainValues, plPerMarkingValues, komplainPerMarkingValues, listBatchValues, isHybridActive, res])
+  }, [hasValidPlQty, plValues, gudangValues, komplainValues, custMarkingValues, plPerMarkingValues, komplainPerMarkingValues, listBatchValues, isHybridActive, res, hasRelatedBills, relatedBills])
 
   // Komplain logic
   const rawKomplainM3 = isGabungan
@@ -515,9 +567,21 @@ export function useBillingValidation({
         Math.abs(seaPrimaryMatch.val - billedM3) < 0.001 &&
         billedM3 >= 0.1
       )
-      matchLabel = isBilledMatchedApprovedKomplain
-        ? (isGabungan ? 'M3 Komplain Per Marking' : 'Ukuran Komplain')
-        : seaPrimaryMatch.sourceName
+      if (seaPrimaryMatch.sourceKey === 'RelatedBillsGudang') {
+        matchLabel = `M3 Terkait: ${relatedBills?.relatedInvoices?.map((i) => i.invNo).join(' + ') || 'Gudang'}`
+      } else if (seaPrimaryMatch.sourceKey === 'RelatedBillsPL') {
+        matchLabel = `M3 Terkait PL: ${relatedBills?.relatedInvoices?.map((i) => i.invNo).join(' + ') || 'PL'}`
+      } else if (seaPrimaryMatch.sourceKey === 'RelatedBillsKomplain') {
+        matchLabel = `M3 Terkait Komplain: ${relatedBills?.relatedInvoices?.map((i) => i.invNo).join(' + ') || 'Komplain'}`
+      } else {
+        matchLabel = isBilledMatchedApprovedKomplain
+          ? (isGabungan ? 'M3 Komplain Per Marking' : 'Ukuran Komplain')
+          : seaPrimaryMatch.sourceName
+      }
+    } else if (isChildBillMerged) {
+      matchStatus = 'MATCH_PRIMARY'
+      matchedSourceName = `Digabung ke Invoice Induk (${relatedBills?.parentInvNo})`
+      matchLabel = `Digabung ke ${relatedBills?.parentInvNo}`
     } else if (seaMarkingMatch) {
       matchStatus = 'MATCH_MARKING'
       matchedSourceName = 'M3 Customer Per Marking'
@@ -535,16 +599,20 @@ export function useBillingValidation({
   }
 
   const isMatch = matchStatus === 'MATCH_PRIMARY' || matchStatus === 'MATCH_MARKING'
+  const isRelatedBillsMatch = Boolean(
+    isChildBillMerged ||
+    (seaPrimaryMatch && seaPrimaryMatch.sourceKey.startsWith('RelatedBills'))
+  )
   const isCodOrUrgent = Boolean(res?.isCodOrUrgent)
   const recommendedM3 = res?.recommendedM3 ?? 0
-  const isCodUrgentShortfall = !isAir && isCodOrUrgent && recommendedM3 > billedM3 + 0.001
+  const isCodUrgentShortfall = !isAir && !isChildBillMerged && isCodOrUrgent && recommendedM3 > billedM3 + 0.001
 
   // Evaluasi Tagihan di Bawah Minimum Charge M3 (Khusus Pengiriman Laut)
   const effectiveMinChargeM3 = (res?.profileHarga?.minChargeM3 && res.profileHarga.minChargeM3 > 0)
     ? res.profileHarga.minChargeM3
     : (res?.minChargeM3 && res.minChargeM3 > 0 ? res.minChargeM3 : 0.1)
 
-  const isBilledBelowMinM3 = !isAir && billedM3 > 0 && billedM3 < (effectiveMinChargeM3 - 0.0001)
+  const isBilledBelowMinM3 = !isAir && !isChildBillMerged && billedM3 > 0 && billedM3 < (effectiveMinChargeM3 - 0.0001)
 
   // 6. Commodity & Item Pricing Evaluation
   const billTypeId = (billingData?.fdTypeComodity !== null && billingData?.fdTypeComodity !== undefined && Number(billingData.fdTypeComodity) > 0)
@@ -567,14 +635,16 @@ export function useBillingValidation({
         defaultTypeId,
         defaultComodityName,
         expedisiList: validExpedisiList,
+        branchCode: billingData?.fdBranchCode,
+        invNo: billingData?.fdInvNo,
       })
       return { item, evaluation }
     })
-  }, [details, res, isAir, defaultTypeId, defaultComodityName, validExpedisiList])
+  }, [details, res, isAir, defaultTypeId, defaultComodityName, validExpedisiList, billingData?.fdBranchCode, billingData?.fdInvNo])
 
   const underchargedItems = useMemo<UnderchargedItem[]>(() => {
     return evaluatedItems
-      .filter(({ evaluation }) => evaluation.statusType === 'LOWER')
+      .filter(({ evaluation }) => evaluation.statusType === 'LOWER' && !evaluation.isNonValidatedBranchDashFee)
       .map(({ item, evaluation }) => ({
         itemName: item.fdItemName ?? '',
         billedPrice: Number(item.fdItemPrice || 0),
@@ -587,7 +657,7 @@ export function useBillingValidation({
 
   const overchargedItems = useMemo<OverchargedItem[]>(() => {
     return evaluatedItems
-      .filter(({ evaluation }) => evaluation.statusType === 'HIGHER')
+      .filter(({ evaluation }) => evaluation.statusType === 'HIGHER' && !evaluation.isNonValidatedBranchDashFee)
       .map(({ item, evaluation }) => ({
         itemName: item.fdItemName ?? '',
         billedPrice: Number(item.fdItemPrice || 0),
@@ -621,7 +691,6 @@ export function useBillingValidation({
       )
 
   const isFinancialValid = !hasPriceDiscrepancy && !hasUnbilledTransport
-  const isOverallValid = isPhysicalValid && isFinancialValid
 
   const validationIssues = useMemo(() => {
     const issues: string[] = []
@@ -639,7 +708,7 @@ export function useBillingValidation({
       }
     }
     if (hasQtyMismatch) {
-      issues.push('Terdapat ketidaksesuaian jumlah koli (Qty) antar tahapan')
+      issues.push(`Terdapat ketidaksesuaian jumlah koli (Qty) antar tahapan (${activeQtys.map((q) => `${q.label}: ${q.val}`).join(' vs ')})`)
     }
     // Perbedaan berat antar dokumen hanya menjadi issue jika moda udara atau muatan overweight (sisa kuota < 0)
     if (hasWeightMismatch && (isAir || overweight.isOverweight)) {
@@ -648,22 +717,22 @@ export function useBillingValidation({
       )
     }
     if (isCodUrgentShortfall) {
-      issues.push('Tagihan M3 lebih rendah dari rekomendasi COD/Urgent')
+      issues.push(`Volume tagihan (${formatDecimal(billedM3, 4)} m³) lebih rendah dari rekomendasi COD/Urgent (${formatDecimal(recommendedM3, 4)} m³ dari Packing List)`)
     }
     if (isBilledMismatchedApprovedKomplain) {
-      issues.push('Ukuran komplain disetujui, namun tagihan tidak mencocokinya')
+      issues.push(`Ukuran komplain disetujui (${formatDecimal(targetKomplainM3 ?? 0, 4)} m³), namun tagihan tidak mencocokinya (${formatDecimal(billedM3, 4)} m³)`)
     }
     if (!isType2 && overweight.isOverweight && !overweight.isBilledOverweightMatch) {
-      issues.push(`Muatan melebihi kuota rasio (+${overweight.overweightKg} kg) namun belum ditagihkan`)
+      issues.push(`Muatan melebihi kuota rasio (+${formatDecimal(overweight.overweightKg, 2)} kg) namun belum ditagihkan`)
     }
     if (!isType2 && overweight.isBilledUnneededOverweight) {
-      issues.push('Muatan tidak overweight namun invoice menagihkan item KG')
+      issues.push(`Muatan tidak overweight (${overweight.actualWeightKg} kg < kuota ${formatDecimal(overweight.maxAllowedWeight, 1)} kg) namun invoice menagihkan item KG`)
     }
     if (hasUnbilledTransport) {
       issues.push(`Ditemukan ${unbilledExpedisiList.length} biaya ekspedisi lokal Harus Tagih (tbExpIndo) yang belum ditagihkan`)
     }
     if (hasPriceDiscrepancy) {
-      issues.push(`Terdapat ${underchargedItems.length} item dengan tarif di bawah master (undercharge)`)
+      issues.push(`Terdapat ${underchargedItems.length} item dengan tarif di bawah master (undercharge: ${underchargedItems.map((u) => u.itemName).join(', ')})`)
     }
     if (isBilledBelowMinM3) {
       issues.push(`Volume yang ditagihkan (${formatDecimal(billedM3, 4)} m³) lebih rendah dari batas minimum charge (${formatDecimal(effectiveMinChargeM3, 4)} m³)`)
@@ -676,19 +745,69 @@ export function useBillingValidation({
     isType2Discrepancy,
     type2CompareData,
     hasQtyMismatch,
+    activeQtys,
     hasWeightMismatch,
     activeWeights,
     isCodUrgentShortfall,
+    recommendedM3,
     isBilledMismatchedApprovedKomplain,
+    targetKomplainM3,
     overweight,
     hasUnbilledTransport,
     unbilledExpedisiList.length,
     hasPriceDiscrepancy,
-    underchargedItems.length,
+    underchargedItems,
     isBilledBelowMinM3,
     billedM3,
     effectiveMinChargeM3,
   ])
+
+  // ── Deteksi Kesalahan Input Mata Uang ──────────────────────────────────────
+  // Kondisi: fdJumlah2 > 0 dengan fdCurr1 valas (S$, HK$, US$, dll),
+  // namun TIDAK ADA satu pun item detail yang menggunakan satuan/mata uang valas tersebut.
+  const isCurrencyInputError = useMemo(() => {
+    const rawJumlah2 = Number(billingData?.fdJumlah2 || 0)
+    if (rawJumlah2 <= 0) return false
+    const foreignCurr = (billingData?.fdCurr1 || '').trim().toUpperCase()
+    if (!foreignCurr || foreignCurr === 'RP.' || foreignCurr === 'RPD' || foreignCurr === 'IDR') return false
+    const hasMatchingForeignItem = details.some((d) => {
+      const listCode = (d.fdListCode || '').trim().toUpperCase()
+      const curr = (d.fdCurr || '').trim().toUpperCase()
+      if (listCode === foreignCurr || curr === foreignCurr) return true
+      if (foreignCurr.includes('S$') && (listCode === 'SGD' || listCode === 'S$' || curr === 'S$' || curr === 'SGD')) return true
+      if (foreignCurr.includes('HK$') && (listCode === 'HKD' || listCode === 'HK$' || curr === 'HK$' || curr === 'HKD')) return true
+      if (foreignCurr.includes('US$') && (listCode === 'USD' || listCode === 'US$' || curr === 'US$' || curr === 'USD')) return true
+      if (foreignCurr === 'USD' && (listCode === 'US$' || curr === 'US$')) return true
+      if (foreignCurr === 'SGD' && (listCode === 'S$' || curr === 'S$')) return true
+      if (foreignCurr === 'HKD' && (listCode === 'HK$' || curr === 'HK$')) return true
+      return false
+    })
+    return !hasMatchingForeignItem
+  }, [billingData?.fdJumlah2, billingData?.fdCurr1, details])
+
+  const currencyInputErrorDetail = useMemo(() => {
+    if (!isCurrencyInputError) return undefined
+    const rawJumlah2 = Number(billingData?.fdJumlah2 || 0)
+    const foreignCurr = (billingData?.fdCurr1 || '').trim()
+    const matchedItem = details.find((d) => Math.abs(Number(d.fdTotal || 0) - rawJumlah2) < 1)
+    return {
+      foreignCurr,
+      fdJumlah2: rawJumlah2,
+      matchedItemName: matchedItem?.fdItemName ?? undefined,
+      correctTotalRp: Number(billingData?.fdJumlah1 || 0) + rawJumlah2,
+    }
+  }, [isCurrencyInputError, billingData?.fdJumlah2, billingData?.fdCurr1, billingData?.fdJumlah1, details])
+
+  const finalValidationIssues = useMemo(() => {
+    if (!isCurrencyInputError || !currencyInputErrorDetail) return validationIssues
+    const errMsg = `Kesalahan input mata uang: Header invoice memiliki nilai ${currencyInputErrorDetail.foreignCurr} ${currencyInputErrorDetail.fdJumlah2.toLocaleString('id-ID')} namun tidak ada item yang menggunakan satuan/mata uang tersebut${currencyInputErrorDetail.matchedItemName ? ` (kemungkinan item '${currencyInputErrorDetail.matchedItemName}' salah dimasukkan ke kolom valas)` : ''}.`
+    return [...validationIssues, errMsg]
+  }, [isCurrencyInputError, currencyInputErrorDetail, validationIssues])
+
+  const finalIsFinancialValid = isFinancialValid && !isCurrencyInputError
+  const finalIsOverallValid = isPhysicalValid && finalIsFinancialValid
+
+
 
   return {
     details,
@@ -718,6 +837,10 @@ export function useBillingValidation({
     minChargeM3: effectiveMinChargeM3,
     isBilledBelowMinM3,
     isCodUrgentShortfall,
+
+    relatedBillsSummary: relatedBills,
+    isChildBillMerged,
+    isRelatedBillsMatch,
 
     rawKomplainM3,
     targetKomplainM3,
@@ -773,8 +896,11 @@ export function useBillingValidation({
     hasPriceDiscrepancy,
 
     isPhysicalValid,
-    isFinancialValid,
-    isOverallValid,
-    validationIssues,
+    isFinancialValid: finalIsFinancialValid,
+    isOverallValid: finalIsOverallValid,
+    validationIssues: finalValidationIssues,
+
+    isCurrencyInputError,
+    currencyInputErrorDetail,
   }
 }

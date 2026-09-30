@@ -29,6 +29,9 @@ import { BatchListItem } from '../../src/features/logistics/components/BatchList
 import { DeliveryListItem } from '../../src/features/logistics/components/DeliveryListItem'
 import { ShipmentDetailSheet } from '../../src/features/logistics/components/ShipmentDetailSheet'
 import { BatchManifestSheet } from '../../src/features/logistics/components/BatchManifestSheet'
+import { InspectionTab } from '../../src/features/inspection/components/InspectionTab'
+import { InspectionFormSheet } from '../../src/features/inspection/components/InspectionFormSheet'
+import { useInspectionMutations } from '../../src/features/inspection/hooks/useInspectionMutations'
 import { useDebounce } from '../../src/hooks/useDebounce'
 import apiClient from '../../src/api/client'
 
@@ -46,7 +49,7 @@ export default function LogisticsScreen() {
     t?: string
   }>()
 
-  const [activeTab, setActiveTab] = useState<'shipments' | 'batches' | 'delivery'>('shipments')
+  const [activeTab, setActiveTab] = useState<'shipments' | 'batches' | 'delivery' | 'inspection'>('shipments')
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
   const [showSuggestions, setShowSuggestions] = useState(false)
@@ -55,11 +58,43 @@ export default function LogisticsScreen() {
   const [selectedItem, setSelectedItem] = useState<any | null>(null)
   const [selectedBatch, setSelectedBatch] = useState<any | null>(null)
 
+  // BAP from shipment state
+  const [bapInitialData, setBapInitialData] = useState<any | null>(null)
+  const [isBapFormVisible, setIsBapFormVisible] = useState(false)
+  const { createMutation: createBapMutation } = useInspectionMutations()
+
+  const handleCreateBapFromShipment = (shipment: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    const prefilled = {
+      fdListType: shipment.fdListType ? (Number(shipment.fdListType) as 1 | 2) : 2,
+      fdMarkingCode: shipment.fdMarkingCode?.trim() || '',
+      fdMarkingNo: shipment.fdMarkingNo?.trim() || '',
+      fdListCode: shipment.fdListCode?.trim() || '',
+      fdTerima: shipment.fdTerima?.trim() || '',
+      fdNamaCustomer: shipment.fdCustName?.trim() || '',
+      fdReportDate: new Date().toISOString(),
+      fdStatus: '1',
+    }
+    setBapInitialData(prefilled)
+    setIsBapFormVisible(true)
+  }
+
+  const handleBapSubmit = async (payload: any) => {
+    try {
+      await createBapMutation.mutateAsync(payload)
+      setIsBapFormVisible(false)
+      setBapInitialData(null)
+      showToast('Berita Acara Pemeriksaan berhasil dibuat', 'success')
+    } catch {
+      // handled by mutation
+    }
+  }
+
   const isDark = mode === 'midnight'
 
   useEffect(() => {
     const target = params.tab || params.initialTab
-    if (target === 'batches' || target === 'shipments' || target === 'delivery') {
+    if (target === 'batches' || target === 'shipments' || target === 'delivery' || target === 'inspection') {
       setActiveTab(target)
       setModeFilter('all')
       setSearch(params.search || '')
@@ -96,7 +131,7 @@ export default function LogisticsScreen() {
       const res = await apiClient.get(suggestionEndpoint, { params: { q: debouncedSearch.trim() } })
       return res.data.data || []
     },
-    enabled: debouncedSearch.trim().length >= 2,
+    enabled: activeTab !== 'inspection' && debouncedSearch.trim().length >= 2,
     staleTime: 30000,
   })
 
@@ -124,6 +159,7 @@ export default function LogisticsScreen() {
               { label: t('logistics.shipments', 'Daftar Resi'), value: 'shipments' },
               { label: t('logistics.batches', 'Batch Marking'), value: 'batches' },
               { label: t('logistics.delivery', 'Surat Jalan'), value: 'delivery' },
+              { label: t('logistics.inspection', 'BAP'), value: 'inspection' },
             ]}
             selectedValue={activeTab}
             onValueChange={(val) => {
@@ -134,77 +170,81 @@ export default function LogisticsScreen() {
             style={{ marginTop: 10 }}
           />
 
-          <SearchBar
-            value={search}
-            debounceMs={0}
-            onChangeText={(txt) => {
-              setSearch(txt)
-              setShowSuggestions(txt.trim().length >= 2)
-            }}
-            onFocus={() => {
-              if (search.trim().length >= 2) setShowSuggestions(true)
-            }}
-            placeholder={
-              activeTab === 'shipments'
-                ? t('logistics.searchShipmentPlaceholder', 'Cari resi, customer, marking code/no...')
-                : activeTab === 'batches'
-                ? t('logistics.searchBatchPlaceholder', 'Cari nomor batch marking...')
-                : t('logistics.searchDeliveryPlaceholder', 'Cari surat jalan, supir, plat...')
-            }
-            onScanPress={() => setScannerVisible(true)}
-            style={{ marginTop: 10 }}
-          />
+          {activeTab !== 'inspection' && (
+            <>
+              <SearchBar
+                value={search}
+                debounceMs={0}
+                onChangeText={(txt) => {
+                  setSearch(txt)
+                  setShowSuggestions(txt.trim().length >= 2)
+                }}
+                onFocus={() => {
+                  if (search.trim().length >= 2) setShowSuggestions(true)
+                }}
+                placeholder={
+                  activeTab === 'shipments'
+                    ? t('logistics.searchShipmentPlaceholder', 'Cari resi, customer, marking code/no...')
+                    : activeTab === 'batches'
+                    ? t('logistics.searchBatchPlaceholder', 'Cari nomor batch marking...')
+                    : t('logistics.searchDeliveryPlaceholder', 'Cari surat jalan, supir, plat...')
+                }
+                onScanPress={() => setScannerVisible(true)}
+                style={{ marginTop: 10 }}
+              />
 
-          <SearchSuggestionsDropdown
-            visible={showSuggestions && search.trim().length >= 2}
-            suggestions={suggestions}
-            isLoading={isFetchingSuggestions}
-            title={
-              activeTab === 'shipments'
-                ? t('logistics.suggestionsShipment', 'Saran Pencarian (Resi / Cust / Marking)')
-                : activeTab === 'batches'
-                ? t('logistics.suggestionsBatch', 'Saran Pencarian (Marking / Kontainer / BL)')
-                : t('logistics.suggestionsDelivery', 'Saran Pencarian (Surat Jalan / Supir / Plat)')
-            }
-            onSelect={(sug) => {
-              Keyboard.dismiss()
-              setSearch(sug.value)
-              setShowSuggestions(false)
-            }}
-            onClose={() => setShowSuggestions(false)}
-          />
+              <SearchSuggestionsDropdown
+                visible={showSuggestions && search.trim().length >= 2}
+                suggestions={suggestions}
+                isLoading={isFetchingSuggestions}
+                title={
+                  activeTab === 'shipments'
+                    ? t('logistics.suggestionsShipment', 'Saran Pencarian (Resi / Cust / Marking)')
+                    : activeTab === 'batches'
+                    ? t('logistics.suggestionsBatch', 'Saran Pencarian (Marking / Kontainer / BL)')
+                    : t('logistics.suggestionsDelivery', 'Saran Pencarian (Surat Jalan / Supir / Plat)')
+                }
+                onSelect={(sug) => {
+                  Keyboard.dismiss()
+                  setSearch(sug.value)
+                  setShowSuggestions(false)
+                }}
+                onClose={() => setShowSuggestions(false)}
+              />
 
-          {/* Mode Filter Pills */}
-          {(activeTab === 'shipments' || activeTab === 'batches') && (
-            <View style={styles.filterPillRow}>
-              {(['all', '1', '2'] as const).map((m) => {
-                const isSelected = modeFilter === m
-                const label = m === 'all' ? t('common.all', 'Semua') : m === '1' ? t('common.air', 'Udara') : t('common.sea', 'Laut')
-                return (
-                  <TouchableOpacity
-                    key={m}
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                      setModeFilter(m)
-                    }}
-                    style={[
-                      styles.pillBtn,
-                      {
-                        backgroundColor: isSelected
-                          ? isDark ? 'rgba(56, 189, 248, 0.15)' : '#E0F2FE'
-                          : colors.surface,
-                        borderColor: isSelected ? colors.tertiary : colors.border,
-                      },
-                    ]}
-                  >
-                    <Text style={[styles.pillText, { color: isSelected ? colors.tertiary : colors.secondary }]}>
-                      {label}
-                    </Text>
-                  </TouchableOpacity>
-                )
-              })}
-            </View>
+              {/* Mode Filter Pills */}
+              {(activeTab === 'shipments' || activeTab === 'batches') && (
+                <View style={styles.filterPillRow}>
+                  {(['all', '1', '2'] as const).map((m) => {
+                    const isSelected = modeFilter === m
+                    const label = m === 'all' ? t('common.all', 'Semua') : m === '1' ? t('common.air', 'Udara') : t('common.sea', 'Laut')
+                    return (
+                      <TouchableOpacity
+                        key={m}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                          setModeFilter(m)
+                        }}
+                        style={[
+                          styles.pillBtn,
+                          {
+                            backgroundColor: isSelected
+                              ? isDark ? 'rgba(56, 189, 248, 0.15)' : '#E0F2FE'
+                              : colors.surface,
+                            borderColor: isSelected ? colors.tertiary : colors.border,
+                          },
+                        ]}
+                      >
+                        <Text style={[styles.pillText, { color: isSelected ? colors.tertiary : colors.secondary }]}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    )
+                  })}
+                </View>
+              )}
+            </>
           )}
         </View>
 
@@ -242,6 +282,7 @@ export default function LogisticsScreen() {
               <ShipmentListItem
                 item={item}
                 onPress={(it) => setSelectedItem(it)}
+                onCreateBap={handleCreateBapFromShipment}
               />
             )}
           />
@@ -332,6 +373,9 @@ export default function LogisticsScreen() {
           />
         )}
 
+        {/* Inspection Reports (BAP) */}
+        {activeTab === 'inspection' && <InspectionTab />}
+
         {/* Barcode Scanner Modal */}
         <BarcodeScannerModal
           visible={scannerVisible}
@@ -343,6 +387,7 @@ export default function LogisticsScreen() {
         <ShipmentDetailSheet
           selectedItem={selectedItem}
           onClose={() => setSelectedItem(null)}
+          onCreateBap={handleCreateBapFromShipment}
         />
 
         {/* Batch Manifest Sheet */}
@@ -350,6 +395,19 @@ export default function LogisticsScreen() {
           selectedBatch={selectedBatch}
           onClose={() => setSelectedBatch(null)}
           setSelectedBatch={setSelectedBatch}
+          onCreateBap={handleCreateBapFromShipment}
+        />
+
+        {/* Create BAP from Resi Modal */}
+        <InspectionFormSheet
+          visible={isBapFormVisible}
+          initialData={bapInitialData}
+          onClose={() => {
+            setIsBapFormVisible(false)
+            setBapInitialData(null)
+          }}
+          onSubmit={handleBapSubmit}
+          isSaving={createBapMutation.isPending}
         />
       </View>
     </SafeAreaView>

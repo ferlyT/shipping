@@ -33,8 +33,8 @@ profileRoutes.put('/', zValidator('json', updateProfileSchema), async (c) => {
   }
 })
 
-// 3. Ganti kata sandi mandiri
-profileRoutes.put('/change-password', zValidator('json', changePasswordSchema), async (c) => {
+// 3. Ganti kata sandi mandiri (mendukung /password dan /change-password)
+const handleChangePassword = async (c: any) => {
   try {
     const userPayload = c.get('user')
     const data = c.req.valid('json')
@@ -43,7 +43,9 @@ profileRoutes.put('/change-password', zValidator('json', changePasswordSchema), 
   } catch (err) {
     return errorResponse(c, (err as Error).message, 400)
   }
-})
+}
+profileRoutes.put('/password', zValidator('json', changePasswordSchema), handleChangePassword)
+profileRoutes.put('/change-password', zValidator('json', changePasswordSchema), handleChangePassword)
 
 // 4. Unggah foto profil avatar (multipart/form-data atau json base64)
 profileRoutes.post('/avatar', async (c) => {

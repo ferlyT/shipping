@@ -1,9 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
-import { ChevronRight, SlidersHorizontal, Plane, Ship, ShieldCheck, LayoutGrid, User, ScrollText, RotateCcw, Search, AlertTriangle } from 'lucide-react'
+import { ChevronRight, SlidersHorizontal, Plane, Ship, ShieldCheck, LayoutGrid, User, ScrollText, RotateCcw, Search, AlertTriangle, Tag, Mic } from 'lucide-react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { billingApi } from '../services/billing.service'
+import { CustomerHargaModal } from '../components/CustomerHargaModal'
 import { useDebounce } from '@/hooks/useDebounce'
 import { Button } from '@/components/ui/Button'
 import { Table } from '@/components/ui/Table'
@@ -19,6 +20,8 @@ import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { useToastStore } from '@/stores/toastStore'
+import { useVoiceAssistantStore } from '@/stores/voiceAssistantStore'
+import { useVoiceAssistantPermission } from '@/hooks/useVoiceAssistantPermission'
 import type { Billing } from '../types/billing.types'
 import { getAgingDays } from '../utils/billing.utils'
 
@@ -101,6 +104,8 @@ export function ValidationListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addToast } = useToastStore()
+  const { openAssistant } = useVoiceAssistantStore()
+  const canUseVoice = useVoiceAssistantPermission()
 
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 400)
@@ -108,6 +113,7 @@ export function ValidationListPage() {
   const [showMobilePanel, setShowMobilePanel] = useState(false)
   const [listTypeFilter, setListTypeFilter] = useState<'all' | 1 | 2>('all')
   const [authorFilter, setAuthorFilter] = useState<string>('all')
+  const [selectedCustForHarga, setSelectedCustForHarga] = useState<{ code: string; name?: string } | null>(null)
 
   const listTypeFilters = useMemo(
     () => [
@@ -343,6 +349,20 @@ export function ValidationListPage() {
               >
                 {mainDisplayName}
               </span>
+              {(row.fdCustCode || rawCustName) && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelectedCustForHarga({ code: row.fdCustCode || rawCustName, name: mainDisplayName })
+                  }}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-bold rounded-md bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer shrink-0"
+                  title="Lihat Pricelist Customer (tbCustomersHarga)"
+                >
+                  <Tag className="w-2.5 h-2.5 shrink-0" />
+                  <span>Tarif</span>
+                </button>
+              )}
               {isDiff && (
                 <span
                   className="text-[9.5px] font-semibold px-1.5 py-0.2 rounded border border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 inline-flex items-center gap-0.5 shrink-0"
@@ -473,6 +493,19 @@ export function ValidationListPage() {
               <ScrollText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span>{t('nav.billingList') || 'Daftar Tagihan'}</span>
             </Button>
+            {canUseVoice && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => openAssistant()}
+                className="flex items-center gap-1.5 cursor-pointer border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20"
+                title="Asisten Suara: Buka Faktur, Cari Invoice (Alt+V)"
+              >
+                <Mic className="w-3.5 h-3.5 text-sky-500 animate-pulse" />
+                <span>Asisten Suara</span>
+                <kbd className="hidden md:inline-block text-[9px] px-1 py-0.2 rounded bg-sky-500/20 text-sky-500 font-mono">Alt+V</kbd>
+              </Button>
+            )}
           </div>
         }
       />
@@ -803,6 +836,20 @@ export function ValidationListPage() {
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-1.5 flex-wrap min-w-0 pr-2">
                         <span className="font-semibold text-[var(--color-primary)] truncate">{mainDisplayName}</span>
+                        {(b.fdCustCode || rawCustName) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedCustForHarga({ code: b.fdCustCode || rawCustName, name: mainDisplayName })
+                            }}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold rounded-md bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer shrink-0"
+                            title="Lihat Pricelist Customer (tbCustomersHarga)"
+                          >
+                            <Tag className="w-2.5 h-2.5 shrink-0" />
+                            <span>Tarif</span>
+                          </button>
+                        )}
                         {isDiff && (
                           <span
                             className="text-[9px] font-semibold px-1 py-0.2 rounded border border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 inline-flex items-center gap-0.5 shrink-0"
@@ -887,6 +934,14 @@ export function ValidationListPage() {
         </>
       )}
 
+      {selectedCustForHarga && (
+        <CustomerHargaModal
+          isOpen={Boolean(selectedCustForHarga)}
+          onClose={() => setSelectedCustForHarga(null)}
+          custCode={selectedCustForHarga.code}
+          custName={selectedCustForHarga.name}
+        />
+      )}
     </div>
   )
 }

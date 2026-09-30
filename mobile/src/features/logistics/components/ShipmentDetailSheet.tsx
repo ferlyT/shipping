@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react'
 import { View, Text, Modal, TouchableOpacity, ScrollView } from 'react-native'
-import { X, MapPin } from 'lucide-react-native'
+import { X, MapPin, ClipboardList } from 'lucide-react-native'
+import * as Haptics from 'expo-haptics'
 import { SegmentedControl } from '@/components/ui/SegmentedControl'
 import { Badge } from '@/components/ui/Badge'
 import { useThemeStore } from '@/theme/themeStore'
@@ -15,9 +16,10 @@ import { ShipmentInvoiceTab } from './ShipmentInvoiceTab'
 interface ShipmentDetailSheetProps {
   selectedItem: any | null
   onClose: () => void
+  onCreateBap?: (item: any) => void
 }
 
-export function ShipmentDetailSheet({ selectedItem, onClose }: ShipmentDetailSheetProps) {
+export function ShipmentDetailSheet({ selectedItem, onClose, onCreateBap }: ShipmentDetailSheetProps) {
   const { colors, mode } = useThemeStore()
   const isDark = mode === 'midnight'
 
@@ -107,12 +109,54 @@ export function ShipmentDetailSheet({ selectedItem, onClose }: ShipmentDetailShe
                 ) : null}
               </View>
             </View>
-            <TouchableOpacity
-              onPress={onClose}
-              style={{ padding: 6, borderRadius: 8, borderWidth: 1, borderColor: colors.border }}
-            >
-              <X size={18} color={colors.secondary} />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              {onCreateBap && (
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    onCreateBap(activeShipment || selectedItem)
+                    onClose()
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 5,
+                    paddingHorizontal: 10,
+                    paddingVertical: 5,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: colors.tabBarActive,
+                    backgroundColor: isDark
+                      ? 'rgba(56, 189, 248, 0.15)'
+                      : 'rgba(2, 132, 199, 0.1)',
+                  }}
+                >
+                  <ClipboardList size={13} color={colors.tabBarActive} />
+                  <Text
+                    style={{
+                      fontSize: 11.5,
+                      fontWeight: '700',
+                      color: colors.tabBarActive,
+                    }}
+                  >
+                    Buat BAP
+                  </Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity
+                onPress={onClose}
+                style={{
+                  padding: 6,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                }}
+              >
+                <X size={18} color={colors.secondary} />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Tabs */}

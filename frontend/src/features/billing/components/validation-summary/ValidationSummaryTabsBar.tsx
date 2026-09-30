@@ -10,6 +10,7 @@ export interface ValidationSummaryTabsBarProps {
   hasPriceDiscrepancy: boolean
   hasPhysicalDiscrepancy: boolean
   isBilledBelowMinM3?: boolean
+  isCodUrgentShortfall?: boolean
   hasOverweightIssue: boolean
   hasUnbilledTransport: boolean
   hasFreightCharge?: boolean
@@ -29,6 +30,7 @@ export function ValidationSummaryTabsBar({
   hasPriceDiscrepancy,
   hasPhysicalDiscrepancy,
   isBilledBelowMinM3 = false,
+  isCodUrgentShortfall = false,
   hasOverweightIssue,
   hasUnbilledTransport,
   hasFreightCharge = false,
@@ -80,6 +82,10 @@ export function ValidationSummaryTabsBar({
         ) : isBilledBelowMinM3 ? (
           <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
             Cek Min. M3
+          </span>
+        ) : isCodUrgentShortfall ? (
+          <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+            Cek COD
           </span>
         ) : (
           <span className="inline-flex items-center px-1.5 py-0.2 rounded-full text-[9px] font-bold bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30">

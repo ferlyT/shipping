@@ -471,6 +471,9 @@ export async function getType2ComparisonCheck(query: {
         if (komplainBerat > 0) {
           kg = komplainBerat
           kgSource = 'Komplain'
+        } else if (Number(m3CheckRes?.relatedBillsSummary?.sumBerat || 0) > 0) {
+          kg = Number(m3CheckRes!.relatedBillsSummary!.sumBerat)
+          kgSource = 'Marking'
         } else if (totalBeratPerMarking > 0) {
           kg = totalBeratPerMarking
           kgSource = 'Marking'

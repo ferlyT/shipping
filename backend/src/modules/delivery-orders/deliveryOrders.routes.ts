@@ -16,6 +16,13 @@ import {
   getCustomerDestinations,
   createCustomerDestination,
   getOrderDeliveryByListCode,
+  getDeliveryMonitoring,
+  confirmDelivery,
+  getDeliveryVehicles,
+  getDeliveryExpeditions,
+  getDeliveryConfirmTrends,
+  getDeliveryConfirmBatchDetail,
+  getDeliveryEstimasiDetails,
 } from './deliveryOrders.service'
 import { successResponse, errorResponse } from '../../utils/response'
 
@@ -101,6 +108,76 @@ deliveryOrdersRoutes.get('/order-delivery/:listCode', async (c) => {
   const listCode = c.req.param('listCode')
   const orderDelivery = await getOrderDeliveryByListCode(listCode)
   return successResponse(c, orderDelivery)
+})
+
+deliveryOrdersRoutes.get('/monitoring', async (c) => {
+  const query = c.req.query()
+  const result = await getDeliveryMonitoring(query)
+  return c.json({
+    success: true,
+    data: result.data,
+    meta: result.meta,
+    kpis: result.kpis,
+  })
+})
+
+deliveryOrdersRoutes.get('/confirm-trends', async (c) => {
+  const days = Number(c.req.query('days') || 30)
+  const result = await getDeliveryConfirmTrends(days)
+  return c.json({
+    success: true,
+    data: result.batches,
+    dailyComparison: result.dailyComparison,
+    summary: result.summary,
+    days: result.days,
+  })
+})
+
+deliveryOrdersRoutes.get('/confirm-batch-detail', async (c) => {
+  const date = c.req.query('date') || ''
+  const session = c.req.query('session') || 'Pagi'
+  if (!date) return errorResponse(c, 'Parameter date wajib diisi', 400)
+  try {
+    const result = await getDeliveryConfirmBatchDetail(date, session)
+    return successResponse(c, result)
+  } catch (err: any) {
+    return errorResponse(c, err.message || 'Gagal memuat rincian batch', 400)
+  }
+})
+
+deliveryOrdersRoutes.get('/estimasi-details', async (c) => {
+  const date = c.req.query('date') || ''
+  const type = (c.req.query('type') || 'all') as 'all' | 'overdue' | 'pending' | 'sent'
+  if (!date) return errorResponse(c, 'Parameter date wajib diisi', 400)
+  try {
+    const result = await getDeliveryEstimasiDetails(date, type)
+    return successResponse(c, result)
+  } catch (err: any) {
+    return errorResponse(c, err.message || 'Gagal memuat rincian target estimasi', 400)
+  }
+})
+
+deliveryOrdersRoutes.post('/confirm-delivery', async (c) => {
+  const body = await c.req.json().catch(() => null)
+  if (!body) return errorResponse(c, 'Data request tidak valid', 400)
+
+  const user = c.get('user')
+  try {
+    const result = await confirmDelivery(body, user)
+    return successResponse(c, result)
+  } catch (err: any) {
+    return errorResponse(c, err.message || 'Gagal mengonfirmasi pengiriman', 400)
+  }
+})
+
+deliveryOrdersRoutes.get('/vehicles', async (c) => {
+  const vehicles = await getDeliveryVehicles()
+  return successResponse(c, vehicles)
+})
+
+deliveryOrdersRoutes.get('/expeditions', async (c) => {
+  const expeditions = await getDeliveryExpeditions()
+  return successResponse(c, expeditions)
 })
 
 deliveryOrdersRoutes.get('/:id', async (c) => {

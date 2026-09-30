@@ -48,6 +48,7 @@ export interface BillingDetailInput {
 export interface Billing {
   fdInvNo: string
   fdInvDate: string
+  fdBranchCode?: string | null
   fdListType?: number | null
   fdCustCode: string | null
   fdMarkingCode: string | null
@@ -77,6 +78,7 @@ export interface Billing {
   fdConsignee?: string | null
   fdComodity?: string | null
   fdTypeComodityName?: string | null
+  fdBillTo?: string | null
   isPaid?: boolean
   paymentStatus?: 'LUNAS' | 'SEBAGIAN' | 'BELUM LUNAS' | 'PARTIAL' | 'OVERDUE' | 'UNPAID' | 'ISSUED' | 'DRAFT'
   cashierID?: string | null
@@ -169,6 +171,53 @@ export interface CustomerTariffItem {
   updateDate: string | null
 }
 
+export interface CustomerHargaTariffItem {
+  colName: string
+  branchCode: string
+  branchName: string
+  mode: 'BY SEA' | 'BY AIR'
+  serviceType: string
+  commodityType: string
+  displayName: string
+  hargaAwal: number
+  hargaAktif: number
+  isEdited: boolean
+  auditInfo?: {
+    auditId: string
+    oldValue: string | null
+    newValue: string | null
+    updatedBy: string
+    updateDate: string
+  } | null
+}
+
+export interface CustomerHargaMetadata {
+  penawaran: string | null
+  rasioLr: number | null
+  rasioSp: number | null
+  rasioPm: number | null
+  typeTagihan: number | null
+  typeTagihanLabel: string | null
+  noteUdara: string | null
+  noteLaut: string | null
+  asuransi: number | null
+  asuransi1: number | null
+  lastUpdateBy: string | null
+  lastUpdateDate: string | null
+}
+
+export interface CustomerHargaDetailResult {
+  custCode: string
+  custName: string
+  metadata: CustomerHargaMetadata
+  tariffs: CustomerHargaTariffItem[]
+  branches: {
+    code: string
+    name: string
+    count: number
+  }[]
+}
+
 export interface TargetPriceCheckData {
   listCode?: string
   markingCode: string
@@ -252,6 +301,24 @@ export interface BillingTrendPoint {
   label: string
   totalBill: number
   totalTagihan: number
+  billUdara?: number
+  tagihanUdara?: number
+  billLaut?: number
+  tagihanLaut?: number
+  // YoY (Year-over-Year perbandingan tahun lalu)
+  prevYearLabel?: string
+  prevTotalBill?: number
+  prevTotalTagihan?: number
+  prevBillUdara?: number
+  prevTagihanUdara?: number
+  prevBillLaut?: number
+  prevTagihanLaut?: number
+  totalBillYoYPct?: number
+  totalTagihanYoYPct?: number
+  billUdaraYoYPct?: number
+  tagihanUdaraYoYPct?: number
+  billLautYoYPct?: number
+  tagihanLautYoYPct?: number
 }
 
 export interface BillingDailyPoint extends BillingTrendPoint {
@@ -818,6 +885,34 @@ export interface M3CheckResponse {
     fdNote1Sea?: string | null
   } | null
   comodityTypes?: ComodityType[]
+  relatedBillsSummary?: RelatedBillsSummary | null
+}
+
+export interface RelatedInvoiceItem {
+  invNo: string
+  listCode: string
+  isParent: boolean
+  billedM3: number
+  billedKg: number
+  markingNo: string
+  firstItemName?: string
+}
+
+export interface RelatedBillsSummary {
+  hasRelatedBills: boolean
+  isParent: boolean
+  isChild: boolean
+  parentInvNo: string
+  childLetter?: string
+  relatedInvoices: RelatedInvoiceItem[]
+  relatedListCodes: string[]
+  sumM3Gudang: number
+  sumM3PL: number
+  sumM3Komplain: number
+  sumQty: number
+  sumBerat: number
+  totalBilledM3: number
+  totalBilledKg?: number
 }
 
 export interface FlatDetailTraceItem {

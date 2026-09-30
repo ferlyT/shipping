@@ -3,9 +3,9 @@ import { useAuthStore } from '../stores/authStore'
 import { Platform } from 'react-native'
 
 // Production Backend ERP M-Shipping:
-// Server: 36.93.22.142 Port: 3010
+// Server: app.sampai.co (HTTPS Port 443 with Let's Encrypt SSL)
 // API Base Path: /api
-export const DEFAULT_API_URL = 'http://36.93.22.142:3010/api'
+export const DEFAULT_API_URL = 'https://app.sampai.co/api'
 
 const apiClient = axios.create({
   baseURL: DEFAULT_API_URL,

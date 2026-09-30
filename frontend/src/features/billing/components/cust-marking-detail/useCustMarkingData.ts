@@ -20,6 +20,49 @@ function getRowValue(row: any, candidates: string[]): any {
   return null
 }
 
+// Helper resolving commodity type according to legacy FoxPro ctypesea.prg and ctypeair.prg
+function resolveCommodityType(typeId: number, isAir: boolean): string {
+  if (isAir) {
+    switch (typeId) {
+      case 1:
+        return 'GENERAL'
+      case 2:
+        return 'BRANDED'
+      case 3:
+        return 'GARMENT'
+      case 4:
+        return 'FOOD'
+      case 5:
+        return 'SHOES'
+      case 6:
+        return 'LEGAL'
+      default:
+        return 'GENERAL'
+    }
+  } else {
+    switch (typeId) {
+      case 1:
+        return 'UMUM'
+      case 2:
+        return 'TEKSTIL'
+      case 3:
+        return 'LARTAS-N'
+      case 4:
+        return 'LARTAS-S'
+      case 5:
+        return 'FCL'
+      case 6:
+        return 'LEGAL'
+      case 7:
+        return 'SEMI GMN'
+      case 8:
+        return 'GARMENT'
+      default:
+        return 'UMUM'
+    }
+  }
+}
+
 export function useCustMarkingData(
   isOpen: boolean,
   custCode?: string | null,
@@ -28,10 +71,11 @@ export function useCustMarkingData(
 ) {
   const [search, setSearch] = useState('')
   const [selectedBranch, setSelectedBranch] = useState<string>('ALL')
+  const [selectedCommodityType, setSelectedCommodityType] = useState<string>('ALL')
   const [onlyKomplain, setOnlyKomplain] = useState(false)
   const [columnPreset, setColumnPreset] = useState<ColumnPreset>('all')
-  const [sortField, setSortField] = useState<SortField>('date')
-  const [sortOrder, setSortOrder] = useState<SortOrder>('desc')
+  const [sortField, setSortField] = useState<SortField>('invoice')
+  const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
 
   const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['m3CustMarkingDetails', custCode, markingCode],
@@ -56,17 +100,24 @@ export function useCustMarkingData(
       const date = dateStr ? new Date(dateStr).getTime() : 0
       const listCode = String(getRowValue(r, ['fdListCode', 'No. SJ', 'No_SJ', 'fdSJ']) || '—').trim()
       const terima = String(getRowValue(r, ['fdTerima', 'No. Terima', 'No_Terima', 'Terima']) || '—').trim()
-      const marking = String(getRowValue(r, ['Marking No', 'Marking_No', 'fdMarkingNo', 'fdMarkingCode']) || '').trim()
-      const fdDescr = String(getRowValue(r, ['fdDescr', 'fdDesc']) || '').trim()
+      const marking = String(getRowValue(r, ['fdMarkingCode', 'Marking', 'marking']) || markingCode || '').trim()
+      const markingNo = String(getRowValue(r, ['fdMarkingNo', 'Marking No', 'Marking_No']) || '').trim()
+      const fdDesc = String(getRowValue(r, ['fdDesc', 'fdDescr', 'Ket', 'Keterangan']) || '').trim()
+      const fdDescr = fdDesc
       const fdComodity = String(getRowValue(r, ['fdComodity', 'Comodity', 'fdCommodity']) || '').trim()
       const fdComodityName = String(getRowValue(r, ['fdComodityName', 'Tipe', 'fdTipe']) || '').trim()
-      const comodity = fdComodity || fdComodityName || fdDescr || '—'
+      const comodity = fdComodity || fdComodityName || fdDesc || '—'
       const rawBc = String(
         getRowValue(r, ['fdBranchCode', 'BranchCode', 'branchCode', 'BC', 'fdBC', 'branch', 'Branch']) || ''
       ).trim()
       const bc = rawBc || '—'
       const listType = getRowValue(r, ['fdListType', 'ListType'])
-      const modeText = listType === 1 ? 'UDARA' : listType === 2 ? 'LAUT' : '—'
+      const isAir = listType === 1
+      const modeText = isAir ? 'UDARA' : listType === 2 ? 'LAUT' : '—'
+
+      const rawTypeId = Number(getRowValue(r, ['fdTypeComodity', 'TypeComodity']) || 1)
+      const typeComodityText = fdComodityName || resolveCommodityType(rawTypeId, isAir)
+
       const tax = getRowValue(r, [
         'Tax',
         'fdTax',
@@ -105,9 +156,9 @@ export function useCustMarkingData(
       const weightSJ = parseNum(['fdTotalBeratSJ', 'Berat SJ', 'Berat_SJ', 'fdBeratSJ', 'fdBeratList', 'fdTotalBeratList'])
       const weightGdg = parseNum(['fdJmlBerat', 'Berat', 'fdBerat', 'fdJmlBeratGudang', 'fdBeratGudang', 'Berat Gdg', 'Berat_Gdg'])
       const weightK = parseNum(['fdJmlBeratKomplain', 'Berat K', 'Berat_K', 'fdBeratK', 'fdBeratKomplain'])
+      const kgBill = parseNum(['KG', 'Kg', 'kg', 'kgBill', 'fdKGBill', 'KGBill'])
       const selisihKg = parseNum(['fdSelisihKg', 'SelisihKg'])
       const weight = weightK > 0 ? weightK : weightSJ > 0 ? weightSJ : weightGdg
-      const weightGudangActual = weightSJ > 0 ? weightSJ : weightGdg
 
       // M3 versions
       const m3PL = parseNum(['fdM3PackingList', 'M3 PL', 'M3_PL']) || parseNum(['fdM3Pl', 'fdM3PL'])
@@ -144,17 +195,52 @@ export function useCustMarkingData(
       const typeTagihan = parseNum(['fdTypeTagihan', 'TypeTagihan'])
       const totalSJ = parseNum(['fdTotalSJ', 'TotalSJ'])
 
-      // Overweight versions
-      const rawOwPL = rasio > 0 ? calculateOverweightRaw(weightGdg > 0 ? weightGdg : weightSJ, m3PL, rasio) : null
-      const owPL = rasio > 0 ? calculateOverweight(weightGdg > 0 ? weightGdg : weightSJ, m3PL, rasio) : 0
-      const rawOwGdg = rasio > 0 ? calculateOverweightRaw(weightGudangActual, m3Gdg, rasio) : null
-      const owGdg = rasio > 0 ? calculateOverweight(weightGudangActual, m3Gdg, rasio) : 0
+      // Overweight versions:
+      // 1. Lebih kilo dari fdJmlBerat (Gudang)
+      const rawOwGdg = rasio > 0 ? calculateOverweightRaw(weightGdg, m3Gdg, rasio) : null
+      const owGdg = rasio > 0 ? calculateOverweight(weightGdg, m3Gdg, rasio) : 0
+
+      // 2. Lebih kilo dari berat SJ
+      const refM3SJ = m3Gdg > 0 ? m3Gdg : m3PL
+      const rawOwSJ = rasio > 0 ? calculateOverweightRaw(weightSJ, refM3SJ, rasio) : null
+      const owSJ = rasio > 0 ? calculateOverweight(weightSJ, refM3SJ, rasio) : 0
+
+      // 3. Lebih kilo dari berat Komplain (hybrid)
       const hasKomplain = m3K > 0 || weightK > 0 || qtyK > 0 || vfcK > 0
       const hasSelisih = Math.abs(selisihM3) > 0.0001 || Math.abs(selisihKg) > 0.01
-      const rawOwK = rasio > 0 && hasKomplain ? calculateOverweightRaw(weight, m3K > 0 ? m3K : m3Gdg, rasio) : null
-      const owK = rasio > 0 && hasKomplain ? calculateOverweight(weight, m3K > 0 ? m3K : m3Gdg, rasio) : 0
+      const hybridWeight = weightK > 0 ? weightK : weightGdg
+      const hybridM3 = m3K > 0 ? m3K : m3Gdg
+      const rawOwK = rasio > 0 && hasKomplain ? calculateOverweightRaw(hybridWeight, hybridM3, rasio) : null
+      const owK = rasio > 0 && hasKomplain ? calculateOverweight(hybridWeight, hybridM3, rasio) : 0
+
+      // PL Overweight
+      const rawOwPL = rasio > 0 ? calculateOverweightRaw(weightGdg > 0 ? weightGdg : weightSJ, m3PL, rasio) : null
+      const owPL = rasio > 0 ? calculateOverweight(weightGdg > 0 ? weightGdg : weightSJ, m3PL, rasio) : 0
+
       const ow = hasKomplain ? (owK > 0 ? owK : null) : owGdg > 0 ? owGdg : null
       const rawOw = hasKomplain ? rawOwK : rawOwGdg
+
+      // FoxPro specific alert flags
+      const isUnderbilledM3 = m3Gdg > m3Bill && m3Bill > 0
+      const isPlEmpty = qtyPL === 0
+      const isStatusNonStandard = status !== 1
+      const isQtyKomplainMismatch = qtyK > 0 && qtyK !== qtyGdg
+
+      // Klasifikasi Invoice berdasarkan Karakter ke-5 dan ke-10 (1-indexed)
+      // Invoice Utama: char 5 & 10 angka
+      // Bill Gabungan: char 5 huruf
+      // Bill Tambahan: char 10 huruf
+      const cleanInv = invoice.trim()
+      const c5 = cleanInv.charAt(4)
+      const c10 = cleanInv.charAt(9)
+      const isChar5Digit = /[0-9]/.test(c5)
+      const isChar5Letter = /[a-zA-Z]/.test(c5)
+      const isChar10Digit = /[0-9]/.test(c10)
+      const isChar10Letter = /[a-zA-Z]/.test(c10)
+
+      const isInvoiceUtama = isChar5Digit && isChar10Digit
+      const isBillGabungan = isChar5Letter
+      const isBillTambahan = isChar10Letter
 
       return {
         raw: r,
@@ -165,10 +251,13 @@ export function useCustMarkingData(
         listCode,
         terima,
         marking,
+        markingNo,
         fdDescr,
+        fdDesc,
         fdComodity,
         fdComodityName,
         comodity,
+        typeComodityText,
         bc,
         branchCode: bc,
         listType,
@@ -183,6 +272,7 @@ export function useCustMarkingData(
         weightSJ,
         weightGdg,
         weightK,
+        kgBill,
         selisihKg,
         weight,
         m3PL,
@@ -205,17 +295,26 @@ export function useCustMarkingData(
         totalSJ,
         hasKomplain,
         hasSelisih,
+        isUnderbilledM3,
+        isPlEmpty,
+        isStatusNonStandard,
+        isInvoiceUtama,
+        isBillGabungan,
+        isBillTambahan,
+        isQtyKomplainMismatch,
         owPL,
         owGdg,
+        owSJ,
         owK,
         rawOwPL,
         rawOwGdg,
+        rawOwSJ,
         rawOwK,
         rawOw,
         overWeight: ow,
       }
     })
-  }, [rows])
+  }, [rows, markingCode])
 
   // Extract single Rasio value for display
   const rasioValue = useMemo(() => {
@@ -263,6 +362,10 @@ export function useCustMarkingData(
       res = res.filter((r) => r.bc === selectedBranch)
     }
 
+    if (selectedCommodityType !== 'ALL') {
+      res = res.filter((r) => r.typeComodityText === selectedCommodityType)
+    }
+
     if (onlyKomplain) {
       res = res.filter((r) => r.hasKomplain || r.hasSelisih)
     }
@@ -275,13 +378,35 @@ export function useCustMarkingData(
           r.listCode.toLowerCase().includes(q) ||
           r.terima.toLowerCase().includes(q) ||
           r.marking.toLowerCase().includes(q) ||
+          r.markingNo.toLowerCase().includes(q) ||
+          r.fdDesc.toLowerCase().includes(q) ||
+          r.typeComodityText.toLowerCase().includes(q) ||
           r.comodity.toLowerCase().includes(q) ||
           r.bc.toLowerCase().includes(q)
       )
     }
 
     return res
-  }, [normalizedRows, selectedBranch, onlyKomplain, search])
+  }, [normalizedRows, selectedBranch, selectedCommodityType, onlyKomplain, search])
+
+  // Commodity Types list across normalized rows
+  const commodityTypes = useMemo(() => {
+    const map = new Map<string, { count: number; weight: number; m3: number }>()
+    normalizedRows.forEach((r) => {
+      const type = r.typeComodityText || 'LAINNYA'
+      const cur = map.get(type) || { count: 0, weight: 0, m3: 0 }
+      cur.count += 1
+      cur.weight += r.weightGdg > 0 ? r.weightGdg : r.weight
+      cur.m3 += r.listType === 1 ? r.vfcGdg : r.m3Gdg
+      map.set(type, cur)
+    })
+    return Array.from(map.entries())
+      .map(([type, stats]) => ({
+        type,
+        ...stats,
+      }))
+      .sort((a, b) => b.count - a.count)
+  }, [normalizedRows])
 
   // Sorted rows
   const sortedRows = useMemo(() => {
@@ -305,7 +430,13 @@ export function useCustMarkingData(
 
   // Aggregates
   const aggregates: CustMarkingAggregates = useMemo(() => {
-    return sortedRows.reduce(
+    // Unique invoice classification map
+    const uniqueInvMap = new Map<
+      string,
+      { isUtama: boolean; isGabungan: boolean; isTambahan: boolean }
+    >()
+
+    const base = sortedRows.reduce<CustMarkingAggregates>(
       (acc, r) => {
         acc.totalResi += 1
         acc.totalQtyGdg += r.qtyGdg
@@ -315,6 +446,7 @@ export function useCustMarkingData(
         acc.totalWeightGdg += r.weightGdg
         acc.totalWeightSJ += r.weightSJ
         acc.totalWeightK += r.weightK
+        acc.totalKgBill += r.kgBill
         acc.totalWeight += r.weight
         acc.totalM3PL += r.m3PL
         acc.totalM3Gdg += r.m3Gdg
@@ -329,12 +461,37 @@ export function useCustMarkingData(
         if (r.overWeight && r.overWeight > 0) {
           acc.totalOw += r.overWeight
         }
+        if (r.owGdg && r.owGdg > 0) {
+          acc.totalOwGdg += r.owGdg
+        }
+        if (r.owSJ && r.owSJ > 0) {
+          acc.totalOwSJ += r.owSJ
+        }
+        if (r.owK && r.owK > 0) {
+          acc.totalOwK += r.owK
+        }
         if (r.hasKomplain) acc.countKomplain += 1
         if (r.hasSelisih) acc.countSelisih += 1
+        if (r.isQtyKomplainMismatch) acc.countQtyKomplainMismatch += 1
+
+        const inv = (r.invoice || '').trim()
+        if (inv && inv !== '—' && !inv.startsWith('Item-') && !uniqueInvMap.has(inv)) {
+          uniqueInvMap.set(inv, {
+            isUtama: r.isInvoiceUtama,
+            isGabungan: r.isBillGabungan,
+            isTambahan: r.isBillTambahan,
+          })
+        }
+
         return acc
       },
       {
         totalResi: 0,
+        totalInvoices: 0,
+        countInvoiceUtama: 0,
+        countBillGabungan: 0,
+        countBillTambahan: 0,
+        countQtyKomplainMismatch: 0,
         totalQtyGdg: 0,
         totalQtySJ: 0,
         totalQtyPL: 0,
@@ -342,6 +499,7 @@ export function useCustMarkingData(
         totalWeightGdg: 0,
         totalWeightSJ: 0,
         totalWeightK: 0,
+        totalKgBill: 0,
         totalWeight: 0,
         totalM3PL: 0,
         totalM3Gdg: 0,
@@ -354,11 +512,23 @@ export function useCustMarkingData(
         totalValue2: 0,
         totalFc: 0,
         totalOw: 0,
+        totalOwGdg: 0,
+        totalOwSJ: 0,
+        totalOwK: 0,
         countKomplain: 0,
         countSelisih: 0,
+        commodityTypes: [],
       }
     )
-  }, [sortedRows])
+
+    base.totalInvoices = uniqueInvMap.size
+    base.countInvoiceUtama = Array.from(uniqueInvMap.values()).filter((v) => v.isUtama).length
+    base.countBillGabungan = Array.from(uniqueInvMap.values()).filter((v) => v.isGabungan).length
+    base.countBillTambahan = Array.from(uniqueInvMap.values()).filter((v) => v.isTambahan).length
+    base.commodityTypes = commodityTypes
+
+    return base
+  }, [sortedRows, commodityTypes])
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -372,6 +542,7 @@ export function useCustMarkingData(
   const resetFilters = () => {
     setSearch('')
     setSelectedBranch('ALL')
+    setSelectedCommodityType('ALL')
     setOnlyKomplain(false)
     setColumnPreset('all')
   }
@@ -383,6 +554,9 @@ export function useCustMarkingData(
     sortedRows,
     aggregates,
     branches,
+    commodityTypes,
+    selectedCommodityType,
+    setSelectedCommodityType,
     rasioValue,
     displayCustName,
     isLoading,

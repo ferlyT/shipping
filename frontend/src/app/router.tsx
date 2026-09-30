@@ -52,6 +52,7 @@ export function PermissionGuard() {
     if (p.startsWith('/mshipping/logistics/shipments') && pathname.startsWith('/mshipping/logistics/shipments')) return true
     if ((p.startsWith('/mshipping/logistics/shipment-batches') || p.startsWith('/mshipping/shipment-batches')) && pathname.startsWith('/mshipping/logistics/shipment-batches')) return true
     if ((p.startsWith('/mshipping/logistics/delivery-orders') || p.startsWith('/mshipping/delivery-orders')) && pathname.startsWith('/mshipping/logistics/delivery-orders')) return true
+    if ((p.startsWith('/mshipping/logistics/inspection-reports') || p.startsWith('/mshipping/inspection-reports')) && pathname.startsWith('/mshipping/logistics/inspection-reports')) return true
     return false
   })
 
@@ -108,6 +109,7 @@ const ShipmentBatchesMarkingSizePage = lazy(() => import('@/features/shipment-ba
 const DeliveryOrdersDashboardPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DashboardPage })))
 const DeliveryOrdersInventoryPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.InventoryPage })))
 const DeliveryOrdersListPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.ListPage })))
+const DeliveryOrdersMonitoringPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.MonitoringPage })))
 const DeliveryOrdersDetailPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DetailPage })))
 const DeliveryOrderPrintPage = lazy(() => import('@/features/delivery-orders').then(m => ({ default: m.DeliveryOrderPrintPage })))
 const BillingDashboardPage = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingDashboardPage })))
@@ -136,6 +138,7 @@ const WalletListPage = lazy(() => import('@/features/wallet').then(m => ({ defau
 const UserManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.UserManagementPage })))
 const RoleManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.RoleManagementPage })))
 const AccountPage        = lazy(() => import('@/features/profile').then(m => ({ default: m.AccountPage })))
+const InspectionReportsPage = lazy(() => import('@/features/inspection').then(m => ({ default: m.InspectionReportsPage })))
 
 export function AppRouter() {
   return (
@@ -159,7 +162,9 @@ export function AppRouter() {
                 <Route path={ROUTES.DELIVERY_ORDERS}   element={<DeliveryOrdersDashboardPage />} />
                 <Route path={ROUTES.DELIVERY_ORDERS_INVENTORY} element={<DeliveryOrdersInventoryPage />} />
                 <Route path={ROUTES.DELIVERY_ORDERS_LIST} element={<DeliveryOrdersListPage />} />
+                <Route path={ROUTES.DELIVERY_ORDERS_MONITORING} element={<DeliveryOrdersMonitoringPage />} />
                 <Route path={ROUTES.DELIVERY_DETAIL(':id')} element={<DeliveryOrdersDetailPage />} />
+                <Route path={ROUTES.INSPECTION_REPORTS} element={<InspectionReportsPage />} />
                 <Route path={ROUTES.BILLING}           element={<BillingDashboardPage />} />
                 <Route path={ROUTES.BILLING_TARGET}    element={<BillingTargetPage />} />
                 <Route path={ROUTES.BILLING_LIST}      element={<BillingPage />} />

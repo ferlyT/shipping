@@ -8,8 +8,8 @@ const DEFAULT_CONFIG: AppVersionConfig = {
   versionCode: 2,
   minVersion: '1.0.0',
   forceUpdate: false,
-  downloadUrl: 'http://36.93.22.142/mshipping/mshipping.apk',
-  webDownloadUrl: 'http://36.93.22.142/mshipping/download/',
+  downloadUrl: 'https://app.sampai.co/mshipping/mshipping.apk',
+  webDownloadUrl: 'https://app.sampai.co/mshipping/download/',
   releaseNotes: [
     'Pembaruan tata letak navigasi bawah Android',
     'Penambahan fitur auto update versi aplikasi',

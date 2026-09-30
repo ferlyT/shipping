@@ -8,6 +8,15 @@ import type {
   CustomerDestination,
   CreateCustomerDestinationDto,
   OrderDeliveryItem,
+  DeliveryMonitoringItem,
+  DeliveryMonitoringKPIs,
+  DeliveryMonitoringQueryParams,
+  ConfirmDeliveryDto,
+  VehicleItem,
+  ExpeditionItem,
+  DeliveryConfirmTrendsResponse,
+  DeliveryBatchDetailResponse,
+  DeliveryEstimasiDetailResponse,
 } from '../types/delivery-orders.types'
 
 export const deliveryOrdersApi = {
@@ -64,6 +73,55 @@ export const deliveryOrdersApi = {
     return apiClient.get<{ success: boolean; data: OrderDeliveryItem | null }>(
       `/delivery-orders/order-delivery/${encodeURIComponent(listCode)}`
     )
+  },
+  getMonitoring: (params?: DeliveryMonitoringQueryParams) => {
+    return apiClient.get<{
+      success: boolean
+      data: DeliveryMonitoringItem[]
+      meta: { page: number; limit: number; total: number; totalPages: number }
+      kpis: DeliveryMonitoringKPIs
+    }>('/delivery-orders/monitoring', { params })
+  },
+  confirmDelivery: (data: ConfirmDeliveryDto) => {
+    return apiClient.post<{
+      success: boolean
+      message: string
+      count: number
+      updatedSjNos: string[]
+    }>('/delivery-orders/confirm-delivery', data)
+  },
+  getVehicles: () => {
+    return apiClient.get<{ success: boolean; data: VehicleItem[] }>('/delivery-orders/vehicles')
+  },
+  getExpeditions: () => {
+    return apiClient.get<{ success: boolean; data: ExpeditionItem[] }>('/delivery-orders/expeditions')
+  },
+  getConfirmTrends: (days?: number) => {
+    return apiClient.get<{
+      success: boolean
+      data: DeliveryConfirmTrendsResponse['batches']
+      dailyComparison: DeliveryConfirmTrendsResponse['dailyComparison']
+      summary: DeliveryConfirmTrendsResponse['summary']
+      days: number
+    }>('/delivery-orders/confirm-trends', {
+      params: days ? { days } : undefined,
+    })
+  },
+  getConfirmBatchDetail: (date: string, session: string) => {
+    return apiClient.get<{
+      success: boolean
+      data: DeliveryBatchDetailResponse
+    }>('/delivery-orders/confirm-batch-detail', {
+      params: { date, session },
+    })
+  },
+  getEstimasiDetails: (date: string, type?: 'all' | 'overdue' | 'pending' | 'sent') => {
+    return apiClient.get<{
+      success: boolean
+      data: DeliveryEstimasiDetailResponse
+    }>('/delivery-orders/estimasi-details', {
+      params: { date, type },
+    })
   },
 }
 

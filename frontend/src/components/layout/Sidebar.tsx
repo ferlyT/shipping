@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Package, Layers, Truck, FileText,
   ChevronLeft, ChevronDown, UserCog, Shield, BarChart2, Target, Search, Upload, History,
-  Activity, PieChart, LineChart, ListOrdered, Table, ScrollText, ClipboardCheck, Tags, Landmark, FileSearch, FileUp, BookOpen, Tag, FileSpreadsheet, Receipt, Wallet, Ruler, Warehouse
+  Activity, PieChart, LineChart, ListOrdered, Table, ScrollText, ClipboardCheck, Tags, Landmark, FileSearch, FileUp, BookOpen, Tag, FileSpreadsheet, Receipt, Wallet, Ruler, Warehouse, Clock
 } from 'lucide-react'
 import { useUiStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -87,7 +87,18 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
               permissionPath: ROUTES.DELIVERY_ORDERS,
             },
             { label: t('nav.deliveryOrderList'), path: ROUTES.DELIVERY_ORDERS_LIST, icon: ListOrdered },
+            {
+              label: t('nav.deliveryOrderMonitoring'),
+              path: ROUTES.DELIVERY_ORDERS_MONITORING,
+              icon: Clock,
+              permissionPath: ROUTES.DELIVERY_ORDERS,
+            },
           ],
+        },
+        {
+          label: t('nav.inspectionReports'),
+          path: ROUTES.INSPECTION_REPORTS,
+          icon: ClipboardCheck,
         },
       ],
     },

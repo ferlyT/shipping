@@ -77,7 +77,7 @@ export function MarkingSizeTable({
               <th className="py-2 px-3 text-right text-[11px] uppercase tracking-wider font-semibold text-[var(--color-secondary)]">
                 M³ PL
               </th>
-              <th className="py-2 px-3 text-right text-[11px] uppercase tracking-wider font-semibold text-[var(--color-secondary)]">
+              <th className="py-2 px-3 text-right text-[11px] uppercase tracking-wider font-semibold text-[var(--color-secondary)] whitespace-nowrap">
                 M³ Gdg
               </th>
               <th className="py-2 px-3 text-right text-[11px] uppercase tracking-wider font-semibold text-[var(--color-secondary)]">
@@ -136,17 +136,6 @@ export function MarkingSizeTable({
                         <span className="font-mono font-medium text-[var(--color-primary)]">
                           {row.fdListCode}
                         </span>
-                        {row.hasMarkup && (
-                          <button
-                            type="button"
-                            onClick={() => onViewDimensions(row, 'asliGudang')}
-                            className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500/20 transition-colors cursor-pointer"
-                            title={t('marking.sizeAudit.tagMarkupTooltip')}
-                          >
-                            <Sparkles size={10} className="shrink-0" />
-                            {t('marking.sizeAudit.tagMarkup')}
-                          </button>
-                        )}
                       </div>
                     </td>
 
@@ -191,18 +180,31 @@ export function MarkingSizeTable({
                     </td>
 
                     {/* M³ Gudang - Alert merah jika beda */}
-                    <td className="py-2 px-3 text-right font-mono">
-                      <span
-                        className={cn(
-                          'font-semibold tabular-nums',
-                          isM3Diff
-                            ? 'inline-flex items-center px-1.5 py-0.2 rounded text-[11px] bg-red-500/10 border border-red-500/30 text-red-500'
-                            : 'text-emerald-600 dark:text-emerald-400'
+                    <td className="py-2 px-3 text-right font-mono whitespace-nowrap">
+                      <div className="inline-flex items-center justify-end gap-1.5">
+                        <span
+                          className={cn(
+                            'font-semibold tabular-nums',
+                            isM3Diff
+                              ? 'inline-flex items-center px-1.5 py-0.5 rounded text-[11px] bg-red-500/10 border border-red-500/30 text-red-500'
+                              : 'text-emerald-600 dark:text-emerald-400'
+                          )}
+                          title={isM3Diff ? `Selisih M³: ${(row.fdM3 - row.fdM3List).toFixed(4)}` : undefined}
+                        >
+                          {formatDecimal(row.fdM3, 4)}
+                        </span>
+                        {row.hasMarkup && (
+                          <button
+                            type="button"
+                            onClick={() => onViewDimensions(row, 'asliGudang')}
+                            className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-500 hover:bg-amber-500/20 transition-colors cursor-pointer shrink-0"
+                            title={t('marking.sizeAudit.tagMarkupTooltip')}
+                          >
+                            <Sparkles size={10} className="shrink-0" />
+                            {t('marking.sizeAudit.tagMarkup')}
+                          </button>
                         )}
-                        title={isM3Diff ? `Selisih M³: ${(row.fdM3 - row.fdM3List).toFixed(4)}` : undefined}
-                      >
-                        {formatDecimal(row.fdM3, 4)}
-                      </span>
+                      </div>
                     </td>
 
                     {/* M³ Komplain - Alert merah jika > 0 */}

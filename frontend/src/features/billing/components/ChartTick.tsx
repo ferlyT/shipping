@@ -21,15 +21,21 @@ export function CustomXAxisTick({ x = 0, y = 0, payload }: ChartTickProps) {
   let line2 = ''
 
   if (typeof payload?.value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(payload.value)) {
-    const dateObj = new Date(payload.value)
+    const [yStr, mStr, dStr] = payload.value.split('-')
+    const dateObj = new Date(Number(yStr), Number(mStr) - 1, Number(dStr))
     line1 = dateObj.toLocaleDateString(lang === 'en' ? 'en-GB' : 'id-ID', { day: '2-digit', month: 'short' })
     line2 = dateObj.toLocaleDateString(lang === 'en' ? 'en-US' : 'id-ID', { weekday: 'short' })
   } else {
     const val = payload?.value || ''
-    const match = val.match(/(.+?)\s*\((.+?)\)/)
-    if (match) {
-      line1 = match[1].trim()
-      line2 = match[2].trim()
+    const parenMatch = val.match(/(.+?)\s*\((.+?)\)/)
+    const monthYearMatch = val.match(/^([A-Za-z]{3,})\s*'?(\d{2,4})$/)
+
+    if (parenMatch) {
+      line1 = parenMatch[1].trim()
+      line2 = parenMatch[2].trim()
+    } else if (monthYearMatch) {
+      line1 = monthYearMatch[1].trim()
+      line2 = monthYearMatch[2].length === 2 ? `20${monthYearMatch[2]}` : monthYearMatch[2]
     }
   }
 

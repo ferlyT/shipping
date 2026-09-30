@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react'
 import { View, Text, Modal, FlatList, TouchableOpacity, TextInput } from 'react-native'
-import { X, ShieldAlert, Search } from 'lucide-react-native'
+import { X, ShieldAlert, Search, ClipboardList } from 'lucide-react-native'
+import * as Haptics from 'expo-haptics'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { SkeletonShimmer } from '@/components/ui/SkeletonShimmer'
@@ -14,9 +15,10 @@ interface BatchManifestSheetProps {
   selectedBatch: any | null
   onClose: () => void
   setSelectedBatch: (v: any) => void
+  onCreateBap?: (item: any) => void
 }
 
-export function BatchManifestSheet({ selectedBatch, onClose, setSelectedBatch }: BatchManifestSheetProps) {
+export function BatchManifestSheet({ selectedBatch, onClose, setSelectedBatch, onCreateBap }: BatchManifestSheetProps) {
   const { colors, mode } = useThemeStore()
   const { t } = useTranslation()
   const isDark = mode === 'midnight'
@@ -338,17 +340,47 @@ export function BatchManifestSheet({ selectedBatch, onClose, setSelectedBatch }:
                       </Text>
                     </View>
 
-                    {/* Row 4: Metrics */}
+                    {/* Row 4: Metrics & Action */}
                     <View style={{
                       flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
                       borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6, marginTop: 2,
                     }}>
-                      <Text style={{ fontSize: 11, color: colors.secondary, fontVariant: ['tabular-nums'] }}>
-                        {formatNumber(item.fdJmlPack)} {item.fdSatuan?.trim() || 'Pack'} • {formatDecimal(item.fdJmlBerat, 1)} kg
+                      <Text style={{ fontSize: 11, color: colors.secondary, fontVariant: ['tabular-nums'], flex: 1 }}>
+                        {formatNumber(item.fdJmlPack)} {item.fdSatuan?.trim() || 'Pack'} • {formatDecimal(item.fdJmlBerat, 1)} kg • {formatDecimal(item.fdM3, 4)} m³
                       </Text>
-                      <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.tertiary, fontVariant: ['tabular-nums'] }}>
-                        {formatDecimal(item.fdM3, 4)} m³
-                      </Text>
+
+                      {onCreateBap && (
+                        <TouchableOpacity
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                            onCreateBap({
+                              ...item,
+                              fdMarkingCode: selectedBatch?.fdMarkingCode || item.fdMarkingCode,
+                              fdListType: selectedBatch?.fdListType || item.fdListType,
+                            })
+                            onClose()
+                          }}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            gap: 4,
+                            paddingHorizontal: 8,
+                            paddingVertical: 3,
+                            borderRadius: 6,
+                            borderWidth: 1,
+                            borderColor: colors.tabBarActive,
+                            backgroundColor: isDark
+                              ? 'rgba(56, 189, 248, 0.12)'
+                              : 'rgba(2, 132, 199, 0.08)',
+                          }}
+                        >
+                          <ClipboardList size={11} color={colors.tabBarActive} />
+                          <Text style={{ fontSize: 10.5, fontWeight: '700', color: colors.tabBarActive }}>
+                            + BAP
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </Card>
                 )

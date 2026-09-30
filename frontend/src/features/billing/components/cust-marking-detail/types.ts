@@ -15,7 +15,10 @@ export type SortField =
   | 'listCode'
   | 'terima'
   | 'marking'
+  | 'markingNo'
   | 'comodity'
+  | 'fdDesc'
+  | 'currValue1'
   | 'qtyGdg'
   | 'qtySJ'
   | 'qtyPL'
@@ -23,6 +26,7 @@ export type SortField =
   | 'weightGdg'
   | 'weightSJ'
   | 'weightK'
+  | 'kgBill'
   | 'selisihKg'
   | 'm3Gdg'
   | 'm3PL'
@@ -36,6 +40,8 @@ export type SortField =
   | 'overWeight'
   | 'value2'
   | 'fc'
+  | 'typeComodityText'
+  | 'taxVal'
 
 export type SortOrder = 'asc' | 'desc'
 
@@ -48,10 +54,13 @@ export interface NormalizedMarkingRow {
   listCode: string
   terima: string
   marking: string
+  markingNo: string
   fdDescr: string
+  fdDesc: string
   fdComodity: string
   fdComodityName: string
   comodity: string
+  typeComodityText: string
   bc: string
   branchCode: string
   listType: number | null
@@ -66,6 +75,7 @@ export interface NormalizedMarkingRow {
   weightSJ: number
   weightGdg: number
   weightK: number
+  kgBill: number
   selisihKg: number
   weight: number
   m3PL: number
@@ -88,11 +98,20 @@ export interface NormalizedMarkingRow {
   totalSJ: number
   hasKomplain: boolean
   hasSelisih: boolean
+  isUnderbilledM3: boolean
+  isPlEmpty: boolean
+  isStatusNonStandard: boolean
+  isInvoiceUtama: boolean
+  isBillGabungan: boolean
+  isBillTambahan: boolean
+  isQtyKomplainMismatch: boolean
   owPL: number | null
   owGdg: number | null
+  owSJ: number | null
   owK: number | null
   rawOwPL: number | null
   rawOwGdg: number | null
+  rawOwSJ: number | null
   rawOwK: number | null
   rawOw: number | null
   overWeight: number | null
@@ -100,6 +119,11 @@ export interface NormalizedMarkingRow {
 
 export interface CustMarkingAggregates {
   totalResi: number
+  totalInvoices: number
+  countInvoiceUtama: number
+  countBillGabungan: number
+  countBillTambahan: number
+  countQtyKomplainMismatch: number
   totalQtyGdg: number
   totalQtySJ: number
   totalQtyPL: number
@@ -107,6 +131,7 @@ export interface CustMarkingAggregates {
   totalWeightGdg: number
   totalWeightSJ: number
   totalWeightK: number
+  totalKgBill: number
   totalWeight: number
   totalM3PL: number
   totalM3Gdg: number
@@ -119,6 +144,15 @@ export interface CustMarkingAggregates {
   totalValue2: number
   totalFc: number
   totalOw: number
+  totalOwGdg: number
+  totalOwSJ: number
+  totalOwK: number
   countKomplain: number
   countSelisih: number
+  commodityTypes: Array<{
+    type: string
+    count: number
+    weight: number
+    m3: number
+  }>
 }

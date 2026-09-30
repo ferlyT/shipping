@@ -161,4 +161,32 @@ export interface UnifiedM3CheckResult {
     listsWithFcCount: number
     currency: string
   } | null
+  relatedBillsSummary?: RelatedBillsSummary | null
+}
+
+export interface RelatedInvoiceItem {
+  invNo: string
+  listCode: string
+  isParent: boolean
+  billedM3: number
+  billedKg: number
+  markingNo: string
+  firstItemName?: string
+}
+
+export interface RelatedBillsSummary {
+  hasRelatedBills: boolean
+  isParent: boolean
+  isChild: boolean
+  parentInvNo: string
+  childLetter?: string
+  relatedInvoices: RelatedInvoiceItem[]
+  relatedListCodes: string[]
+  sumM3Gudang: number
+  sumM3PL: number
+  sumM3Komplain: number
+  sumQty: number
+  sumBerat: number
+  totalBilledM3: number
+  totalBilledKg?: number
 }

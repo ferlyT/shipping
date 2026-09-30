@@ -15,6 +15,7 @@ import { StatusKirimBadge } from '../components/StatusKirimBadge'
 import { MismatchModal } from '../components/MismatchModal'
 import { PartialDetailModal } from '../components/PartialDetailModal'
 import { TargetPriceCheckModal } from '../components/TargetPriceCheckModal'
+import { CustomerHargaModal } from '../components/CustomerHargaModal'
 import { BrokerBadge } from '@/features/customers/components/CustomerBadges'
 import type { TargetBillingItem, GroupKey } from '../types/billing.types'
 
@@ -177,6 +178,7 @@ export default function TargetPage() {
   const [mismatchItem,     setMismatchItem]     = useState<TargetBillingItem | null>(null)
   const [partialModalItem, setPartialModalItem] = useState<TargetBillingItem | null>(null)
   const [priceCheckItem,   setPriceCheckItem]   = useState<TargetBillingItem | null>(null)
+  const [selectedCustForHarga, setSelectedCustForHarga] = useState<{ code: string; name?: string } | null>(null)
   const [copiedKey,        setCopiedKey]        = useState<string | null>(null)
 
   const { addToast } = useToastStore()
@@ -259,6 +261,7 @@ export default function TargetPage() {
       hari: Number(r.hari ?? r.Hari ?? 0),
       pic: String(r.pic ?? r.Pic ?? '').trim(),
       customer: String(r.customer ?? r.Customer ?? '').trim(),
+      custCode: String(r.custCode ?? r.CustCode ?? r.fdCustCode ?? '').trim(),
       branch: String(r.branch ?? r.Branch ?? '').trim(),
       sales: String(r.sales ?? r.Sales ?? '').trim(),
       markingCode: String(r.markingCode ?? r.Marking_code ?? r.marking_code ?? '').trim(),
@@ -404,6 +407,14 @@ export default function TargetPage() {
           item={priceCheckItem}
           activeMode={activeType}
           onClose={() => setPriceCheckItem(null)}
+        />
+      )}
+      {selectedCustForHarga && (
+        <CustomerHargaModal
+          isOpen={Boolean(selectedCustForHarga)}
+          onClose={() => setSelectedCustForHarga(null)}
+          custCode={selectedCustForHarga.code}
+          custName={selectedCustForHarga.name}
         />
       )}
       
@@ -666,8 +677,24 @@ export default function TargetPage() {
 
                     {/* Customer & Branch */}
                     <div className="min-w-0">
-                      <div className="font-bold text-[var(--color-primary)] text-sm leading-tight truncate" title={item.customer}>
-                        {item.customer || '-'}
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-[var(--color-primary)] text-sm leading-tight truncate" title={item.customer}>
+                          {item.customer || '-'}
+                        </span>
+                        {(item.custCode || item.customer) && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedCustForHarga({ code: item.custCode || item.customer, name: item.customer })
+                            }}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-bold rounded-md bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer shrink-0"
+                            title="Lihat Pricelist Customer (tbCustomersHarga)"
+                          >
+                            <Tag className="w-2.5 h-2.5 shrink-0" />
+                            <span>Tarif</span>
+                          </button>
+                        )}
                       </div>
                       <div className="text-[11px] text-[var(--color-secondary)] mt-0.5 flex items-center gap-1.5 flex-wrap">
                         <span>{item.branch || '-'}</span>
@@ -874,8 +901,24 @@ export default function TargetPage() {
 
                         {/* Customer & Status */}
                         <td className="px-4 py-3 border-b border-[var(--color-border)] max-w-[240px]">
-                          <div className="font-semibold text-[var(--color-primary)] text-xs truncate leading-snug" title={item.customer}>
-                            {item.customer || '-'}
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="font-semibold text-[var(--color-primary)] text-xs truncate leading-snug" title={item.customer}>
+                              {item.customer || '-'}
+                            </span>
+                            {(item.custCode || item.customer) && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedCustForHarga({ code: item.custCode || item.customer, name: item.customer })
+                                }}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold rounded-md bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer shrink-0"
+                                title="Lihat Pricelist Customer (tbCustomersHarga)"
+                              >
+                                <Tag className="w-2.5 h-2.5 shrink-0" />
+                                <span>Tarif</span>
+                              </button>
+                            )}
                           </div>
                           <div className="mt-1 flex items-center gap-1.5 flex-nowrap">
                             <StatusBadge status={item.status} />

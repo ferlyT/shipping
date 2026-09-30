@@ -16,10 +16,16 @@ export function OverweightAuditTab({ overweight, billedM3 }: OverweightAuditTabP
     isOverweight,
     isBilledOverweightExactMatch,
     isBilledOverweightTolerated,
+    isBilledOverweightMatch,
     isBilledUnneededOverweight,
     effectiveBilledKg,
     refM3,
     isMinM3EnforcedForKg,
+    weightSource,
+    isChildBillMerged,
+    parentInvNo,
+    matchedCandidateSource,
+    overweightDiff,
   } = overweight
 
   const sisaKuota = Math.max(0, maxAllowedWeight - actualWeightKg)
@@ -46,7 +52,9 @@ export function OverweightAuditTab({ overweight, billedM3 }: OverweightAuditTabP
           <div className="text-[16px] sm:text-[17px] font-bold tabular-nums text-[var(--color-primary)] mt-0.5">
             {formatNumber(actualWeightKg)} <span className="text-xs font-normal">kg</span>
           </div>
-          <span className="text-[10.5px] text-[var(--color-secondary)]">Timbangan Gudang</span>
+          <span className="text-[10.5px] text-[var(--color-secondary)] truncate block" title={weightSource}>
+            {weightSource || 'Timbangan Gudang'}
+          </span>
         </div>
 
         <div className="p-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-neutral)]/20">
@@ -71,12 +79,12 @@ export function OverweightAuditTab({ overweight, billedM3 }: OverweightAuditTabP
             )}
           </div>
           <span className="text-[10.5px] text-[var(--color-secondary)]">
-            {isOverweight ? 'Perlu Dikenakan Biaya' : 'Muatan Aman'}
+            {isChildBillMerged ? 'Digabung ke Induk' : isOverweight ? 'Perlu Dikenakan Biaya' : 'Muatan Aman'}
           </span>
         </div>
       </div>
 
-      <div className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] space-y-1.5">
+      <div className="p-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] space-y-2">
         <h4 className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-secondary)]">
           Audit Status Penagihan Overweight
         </h4>
@@ -84,11 +92,16 @@ export function OverweightAuditTab({ overweight, billedM3 }: OverweightAuditTabP
           <div>
             <span className="text-[var(--color-secondary)]">Item Overweight Ditagihkan: </span>
             <strong className="text-[var(--color-primary)]">{formatNumber(effectiveBilledKg)} kg</strong>
+            {matchedCandidateSource ? (
+              <span className="ml-1.5 text-[10.5px] text-emerald-600 dark:text-emerald-400 font-medium">
+                (Cocok: {matchedCandidateSource})
+              </span>
+            ) : null}
           </div>
           <div>
             <StatusBadge
               status={
-                isBilledOverweightExactMatch || isBilledOverweightTolerated
+                isChildBillMerged || isBilledOverweightExactMatch || isBilledOverweightTolerated || (isBilledOverweightMatch && matchedCandidateSource)
                   ? 'AMAN'
                   : isBilledUnneededOverweight
                     ? 'PERINGATAN'
@@ -99,6 +112,45 @@ export function OverweightAuditTab({ overweight, billedM3 }: OverweightAuditTabP
               size="sm"
             />
           </div>
+        </div>
+
+        {/* Banner Keterangan Overweight */}
+        <div className="p-2.5 rounded-md text-xs leading-relaxed border border-[var(--color-border)]/60 bg-[var(--color-neutral)]/10">
+          {isChildBillMerged ? (
+            <span className="text-emerald-800 dark:text-emerald-300 font-medium">
+              ✓ Tagihan ini merupakan invoice pecahan yang digabung ke Invoice Induk ({parentInvNo || 'Induk'}). Validasi overweight dihitung terpusat pada invoice induk.
+            </span>
+          ) : isBilledOverweightExactMatch ? (
+            <span className="text-emerald-800 dark:text-emerald-300 font-medium">
+              ✓ Muatan terindikasi overweight (+{formatNumber(overweightKg)} kg) dan invoice telah memuat item penagihan KG sebesar {formatNumber(effectiveBilledKg)} kg secara presisi.
+            </span>
+          ) : matchedCandidateSource ? (
+            <span className="text-emerald-800 dark:text-emerald-300 font-medium">
+              ✓ Item penagihan KG pada invoice ({formatNumber(effectiveBilledKg)} kg) COCOK dengan perhitungan overweight dari {matchedCandidateSource}.
+            </span>
+          ) : isBilledOverweightTolerated ? (
+            <span className="text-amber-800 dark:text-amber-300 font-medium">
+              ⚠ Tagihan memuat item penagihan KG sebesar {formatNumber(effectiveBilledKg)} kg. Terdapat selisih pembulatan wajar {Math.abs(overweightDiff ?? 0)} kg dengan sistem (+{formatNumber(overweightKg)} kg).
+            </span>
+          ) : isBilledUnneededOverweight ? (
+            <span className="text-amber-800 dark:text-amber-300 font-medium">
+              ⚠ Berat fisik aktual ({formatNumber(actualWeightKg)} kg) masih berada dalam batas kuota rasio (0 kg overweight), namun invoice menagihkan item KG sebesar {formatNumber(effectiveBilledKg)} kg.
+            </span>
+          ) : isOverweight ? (
+            effectiveBilledKg > 0 ? (
+              <span className="text-rose-800 dark:text-rose-300 font-medium">
+                ⚠ Muatan fisik melebihi batas kuota rasio sebesar +{formatNumber(overweightKg)} kg, namun item penagihan KG ({formatNumber(effectiveBilledKg)} kg) memiliki selisih {Math.abs(overweightDiff ?? 0)} kg dengan sistem.
+              </span>
+            ) : (
+              <span className="text-rose-800 dark:text-rose-300 font-medium">
+                ⚠ Muatan fisik melebihi batas kuota rasio sebesar +{formatNumber(overweightKg)} kg ({weightSource}), namun invoice belum memuat item penagihan KG.
+              </span>
+            )
+          ) : (
+            <span className="text-emerald-800 dark:text-emerald-300 font-medium">
+              ✓ Berat fisik aktual ({formatNumber(actualWeightKg)} kg{weightSource ? ` · ${weightSource}` : ''}) berada di dalam batas kuota rasio ({formatNumber(maxAllowedWeight)} kg). Sisa kuota aman: {formatNumber(sisaKuota)} kg.
+            </span>
+          )}
         </div>
       </div>
     </div>

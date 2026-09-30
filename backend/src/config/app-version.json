@@ -1,15 +1,14 @@
 {
-  "version": "1.2.2",
-  "versionCode": 14,
-  "minVersion": "1.2.2",
+  "version": "1.2.6",
+  "versionCode": 18,
+  "minVersion": "1.2.6",
   "forceUpdate": true,
-  "downloadUrl": "http://36.93.22.142/mshipping/mshipping.apk",
-  "webDownloadUrl": "http://36.93.22.142/mshipping/download/",
+  "downloadUrl": "https://app.sampai.co/mshipping/mshipping.apk",
+  "webDownloadUrl": "https://app.sampai.co/mshipping/download/",
   "releaseNotes": [
-    "Fitur Cetak & Bagikan PDF Invoice Tagihan (format resmi A5 Landscape 100% identik web)",
-    "Verifikasi Biometrik (Fingerprint / Face ID) sebelum mencetak atau membagikan invoice",
-    "Perbaikan bug biometrik login: eliminasi race condition nama sensor dan pembersihan kredensial saat logout",
-    "Penyelarasan otomatis penyimpanan kredensial saat mengaktifkan biometrik di profil"
+    "Migrasi penuh ke protokol HTTPS terenkripsi SSL Let's Encrypt (app.sampai.co)",
+    "Peningkatan keamanan transmisi data dan integritas API ERP",
+    "Pembaruan endpoint reverse proxy resmi port 443"
   ],
-  "publishedAt": "2026-09-20T07:15:00.000Z"
+  "publishedAt": "2026-09-28T12:35:00.000Z"
 }

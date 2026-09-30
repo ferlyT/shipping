@@ -18,11 +18,13 @@ export const ROUTES = {
   DELIVERY_ORDERS: '/mshipping/logistics/delivery-orders',
   DELIVERY_ORDERS_INVENTORY: '/mshipping/logistics/delivery-orders/inventory',
   DELIVERY_ORDERS_LIST: '/mshipping/logistics/delivery-orders/list',
+  DELIVERY_ORDERS_MONITORING: '/mshipping/logistics/delivery-orders/monitoring',
   DELIVERY_DETAIL: (id: string) => `/mshipping/logistics/delivery-orders/${id}`,
   DELIVERY_PRINT: (id: string, doc?: 'both' | 'sj' | 'ukuran') => {
     const cleanId = (id || '').trim()
     return doc ? `/mshipping/logistics/delivery-orders/${cleanId}/print?doc=${doc}` : `/mshipping/logistics/delivery-orders/${cleanId}/print`
   },
+  INSPECTION_REPORTS: '/mshipping/logistics/inspection-reports',
 
   // Finance
   BILLING: '/mshipping/finance/billing',
@@ -77,6 +79,9 @@ export const ROUTES = {
   // Administration
   USERS: '/mshipping/admin/users',
   ROLES: '/mshipping/admin/roles',
+
+  // Tools & Voice Assistant
+  VOICE_ASSISTANT: '/mshipping/voice-assistant',
 } as const
 
 export const PAGE_SIZES = [10, 20, 50, 100] as const

@@ -33,102 +33,204 @@ export async function getCustomers(query: Record<string, string | undefined>) {
     const tierMap = await getAnnualTierMap(targetYear)
 
     // 2. Base status condition (for group counts scope)
-    const baseWhere: any = {}
+    const baseAnd: any[] = []
     if (status === 'active') {
-      baseWhere.fdDiscontinued = { not: 1 }
+      baseAnd.push({ fdDiscontinued: { not: 1 } })
     } else if (status === 'discontinued') {
-      baseWhere.fdDiscontinued = 1
+      baseAnd.push({ fdDiscontinued: 1 })
     }
 
     if (sales && sales !== 'all') {
-      baseWhere.fdSalesNM = sales
+      baseAnd.push({ fdSalesNM: sales })
     }
 
-    // 3. Full query condition with search, category, broker, blockStatus, and tier
-    const where: any = { ...baseWhere }
+    // 3. Full query conditions with multi-token search, category, broker, blockStatus, and tier
+    const queryAnd: any[] = [...baseAnd]
 
     if (search) {
-      where.OR = [
-        { fdCustName: { contains: search } },
-        { fdCustCode: { contains: search } },
-        { fdContact: { contains: search } },
-        { fdHP: { contains: search } },
-        { fdTelp: { contains: search } },
-        { fdEmailPenagihan: { contains: search } },
-        { fdCityName: { contains: search } },
-        { fdSalesNM: { contains: search } },
-      ]
+      const tokens = search.trim().split(/\s+/).filter((t) => t.length > 0)
+      for (const token of tokens) {
+        const digitsOnly = token.replace(/\D/g, '')
+        const hasPhoneDigits = digitsOnly.length >= 4
+
+        const orConditions: any[] = [
+          { fdCustName: { contains: token } },
+          { fdCustCode: { contains: token } },
+          { fdContact: { contains: token } },
+          { fdHP: { contains: token } },
+          { fdTelp: { contains: token } },
+          { fdCityName: { contains: token } },
+          { fdBillTo: { contains: token } },
+          { fdSalesNM: { contains: token } },
+        ]
+
+        // Hanya cari alamat jalan & keterangan jika token >= 4 karakter
+        // untuk mencegah singkatan 2-3 huruf (misal: ash, pt, cv, jl) mencocokkan ratusan alamat jalan
+        if (token.length >= 4) {
+          orConditions.push(
+            { fdAddr1: { contains: token } },
+            { fdNamaPengiriman: { contains: token } },
+            { fdKotaPengiriman: { contains: token } },
+            { fdEmailPenagihan: { contains: token } },
+            { fdKeterangan: { contains: token } }
+          )
+        }
+
+        if (hasPhoneDigits && digitsOnly !== token) {
+          orConditions.push(
+            { fdHP: { contains: digitsOnly } },
+            { fdTelp: { contains: digitsOnly } },
+            { fdContact: { contains: digitsOnly } },
+            { fdHpPengiriman: { contains: digitsOnly } },
+            { fdHpPenagihan: { contains: digitsOnly } }
+          )
+        }
+
+        queryAnd.push({ OR: orConditions })
+      }
     }
 
     // Tier Filter
     if (tierFilter && tierFilter !== 'all') {
       const allowedCodes = tierMap.tierCustCodes[tierFilter] || []
-      where.fdCustCode = { in: allowedCodes }
+      queryAnd.push({ fdCustCode: { in: allowedCodes } })
     }
 
     // Category / Group Filter
     if (category && category !== 'all') {
       if (category === 'broker') {
-        where.fdBroker = 1
+        queryAnd.push({ fdBroker: 1 })
       } else if (category === 'direct') {
-        where.OR = [{ fdBroker: 0 }, { fdBroker: null }]
+        queryAnd.push({ OR: [{ fdBroker: 2 }, { fdBroker: 0 }, { fdBroker: null }] })
       } else if (category === 'cod') {
-        where.fdBlocked = 2
+        queryAnd.push({ fdBlocked: 2 })
       } else if (category === 'warning') {
-        where.fdBlocked = 3
+        queryAnd.push({ fdBlocked: 3 })
       } else if (category === 'blocked') {
-        where.fdBlocked = 4
+        queryAnd.push({ fdBlocked: 4 })
       } else if (category === 'urgent') {
-        where.fdBlocked = 5
+        queryAnd.push({ fdBlocked: 5 })
       } else if (category === 'ok') {
-        where.fdBlocked = 1
+        queryAnd.push({ fdBlocked: 1 })
       } else if (category === 'no_status') {
-        where.OR = [{ fdBlocked: 0 }, { fdBlocked: null }]
+        queryAnd.push({ OR: [{ fdBlocked: 0 }, { fdBlocked: null }] })
       }
     } else {
       if (broker !== undefined && broker !== '' && broker !== 'all') {
         if (broker === '1' || broker === 'broker') {
-          where.fdBroker = 1
-        } else if (broker === '0' || broker === 'direct') {
-          where.OR = [{ fdBroker: 0 }, { fdBroker: null }]
+          queryAnd.push({ fdBroker: 1 })
+        } else if (broker === '0' || broker === 'direct' || broker === '2') {
+          queryAnd.push({ OR: [{ fdBroker: 2 }, { fdBroker: 0 }, { fdBroker: null }] })
         }
       }
 
       if (blockStatus !== undefined && blockStatus !== '' && blockStatus !== 'all') {
-        where.fdBlocked = parseInt(blockStatus, 10)
+        queryAnd.push({ fdBlocked: parseInt(blockStatus, 10) })
       }
     }
 
-    // 4. Query customer page data and aggregations
+    const where: any = queryAnd.length > 0 ? { AND: queryAnd } : {}
+    const baseWhere: any = baseAnd.length > 0 ? { AND: baseAnd } : {}
+
+    // 4. Query customer page data with relevance ranking
     const cacheKey = `${status}_${sales}`
     const now = Date.now()
     let groupStats: number[]
     let salesStats: Array<{ fdSalesNM: string | null; _count: number }>
+    let rawCustomers: any[]
+    let total: number
 
     const isStatsWarm = statsCache[cacheKey] && now - statsCache[cacheKey].timestamp < 60_000
 
-    const pageQueries: Promise<any>[] = [
-      prisma.tbCustomers.findMany({
+    if (search && sortBy === 'fdCustName') {
+      // Relevance scoring for search queries:
+      // Exact match (1) > Prefix match (2) > Word match (3) > Substring in name (4) > Code (5) > Contact (6) > Other (7)
+      const candidates = await prisma.tbCustomers.findMany({
         where,
-        skip,
-        take,
-        orderBy: { [sortBy]: sortDir }
-      }),
-      prisma.tbCustomers.count({ where }),
-    ]
+        select: {
+          fdCustCode: true,
+          fdCustName: true,
+          fdContact: true,
+          fdBillTo: true,
+        },
+      })
+
+      total = candidates.length
+      const cleanQ = search.trim().toLowerCase()
+
+      const scored = candidates.map((c) => {
+        const code = (c.fdCustCode || '').trim().toLowerCase()
+        const name = (c.fdCustName || '').trim().toLowerCase()
+        const contact = (c.fdContact || '').trim().toLowerCase()
+        const billTo = (c.fdBillTo || '').trim().toLowerCase()
+
+        let score = 99
+        if (name === cleanQ || code === cleanQ) {
+          score = 1
+        } else if (name.startsWith(cleanQ) || code.startsWith(cleanQ)) {
+          score = 2
+        } else if (name.includes(' ' + cleanQ) || name.includes('/' + cleanQ)) {
+          score = 3
+        } else if (name.includes(cleanQ)) {
+          score = 4
+        } else if (code.includes(cleanQ)) {
+          score = 5
+        } else if (contact.startsWith(cleanQ)) {
+          score = 6
+        } else if (contact.includes(cleanQ)) {
+          score = 7
+        } else if (billTo.includes(cleanQ)) {
+          score = 8
+        } else {
+          score = 9
+        }
+
+        return { code: c.fdCustCode, score, name }
+      })
+
+      scored.sort((a, b) => {
+        if (a.score !== b.score) return a.score - b.score
+        return a.name.localeCompare(b.name)
+      })
+
+      const pageCodes = scored.slice(skip, skip + take).map((s) => s.code)
+
+      if (pageCodes.length > 0) {
+        const pageRecords = await prisma.tbCustomers.findMany({
+          where: { fdCustCode: { in: pageCodes } },
+        })
+        const recordMap = new Map(pageRecords.map((r) => [r.fdCustCode.trim(), r]))
+        rawCustomers = pageCodes.map((c) => recordMap.get(c.trim())).filter(Boolean)
+      } else {
+        rawCustomers = []
+      }
+    } else {
+      const pageQueries: Promise<any>[] = [
+        prisma.tbCustomers.findMany({
+          where,
+          skip,
+          take,
+          orderBy: { [sortBy]: sortDir },
+        }),
+        prisma.tbCustomers.count({ where }),
+      ]
+      const results = await Promise.all(pageQueries)
+      rawCustomers = results[0]
+      total = results[1]
+    }
 
     if (!isStatsWarm) {
-      pageQueries.push(
+      const statsQueries = await Promise.all([
         Promise.all([
-          prisma.tbCustomers.count({ where: { ...baseWhere } }),
-          prisma.tbCustomers.count({ where: { ...baseWhere, fdBroker: 1 } }),
-          prisma.tbCustomers.count({ where: { ...baseWhere, OR: [{ fdBroker: 0 }, { fdBroker: null }] } }),
-          prisma.tbCustomers.count({ where: { ...baseWhere, fdBlocked: 2 } }),
-          prisma.tbCustomers.count({ where: { ...baseWhere, fdBlocked: 3 } }),
-          prisma.tbCustomers.count({ where: { ...baseWhere, fdBlocked: 4 } }),
-          prisma.tbCustomers.count({ where: { ...baseWhere, fdBlocked: 5 } }),
-          prisma.tbCustomers.count({ where: { ...baseWhere, fdBlocked: 1 } }),
-          prisma.tbCustomers.count({ where: { ...baseWhere, OR: [{ fdBlocked: 0 }, { fdBlocked: null }] } }),
+          prisma.tbCustomers.count({ where: baseWhere }),
+          prisma.tbCustomers.count({ where: { AND: [...baseAnd, { fdBroker: 1 }] } }),
+          prisma.tbCustomers.count({ where: { AND: [...baseAnd, { OR: [{ fdBroker: 2 }, { fdBroker: 0 }, { fdBroker: null }] }] } }),
+          prisma.tbCustomers.count({ where: { AND: [...baseAnd, { fdBlocked: 2 }] } }),
+          prisma.tbCustomers.count({ where: { AND: [...baseAnd, { fdBlocked: 3 }] } }),
+          prisma.tbCustomers.count({ where: { AND: [...baseAnd, { fdBlocked: 4 }] } }),
+          prisma.tbCustomers.count({ where: { AND: [...baseAnd, { fdBlocked: 5 }] } }),
+          prisma.tbCustomers.count({ where: { AND: [...baseAnd, { fdBlocked: 1 }] } }),
+          prisma.tbCustomers.count({ where: { AND: [...baseAnd, { OR: [{ fdBlocked: 0 }, { fdBlocked: null }] }] } }),
         ]),
         prisma.tbCustomers.groupBy({
           by: ['fdSalesNM'],
@@ -136,17 +238,10 @@ export async function getCustomers(query: Record<string, string | undefined>) {
           _count: true,
           orderBy: { _count: { fdSalesNM: 'desc' } },
           take: 30,
-        })
-      )
-    }
-
-    const results = await Promise.all(pageQueries)
-    const rawCustomers = results[0]
-    const total = results[1]
-
-    if (!isStatsWarm) {
-      groupStats = results[2]
-      salesStats = results[3]
+        }),
+      ])
+      groupStats = statsQueries[0]
+      salesStats = statsQueries[1]
       statsCache[cacheKey] = { timestamp: now, groupStats, salesStats }
     } else {
       groupStats = statsCache[cacheKey]?.groupStats ?? []
@@ -399,7 +494,7 @@ export async function getCustomerSuggestions(keyword: string): Promise<CustomerS
 
   try {
     const rows = await prisma.$queryRaw<any[]>`
-      SELECT TOP 12 
+      SELECT TOP 20 
         RTRIM(ISNULL(fdCustCode, '')) AS fdCustCode,
         RTRIM(ISNULL(fdCustName, '')) AS fdCustName,
         RTRIM(ISNULL(fdContact, '')) AS fdContact,
@@ -407,15 +502,21 @@ export async function getCustomerSuggestions(keyword: string): Promise<CustomerS
         RTRIM(ISNULL(fdTelp, '')) AS fdTelp,
         RTRIM(ISNULL(fdCityName, '')) AS fdCityName
       FROM tbCustomers WITH (NOLOCK)
-      WHERE ISNULL(fdDiscontinued, 0) <> 1
-        AND (
+      WHERE (
           fdCustName LIKE ${searchLike}
           OR fdCustCode LIKE ${searchLike}
           OR fdContact LIKE ${searchLike}
           OR fdHP LIKE ${searchLike}
           OR fdTelp LIKE ${searchLike}
+          OR fdCityName LIKE ${searchLike}
         )
-      ORDER BY fdCustName ASC
+      ORDER BY 
+        CASE 
+          WHEN fdCustCode LIKE ${cleanQ + '%'} THEN 1
+          WHEN fdCustName LIKE ${cleanQ + '%'} THEN 2
+          ELSE 3
+        END,
+        fdCustName ASC
     `.catch(() => [])
 
     const suggestions: CustomerSuggestion[] = []
@@ -424,34 +525,35 @@ export async function getCustomerSuggestions(keyword: string): Promise<CustomerS
 
     for (const row of rows) {
       const custCode = (row.fdCustCode || '').trim()
+      const custName = (row.fdCustName || '').trim()
 
-      if (row.fdCustName && row.fdCustName.toLowerCase().includes(qLower) && !seen.has(`c:${row.fdCustName}`)) {
-        seen.add(`c:${row.fdCustName}`)
+      if (custName && !seen.has(`c:${custName.toLowerCase()}`)) {
+        seen.add(`c:${custName.toLowerCase()}`)
         suggestions.push({
           type: 'customer',
-          title: row.fdCustName,
-          subtitle: `Kode: ${custCode}${row.fdCityName ? ` • ${row.fdCityName}` : ''}`,
-          value: row.fdCustName,
+          title: custName,
+          subtitle: `Kode: ${custCode}${row.fdCityName ? ` • ${row.fdCityName.trim()}` : ''}`,
+          value: custName,
           custCode,
         })
       }
-      if (row.fdCustCode && row.fdCustCode.toLowerCase().includes(qLower) && !seen.has(`code:${row.fdCustCode}`)) {
-        seen.add(`code:${row.fdCustCode}`)
+      if (custCode && custCode.toLowerCase().includes(qLower) && !seen.has(`code:${custCode.toLowerCase()}`)) {
+        seen.add(`code:${custCode.toLowerCase()}`)
         suggestions.push({
           type: 'code',
-          title: row.fdCustCode,
-          subtitle: `Pelanggan: ${row.fdCustName}`,
-          value: row.fdCustCode,
+          title: custCode,
+          subtitle: `Pelanggan: ${custName}`,
+          value: custCode,
           custCode,
         })
       }
       const contactVal = (row.fdContact || row.fdHP || row.fdTelp || '').trim()
-      if (contactVal && contactVal.toLowerCase().includes(qLower) && !seen.has(`cnt:${contactVal}`)) {
-        seen.add(`cnt:${contactVal}`)
+      if (contactVal && contactVal.toLowerCase().includes(qLower) && !seen.has(`cnt:${contactVal.toLowerCase()}`)) {
+        seen.add(`cnt:${contactVal.toLowerCase()}`)
         suggestions.push({
           type: 'contact',
           title: contactVal,
-          subtitle: `Kontak: ${row.fdCustName}`,
+          subtitle: `Kontak: ${custName} (${custCode})`,
           value: contactVal,
           custCode,
         })

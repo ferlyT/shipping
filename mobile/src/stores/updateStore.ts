@@ -101,7 +101,7 @@ export const useUpdateStore = create<UpdateState>((set, get) => ({
   openWebDownload: async () => {
     const { updateInfo } = get()
     const { showToast } = useToastStore.getState()
-    const targetUrl = updateInfo?.webDownloadUrl || 'http://36.93.22.142/mshipping/download/'
+    const targetUrl = updateInfo?.webDownloadUrl || 'https://app.sampai.co/mshipping/download/'
 
     try {
       await Linking.openURL(targetUrl)

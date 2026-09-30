@@ -8,3 +8,5 @@ export { dashboardApi } from '@/features/dashboard/services/dashboard.service'
 export { priceCheckApi } from './priceCheck'
 export { m3CheckApi } from './m3Check'
 export { cashierApi } from './cashier'
+export { inspectionApi } from '@/features/inspection/services/inspection.service'
+

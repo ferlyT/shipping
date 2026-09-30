@@ -74,12 +74,182 @@ export interface TransportExpedisiRef {
   fdMarkingNo?: string | null
 }
 
+// ─── Daftar Kata Kunci Item Biaya Cabang '--' Non-Validasi (Tidak Ada di DB) ───
+export const UNVALIDATED_BRANCH_DASH_FEE_KEYWORDS: readonly string[] = [
+  'AGENCY FEE',
+  'AWB FEE',
+  'ADJUSMENT',
+  'ADJUSTMENT',
+  'AIRLINE IMPORT FEE',
+  'ADDITIONAL FEE - MEDICAL/ VITAMIN',
+  'ADDITIONAL FEE - MEDICAL/VITAMIN',
+  'ADDITIONAL FEE',
+  'ADDITIONAL PAYMENT DUE (SHORTAGE)',
+  'ADDITIONAL PAYMENT DUE',
+  'BILL OF LANDING',
+  'BL FOR BANK INDORSMENT',
+  'BANK INDORSMENT',
+  'BANK ENDORSEMENT',
+  'BEING SUPPLY LABOUR & TRANSPORT',
+  'BEING CHECK RECEIVED',
+  'BEA CUKAI',
+  'BRANDED CHARGES',
+  'BIAYA JASA',
+  'CUSTOM COMPOUND',
+  'CHARGE COLLECT',
+  'CONTROL DEPARTEMENT FEE',
+  'CONTROL DEPARTMENT FEE',
+  'CUSTOM FEE',
+  'CHARGE FOR NO SHIPPING MARK',
+  'COMMISSION',
+  'CHARGE FOR MISSING INVOICE',
+  'CENTRAL NARCOTICS BUREAU LICENCE',
+  'CENTRAL NARCOTICS BUREAU LICENSE',
+  'COST OF PARTS',
+  'CUSTOM SUPERVISOR FEE',
+  'CONTAINER TO JAKARTA',
+  'COURIER DOCUMENT',
+  'CLEARENCE FEE',
+  'CLEARANCE FEE',
+  'CUSTOM CLEARANCE',
+  'CARRIER CHARGES',
+  'CUSTOM HANDLING',
+  'COLOADER CHARGES',
+  'DOCUMENT FEE',
+  'DRAFT',
+  'DAMAGE CONTAINER',
+  'DETENTION',
+  'DHC',
+  'DEMURRAGE',
+  'DENDA',
+  'DUTY & IMPORT TAX',
+  'DOCUMENT CHARGES',
+  'DOCUMENT & STAMP FEE',
+  'EX WORK SHORT COLLECT',
+  'EXPORT TAX',
+  'EXPORT OCEAN FREIGHT',
+  'EXPORT PERMIT',
+  'EXWORK',
+  'FREIGHT CHARGE',
+  'FORKLIFT',
+  'FUEL SURCHARGES',
+  'FOOD CONTROL DEPT.',
+  'FOOD CONTROL DEPT',
+  'ICA CHARGES',
+  'FREIGHT & SERVICE CHARGE',
+  'G.S.T',
+  'GST',
+  'HAND CARRY',
+  'HANDLING FEE',
+  'INBOUND FREIGHT CHARGES',
+  'IMPORT FEE FOR CONTROL ITEM',
+  'INSURANCE PREMIUM',
+  'JASA UNDERNAME',
+  'LABOUR CHARGES',
+  'LICENCE FEE',
+  'LICENSE FEE',
+  'LOCAL AGENT HANDLING FEE',
+  'LETTER OF INDEMNITY',
+  'LOADING & UNLOADING CHARGES',
+  'LOADING & SERVICES',
+  'LOADING & SERVICES CHARGES',
+  'LOLO',
+  'LAB TEST FEE',
+  'LOCAL CHARGES',
+  'MISS CHARGES (CUSTOM LETTER)',
+  'NON REIMBURSMENT',
+  'NON REIMBURSEMENT',
+  'NO INVOICE',
+  'OUTBOUND FREIGHT CHARGES',
+  'OTHER CHARGES',
+  'PSA CHARGES',
+  'PERMIT FEE',
+  'PACKING CHARGES',
+  'PLUS',
+  'PERMIT & COURIER FEE',
+  'PREMIUM FEE',
+  'PICKUP & PROCEDURE FREIGHT',
+  'PORT HANDLING',
+  'PEMELIHARAAN KONTAINER',
+  'PICKUP & CUSTOM FEE',
+  'REIMBURSE',
+  'REMOVALLANEL',
+  'REMOVALLABEL',
+  'REMOVAL LABEL',
+  'REMOVAL PANEL',
+  'RADIATION PROTECTION LICENCE',
+  'RADIATION PROTECTION LICENSE',
+  'REIMBURSMENT',
+  'REIMBURSEMENT',
+  'SERVICE CHARGES',
+  'SECURITY FEE',
+  'STAMP FEE',
+  'STORAGE',
+  'SURVEY FEE',
+  'SUPPLY WOODEN CASE',
+  'SPLIT DELIVERY ORDER',
+  'STUFFING',
+  'SHIPPING LINE',
+  'STORAGE REMOVAL CHARGES',
+  'SHIPPING LINE CHARGES',
+  'SEWA GUDANG JAKARTA',
+  'TRANSPORT CHARGES',
+  'TERMINAL FEE',
+  'TRADE NET',
+  'TRUCKING',
+  'TRANSPORT & SERVICE CHARGES',
+  'TAX RETURN',
+  'UNSTUFFING',
+  'USED OF SPECIAL EQUIPMENT',
+  'UPS COURIER FEE',
+  'UBTS CHARGES',
+  'UNDERNAME CHARGES',
+  'WASHING',
+  'WAREHOUSE CHARGES',
+]
+
+/**
+ * Memeriksa apakah branch code dari invoice adalah branch '--'
+ */
+export function isBranchDash(branchCode?: string | null, invNo?: string | null): boolean {
+  const b = (branchCode || '').trim().toUpperCase()
+  if (b === '--' || b === '-') return true
+  const inv = (invNo || '').trim().toUpperCase()
+  if (inv.startsWith('--')) return true
+  return false
+}
+
+/**
+ * Memeriksa apakah nama item invoice memuat kata-kata biaya/fee non-database (branch code --)
+ */
+export function isBranchDashExemptFee(itemName?: string | null): boolean {
+  if (!itemName) return false
+  const upper = itemName.toUpperCase().trim()
+
+  for (const kw of UNVALIDATED_BRANCH_DASH_FEE_KEYWORDS) {
+    if (kw.length <= 4) {
+      const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      if (new RegExp(`\\b${escaped}\\b`, 'i').test(upper)) {
+        return true
+      }
+    } else {
+      if (upper.includes(kw)) {
+        return true
+      }
+    }
+  }
+
+  return false
+}
+
 export interface PriceEvaluationContext {
   res?: any
   isAir: boolean
   defaultTypeId?: number | null
   defaultComodityName?: string
   expedisiList?: TransportExpedisiRef[]
+  branchCode?: string | null
+  invNo?: string | null
 }
 
 export interface ItemPriceEvaluation {
@@ -94,6 +264,7 @@ export interface ItemPriceEvaluation {
   isKgOverweightItem: boolean
   isTransportItem: boolean
   isFreightChargeItem?: boolean
+  isNonValidatedBranchDashFee?: boolean
   targetColName: string
   priceListDisplay: string
   statusType: 'MATCH' | 'LOWER' | 'HIGHER' | 'NO_TARGET'
@@ -365,6 +536,35 @@ export function evaluateItemPrice(
   item: any,
   ctx: PriceEvaluationContext
 ): ItemPriceEvaluation {
+  const invNo = String(item?.fdInvNo || ctx.invNo || ctx.res?.billing?.fdInvNo || ctx.res?.fdInvNo || '').trim()
+  const branchCode = String(ctx.branchCode || ctx.res?.expectedBranch || ctx.res?.branch || ctx.res?.customer?.fdBranchCode || ctx.res?.billing?.fdBranchCode || '').trim()
+  const isDashBranch = isBranchDash(branchCode, invNo)
+  const isExemptFee = isDashBranch && isBranchDashExemptFee(item?.fdItemName)
+
+  // 0. Item invoice dengan branch code '--' yang memuat kata kunci biaya khusus tidak divalidasi ke database tarif
+  if (isExemptFee) {
+    return {
+      comodityName: (item?.fdItemName || 'BIAYA KHUSUS').trim(),
+      priceItem: null,
+      minTargetPrice: 0,
+      maxTargetPrice: 0,
+      profilePrice: 0,
+      isMatched: true,
+      hasTargetPrice: false,
+      isTaxReturnItem: false,
+      isKgOverweightItem: false,
+      isTransportItem: false,
+      isFreightChargeItem: false,
+      isNonValidatedBranchDashFee: true,
+      targetColName: 'Non-Validasi (Cabang --)',
+      priceListDisplay: 'Tidak Terdapat di Database',
+      statusType: 'NO_TARGET',
+      difference: 0,
+      isUndercharge: false,
+      isOvercharge: false,
+    }
+  }
+
   const itemNameUpper = (item?.fdItemName || '').toUpperCase()
   const isTransportItem =
     itemNameUpper.includes('TRANSPORT') ||
@@ -1180,13 +1380,17 @@ export function resolveBranchCode(
 
 // ─── Item Classifiers ────────────────────────────────────────────────────────
 
-/** Returns true for auxiliary items like Tax Return, Admin, Surcharge, etc. */
-export function isAuxiliaryItem(name?: string | null): boolean {
+/** Returns true for auxiliary items like Tax Return, Admin, Surcharge, etc. or non-validated branch '--' fee items */
+export function isAuxiliaryItem(name?: string | null, branchCode?: string | null, invNo?: string | null): boolean {
   if (!name) return false
   const n = name.toUpperCase().trim()
 
   // Item muatan kargo utama (PARCEL / PARCELS) bukan auxiliary item
   if (/^PARCELS?\b/i.test(n)) return false
+
+  if (isBranchDash(branchCode, invNo) && isBranchDashExemptFee(n)) {
+    return true
+  }
 
   return (
     n.includes('TAX RETURN') ||

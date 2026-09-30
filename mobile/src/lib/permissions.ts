@@ -74,3 +74,16 @@ export function canViewBillingValidation(user: User | null | undefined): boolean
     )
   )
 }
+
+export function canManageInspectionReports(user: User | null | undefined): boolean {
+  if (!user) return false
+  if (isAdmin(user)) return true
+  return Boolean(
+    user.permissions?.some(
+      (p) =>
+        p.startsWith('/mshipping/logistics') ||
+        p === '/mshipping/logistics/inspection'
+    )
+  )
+}
+

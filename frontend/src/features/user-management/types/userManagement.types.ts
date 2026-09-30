@@ -35,6 +35,7 @@ export interface AvailablePath {
 export const AVAILABLE_PATHS: AvailablePath[] = [
   // Overview
   { path: ROUTES.DASHBOARD, label: 'Overview Dashboard', module: 'overview', moduleLabel: 'Overview', accentColor: '#3B82F6' },
+  { path: ROUTES.VOICE_ASSISTANT, label: 'Asisten Suara ERP (Voice Assistant)', module: 'overview', moduleLabel: 'Overview', accentColor: '#0EA5E9' },
 
   // Logistik
   { path: ROUTES.SHIPMENTS, label: 'Shipment Dashboard', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
@@ -43,6 +44,7 @@ export const AVAILABLE_PATHS: AvailablePath[] = [
   { path: ROUTES.SHIPMENT_BATCHES_LIST, label: 'Daftar Batch Marking', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
   { path: ROUTES.DELIVERY_ORDERS, label: 'Delivery Orders Dashboard', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
   { path: ROUTES.DELIVERY_ORDERS_LIST, label: 'Daftar Surat Jalan', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
+  { path: ROUTES.DELIVERY_ORDERS_MONITORING, label: 'Monitoring SJ Belum Terkirim', module: 'logistics', moduleLabel: 'Logistik', accentColor: '#F59E0B' },
 
   // Keuangan
   { path: ROUTES.BILLING, label: 'Billing Dashboard', module: 'finance', moduleLabel: 'Keuangan', accentColor: '#10B981' },

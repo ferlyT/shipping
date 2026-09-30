@@ -24,6 +24,7 @@ import { m3CheckRoutes } from './modules/m3-check/m3-check.routes'
 import { appVersionRoutes } from './modules/app-version/app-version.routes'
 import cashierRoutes from './modules/cashier/cashier.routes'
 import walletRoutes from './modules/wallet/wallet.routes'
+import { inspectionReportsRoutes } from './modules/inspection-reports/inspectionReports.routes'
 
 
 import path from 'path'
@@ -34,9 +35,21 @@ import { profileRoutes } from './modules/profile/profile.routes'
 
 const rootApp = new Hono()
 
-// Global middleware
 rootApp.use('*', cors({
-  origin: ENV.IS_PRODUCTION ? 'http://36.93.22.142' : '*',
+  origin: (origin) => {
+    if (!origin) return '*'
+    if (!ENV.IS_PRODUCTION) return origin
+    if (
+      origin.includes('36.93.22.142') ||
+      origin.includes('sampai.co') ||
+      origin.includes('localhost') ||
+      origin.includes('127.0.0.1') ||
+      origin.includes('192.168.1.')
+    ) {
+      return origin
+    }
+    return 'https://app.sampai.co'
+  },
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
 }))
@@ -61,13 +74,18 @@ const serveUploadHandler = async (c: any) => {
   const fullPath = path.join(process.cwd(), 'public', 'uploads', relativePath)
   const file = Bun.file(fullPath)
   if (await file.exists()) {
-    return new Response(file)
+    return new Response(file, {
+      headers: {
+        'Content-Type': file.type || 'image/jpeg',
+        'Cache-Control': 'public, max-age=31536000',
+      },
+    })
   }
 
   // Development mode: Fallback ke server production jika file belum ada di lokal
   if (!ENV.IS_PRODUCTION) {
     try {
-      const prodUrl = `http://36.93.22.142:3010/uploads/${relativePath}`
+      const prodUrl = `https://app.sampai.co/uploads/${relativePath}`
       const remoteRes = await fetch(prodUrl, { signal: AbortSignal.timeout(3000) })
       if (remoteRes.ok) {
         const buffer = await remoteRes.arrayBuffer()
@@ -133,6 +151,7 @@ apiApp.route('/m3-check', m3CheckRoutes)
 apiApp.route('/app-version', appVersionRoutes)
 apiApp.route('/cashier', cashierRoutes)
 apiApp.route('/wallet', walletRoutes)
+apiApp.route('/inspection-reports', inspectionReportsRoutes)
 
 // OpenAPI JSON & Swagger UI
 apiApp.get('/openapi.json', (c) => c.json(openApiSpec))

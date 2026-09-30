@@ -9,12 +9,39 @@ import type {
   ProfileHargaItem,
   MarkingDetailItem,
   ComodityTypeOption,
+  RelatedBillsSummary,
+  RelatedInvoiceItem,
 } from './m3-check.types'
 
 /**
  * Helper untuk memeriksa apakah kode adalah format 5-8 digit list code
  */
 export const is7DigitListCode = (c?: string | null): boolean => !!c && /^\d{5,8}$/.test(c.trim())
+
+/**
+ * Helper untuk parsing format nomor invoice dan mengenali keluarga invoice (induk & anak/pecahan A-Z)
+ */
+export function parseInvoiceFamily(invNo: string) {
+  const clean = invNo.replace(/^[\x00-\x1F]+/, '').trim()
+  const match = clean.match(/^([A-Za-z0-9_-]+-)([0-9A-Za-z])(\d{5})(-\d{2}-\d{4})$/)
+  if (!match) return null
+
+  const [, prefix, headChar, seq5, tail] = match
+  const isChild = headChar !== '0' && /[A-Za-z]/.test(headChar)
+  const isParent = headChar === '0'
+  const parentInvNo = `${prefix}0${seq5}${tail}`
+
+  return {
+    clean,
+    prefix,
+    headChar,
+    seq5,
+    tail,
+    isChild,
+    isParent,
+    parentInvNo,
+  }
+}
 
 /**
  * Parser nilai desimal M3
@@ -798,6 +825,152 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
 
   const allPriceListItems = [...customerPriceListItems, ...masterPriceListItems]
 
+  // ─── Evaluasi Fallback M3 Berbasis No Invoice Terkait (Induk & Anak / Tambahan) ─
+  let relatedBillsSummary: RelatedBillsSummary | null = null
+  try {
+    const rawInvNo = (cleanIdentifier.includes('-') || /^[A-Za-z]/.test(cleanIdentifier))
+      ? cleanIdentifier.replace(/^[\x00-\x1F]+/, '').trim()
+      : ''
+
+    let targetInvNo = rawInvNo
+    if (!targetInvNo && resolvedListCode) {
+      const b = await safeRunRaw(async () => {
+        return prisma.tbBilling.findFirst({
+          where: { fdListCode: resolvedListCode },
+          select: { fdInvNo: true },
+        })
+      }, 'find_billing_inv_by_listcode')
+      if (b?.fdInvNo) {
+        targetInvNo = b.fdInvNo.replace(/^[\x00-\x1F]+/, '').trim()
+      }
+    }
+
+    if (targetInvNo && resolvedCustCode && cleanBatchCode) {
+      const parsedFam = parseInvoiceFamily(targetInvNo)
+      const parentInvNo = parsedFam?.parentInvNo || targetInvNo
+
+      // Ambil seluruh bill dalam batch & customer yang sama
+      const batchBills = await safeRunRaw(async () => {
+        return prisma.tbBilling.findMany({
+          where: {
+            fdCustCode: resolvedCustCode,
+            fdMarkingCode: { startsWith: cleanBatchCode },
+          },
+          select: {
+            fdInvNo: true,
+            fdListCode: true,
+            fdMarkingNo: true,
+            fdBillTambahan: true,
+            details: {
+              select: {
+                fdItemName: true,
+                fdQty: true,
+                fdListCode: true,
+              },
+            },
+          },
+        })
+      }, 'get_related_batch_bills')
+
+      if (Array.isArray(batchBills) && batchBills.length > 0) {
+        // Filter invoice yang saling berelasi
+        const relatedBatchBills = batchBills.filter((b) => {
+          const bInv = b.fdInvNo.replace(/^[\x00-\x1F]+/, '').trim()
+          if (bInv === parentInvNo || bInv === targetInvNo) return true
+          const bFam = parseInvoiceFamily(bInv)
+          if (bFam && bFam.parentInvNo === parentInvNo) return true
+          const hasGabung = b.details.some((d) => {
+            const itemName = (d.fdItemName || '').toUpperCase()
+            return itemName.includes(parentInvNo.toUpperCase()) || itemName.includes(targetInvNo.toUpperCase())
+          })
+          if (hasGabung) return true
+          return false
+        })
+
+        // Hanya bentuk summary jika terdapat lebih dari 1 invoice terkait atau ada relasi induk/anak
+        if (relatedBatchBills.length > 1 || (parsedFam?.isChild && relatedBatchBills.length > 0)) {
+          const relatedListCodes = Array.from(
+            new Set(
+              relatedBatchBills
+                .map((b) => (b.fdListCode ? String(b.fdListCode).trim() : ''))
+                .filter(Boolean)
+            )
+          )
+
+          // Akumulasi dari detailRows untuk listCode terkait
+          let sumM3Gudang = 0
+          let sumM3PL = 0
+          let sumM3Komplain = 0
+          let sumQty = 0
+          let sumBerat = 0
+
+          for (const d of (detailRows || [])) {
+            const lc = String(d.fdListCode || '').trim()
+            if (relatedListCodes.includes(lc)) {
+              sumM3Gudang += parseM3Val(d.fdM3 ?? d['M3'] ?? d.m3_gdg) || 0
+              sumM3PL += parseM3Val(d.fdM3PackingList ?? d.fdM3PL ?? d['M3 PL'] ?? d['M3_PL'] ?? d.m3_pl ?? d.fdm3PL) || 0
+              sumM3Komplain += parseM3Val(d.fdM3Komplain ?? d.fdm3Komplain ?? d['M3 K'] ?? d['M3_K']) || 0
+              sumQty += parseM3Val(d.fdTotalQty ?? d.fdQtyPL ?? d.fdTotalQtySJ ?? d.fdJmlPack) || 0
+              sumBerat += parseM3Val(d.fdTotalBeratSJ ?? d.fdJmlBerat ?? d.berat ?? d.Berat) || 0
+            }
+          }
+
+          let totalBilledM3 = 0
+          let totalBilledKg = 0
+          const relatedInvoices: RelatedInvoiceItem[] = relatedBatchBills.map((b) => {
+            const bInv = b.fdInvNo.replace(/^[\x00-\x1F]+/, '').trim()
+            const bFam = parseInvoiceFamily(bInv)
+            const isP = bFam ? bFam.isParent : bInv === parentInvNo
+
+            let invBilledM3 = 0
+            let invBilledKg = 0
+            for (const item of (b.details || [])) {
+              const u = (item.fdListCode || '').trim().toUpperCase()
+              const n = (item.fdItemName || '').toUpperCase()
+              const q = Number(item.fdQty || 0)
+              if (u === 'M3' || (!u && n.includes('(M3)'))) {
+                invBilledM3 += q
+              } else if (u === 'KG' || (!u && n.includes('(KG)'))) {
+                invBilledKg += q
+              }
+            }
+            totalBilledM3 += invBilledM3
+            totalBilledKg += invBilledKg
+
+            return {
+              invNo: bInv,
+              listCode: b.fdListCode ? String(b.fdListCode).trim() : '',
+              isParent: isP,
+              billedM3: parseFloat(invBilledM3.toFixed(4)),
+              billedKg: parseFloat(invBilledKg.toFixed(2)),
+              markingNo: b.fdMarkingNo ? String(b.fdMarkingNo).trim() : '',
+              firstItemName: b.details?.[0]?.fdItemName ? String(b.details[0].fdItemName).trim() : undefined,
+            }
+          })
+
+          relatedBillsSummary = {
+            hasRelatedBills: true,
+            isParent: parsedFam ? parsedFam.isParent : targetInvNo === parentInvNo,
+            isChild: parsedFam ? parsedFam.isChild : false,
+            parentInvNo,
+            childLetter: parsedFam?.isChild ? parsedFam.headChar : undefined,
+            relatedInvoices,
+            relatedListCodes,
+            sumM3Gudang: parseFloat(sumM3Gudang.toFixed(4)),
+            sumM3PL: parseFloat(sumM3PL.toFixed(4)),
+            sumM3Komplain: parseFloat(sumM3Komplain.toFixed(4)),
+            sumQty: parseFloat(sumQty.toFixed(2)),
+            sumBerat: parseFloat(sumBerat.toFixed(2)),
+            totalBilledM3: parseFloat(totalBilledM3.toFixed(4)),
+            totalBilledKg: parseFloat(totalBilledKg.toFixed(2)),
+          }
+        }
+      }
+    }
+  } catch (err: any) {
+    logger.warn('[M3Check] Gagal evaluasi related bills fallback: ' + (err?.message || err))
+  }
+
   return {
     fdListCode: resolvedListCode,
     fdListType: resolvedListType,
@@ -947,6 +1120,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
           currency: String(freightChargeRows[0].currency || '').trim() || '—',
         }
       : null,
+    relatedBillsSummary,
   }
 }
 

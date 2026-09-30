@@ -7,6 +7,7 @@ export interface ValidationSummaryFooterProps {
   isOverallValid: boolean
   hasWarning: boolean
   isLoadingValidation?: boolean
+  validationIssues?: string[]
   onOpenIssueModal?: () => void
   onClose: () => void
   canIssue?: boolean
@@ -18,6 +19,7 @@ export function ValidationSummaryFooter({
   isOverallValid,
   hasWarning,
   isLoadingValidation = false,
+  validationIssues,
   onOpenIssueModal,
   onClose,
   canIssue = true,
@@ -54,9 +56,17 @@ export function ValidationSummaryFooter({
         </div>
         <div className="min-w-0 flex-1">
           <div className="font-bold text-xs leading-snug">{verdictTitle}</div>
-          <div className="text-[11px] mt-0.5 opacity-90 leading-snug">
-            {verdictDescription}
-          </div>
+          {validationIssues && validationIssues.length > 1 ? (
+            <ul className="text-[11px] mt-1 opacity-90 leading-relaxed list-disc list-inside space-y-0.5">
+              {validationIssues.map((issue, idx) => (
+                <li key={idx}>{issue}</li>
+              ))}
+            </ul>
+          ) : (
+            <div className="text-[11px] mt-0.5 opacity-90 leading-snug">
+              {verdictDescription}
+            </div>
+          )}
         </div>
       </div>
 

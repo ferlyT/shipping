@@ -56,8 +56,12 @@ const COMMON_CATEGORIES = [
   'LEGAL',
   'CHEMICAL',
 ]
+const COMMON_BRANCHES = ['GZ', 'YW', 'SH', 'SZ', 'HK', 'SG']
 
-const COMMON_BRANCHES = ['GZ', 'YIWU', 'SH', 'SZ', 'FOSHAN', 'JKT']
+interface BranchOption {
+  code: string
+  name: string
+}
 
 export function CustomerCommodityPriceModal({
   isOpen,
@@ -87,6 +91,8 @@ export function CustomerCommodityPriceModal({
   const [branch, setBranch] = useState('GZ')
   const [customBranch, setCustomBranch] = useState('')
   const [isCustomBranch, setIsCustomBranch] = useState(false)
+  const [branches, setBranches] = useState<BranchOption[]>([])
+  const [isLoadingBranches, setIsLoadingBranches] = useState(false)
 
   const [price, setPrice] = useState<string>('6500000')
   const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().slice(0, 10))
@@ -137,6 +143,33 @@ export function CustomerCommodityPriceModal({
     }
   }, [isOpen, debouncedCustomerSearch])
 
+  // Load branch list from tbCabang
+  useEffect(() => {
+    if (!isOpen) return
+    let active = true
+    setIsLoadingBranches(true)
+
+    customerPriceListApi
+      .getBranches()
+      .then((res: any) => {
+        if (!active) return
+        const list = res.data?.data || []
+        if (Array.isArray(list) && list.length > 0) {
+          setBranches(list)
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to load branches from tbCabang:', err)
+      })
+      .finally(() => {
+        if (active) setIsLoadingBranches(false)
+      })
+
+    return () => {
+      active = false
+    }
+  }, [isOpen])
+
   // Populate data when editing or opening
   useEffect(() => {
     if (!isOpen) return
@@ -183,8 +216,13 @@ export function CustomerCommodityPriceModal({
       setMode(initialData.mode.toUpperCase().includes('AIR') ? 'BY AIR' : 'BY SEA')
 
       const brUpper = initialData.branch.toUpperCase().trim()
-      if (COMMON_BRANCHES.includes(brUpper)) {
-        setBranch(brUpper)
+      const normalizedBr = brUpper === 'YIWU' ? 'YW' : brUpper
+      const isKnownBranch =
+        COMMON_BRANCHES.includes(normalizedBr) ||
+        branches.some((b) => b.code.toUpperCase() === normalizedBr)
+
+      if (isKnownBranch) {
+        setBranch(normalizedBr)
         setIsCustomBranch(false)
       } else {
         setBranch('CUSTOM')
@@ -700,7 +738,10 @@ export function CustomerCommodityPriceModal({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             {/* Branch */}
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[var(--color-primary)]">Branch / Asal</label>
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-[var(--color-primary)]">Branch / Asal</label>
+                <span className="text-[10px] text-[var(--color-secondary)]">Master tbCabang</span>
+              </div>
               <select
                 value={isCustomBranch ? 'CUSTOM' : branch}
                 onChange={(e) => {
@@ -711,13 +752,22 @@ export function CustomerCommodityPriceModal({
                     setBranch(e.target.value)
                   }
                 }}
-                className="w-full px-3 py-2 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-primary)] focus:outline-hidden focus:border-[var(--color-primary)] cursor-pointer"
+                disabled={isLoadingBranches && branches.length === 0}
+                className="w-full px-3 py-2 rounded-xl bg-[var(--color-surface)] border border-[var(--color-border)] text-xs text-[var(--color-primary)] focus:outline-hidden focus:border-[var(--color-primary)] cursor-pointer disabled:opacity-60"
               >
-                {COMMON_BRANCHES.map((b) => (
-                  <option key={b} value={b}>
-                    {b}
-                  </option>
-                ))}
+                {branches.length > 0 ? (
+                  branches.map((b) => (
+                    <option key={b.code} value={b.code}>
+                      {b.code} - {b.name}
+                    </option>
+                  ))
+                ) : (
+                  COMMON_BRANCHES.map((b) => (
+                    <option key={b} value={b}>
+                      {b}
+                    </option>
+                  ))
+                )}
                 <option value="CUSTOM">+ Branch Lainnya...</option>
               </select>
 

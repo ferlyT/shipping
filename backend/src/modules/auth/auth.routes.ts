@@ -13,12 +13,12 @@ const authRoutes = new Hono()
 
 // Rate limiter khusus untuk login (max 5 di production, 100 di development)
 const loginRateLimiter = rateLimiter({
-  windowMs: 15 * 60 * 1000, // 15 menit
+  windowMs: 10 * 60 * 1000, // 10 menit
   limit: ENV.IS_PRODUCTION ? 5 : 100,
   keyGenerator: (c) => c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'local-dev',
   handler: (c) => {
     logger.warn(`[Auth] Rate limit login terpicu untuk IP/Key: ${c.req.header('x-forwarded-for') ?? 'local-dev'}`)
-    return errorResponse(c, 'Terlalu banyak percobaan login, silakan coba lagi setelah 15 menit', 429)
+    return errorResponse(c, 'Terlalu banyak percobaan login, silakan coba lagi setelah 10 menit', 429)
   },
 })
 

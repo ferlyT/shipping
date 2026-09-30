@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from '@/hooks/useTranslation'
-import { ArrowLeft, AlertCircle, TrendingUp, TrendingDown, Anchor, Plane, Ship, Calendar, Tag } from 'lucide-react'
+import { ArrowLeft, AlertCircle, TrendingUp, TrendingDown, Anchor, Plane, Ship, Calendar, Tag, RotateCcw } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { priceListApi } from '../services/priceList.service'
 import type { DiffResponse, DiffRow } from '../types'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
-import { SegmentedControl } from '../components/DashboardFilters'
+import { CategoryMultiCombobox } from '../components/DashboardFilters'
 import { EditEffectiveDateModal } from '../components/EditEffectiveDateModal'
 import { MarkingManagerModal } from '../components/MarkingManagerModal'
 
@@ -20,8 +20,10 @@ export function DetailPage() {
   const [data, setData] = useState<DiffResponse | null>(null)
   const [onlyChanged, setOnlyChanged] = useState(false)
   const [activeKpi, setActiveKpi] = useState<'all' | 'naik' | 'turun' | 'tetap' | 'baru'>('all')
+  const [sheetTypeFilter, setSheetTypeFilter] = useState<string>('')
   const [modeFilter, setModeFilter] = useState<string>('')
   const [branchFilter, setBranchFilter] = useState<string>('')
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -47,6 +49,13 @@ export function DetailPage() {
     loadData()
   }, [uploadId])
 
+  const sheetTypeOptions = useMemo(() => {
+    if (!data?.diff) return ['CS', 'MKT']
+    const set = new Set(data.diff.map((r) => r.sheetType).filter(Boolean))
+    const list = Array.from(set)
+    return list.length > 0 ? list : ['CS', 'MKT']
+  }, [data])
+
   const modeOptions = useMemo(() => {
     if (!data?.diff) return ['BY SEA', 'BY AIR']
     const set = new Set(data.diff.map((r) => r.mode).filter(Boolean))
@@ -59,15 +68,76 @@ export function DetailPage() {
     return set.size > 0 ? Array.from(set) : ['GZ', 'YW']
   }, [data])
 
-  let rows: DiffRow[] = data ? data.diff : []
+  const categoryOptions = useMemo(() => {
+    if (!data?.diff) return []
+    let list = data.diff
+    if (sheetTypeFilter) {
+      list = list.filter((r) => r.sheetType.toUpperCase() === sheetTypeFilter.toUpperCase())
+    }
+    if (modeFilter) {
+      list = list.filter((r) => r.mode.toUpperCase() === modeFilter.toUpperCase())
+    }
+    const set = new Set(list.map((r) => r.category).filter(Boolean))
+    return Array.from(set).sort((a, b) => a.localeCompare(b))
+  }, [data, sheetTypeFilter, modeFilter])
 
-  if (modeFilter) {
-    rows = rows.filter((r) => r.mode.toUpperCase() === modeFilter.toUpperCase())
+  // Auto-prune selected categories that no longer exist in available categoryOptions
+  useEffect(() => {
+    if (selectedCategories.length > 0 && categoryOptions.length > 0) {
+      const valid = selectedCategories.filter((c) => categoryOptions.includes(c))
+      if (valid.length !== selectedCategories.length) {
+        setSelectedCategories(valid)
+      }
+    }
+  }, [categoryOptions])
+
+  const isFiltered = Boolean(
+    sheetTypeFilter ||
+    modeFilter ||
+    branchFilter ||
+    selectedCategories.length > 0 ||
+    onlyChanged ||
+    activeKpi !== 'all'
+  )
+
+  const handleResetFilters = () => {
+    setSheetTypeFilter('')
+    setModeFilter('')
+    setBranchFilter('')
+    setSelectedCategories([])
+    setOnlyChanged(false)
+    setActiveKpi('all')
   }
 
-  if (branchFilter) {
-    rows = rows.filter((r) => r.branch.toUpperCase() === branchFilter.toUpperCase())
-  }
+  const baseFiltered = useMemo(() => {
+    if (!data?.diff) return []
+    let list = data.diff
+    if (sheetTypeFilter) {
+      list = list.filter((r) => r.sheetType.toUpperCase() === sheetTypeFilter.toUpperCase())
+    }
+    if (modeFilter) {
+      list = list.filter((r) => r.mode.toUpperCase() === modeFilter.toUpperCase())
+    }
+    if (branchFilter) {
+      list = list.filter((r) => r.branch.toUpperCase() === branchFilter.toUpperCase())
+    }
+    if (selectedCategories.length > 0) {
+      list = list.filter((r) => selectedCategories.includes(r.category))
+    }
+    return list
+  }, [data, sheetTypeFilter, modeFilter, branchFilter, selectedCategories])
+
+  const stats = useMemo(() => {
+    if (!data) return null
+    return {
+      naik: baseFiltered.filter((r) => r.delta !== null && r.delta > 0).length,
+      turun: baseFiltered.filter((r) => r.delta !== null && r.delta < 0).length,
+      tetap: baseFiltered.filter((r) => r.delta !== null && r.delta === 0).length,
+      baru: baseFiltered.filter((r) => r.delta === null).length,
+    }
+  }, [data, baseFiltered])
+
+  let rows: DiffRow[] = baseFiltered
 
   if (onlyChanged) {
     rows = rows.filter((r) => r.delta !== null && r.delta !== 0)
@@ -82,15 +152,6 @@ export function DetailPage() {
       return true
     })
   }
-
-  const stats = data
-    ? {
-        naik: data.diff.filter((r) => r.delta !== null && r.delta > 0).length,
-        turun: data.diff.filter((r) => r.delta !== null && r.delta < 0).length,
-        tetap: data.diff.filter((r) => r.delta !== null && r.delta === 0).length,
-        baru: data.diff.filter((r) => r.delta === null).length,
-      }
-    : null
 
   const uploadMarkings = data?.markings || []
 
@@ -197,55 +258,157 @@ export function DetailPage() {
         </div>
       )}
 
-      {/* Pill Groups Filter (Tipe Mode & Cabang Target) */}
+      {/* Filter Section (1 Baris Terpadu: CS/MKT, Mode, Cabang, Kategori) */}
       {!loading && data && (
-        <div className="card border border-[var(--color-border)] rounded-2xl p-4 sm:p-5 bg-[var(--color-surface)] shadow-xs space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <SegmentedControl
-              label="Tipe Mode"
-              value={modeFilter}
-              onChange={setModeFilter}
-              options={modeOptions}
-              getIcon={(o) => {
-                const v = o.toLowerCase()
-                if (v.includes('sea') || v.includes('laut')) return Anchor
-                if (v.includes('air') || v.includes('udara')) return Plane
-                return undefined
-              }}
-            />
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-[var(--color-secondary)] uppercase tracking-wider">
-                Cabang Target
+        <div className="card border border-[var(--color-border)] rounded-2xl p-3.5 sm:p-4 bg-[var(--color-surface)] shadow-xs">
+          <div className="flex flex-wrap items-end gap-3 sm:gap-4">
+            {/* Pill Group CS / MKT */}
+            <div className="space-y-1.5 shrink-0">
+              <label className="text-[0.72rem] tracking-[0.06em] font-semibold text-[var(--color-secondary)] uppercase">
+                Tipe (CS / MKT)
               </label>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSheetTypeFilter('')}
+                  className={`h-[38px] px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-colors cursor-pointer border flex items-center justify-center ${
+                    sheetTypeFilter === ''
+                      ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                      : 'bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40'
+                  }`}
+                >
+                  Semua
+                </button>
+                {sheetTypeOptions.map((st) => {
+                  const active = sheetTypeFilter.toUpperCase() === st.toUpperCase()
+                  return (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setSheetTypeFilter(active ? '' : st)}
+                      className={`h-[38px] px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-colors cursor-pointer border flex items-center justify-center ${
+                        active
+                          ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                          : 'bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Pill Group Tipe Mode */}
+            <div className="space-y-1.5 shrink-0">
+              <label className="text-[0.72rem] tracking-[0.06em] font-semibold text-[var(--color-secondary)] uppercase">
+                Mode
+              </label>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setModeFilter('')}
+                  className={`h-[38px] px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-colors cursor-pointer border flex items-center justify-center ${
+                    modeFilter === ''
+                      ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                      : 'bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40'
+                  }`}
+                >
+                  Semua
+                </button>
+                {modeOptions.map((m) => {
+                  const isSea = m.toLowerCase().includes('sea') || m.toLowerCase().includes('laut')
+                  const isAir = m.toLowerCase().includes('air') || m.toLowerCase().includes('udara')
+                  const active = modeFilter.toUpperCase() === m.toUpperCase()
+                  const shortLabel = isSea ? 'Sea' : isAir ? 'Air' : m
+                  return (
+                    <button
+                      key={m}
+                      type="button"
+                      onClick={() => setModeFilter(active ? '' : m)}
+                      className={`h-[38px] px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-colors cursor-pointer border flex items-center justify-center gap-1.5 ${
+                        active
+                          ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                          : 'bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40'
+                      }`}
+                      title={m}
+                    >
+                      {isSea && <Anchor size={13} className="shrink-0" />}
+                      {isAir && <Plane size={13} className="shrink-0" />}
+                      {shortLabel}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Pill Group Cabang Target */}
+            <div className="space-y-1.5 shrink-0">
+              <label className="text-[0.72rem] tracking-[0.06em] font-semibold text-[var(--color-secondary)] uppercase">
+                Cabang
+              </label>
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
                   onClick={() => setBranchFilter('')}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer border ${
+                  className={`h-[38px] px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-colors cursor-pointer border flex items-center justify-center ${
                     branchFilter === ''
-                      ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)]'
-                      : 'bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                      ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                      : 'bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40'
                   }`}
                 >
-                  Semua Cabang
+                  Semua
                 </button>
-                {branchOptions.map((b) => (
-                  <button
-                    key={b}
-                    type="button"
-                    onClick={() => setBranchFilter(b)}
-                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors cursor-pointer border ${
-                      branchFilter === b
-                        ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)]'
-                        : 'bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
-                    }`}
-                  >
-                    {b}
-                  </button>
-                ))}
+                {branchOptions.map((b) => {
+                  const active = branchFilter.toUpperCase() === b.toUpperCase()
+                  return (
+                    <button
+                      key={b}
+                      type="button"
+                      onClick={() => setBranchFilter(active ? '' : b)}
+                      className={`h-[38px] px-2.5 sm:px-3 text-xs font-semibold rounded-lg transition-colors cursor-pointer border flex items-center justify-center ${
+                        active
+                          ? 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs'
+                          : 'bg-transparent border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-primary)]/40'
+                      }`}
+                    >
+                      {b}
+                    </button>
+                  )
+                })}
               </div>
             </div>
+
+            {/* Dropdown Kategori Barang Multi Select */}
+            <div className="flex-1 min-w-[200px] max-w-sm">
+              <CategoryMultiCombobox
+                label="Kategori Barang"
+                value={selectedCategories}
+                onChange={setSelectedCategories}
+                options={categoryOptions}
+                searchPlaceholder="Pilih kategori..."
+                helperText={
+                  selectedCategories.length > 0
+                    ? `${selectedCategories.length} dipilih`
+                    : `${categoryOptions.length} kategori`
+                }
+              />
+            </div>
+
+            {/* Reset Filter Button */}
+            {isFiltered && (
+              <div className="shrink-0">
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="h-[38px] px-3 rounded-lg text-xs font-medium text-[var(--color-tertiary)] hover:bg-[var(--color-tertiary)]/10 border border-[var(--color-tertiary)]/30 transition-colors cursor-pointer flex items-center gap-1.5"
+                  title="Reset Semua Filter"
+                >
+                  <RotateCcw size={12} />
+                  <span>Reset</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -301,7 +464,7 @@ export function DetailPage() {
       <div className="bg-[var(--color-surface)] shadow-xs border border-[var(--color-border)] rounded-xl overflow-hidden">
         {/* Toolbar */}
         <div className="px-6 py-4 border-b border-[var(--color-border)] flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-[1rem] font-semibold text-[var(--color-primary)]">
               {loading ? (
                 <div className="h-5 w-32 rounded skeleton-shimmer" />
@@ -309,6 +472,11 @@ export function DetailPage() {
                 `${rows.length.toLocaleString('en-US')} baris harga`
               )}
             </h2>
+            {isFiltered && !loading && data?.diff && (
+              <span className="text-xs text-[var(--color-secondary)] font-normal">
+                (dari {data.diff.length.toLocaleString('en-US')} total)
+              </span>
+            )}
           </div>
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <div

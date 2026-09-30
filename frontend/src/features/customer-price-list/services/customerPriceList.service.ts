@@ -16,14 +16,18 @@ interface ListUploadsParams {
 }
 
 export const customerPriceListApi = {
+  // GET /api/customer-price-list/branches
+  getBranches: () =>
+    apiClient.get<{ data: { code: string; name: string }[] }>('/customer-price-list/branches'),
+
   // GET /api/customer-price-list/filters
   getGlobalFilters: () =>
     apiClient.get<{ data: CustomerPriceListFilters }>('/customer-price-list/filters'),
 
   // GET /api/customer-price-list
   // Daftar semua customer yang punya price list aktif
-  listCustomers: () =>
-    apiClient.get<{ data: CustomerPriceListUploadRow[] }>('/customer-price-list'),
+  listCustomers: (params?: { search?: string }) =>
+    apiClient.get<{ data: CustomerPriceListUploadRow[] }>('/customer-price-list', { params }),
 
   // GET /api/customer-price-list/lookup
   // Cari harga khusus customer pada tanggal tertentu

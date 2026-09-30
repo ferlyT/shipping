@@ -1,5 +1,6 @@
 import { prisma } from '../../config/database'
 import { Prisma } from '@prisma/client'
+import { logger } from '../../config/logger'
 import { buildPagination, parsePagination } from '../../utils/pagination'
 import { suggestionCache } from '../../utils/cache'
 import { getBlockedFinanceStatusMap } from '../shipments/shipments-status.resolver'
@@ -17,6 +18,8 @@ import type {
   CustomerDestination,
   CreateCustomerDestinationDto,
   OrderDeliveryItem,
+  DeliveryMonitoringResponse,
+  ConfirmDeliveryDto,
 } from './deliveryOrders.types'
 
 // Re-export types
@@ -108,6 +111,7 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
         fdJmlBeratSJ: true,
         fdEstimasi: true,
         fdSent: true,
+        fdLoad: true,
         fdSndDate: true,
         fdPrint: true,
         fdPrintDate: true,
@@ -1496,3 +1500,1052 @@ export async function getOrderDeliveryByListCode(listCode: string): Promise<Orde
     fdMobile: odRaw.fdMobile ? String(odRaw.fdMobile).trim() : null,
   }
 }
+
+/**
+ * Mengambil data monitoring surat jalan yang belum terkirim (fdSent = 0 atau NULL).
+ * Menghitung aging, status overdue, dan metrik KPI.
+ */
+export async function getDeliveryMonitoring(
+  query: Record<string, string | undefined>
+): Promise<DeliveryMonitoringResponse> {
+  const page = Math.max(1, Number(query.page || 1))
+  const limit = Math.max(1, Math.min(500, Number(query.limit || 50)))
+  const skip = (page - 1) * limit
+
+  // Default: dari awal tahun 2026 jika tidak dispesifikasikan
+  const startDate = query.startDate?.trim() || '2026-01-01'
+  const endDate = query.endDate?.trim() || ''
+
+  const search = query.search?.trim() || ''
+  const aging = query.aging?.trim() || 'all' // all, today, 1-2, 3-5, 6-7, >7
+  const status = query.status?.trim() || 'all' // all, overdue, ontime
+  const listType = query.listType?.trim() || 'all' // all, 1, 2
+  const branch = query.branch?.trim() || ''
+  const sortBy = query.sortBy?.trim() || 'fdSJDate'
+  const sortOrder = query.sortOrder?.trim()?.toUpperCase() === 'ASC' ? 'ASC' : 'DESC'
+
+  // Build SQL filters
+  const conditions: string[] = ['(d.fdSent = 0 OR d.fdSent IS NULL)']
+
+  if (startDate) {
+    const cleanStart = startDate.replace(/[^0-9-]/g, '')
+    if (cleanStart) conditions.push(`d.fdSJDate >= '${cleanStart}'`)
+  }
+
+  if (endDate) {
+    const cleanEnd = endDate.replace(/[^0-9-]/g, '')
+    if (cleanEnd) conditions.push(`d.fdSJDate <= '${cleanEnd} 23:59:59'`)
+  }
+
+  if (listType === '1' || listType === '2') {
+    conditions.push(`d.fdListType = ${listType}`)
+  }
+
+  if (branch) {
+    const cleanBranch = branch.replace(/[^a-zA-Z0-9]/g, '')
+    if (cleanBranch) {
+      conditions.push(`(d.fdSJNo LIKE '${cleanBranch}-%' OR d.fdBranchCode = '${cleanBranch}')`)
+    }
+  }
+
+  if (status === 'overdue') {
+    conditions.push(`d.fdEstimasi < CAST(GETDATE() AS DATE)`)
+  } else if (status === 'ontime') {
+    conditions.push(`(d.fdEstimasi IS NULL OR d.fdEstimasi >= CAST(GETDATE() AS DATE))`)
+  }
+
+  if (aging === 'today') {
+    conditions.push(`DATEDIFF(day, d.fdSJDate, GETDATE()) <= 0`)
+  } else if (aging === '1-2') {
+    conditions.push(`DATEDIFF(day, d.fdSJDate, GETDATE()) BETWEEN 1 AND 2`)
+  } else if (aging === '3-5') {
+    conditions.push(`DATEDIFF(day, d.fdSJDate, GETDATE()) BETWEEN 3 AND 5`)
+  } else if (aging === '6-7') {
+    conditions.push(`DATEDIFF(day, d.fdSJDate, GETDATE()) BETWEEN 6 AND 7`)
+  } else if (aging === '>7') {
+    conditions.push(`DATEDIFF(day, d.fdSJDate, GETDATE()) > 7`)
+  }
+
+  if (search) {
+    const cleanSearch = search.replace(/'/g, "''")
+    conditions.push(`(
+      d.fdSJNo LIKE '%${cleanSearch}%' OR 
+      d.fdCustNameSJ LIKE '%${cleanSearch}%' OR 
+      c.fdCustName LIKE '%${cleanSearch}%' OR 
+      d.fdCustCode LIKE '%${cleanSearch}%' OR 
+      d.fdListCode LIKE '%${cleanSearch}%' OR 
+      e.fdMarkingCode LIKE '%${cleanSearch}%' OR 
+      e.fdMarkingNo LIKE '%${cleanSearch}%' OR 
+      d.fdSupir LIKE '%${cleanSearch}%' OR 
+      d.fdCarID LIKE '%${cleanSearch}%' OR
+      d.fdDescr LIKE '%${cleanSearch}%'
+    )`)
+  }
+
+  const whereClause = conditions.join(' AND ')
+
+  // Valid sort column mapping
+  let orderColumn = 'd.fdSJDate'
+  if (sortBy === 'agingDays') orderColumn = 'DATEDIFF(day, d.fdSJDate, GETDATE())'
+  else if (sortBy === 'fdEstimasi') orderColumn = 'd.fdEstimasi'
+  else if (sortBy === 'fdSJNo') orderColumn = 'd.fdSJNo'
+  else if (sortBy === 'fdCustName') orderColumn = 'ISNULL(c.fdCustName, d.fdCustNameSJ)'
+  else if (sortBy === 'fdSupir') orderColumn = 'd.fdSupir'
+  else if (sortBy === 'fdJmlPackSJ') orderColumn = 'd.fdJmlPackSJ'
+  else if (sortBy === 'fdJmlBeratSJ') orderColumn = 'd.fdJmlBeratSJ'
+
+  // KPI query (dihitung berbasis rentang tanggal dasar dan cabang agar distributor ringkasan selalu utuh)
+  const baseKpiConditions: string[] = ['(d.fdSent = 0 OR d.fdSent IS NULL)']
+  if (startDate) {
+    const cleanStart = startDate.replace(/[^0-9-]/g, '')
+    if (cleanStart) baseKpiConditions.push(`d.fdSJDate >= '${cleanStart}'`)
+  }
+  if (endDate) {
+    const cleanEnd = endDate.replace(/[^0-9-]/g, '')
+    if (cleanEnd) baseKpiConditions.push(`d.fdSJDate <= '${cleanEnd} 23:59:59'`)
+  }
+  if (branch) {
+    const cleanBranch = branch.replace(/[^a-zA-Z0-9]/g, '')
+    if (cleanBranch) baseKpiConditions.push(`(d.fdSJNo LIKE '${cleanBranch}-%' OR d.fdBranchCode = '${cleanBranch}')`)
+  }
+  const baseKpiWhere = baseKpiConditions.join(' AND ')
+
+  const kpiSql = `
+    SELECT 
+      COUNT(*) as totalPending,
+      SUM(CASE WHEN d.fdEstimasi < CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END) as overdueCount,
+      SUM(CASE WHEN DATEDIFF(day, d.fdSJDate, GETDATE()) <= 0 THEN 1 ELSE 0 END) as todayCount,
+      SUM(CASE WHEN DATEDIFF(day, d.fdSJDate, GETDATE()) BETWEEN 1 AND 2 THEN 1 ELSE 0 END) as aging1to2Count,
+      SUM(CASE WHEN DATEDIFF(day, d.fdSJDate, GETDATE()) BETWEEN 3 AND 5 THEN 1 ELSE 0 END) as aging3to5Count,
+      SUM(CASE WHEN DATEDIFF(day, d.fdSJDate, GETDATE()) BETWEEN 6 AND 7 THEN 1 ELSE 0 END) as aging6to7Count,
+      SUM(CASE WHEN DATEDIFF(day, d.fdSJDate, GETDATE()) > 7 THEN 1 ELSE 0 END) as agingOver7Count,
+      SUM(CASE WHEN d.fdListType = 1 THEN 1 ELSE 0 END) as airCount,
+      SUM(CASE WHEN d.fdListType = 2 THEN 1 ELSE 0 END) as seaCount,
+      SUM(ISNULL(d.fdJmlPackSJ, 0)) as totalPackages,
+      SUM(ISNULL(d.fdJmlBeratSJ, 0)) as totalWeight
+    FROM tbDelivery d WITH (NOLOCK)
+    WHERE ${baseKpiWhere}
+  `
+
+  const countSql = `
+    SELECT COUNT(*) as filteredTotal
+    FROM tbDelivery d WITH (NOLOCK)
+    LEFT JOIN tbCustomers c WITH (NOLOCK) ON d.fdCustCode = c.fdCustCode
+    LEFT JOIN tbEntryList e WITH (NOLOCK) ON d.fdListCode = e.fdListCode
+    WHERE ${whereClause}
+  `
+
+  const dataSql = `
+    SELECT 
+      d.fdSJNo,
+      d.fdSJDate,
+      d.fdEstimasi,
+      d.fdSent,
+      d.fdSndDate,
+      RTRIM(d.fdCarID) AS fdCarID,
+      RTRIM(d.fdSupir) AS fdSupir,
+      RTRIM(d.fdTelpSupir) AS fdTelpSupir,
+      RTRIM(d.fdCustCode) AS fdCustCode,
+      RTRIM(ISNULL(c.fdCustName, d.fdCustNameSJ)) AS fdCustName,
+      RTRIM(d.fdCustNameSJ) AS fdCustNameSJ,
+      RTRIM(d.fdListCode) AS fdListCode,
+      d.fdListType,
+      ISNULL(d.fdJmlPackSJ, 0) AS fdJmlPackSJ,
+      RTRIM(d.fdSatuan) AS fdSatuan,
+      ISNULL(d.fdJmlBeratSJ, 0) AS fdJmlBeratSJ,
+      RTRIM(d.fdDescr) AS fdDescr,
+      d.fdPrint,
+      d.fdPrintDate,
+      d.fdGive,
+      d.fdGiveDate,
+      RTRIM(d.fdAddr) AS fdAddr,
+      RTRIM(d.fdCity) AS fdCity,
+      RTRIM(d.fdContact) AS fdContact,
+      RTRIM(d.fdHp) AS fdHp,
+      RTRIM(d.fdTelp) AS fdTelp,
+      RTRIM(e.fdMarkingCode) AS fdMarkingCode,
+      RTRIM(e.fdMarkingNo) AS fdMarkingNo,
+      ISNULL(e.fdM3, 0) AS fdM3,
+      DATEDIFF(day, d.fdSJDate, GETDATE()) AS agingDays,
+      CASE WHEN d.fdEstimasi < CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END AS isOverdue,
+      CASE WHEN d.fdEstimasi < CAST(GETDATE() AS DATE) THEN DATEDIFF(day, d.fdEstimasi, GETDATE()) ELSE 0 END AS overdueDays
+    FROM tbDelivery d WITH (NOLOCK)
+    LEFT JOIN tbCustomers c WITH (NOLOCK) ON d.fdCustCode = c.fdCustCode
+    LEFT JOIN tbEntryList e WITH (NOLOCK) ON d.fdListCode = e.fdListCode
+    WHERE ${whereClause}
+    ORDER BY ${orderColumn} ${sortOrder}, d.fdSJNo DESC
+    OFFSET ${skip} ROWS FETCH NEXT ${limit} ROWS ONLY
+  `
+
+  const [kpiRows, countRows, rows] = await Promise.all([
+    prisma.$queryRawUnsafe<any[]>(kpiSql).catch(() => [{}]),
+    prisma.$queryRawUnsafe<any[]>(countSql).catch(() => [{ filteredTotal: 0 }]),
+    prisma.$queryRawUnsafe<any[]>(dataSql).catch(() => []),
+  ])
+
+  const k = kpiRows[0] || {}
+  const total = Number(countRows[0]?.filteredTotal || 0)
+  const totalPages = Math.ceil(total / limit) || 1
+
+  return {
+    data: rows.map((r: any) => ({
+      fdSJNo: String(r.fdSJNo || '').trim(),
+      fdSJDate: r.fdSJDate ? new Date(r.fdSJDate).toISOString() : null,
+      fdEstimasi: r.fdEstimasi ? new Date(r.fdEstimasi).toISOString() : null,
+      fdSent: Number(r.fdSent || 0),
+      fdSndDate: r.fdSndDate ? new Date(r.fdSndDate).toISOString() : null,
+      fdCarID: String(r.fdCarID || '').trim(),
+      fdSupir: String(r.fdSupir || '').trim(),
+      fdTelpSupir: String(r.fdTelpSupir || '').trim(),
+      fdCustCode: String(r.fdCustCode || '').trim(),
+      fdCustName: String(r.fdCustName || r.fdCustNameSJ || '').trim(),
+      fdCustNameSJ: String(r.fdCustNameSJ || '').trim(),
+      fdListCode: String(r.fdListCode || '').trim(),
+      fdListType: r.fdListType !== null ? Number(r.fdListType) : null,
+      fdJmlPackSJ: Number(r.fdJmlPackSJ || 0),
+      fdSatuan: String(r.fdSatuan || '').trim(),
+      fdJmlBeratSJ: Number(r.fdJmlBeratSJ || 0),
+      fdDescr: String(r.fdDescr || '').trim(),
+      fdPrint: Number(r.fdPrint || 0),
+      fdPrintDate: r.fdPrintDate ? new Date(r.fdPrintDate).toISOString() : null,
+      fdGive: Number(r.fdGive || 0),
+      fdGiveDate: r.fdGiveDate ? new Date(r.fdGiveDate).toISOString() : null,
+      fdAddr: String(r.fdAddr || '').trim(),
+      fdCity: String(r.fdCity || '').trim(),
+      fdContact: String(r.fdContact || '').trim(),
+      fdHp: String(r.fdHp || '').trim(),
+      fdTelp: String(r.fdTelp || '').trim(),
+      fdMarkingCode: String(r.fdMarkingCode || '').trim(),
+      fdMarkingNo: String(r.fdMarkingNo || '').trim(),
+      fdM3: Number(r.fdM3 || 0),
+      agingDays: Number(r.agingDays || 0),
+      isOverdue: Boolean(r.isOverdue),
+      overdueDays: Number(r.overdueDays || 0),
+    })),
+    meta: {
+      page,
+      limit,
+      total,
+      totalPages,
+    },
+    kpis: {
+      totalPending: Number(k.totalPending || 0),
+      overdueCount: Number(k.overdueCount || 0),
+      todayCount: Number(k.todayCount || 0),
+      aging1to2Count: Number(k.aging1to2Count || 0),
+      aging3to5Count: Number(k.aging3to5Count || 0),
+      aging6to7Count: Number(k.aging6to7Count || 0),
+      agingOver7Count: Number(k.agingOver7Count || 0),
+      airCount: Number(k.airCount || 0),
+      seaCount: Number(k.seaCount || 0),
+      totalPackages: Number(k.totalPackages || 0),
+      totalWeight: Number(k.totalWeight || 0),
+    },
+  }
+}
+
+/**
+ * Konfirmasi pengiriman Surat Jalan (fdSent = 1).
+ * Mengadopsi form FoxPro frm_delivery_view_edit_2023.scx ("Isi Tanggal Konfirmasi").
+ * Mendukung single maupun batch update (beberapa SJ sekaligus dengan driver & armada yang sama).
+ */
+export async function confirmDelivery(dto: ConfirmDeliveryDto, user: any) {
+  if (!dto.sjNos || !Array.isArray(dto.sjNos) || dto.sjNos.length === 0) {
+    throw new Error('Pilih setidaknya 1 Surat Jalan untuk dikonfirmasi')
+  }
+  if (!dto.fdSndDate) {
+    throw new Error('Tanggal Kirim / Konfirmasi wajib diisi')
+  }
+  if (!dto.fdCarID || !dto.fdCarID.trim()) {
+    throw new Error('Plat Mobil wajib dipilih')
+  }
+  if (!dto.fdSupir || !dto.fdSupir.trim()) {
+    throw new Error('Nama Supir wajib diisi')
+  }
+
+  const sndDate = new Date(dto.fdSndDate)
+  const carId = dto.fdCarID.trim().slice(0, 10)
+  const supir = dto.fdSupir.trim().slice(0, 35)
+  const telpSupir = dto.fdTelpSupir ? dto.fdTelpSupir.trim().slice(0, 50) : null
+  const emp = (user?.username || 'SYSTEM').slice(0, 10)
+  const updatedBy = (user?.username || 'SYSTEM').slice(0, 25)
+
+  const updatedSjNos: string[] = []
+  const hasExpedition = Boolean(dto.expedition && dto.expedition.fdExpID && dto.expedition.fdExpID.trim())
+
+  // Loop per baris agar trigger AFTER UPDATE (tgr_update_tbDelivery) tereksekusi akurat untuk setiap ListCode
+  for (const sjNo of dto.sjNos) {
+    const cleanSjNo = sjNo.trim()
+    const rows = await prisma.$queryRaw<any[]>`
+      SELECT TOP 1 fdSJNo, fdListCode, fdSent FROM tbDelivery WITH (NOLOCK) WHERE fdSJNo = ${cleanSjNo}
+    `.catch(() => [])
+
+    if (!rows || rows.length === 0) continue
+
+    await prisma.$executeRaw`
+      UPDATE tbDelivery
+      SET 
+        fdSent = 1,
+        fdSndDate = ${sndDate},
+        fdCarID = ${carId},
+        fdSupir = ${supir},
+        fdTelpSupir = ${telpSupir},
+        fdUpdate = ${updatedBy},
+        fdLoad = GETDATE()
+      WHERE fdSJNo = ${cleanSjNo}
+    `
+    updatedSjNos.push(cleanSjNo)
+
+    if (hasExpedition && dto.expedition) {
+      const listCode = rows[0].fdListCode ? String(rows[0].fdListCode).trim() : ''
+      if (listCode) {
+        const expId = dto.expedition.fdExpID.trim().slice(0, 7)
+        const resiExp = (dto.expedition.fdResiExp || '').trim().slice(0, 200)
+        const currExp = (dto.expedition.fdCurrExp || 'RP.').trim().slice(0, 5)
+        const totalExp = Number(dto.expedition.fdTotalExp || 0)
+        const paid = Number(dto.expedition.fdPaid || 1) // 1 = Bayar Jkt, 2 = BT
+
+        await prisma.$executeRaw`
+          EXEC sp_tbExpIndo 
+            @fdListCode = ${listCode}, 
+            @fdExpID = ${expId}, 
+            @fdResiExp = ${resiExp}, 
+            @fdCurrExp = ${currExp}, 
+            @fdTotalExp = ${totalExp}, 
+            @fdEmp = ${emp}, 
+            @fdPaid = ${paid}
+        `.catch((err) => {
+          logger.error(`Error executing sp_tbExpIndo for SJ ${cleanSjNo}: ${err.message}`)
+        })
+      }
+    }
+  }
+
+  return {
+    success: true,
+    message: `Berhasil mengonfirmasi ${updatedSjNos.length} Surat Jalan`,
+    count: updatedSjNos.length,
+    updatedSjNos,
+  }
+}
+
+/**
+ * Mengambil daftar armada/kendaraan aktif dari tbKendaraan
+ */
+export async function getDeliveryVehicles() {
+  const rows = await prisma.$queryRaw<any[]>`
+    SELECT RTRIM(fdCarID) AS fdCarID, RTRIM(fdSupir) AS fdSupir, RTRIM(fdNotel) AS fdNotel, ISNULL(fdStatus, 1) AS fdStatus
+    FROM tbKendaraan WITH (NOLOCK)
+    WHERE ISNULL(fdStatus, 1) = 1
+    ORDER BY fdCarID ASC
+  `.catch(() => [])
+
+  return rows.map((v) => ({
+    fdCarID: String(v.fdCarID || '').trim(),
+    fdSupir: String(v.fdSupir || '').trim(),
+    fdNotel: String(v.fdNotel || '').trim(),
+    fdStatus: Number(v.fdStatus || 1),
+  }))
+}
+
+/**
+ * Mengambil master sub-carrier ekspedisi lokal dari tbExpedisi
+ */
+export async function getDeliveryExpeditions() {
+  const rows = await prisma.$queryRaw<any[]>`
+    SELECT RTRIM(fdExpID) AS fdExpID, RTRIM(fdExpName) AS fdExpName, RTRIM(fdExpAddr1) AS fdExpAddr1, RTRIM(fdTelp) AS fdTelp
+    FROM tbExpedisi WITH (NOLOCK)
+    ORDER BY fdExpName ASC
+  `.catch(() => [])
+
+  return rows.map((e) => ({
+    fdExpID: String(e.fdExpID || '').trim(),
+    fdExpName: String(e.fdExpName || '').trim(),
+    fdExpAddr1: String(e.fdExpAddr1 || '').trim(),
+    fdTelp: String(e.fdTelp || '').trim(),
+  }))
+}
+
+/**
+ * Mengambil data tren konfirmasi surat jalan terkirim (fdSent = 1) berdasarkan batch tbDeliveryConfirm
+ * serta mengagregasikannya dengan target estimasi kirim (tbDelivery.fdEstimasi)
+ */
+export async function getDeliveryConfirmTrends(days = 30) {
+  const safeDays = Math.min(Math.max(Number(days) || 30, 7), 90)
+
+  // 1. Kueri Komparasi Harian (Estimasi vs Realisasi Terkonfirmasi)
+  const dailyRows = await prisma.$queryRawUnsafe<any[]>(`
+    WITH Confirms AS (
+      SELECT 
+        fdTglPrintReport,
+        fdListType,
+        LAG(fdTglPrintReport) OVER (PARTITION BY fdListType ORDER BY fdTglPrintReport ASC) AS prevTglPrintReport
+      FROM tbDeliveryConfirm WITH (NOLOCK)
+      WHERE fdTglPrintReport >= DATEADD(day, -${safeDays}, GETDATE())
+    ),
+    BatchCounts AS (
+      SELECT 
+        CAST(c.fdTglPrintReport AS DATE) AS batchDate,
+        c.fdTglPrintReport,
+        c.fdListType,
+        COUNT(d.fdSJNo) AS total_sj,
+        ISNULL(SUM(d.fdJmlPackSJ), 0) AS total_pack,
+        ISNULL(SUM(d.fdJmlBeratSJ), 0) AS total_weight
+      FROM Confirms c
+      LEFT JOIN tbDelivery d WITH (NOLOCK) ON (d.fdListType = c.fdListType OR (d.fdListType NOT IN (1, 2) AND c.fdListType = 2))
+        AND d.fdSent = 1
+        AND d.fdKembali > ISNULL(c.prevTglPrintReport, DATEADD(hour, -24, c.fdTglPrintReport))
+        AND d.fdKembali <= c.fdTglPrintReport
+      GROUP BY CAST(c.fdTglPrintReport AS DATE), c.fdTglPrintReport, c.fdListType
+    ),
+    DailyRealization AS (
+      SELECT 
+        batchDate,
+        SUM(CASE WHEN fdListType = 1 THEN total_sj ELSE 0 END) AS realSjUdara,
+        SUM(CASE WHEN fdListType = 2 THEN total_sj ELSE 0 END) AS realSjLaut,
+        SUM(total_sj) AS totalRealSj,
+        SUM(CASE WHEN fdListType = 1 THEN total_pack ELSE 0 END) AS realPackUdara,
+        SUM(CASE WHEN fdListType = 2 THEN total_pack ELSE 0 END) AS realPackLaut,
+        SUM(total_pack) AS totalRealPack,
+        SUM(CASE WHEN fdListType = 1 THEN total_weight ELSE 0 END) AS realWeightUdara,
+        SUM(CASE WHEN fdListType = 2 THEN total_weight ELSE 0 END) AS realWeightLaut,
+        SUM(total_weight) AS totalRealWeight,
+        COUNT(DISTINCT fdTglPrintReport) AS batchCount
+      FROM BatchCounts
+      GROUP BY batchDate
+    ),
+    DailyEstimation AS (
+      SELECT 
+        CAST(fdEstimasi AS DATE) AS estimasiDate,
+        SUM(CASE WHEN fdListType = 1 THEN 1 ELSE 0 END) AS estSjUdara,
+        SUM(CASE WHEN fdListType = 2 THEN 1 ELSE 0 END) AS estSjLaut,
+        COUNT(*) AS totalEstSj,
+        SUM(CASE WHEN fdListType = 1 THEN ISNULL(fdJmlPackSJ, 0) ELSE 0 END) AS estPackUdara,
+        SUM(CASE WHEN fdListType = 2 THEN ISNULL(fdJmlPackSJ, 0) ELSE 0 END) AS estPackLaut,
+        SUM(ISNULL(fdJmlPackSJ, 0)) AS totalEstPack,
+        SUM(CASE WHEN fdListType = 1 THEN ISNULL(fdJmlBeratSJ, 0) ELSE 0 END) AS estWeightUdara,
+        SUM(CASE WHEN fdListType = 2 THEN ISNULL(fdJmlBeratSJ, 0) ELSE 0 END) AS estWeightLaut,
+        SUM(ISNULL(fdJmlBeratSJ, 0)) AS totalEstWeight,
+        -- Analisis Pending H+1 (fdSent = fdEstimasi + 1 itu max)
+        SUM(CASE 
+          WHEN (fdSent = 0 OR fdSent IS NULL) 
+           AND CAST(GETDATE() AS DATE) > DATEADD(day, 1, CAST(fdEstimasi AS DATE)) 
+          THEN 1 ELSE 0 
+        END) AS pendingOverdueSj,
+        SUM(CASE 
+          WHEN (fdSent = 0 OR fdSent IS NULL) 
+           AND CAST(GETDATE() AS DATE) <= DATEADD(day, 1, CAST(fdEstimasi AS DATE)) 
+          THEN 1 ELSE 0 
+        END) AS pendingToleransiSj,
+        SUM(CASE WHEN fdSent = 0 OR fdSent IS NULL THEN 1 ELSE 0 END) AS pendingSjTotal,
+        SUM(CASE 
+          WHEN fdSent = 1 
+           AND (COALESCE(fdLoad, fdSndDate) IS NULL OR CAST(COALESCE(fdLoad, fdSndDate) AS DATE) <= DATEADD(day, 1, CAST(fdEstimasi AS DATE))) 
+          THEN 1 ELSE 0 
+        END) AS sentOnTimeSj,
+        SUM(CASE 
+          WHEN fdSent = 1 
+           AND CAST(COALESCE(fdLoad, fdSndDate) AS DATE) > DATEADD(day, 1, CAST(fdEstimasi AS DATE)) 
+          THEN 1 ELSE 0 
+        END) AS sentLateSj,
+        SUM(CASE 
+          WHEN (fdSent = 0 OR fdSent IS NULL) 
+           AND CAST(GETDATE() AS DATE) > DATEADD(day, 1, CAST(fdEstimasi AS DATE)) 
+          THEN ISNULL(fdJmlPackSJ, 0) ELSE 0 
+        END) AS pendingOverduePack,
+        SUM(CASE 
+          WHEN (fdSent = 0 OR fdSent IS NULL) 
+           AND CAST(GETDATE() AS DATE) > DATEADD(day, 1, CAST(fdEstimasi AS DATE)) 
+          THEN ISNULL(fdJmlBeratSJ, 0) ELSE 0 
+        END) AS pendingOverdueWeight
+      FROM tbDelivery WITH (NOLOCK)
+      WHERE fdEstimasi >= DATEADD(day, -${safeDays}, GETDATE())
+        AND fdEstimasi <= CAST(GETDATE() AS DATE)
+      GROUP BY CAST(fdEstimasi AS DATE)
+    )
+    SELECT 
+      COALESCE(r.batchDate, e.estimasiDate) AS logDate,
+      ISNULL(r.realSjUdara, 0) AS realSjUdara,
+      ISNULL(r.realSjLaut, 0) AS realSjLaut,
+      ISNULL(r.totalRealSj, 0) AS totalRealSj,
+      ISNULL(r.realPackUdara, 0) AS realPackUdara,
+      ISNULL(r.realPackLaut, 0) AS realPackLaut,
+      ISNULL(r.totalRealPack, 0) AS totalRealPack,
+      ISNULL(r.realWeightUdara, 0) AS realWeightUdara,
+      ISNULL(r.realWeightLaut, 0) AS realWeightLaut,
+      ISNULL(r.totalRealWeight, 0) AS totalRealWeight,
+      ISNULL(r.batchCount, 0) AS batchCount,
+      ISNULL(e.estSjUdara, 0) AS estSjUdara,
+      ISNULL(e.estSjLaut, 0) AS estSjLaut,
+      ISNULL(e.totalEstSj, 0) AS totalEstSj,
+      ISNULL(e.estPackUdara, 0) AS estPackUdara,
+      ISNULL(e.estPackLaut, 0) AS estPackLaut,
+      ISNULL(e.totalEstPack, 0) AS totalEstPack,
+      ISNULL(e.estWeightUdara, 0) AS estWeightUdara,
+      ISNULL(e.estWeightLaut, 0) AS estWeightLaut,
+      ISNULL(e.totalEstWeight, 0) AS totalEstWeight,
+      ISNULL(e.pendingOverdueSj, 0) AS pendingOverdueSj,
+      ISNULL(e.pendingToleransiSj, 0) AS pendingToleransiSj,
+      ISNULL(e.pendingSjTotal, 0) AS pendingSjTotal,
+      ISNULL(e.sentOnTimeSj, 0) AS sentOnTimeSj,
+      ISNULL(e.sentLateSj, 0) AS sentLateSj,
+      ISNULL(e.pendingOverduePack, 0) AS pendingOverduePack,
+      ISNULL(e.pendingOverdueWeight, 0) AS pendingOverdueWeight
+    FROM DailyRealization r
+    FULL OUTER JOIN DailyEstimation e ON r.batchDate = e.estimasiDate
+    ORDER BY logDate ASC
+  `).catch((err) => {
+    logger.error(`Error querying getDeliveryConfirmTrends daily: ${err.message}`)
+    return [] as any[]
+  })
+
+  // 2. Kueri Rincian per Batch Cetak FoxPro
+  const batchRows = await prisma.$queryRawUnsafe<any[]>(`
+    WITH Confirms AS (
+      SELECT 
+        fdTglPrintReport,
+        fdListType,
+        LAG(fdTglPrintReport) OVER (PARTITION BY fdListType ORDER BY fdTglPrintReport ASC) AS prevTglPrintReport
+      FROM tbDeliveryConfirm WITH (NOLOCK)
+      WHERE fdTglPrintReport >= DATEADD(day, -${safeDays}, GETDATE())
+    ),
+    BatchCounts AS (
+      SELECT 
+        c.fdTglPrintReport,
+        c.fdListType,
+        COUNT(d.fdSJNo) AS total_sj,
+        ISNULL(SUM(d.fdJmlPackSJ), 0) AS total_pack,
+        ISNULL(SUM(d.fdJmlBeratSJ), 0) AS total_weight
+      FROM Confirms c
+      LEFT JOIN tbDelivery d WITH (NOLOCK) ON (d.fdListType = c.fdListType OR (d.fdListType NOT IN (1, 2) AND c.fdListType = 2))
+        AND d.fdSent = 1
+        AND d.fdKembali > ISNULL(c.prevTglPrintReport, DATEADD(hour, -24, c.fdTglPrintReport))
+        AND d.fdKembali <= c.fdTglPrintReport
+      GROUP BY c.fdTglPrintReport, c.fdListType
+    )
+    SELECT 
+      CAST(fdTglPrintReport AS DATE) AS batchDate,
+      CASE WHEN DATEPART(hour, fdTglPrintReport) < 12 THEN 'Pagi' ELSE 'Sore' END AS batchSession,
+      MAX(fdTglPrintReport) AS batchTimestamp,
+      CONVERT(VARCHAR(5), MAX(fdTglPrintReport), 108) AS batchTime,
+      SUM(CASE WHEN fdListType = 1 THEN total_sj ELSE 0 END) AS sjUdara,
+      SUM(CASE WHEN fdListType = 2 THEN total_sj ELSE 0 END) AS sjLaut,
+      SUM(total_sj) AS totalSj,
+      SUM(CASE WHEN fdListType = 1 THEN total_pack ELSE 0 END) AS packUdara,
+      SUM(CASE WHEN fdListType = 2 THEN total_pack ELSE 0 END) AS packLaut,
+      SUM(total_pack) AS totalPack,
+      SUM(CASE WHEN fdListType = 1 THEN total_weight ELSE 0 END) AS weightUdara,
+      SUM(CASE WHEN fdListType = 2 THEN total_weight ELSE 0 END) AS weightLaut,
+      SUM(total_weight) AS totalWeight
+    FROM BatchCounts
+    GROUP BY CAST(fdTglPrintReport AS DATE), CASE WHEN DATEPART(hour, fdTglPrintReport) < 12 THEN 'Pagi' ELSE 'Sore' END
+    ORDER BY batchDate ASC, batchSession ASC
+  `).catch((err) => {
+    logger.error(`Error querying getDeliveryConfirmTrends batch: ${err.message}`)
+    return [] as any[]
+  })
+
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des']
+  const dayNames = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
+
+  // Format batches terlebih dahulu agar dapat diasosiasikan ke perbandingan harian
+  const batches = batchRows.map((r) => {
+    const d = new Date(r.batchDate)
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = monthNames[d.getMonth()]
+    const session = (r.batchSession || 'Pagi') as 'Pagi' | 'Sore'
+    const batchTime = r.batchTime || (r.batchTimestamp ? new Date(r.batchTimestamp).toISOString().slice(11, 16) : '')
+    const label = `${day} ${month} (${session}${batchTime ? ` ${batchTime}` : ''})`
+
+    return {
+      batchDate: r.batchDate ? new Date(r.batchDate).toISOString().slice(0, 10) : '',
+      batchSession: session,
+      batchTime,
+      batchLabel: label,
+      batchTimestamp: r.batchTimestamp ? new Date(r.batchTimestamp).toISOString() : '',
+      sjUdara: Number(r.sjUdara || 0),
+      sjLaut: Number(r.sjLaut || 0),
+      totalSj: Number(r.totalSj || 0),
+      packUdara: Number(r.packUdara || 0),
+      packLaut: Number(r.packLaut || 0),
+      totalPack: Number(r.totalPack || 0),
+      weightUdara: Number(r.weightUdara || 0),
+      weightLaut: Number(r.weightLaut || 0),
+      totalWeight: Number(r.totalWeight || 0),
+    }
+  })
+
+  // Format Daily Comparison dengan rincian batch & jam terintegrasi
+  const dailyComparison = dailyRows.map((r) => {
+    const d = new Date(r.logDate)
+    const day = String(d.getDate()).padStart(2, '0')
+    const month = monthNames[d.getMonth()]
+    const dayName = dayNames[d.getDay()]
+    const displayDate = `${day} ${month}`
+
+    const totalRealSj = Number(r.totalRealSj || 0)
+    const totalEstSj = Number(r.totalEstSj || 0)
+    const achievementPct = totalEstSj > 0 ? Math.round((totalRealSj / totalEstSj) * 1000) / 10 : 0
+    const diffSj = totalRealSj - totalEstSj
+    const dateStr = r.logDate ? new Date(r.logDate).toISOString().slice(0, 10) : ''
+    const dateBatches = batches.filter((b) => b.batchDate === dateStr)
+
+    return {
+      date: dateStr,
+      displayDate,
+      dayName,
+      realSjUdara: Number(r.realSjUdara || 0),
+      realSjLaut: Number(r.realSjLaut || 0),
+      totalRealSj,
+      realPackUdara: Number(r.realPackUdara || 0),
+      realPackLaut: Number(r.realPackLaut || 0),
+      totalRealPack: Number(r.totalRealPack || 0),
+      realWeightUdara: Number(r.realWeightUdara || 0),
+      realWeightLaut: Number(r.realWeightLaut || 0),
+      totalRealWeight: Number(r.totalRealWeight || 0),
+      batchCount: Number(r.batchCount || 0),
+      batches: dateBatches,
+      estSjUdara: Number(r.estSjUdara || 0),
+      estSjLaut: Number(r.estSjLaut || 0),
+      totalEstSj,
+      estPackUdara: Number(r.estPackUdara || 0),
+      estPackLaut: Number(r.estPackLaut || 0),
+      totalEstPack: Number(r.totalEstPack || 0),
+      estWeightUdara: Number(r.estWeightUdara || 0),
+      estWeightLaut: Number(r.estWeightLaut || 0),
+      totalEstWeight: Number(r.totalEstWeight || 0),
+      achievementPct,
+      diffSj,
+      pendingOverdueSj: Number(r.pendingOverdueSj || 0),
+      pendingToleransiSj: Number(r.pendingToleransiSj || 0),
+      pendingSjTotal: Number(r.pendingSjTotal || 0),
+      sentOnTimeSj: Number(r.sentOnTimeSj || 0),
+      sentLateSj: Number(r.sentLateSj || 0),
+      pendingOverduePack: Number(r.pendingOverduePack || 0),
+      pendingOverdueWeight: Number(r.pendingOverdueWeight || 0),
+    }
+  })
+
+  // Calculate summary metrics
+  const totalBatches = batches.length
+  const totalSjSent = batches.reduce((s, b) => s + b.totalSj, 0)
+  const totalSjUdara = batches.reduce((s, b) => s + b.sjUdara, 0)
+  const totalSjLaut = batches.reduce((s, b) => s + b.sjLaut, 0)
+  const totalColySent = batches.reduce((s, b) => s + b.totalPack, 0)
+  const totalWeightSent = Math.round(batches.reduce((s, b) => s + b.totalWeight, 0) * 10) / 10
+  const avgSjPerBatch = totalBatches > 0 ? Math.round((totalSjSent / totalBatches) * 10) / 10 : 0
+
+  const totalSjEstimated = dailyComparison.reduce((s, d) => s + d.totalEstSj, 0)
+  const totalEstUdara = dailyComparison.reduce((s, d) => s + d.estSjUdara, 0)
+  const totalEstLaut = dailyComparison.reduce((s, d) => s + d.estSjLaut, 0)
+  const totalEstColy = dailyComparison.reduce((s, d) => s + d.totalEstPack, 0)
+  const totalEstWeight = Math.round(dailyComparison.reduce((s, d) => s + d.totalEstWeight, 0) * 10) / 10
+  const overallAchievementPct = totalSjEstimated > 0 ? Math.round((totalSjSent / totalSjEstimated) * 1000) / 10 : 0
+  const diffTotalSj = totalSjSent - totalSjEstimated
+
+  // Pending Overdue Global (> fdEstimasi + 1)
+  const totalPendingOverdueSj = dailyComparison.reduce((s, d) => s + d.pendingOverdueSj, 0)
+  const totalPendingSj = dailyComparison.reduce((s, d) => s + d.pendingSjTotal, 0)
+
+  return {
+    days: safeDays,
+    summary: {
+      totalBatches,
+      totalSjSent,
+      totalSjUdara,
+      totalSjLaut,
+      totalColySent,
+      totalWeightSent,
+      avgSjPerBatch,
+      totalSjEstimated,
+      totalEstUdara,
+      totalEstLaut,
+      totalEstColy,
+      totalEstWeight,
+      overallAchievementPct,
+      diffTotalSj,
+      totalPendingOverdueSj,
+      totalPendingSj,
+    },
+    batches,
+    dailyComparison,
+  }
+}
+
+/**
+ * Mengambil daftar surat jalan lengkap dari batch tbDeliveryConfirm tertentu
+ * Menggunakan Stored Procedure resmi rpt_tbDelivery2023 @ListType, @date1, @date2
+ * dengan detail moda (Udara/Laut), cabang pengirim, armada supir, dan koli/berat
+ */
+export async function getDeliveryConfirmBatchDetail(date: string, session: string) {
+  if (!date) throw new Error('Parameter date diperlukan')
+  const cleanDate = date.replace(/[^0-9-]/g, '')
+  const cleanSession = session === 'Pagi' ? 'Pagi' : 'Sore'
+
+  // 1. Dapatkan window waktu cetak dari tbDeliveryConfirm
+  const batchConfirms: any[] = await prisma.$queryRawUnsafe(`
+    WITH Confirms AS (
+      SELECT 
+        fdTglPrintReport,
+        CONVERT(VARCHAR(19), fdTglPrintReport, 120) AS strReport,
+        CONVERT(VARCHAR(5), fdTglPrintReport, 108) AS batchTime,
+        fdListType,
+        LAG(CONVERT(VARCHAR(19), fdTglPrintReport, 120)) OVER (
+          PARTITION BY fdListType ORDER BY fdTglPrintReport ASC
+        ) AS prevStrReport
+      FROM tbDeliveryConfirm WITH (NOLOCK)
+      WHERE fdTglPrintReport >= DATEADD(day, -7, '${cleanDate}')
+        AND fdTglPrintReport <= DATEADD(day, 1, '${cleanDate}')
+    )
+    SELECT *
+    FROM Confirms
+    WHERE CAST(fdTglPrintReport AS DATE) = '${cleanDate}'
+      AND (CASE WHEN DATEPART(hour, fdTglPrintReport) < 12 THEN 'Pagi' ELSE 'Sore' END) = '${cleanSession}'
+    ORDER BY fdListType ASC
+  `).catch((err) => {
+    logger.error(`Error querying batchConfirms: ${err.message}`)
+    return [] as any[]
+  })
+
+  let allRows: any[] = []
+  let batchTime = ''
+
+  if (batchConfirms.length > 0) {
+    for (const c of batchConfirms) {
+      if (c.batchTime) batchTime = c.batchTime
+      const date1 = c.prevStrReport || `${cleanDate} 00:00:00`
+      const date2 = c.strReport
+      try {
+        const rows: any[] = await prisma.$queryRawUnsafe(
+          `EXEC rpt_tbDelivery2023 ${c.fdListType}, '${date1}', '${date2}'`
+        )
+        if (Array.isArray(rows)) {
+          allRows.push(...rows)
+        }
+      } catch (err: any) {
+        logger.error(`Error executing rpt_tbDelivery2023 for listType ${c.fdListType}: ${err.message}`)
+      }
+    }
+  } else {
+    // Fallback jika tidak ada record di tbDeliveryConfirm
+    const startHour = cleanSession === 'Pagi' ? '00:00:00' : '12:00:00'
+    const endHour = cleanSession === 'Pagi' ? '12:00:00' : '23:59:59'
+    const fallbackRows: any[] = await prisma.$queryRawUnsafe(`
+      SELECT 
+        d.fdSJNo,
+        d.fdSJDate,
+        d.fdEstimasi,
+        d.fdSent,
+        d.fdSndDate,
+        d.fdKembali,
+        RTRIM(d.fdCarID) AS fdCarID,
+        RTRIM(d.fdSupir) AS fdSupir,
+        RTRIM(d.fdTelpSupir) AS fdTelpSupir,
+        RTRIM(d.fdCustCode) AS fdCustCode,
+        RTRIM(ISNULL(c_master.fdCustName, d.fdCustNameSJ)) AS fdCustName,
+        RTRIM(d.fdListCode) AS fdListCode,
+        d.fdListType,
+        ISNULL(d.fdJmlPackSJ, 0) AS fdJmlPackSJ,
+        RTRIM(d.fdSatuan) AS fdSatuan,
+        ISNULL(d.fdJmlBeratSJ, 0) AS fdJmlBeratSJ,
+        RTRIM(d.fdDescr) AS fdDescr,
+        RTRIM(d.fdAddr) AS fdAddr1,
+        RTRIM(e.fdMarkingCode) AS fdMarkingCode,
+        RTRIM(e.fdMarkingNo) AS fdMarkingNo,
+        ISNULL(NULLIF(RTRIM(b.fdBranchName), ''), 'GUANGZHOU') AS fdBranchName
+      FROM tbDelivery d WITH (NOLOCK)
+      LEFT JOIN tbCustomers c_master WITH (NOLOCK) ON d.fdCustCode = c_master.fdCustCode
+      LEFT JOIN tbEntryList e WITH (NOLOCK) ON d.fdListCode = e.fdListCode
+      LEFT JOIN tbCabang b WITH (NOLOCK) ON b.fdBranchCode = e.fdBranchCode
+      WHERE d.fdSent = 1
+        AND d.fdKembali >= '${cleanDate} ${startHour}'
+        AND d.fdKembali <= '${cleanDate} ${endHour}'
+      ORDER BY d.fdListType ASC, d.fdSJNo ASC
+    `).catch(() => [])
+    allRows = fallbackRows
+  }
+
+  // 2. Ambil informasi supir & estimasi dari tbDelivery untuk setiap SJ
+  const driverMap = new Map<string, any>()
+  if (allRows.length > 0) {
+    const sjNos = allRows.map((r) => `'${String(r.fdSJNo).replace(/'/g, "''")}'`)
+    const chunkSize = 200
+    for (let i = 0; i < sjNos.length; i += chunkSize) {
+      const chunk = sjNos.slice(i, i + chunkSize).join(',')
+      try {
+        const drivers: any[] = await prisma.$queryRawUnsafe(`
+          SELECT 
+            fdSJNo,
+            RTRIM(fdSupir) AS fdSupir,
+            RTRIM(fdTelpSupir) AS fdTelpSupir,
+            RTRIM(fdSatuan) AS fdSatuan,
+            RTRIM(fdAddr) AS fdAddr,
+            RTRIM(fdCity) AS fdCity,
+            fdEstimasi,
+            fdKembali
+          FROM tbDelivery WITH (NOLOCK)
+          WHERE fdSJNo IN (${chunk})
+        `)
+        for (const d of drivers) {
+          driverMap.set(d.fdSJNo, d)
+        }
+      } catch (err: any) {
+        logger.error(`Error querying driver info chunk: ${err.message}`)
+      }
+    }
+  }
+
+  // 3. Mapping data hasil SP dan data supir
+  const items = allRows.map((r) => {
+    const driver = driverMap.get(r.fdSJNo) || {}
+    const listType = Number(r.fdListType || 0)
+    const moda: 'Udara' | 'Laut' = listType === 1 ? 'Udara' : 'Laut'
+    const branchName = r.fdBranchName?.trim() || 'GUANGZHOU'
+    const sjParts = (r.fdSJNo || '').split('-')
+    const branchCode = sjParts.length > 1 ? sjParts[0].trim() : 'GZ'
+
+    return {
+      fdSJNo: r.fdSJNo ? String(r.fdSJNo).trim() : '',
+      fdSJDate: r.fdSJDate ? new Date(r.fdSJDate).toISOString().slice(0, 10) : '',
+      fdEstimasi: driver.fdEstimasi
+        ? new Date(driver.fdEstimasi).toISOString().slice(0, 10)
+        : (r.fdEstimasi ? new Date(r.fdEstimasi).toISOString().slice(0, 10) : ''),
+      fdSent: Number(r.fdSent || 1),
+      fdSndDate: r.fdSndDate ? new Date(r.fdSndDate).toISOString() : '',
+      fdKembali: driver.fdKembali
+        ? new Date(driver.fdKembali).toISOString()
+        : (r.fdKembali ? new Date(r.fdKembali).toISOString() : ''),
+      fdCarID: r.fdCarID?.trim() || '-',
+      fdSupir: driver.fdSupir || r.fdSupir || '-',
+      fdTelpSupir: driver.fdTelpSupir || r.fdTelpSupir || '',
+      fdCustCode: r.fdCustCode?.trim() || '',
+      fdCustName: r.fdCustName?.trim() || '-',
+      fdListCode: r.fdListCode?.trim() || '',
+      fdListType: listType,
+      moda,
+      fdJmlPackSJ: Number(r.fdJmlPackSJ || 0),
+      fdSatuan: driver.fdSatuan || r.fdSatuan || 'COLY',
+      fdJmlBeratSJ: Number(Number(r.fdJmlBeratSJ || 0).toFixed(2)),
+      fdDescr: r.fdDescr?.trim() || '',
+      fdAddr: driver.fdAddr || r.fdAddr1?.trim() || r.fdAddr?.trim() || '',
+      fdCity: driver.fdCity || r.fdCity?.trim() || '',
+      fdMarkingCode: r.fdMarkingCode?.trim() || '-',
+      fdMarkingNo: r.fdMarkingNo?.trim() || '',
+      fdM3: Number(r.fdM3 || 0),
+      branchCode,
+      branchName,
+      batchTime,
+    }
+  })
+
+  const totalSj = items.length
+  const totalPack = items.reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0)
+  const totalWeight = Math.round(items.reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10
+  const sjUdara = items.filter((i) => i.moda === 'Udara').length
+  const sjLaut = items.filter((i) => i.moda === 'Laut').length
+  const packUdara = items.filter((i) => i.moda === 'Udara').reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0)
+  const packLaut = items.filter((i) => i.moda === 'Laut').reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0)
+  const weightUdara = Math.round(items.filter((i) => i.moda === 'Udara').reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10
+  const weightLaut = Math.round(items.filter((i) => i.moda === 'Laut').reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10
+
+  return {
+    batchDate: cleanDate,
+    batchSession: cleanSession,
+    batchTime,
+    totalSj,
+    totalPack,
+    totalWeight,
+    sjUdara,
+    sjLaut,
+    packUdara,
+    packLaut,
+    weightUdara,
+    weightLaut,
+    items,
+  }
+}
+
+/**
+ * Mengambil daftar rincian Surat Jalan berdasarkan tanggal fdEstimasi tertentu
+ * Mengidentifikasi status pengiriman dengan toleransi H+1:
+ * "fdSent = fdEstimasi + 1 itu max. Apabila lebih berarti pending."
+ */
+export async function getDeliveryEstimasiDetails(
+  date: string,
+  filterType: 'all' | 'overdue' | 'pending' | 'sent' = 'all'
+) {
+  if (!date) throw new Error('Parameter date diperlukan')
+  const cleanDate = date.replace(/[^0-9-]/g, '')
+
+  let statusFilterClause = ''
+  if (filterType === 'overdue') {
+    statusFilterClause = `AND (d.fdSent = 0 OR d.fdSent IS NULL) AND CAST(GETDATE() AS DATE) > DATEADD(day, 1, CAST(d.fdEstimasi AS DATE))`
+  } else if (filterType === 'pending') {
+    statusFilterClause = `AND (d.fdSent = 0 OR d.fdSent IS NULL)`
+  } else if (filterType === 'sent') {
+    statusFilterClause = `AND d.fdSent = 1`
+  }
+
+  const rows: any[] = await prisma.$queryRawUnsafe(`
+    SELECT 
+      d.fdSJNo,
+      CONVERT(varchar(10), d.fdSJDate, 120) AS fdSJDate,
+      CONVERT(varchar(10), d.fdEstimasi, 120) AS fdEstimasi,
+      CONVERT(varchar(10), DATEADD(day, 1, d.fdEstimasi), 120) AS maxToleranceDate,
+      ISNULL(d.fdSent, 0) AS fdSent,
+      CONVERT(varchar(19), d.fdLoad, 120) AS fdLoad,
+      CONVERT(varchar(19), d.fdSndDate, 120) AS fdSndDate,
+      CONVERT(varchar(19), d.fdKembali, 120) AS fdKembali,
+      d.fdCustCode,
+      RTRIM(ISNULL(c.fdCustName, d.fdCustNameSJ)) AS custName,
+      RTRIM(d.fdListCode) AS fdListCode,
+      RTRIM(COALESCE(el.fdMarkingCode, d.fdSJNo)) AS fdMarkingCode,
+      RTRIM(el.fdMarkingNo) AS fdMarkingNo,
+      ISNULL(d.fdJmlPackSJ, 0) AS fdJmlPackSJ,
+      RTRIM(ISNULL(d.fdSatuan, 'COLI')) AS fdSatuan,
+      ISNULL(d.fdJmlBeratSJ, 0) AS fdJmlBeratSJ,
+      RTRIM(d.fdCarID) AS fdCarID,
+      RTRIM(d.fdSupir) AS fdSupir,
+      RTRIM(d.fdTelpSupir) AS fdTelpSupir,
+      ISNULL(d.fdListType, 2) AS fdListType,
+      DATEDIFF(day, DATEADD(day, 1, d.fdEstimasi), 
+        CASE 
+          WHEN d.fdSent = 1 THEN CAST(COALESCE(d.fdLoad, d.fdSndDate) AS DATE) 
+          ELSE CAST(GETDATE() AS DATE) 
+        END
+      ) AS overdueDays,
+      CASE 
+        WHEN (d.fdSent = 0 OR d.fdSent IS NULL) AND CAST(GETDATE() AS DATE) > DATEADD(day, 1, CAST(d.fdEstimasi AS DATE))
+          THEN 1
+        WHEN d.fdSent = 1 AND CAST(COALESCE(d.fdLoad, d.fdSndDate) AS DATE) > DATEADD(day, 1, CAST(d.fdEstimasi AS DATE))
+          THEN 1
+        ELSE 0
+      END AS isOverdueHPlus1,
+      CASE
+        WHEN (d.fdSent = 0 OR d.fdSent IS NULL) AND CAST(GETDATE() AS DATE) > DATEADD(day, 1, CAST(d.fdEstimasi AS DATE))
+          THEN 'PENDING_OVERDUE'
+        WHEN (d.fdSent = 0 OR d.fdSent IS NULL)
+          THEN 'PENDING_TOLERANCE'
+        WHEN d.fdSent = 1 AND (COALESCE(d.fdLoad, d.fdSndDate) IS NULL OR CAST(COALESCE(d.fdLoad, d.fdSndDate) AS DATE) <= DATEADD(day, 1, CAST(d.fdEstimasi AS DATE)))
+          THEN 'SENT_ONTIME'
+        ELSE 'SENT_LATE'
+      END AS statusLabel,
+      RTRIM(d.fdTerima) AS fdTerima,
+      RTRIM(d.fdDescr) AS fdDescr,
+      ISNULL(b.isBilled, 0) AS isBilled,
+      b.invNos AS invNos,
+      b.invDates AS invDates,
+      ISNULL(b.billCount, 0) AS billCount
+    FROM tbDelivery d WITH (NOLOCK)
+    LEFT JOIN tbCustomers c WITH (NOLOCK) ON d.fdCustCode = c.fdCustCode
+    LEFT JOIN tbEntryList el WITH (NOLOCK) ON d.fdListCode = el.fdListCode
+    OUTER APPLY (
+      SELECT 
+        CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END AS isBilled,
+        COUNT(*) AS billCount,
+        STRING_AGG(CAST(RTRIM(tb.fdInvNo) AS VARCHAR(MAX)), ', ') AS invNos,
+        STRING_AGG(CAST(CONVERT(varchar(10), tb.fdInvDate, 120) AS VARCHAR(MAX)), ', ') AS invDates
+      FROM tbBilling tb WITH (NOLOCK)
+      WHERE RTRIM(tb.fdListCode) = RTRIM(d.fdListCode) AND d.fdListCode IS NOT NULL
+    ) b
+    WHERE CAST(d.fdEstimasi AS DATE) = '${cleanDate}'
+      ${statusFilterClause}
+    ORDER BY 
+      CASE WHEN (d.fdSent = 0 OR d.fdSent IS NULL) THEN 0 ELSE 1 END ASC,
+      CASE WHEN (d.fdSent = 0 OR d.fdSent IS NULL) AND CAST(GETDATE() AS DATE) > DATEADD(day, 1, CAST(d.fdEstimasi AS DATE)) THEN 0 ELSE 1 END ASC,
+      d.fdSJNo ASC
+  `)
+
+  const items = rows.map((r) => {
+    const isSent = Number(r.fdSent || 0) === 1
+    // Apabila fdSent = 1, ambil data riil pengiriman dari fdLoad (fallback fdSndDate)
+    const effectiveSentDate = isSent
+      ? (r.fdLoad ? String(r.fdLoad).trim() : (r.fdSndDate ? String(r.fdSndDate).trim() : null))
+      : (r.fdSndDate ? String(r.fdSndDate).trim() : null)
+
+    return {
+      fdSJNo: r.fdSJNo ? String(r.fdSJNo).trim() : '',
+      fdSJDate: r.fdSJDate ? String(r.fdSJDate).trim() : null,
+      fdEstimasi: r.fdEstimasi ? String(r.fdEstimasi).trim() : null,
+      maxToleranceDate: r.maxToleranceDate ? String(r.maxToleranceDate).trim() : null,
+      fdSent: Number(r.fdSent || 0),
+      fdLoad: r.fdLoad ? String(r.fdLoad).trim() : null,
+      fdSndDate: effectiveSentDate,
+      fdKembali: r.fdKembali ? String(r.fdKembali).trim() : null,
+      fdCustCode: r.fdCustCode ? String(r.fdCustCode).trim() : null,
+      custName: r.custName ? String(r.custName).trim() : '—',
+      fdListCode: r.fdListCode ? String(r.fdListCode).trim() : null,
+      fdMarkingCode: r.fdMarkingCode ? String(r.fdMarkingCode).trim() : null,
+      fdMarkingNo: r.fdMarkingNo ? String(r.fdMarkingNo).trim() : null,
+      fdJmlPackSJ: Number(r.fdJmlPackSJ || 0),
+      fdSatuan: r.fdSatuan ? String(r.fdSatuan).trim() : 'COLI',
+      fdJmlBeratSJ: Number(r.fdJmlBeratSJ || 0),
+      fdCarID: r.fdCarID ? String(r.fdCarID).trim() : null,
+      fdSupir: r.fdSupir ? String(r.fdSupir).trim() : null,
+      fdTelpSupir: r.fdTelpSupir ? String(r.fdTelpSupir).trim() : null,
+      fdListType: Number(r.fdListType || 2),
+      overdueDays: Math.max(0, Number(r.overdueDays || 0)),
+      isOverdueHPlus1: Boolean(r.isOverdueHPlus1),
+      statusLabel: String(r.statusLabel || 'PENDING_OVERDUE'),
+      fdTerima: r.fdTerima ? String(r.fdTerima).trim() : null,
+      fdDescr: r.fdDescr ? String(r.fdDescr).trim() : null,
+      isBilled: Number(r.isBilled || 0) === 1,
+      invNos: r.invNos ? String(r.invNos).trim() : null,
+      invDates: r.invDates ? String(r.invDates).trim() : null,
+      billCount: Number(r.billCount || 0),
+    }
+  })
+
+  const totalSj = items.length
+  const pendingOverdueCount = items.filter((i) => i.statusLabel === 'PENDING_OVERDUE').length
+  const pendingToleranceCount = items.filter((i) => i.statusLabel === 'PENDING_TOLERANCE').length
+  const sentCount = items.filter((i) => i.fdSent === 1).length
+  const totalPack = items.reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0)
+  const totalWeight = Math.round(items.reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10
+
+  const billedSjCount = items.filter((i) => i.isBilled).length
+  const unbilledSjCount = items.filter((i) => !i.isBilled).length
+
+  const listCodeSet = new Set<string>()
+  const billedListCodeSet = new Set<string>()
+  const unbilledListCodeSet = new Set<string>()
+
+  items.forEach((item) => {
+    const lc = item.fdListCode || 'NO_LIST_CODE'
+    listCodeSet.add(lc)
+    if (item.isBilled) {
+      billedListCodeSet.add(lc)
+    } else {
+      unbilledListCodeSet.add(lc)
+    }
+  })
+
+  const billedPack = items.filter((i) => i.isBilled).reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0)
+  const billedWeight = Math.round(items.filter((i) => i.isBilled).reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10
+  const unbilledPack = items.filter((i) => !i.isBilled).reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0)
+  const unbilledWeight = Math.round(items.filter((i) => !i.isBilled).reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10
+
+  return {
+    date: cleanDate,
+    filterType,
+    totalSj,
+    pendingOverdueCount,
+    pendingToleranceCount,
+    sentCount,
+    totalPack,
+    totalWeight,
+    billingRecap: {
+      billedSjCount,
+      unbilledSjCount,
+      totalListCodes: listCodeSet.size,
+      billedListCodeCount: billedListCodeSet.size,
+      unbilledListCodeCount: unbilledListCodeSet.size,
+      billedPack,
+      billedWeight,
+      unbilledPack,
+      unbilledWeight,
+    },
+    items,
+  }
+}
+

@@ -854,36 +854,43 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
     const custUploads = allCustUploads.filter(
       (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
     )
-    for (const u of custUploads) {
-      if (u.markings && u.markings.length > 0) {
-        for (const m of u.markings) {
-          if (m.markingCode) {
-            const isGE = await isMarkingGreaterOrEqual(markingUpper, m.markingCode, modeCategory, targetBranchCode)
-            if (isGE) {
-              const matchedItem = matchCategoryInItems(u.items, (it: any) => {
-                const mMatch = !it.mode || it.mode.toUpperCase().includes(modeStr.toUpperCase())
-                const bMatch = !it.branch || getNormalizedBranchCode(it.branch) === targetBranchCode
-                return mMatch && bMatch
-              })
-              if (matchedItem && Number(matchedItem.price) > 0) {
-                dbPrice = Number(matchedItem.price)
-                priceSource = 'CUSTOMER_MARKING'
-                priceSourceLabel = `Tier 2: Tarif Khusus Customer (Marking Override: ${m.markingCode})`
-                appliedTier = 'TIER_2_CUSTOMER_MARKING'
-                appliedTierLabel = 'Tier 2: Customer Marking Override'
-                matchedWith = 'CUSTOMER'
-                isMarkingOverride = true
-                matchedMarkingCode = m.markingCode
-                effectiveDate = u.effectiveDate ? new Date(u.effectiveDate).toISOString() : null
-                matchedCategory = matchedItem.category
-                chosenCustUpload = u
-                break
+    const latestCust = custUploads[0]
+    if (latestCust) {
+      const minEffTime = new Date(latestCust.effectiveDate).getTime()
+      const overrideCandidates = custUploads.filter(
+        (u) => new Date(u.effectiveDate).getTime() >= minEffTime
+      )
+      for (const u of overrideCandidates) {
+        if (u.markings && u.markings.length > 0) {
+          for (const m of u.markings) {
+            if (m.markingCode) {
+              const isGE = await isMarkingGreaterOrEqual(markingUpper, m.markingCode, modeCategory, targetBranchCode)
+              if (isGE) {
+                const matchedItem = matchCategoryInItems(u.items, (it: any) => {
+                  const mMatch = !it.mode || it.mode.toUpperCase().includes(modeStr.toUpperCase())
+                  const bMatch = !it.branch || getNormalizedBranchCode(it.branch) === targetBranchCode
+                  return mMatch && bMatch
+                })
+                if (matchedItem && Number(matchedItem.price) > 0) {
+                  dbPrice = Number(matchedItem.price)
+                  priceSource = 'CUSTOMER_MARKING'
+                  priceSourceLabel = `Tier 2: Tarif Khusus Customer (Marking Override: ${m.markingCode})`
+                  appliedTier = 'TIER_2_CUSTOMER_MARKING'
+                  appliedTierLabel = 'Tier 2: Customer Marking Override'
+                  matchedWith = 'CUSTOMER'
+                  isMarkingOverride = true
+                  matchedMarkingCode = m.markingCode
+                  effectiveDate = u.effectiveDate ? new Date(u.effectiveDate).toISOString() : null
+                  matchedCategory = matchedItem.category
+                  chosenCustUpload = u
+                  break
+                }
               }
             }
           }
         }
+        if (dbPrice > 0) break
       }
-      if (dbPrice > 0) break
     }
   }
 
@@ -964,24 +971,35 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
   }
 
   // ── TIER 5: Harga Marking Global (Master Marking Override) ──
+  // HANYA cari dari upload yang effectiveDate-nya >= upload master terbaru yang berlaku pada targetDate.
+  // Jika sudah ada upload master baru (misal 1 Sep 2026), marking override dari upload lama (misal 17 Juli 2026)
+  // TIDAK BERLAKU LAGI karena sudah digantikan oleh price list baru.
   let generalMarkingOverrideUpload: any = null
   let generalMatchedMarking: string | undefined = undefined
 
   if (dbPrice === 0 && markingUpper && allMasterUploads.length > 0) {
-    for (const u of allMasterUploads) {
-      if (u.markings && u.markings.length > 0) {
-        for (const m of u.markings) {
-          if (m.markingCode) {
-            const isGE = await isMarkingGreaterOrEqual(markingUpper, m.markingCode, modeCategory, targetBranchCode)
-            if (isGE) {
-              generalMarkingOverrideUpload = u
-              generalMatchedMarking = m.markingCode
-              break
+    const eligibleMasterUploads = allMasterUploads.filter((u) => new Date(u.effectiveDate) <= targetDate)
+    const latestMaster = eligibleMasterUploads[0]
+    if (latestMaster) {
+      const minEffTime = new Date(latestMaster.effectiveDate).getTime()
+      const overrideCandidates = eligibleMasterUploads.filter(
+        (u) => new Date(u.effectiveDate).getTime() >= minEffTime
+      )
+      for (const u of overrideCandidates) {
+        if (u.markings && u.markings.length > 0) {
+          for (const m of u.markings) {
+            if (m.markingCode) {
+              const isGE = await isMarkingGreaterOrEqual(markingUpper, m.markingCode, modeCategory, targetBranchCode)
+              if (isGE) {
+                generalMarkingOverrideUpload = u
+                generalMatchedMarking = m.markingCode
+                break
+              }
             }
           }
         }
+        if (generalMarkingOverrideUpload) break
       }
-      if (generalMarkingOverrideUpload) break
     }
   }
 
@@ -1473,21 +1491,32 @@ export async function evaluateBatchPriceCheck(
     }
 
     // ── TIER 5: Harga Marking Global (Master Marking Override) ──
+    // HANYA cari dari upload yang effectiveDate-nya >= upload master terbaru yang berlaku pada targetDate.
+    // Jika sudah ada upload master baru (misal 1 Sep 2026), marking override dari upload lama (misal 17 Juli 2026)
+    // TIDAK BERLAKU LAGI karena sudah digantikan oleh price list baru.
     let genOverrideUpload: any = null
     let genMatchedMarking: string | undefined = undefined
 
     if (dbPrice === 0 && markingUpper && mUploads.length > 0) {
-      for (const u of mUploads) {
-        if (u.markings && u.markings.length > 0) {
-          for (const m of u.markings) {
-            if (m.markingCode && isMarkingGE(markingUpper, m.markingCode)) {
-              genOverrideUpload = u
-              genMatchedMarking = m.markingCode
-              break
+      const eligibleForOverride = mUploads.filter((u) => new Date(u.effectiveDate) <= targetDate)
+      const latestMaster = eligibleForOverride[0]
+      if (latestMaster) {
+        const minEffTime = new Date(latestMaster.effectiveDate).getTime()
+        const overrideCandidates = eligibleForOverride.filter(
+          (u) => new Date(u.effectiveDate).getTime() >= minEffTime
+        )
+        for (const u of overrideCandidates) {
+          if (u.markings && u.markings.length > 0) {
+            for (const m of u.markings) {
+              if (m.markingCode && isMarkingGE(markingUpper, m.markingCode)) {
+                genOverrideUpload = u
+                genMatchedMarking = m.markingCode
+                break
+              }
             }
           }
+          if (genOverrideUpload) break
         }
-        if (genOverrideUpload) break
       }
     }
 

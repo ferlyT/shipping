@@ -61,6 +61,7 @@ interface CustomerToolbarProps {
   groupCounts: CustomerGroupCounts
   search: string
   onSearchChange: (search: string) => void
+  onSearchSubmit?: (search: string) => void
   onResetFilters: () => void
   hasActiveFilters: boolean
   viewMode: 'table' | 'grid' | 'shortlist'
@@ -80,6 +81,7 @@ export function CustomerToolbar({
   groupCounts,
   search,
   onSearchChange,
+  onSearchSubmit,
   onResetFilters,
   viewMode,
   onViewModeChange,
@@ -168,8 +170,9 @@ export function CustomerToolbar({
 
   // Suggestions state & query
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(-1)
   const searchContainerRef = useRef<HTMLDivElement>(null)
-  const debouncedSearch = useDebounce(search, 300)
+  const debouncedSearch = useDebounce(search, 200)
 
   const { data: suggestions = [], isFetching: isFetchingSuggestions } = useQuery({
     queryKey: ['customer-toolbar-suggestions', debouncedSearch],
@@ -186,11 +189,58 @@ export function CustomerToolbar({
     function handleClickOutside(e: MouseEvent) {
       if (searchContainerRef.current && !searchContainerRef.current.contains(e.target as Node)) {
         setShowSuggestions(false)
+        setSelectedSuggestionIndex(-1)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value
+    onSearchChange(val)
+    setSelectedSuggestionIndex(-1)
+    if (val.trim().length >= 2) {
+      setShowSuggestions(true)
+    } else {
+      setShowSuggestions(false)
+    }
+  }
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showSuggestions || suggestions.length === 0) {
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        setShowSuggestions(false)
+        onSearchSubmit?.(search)
+      }
+      return
+    }
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setSelectedSuggestionIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setSelectedSuggestionIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      if (selectedSuggestionIndex >= 0 && suggestions[selectedSuggestionIndex]) {
+        const item = suggestions[selectedSuggestionIndex]
+        onSearchChange(item.value)
+        onSearchSubmit?.(item.value)
+        setShowSuggestions(false)
+        setSelectedSuggestionIndex(-1)
+      } else {
+        setShowSuggestions(false)
+        onSearchSubmit?.(search)
+      }
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      setShowSuggestions(false)
+      setSelectedSuggestionIndex(-1)
+    }
+  }
 
   return (
     <div className="bg-[var(--color-surface)] rounded-2xl shadow-xs border border-[var(--color-border)] relative z-30 space-y-0">
@@ -204,11 +254,8 @@ export function CustomerToolbar({
             type="text"
             placeholder={t('customers.searchPlaceholder') || 'Cari customer, kode, kontak, telp, kota...'}
             value={search}
-            onChange={(e) => {
-              onSearchChange(e.target.value)
-              if (e.target.value.trim().length >= 2) setShowSuggestions(true)
-              else setShowSuggestions(false)
-            }}
+            onChange={handleInputChange}
+            onKeyDown={handleInputKeyDown}
             onFocus={() => {
               if (search.trim().length >= 2) setShowSuggestions(true)
             }}
@@ -220,11 +267,13 @@ export function CustomerToolbar({
                 type="button"
                 onClick={() => {
                   onSearchChange('')
+                  onSearchSubmit?.('')
                   setShowSuggestions(false)
+                  setSelectedSuggestionIndex(-1)
                   searchInputRef.current?.focus()
                 }}
                 className="p-1 rounded-md text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] cursor-pointer"
-                title="Hapus pencarian"
+                title="Hapus pencarian (Esc)"
               >
                 <X size={13} />
               </button>
@@ -239,13 +288,19 @@ export function CustomerToolbar({
           <SearchSuggestionsDropdown
             visible={showSuggestions && search.trim().length >= 2}
             suggestions={suggestions}
+            selectedIndex={selectedSuggestionIndex}
             isLoading={isFetchingSuggestions}
             title="Saran Pencarian (Customer / Kode / Kontak)"
             onSelect={(item) => {
               onSearchChange(item.value)
+              onSearchSubmit?.(item.value)
               setShowSuggestions(false)
+              setSelectedSuggestionIndex(-1)
             }}
-            onClose={() => setShowSuggestions(false)}
+            onClose={() => {
+              setShowSuggestions(false)
+              setSelectedSuggestionIndex(-1)
+            }}
           />
         </div>
 

@@ -67,9 +67,42 @@ export async function ingestCustomerPriceListFile(
 /**
  * List semua customer yang punya price list (distinct fdCustCode + info upload terakhir).
  */
-export async function listCustomersWithPriceList() {
+export async function listCustomersWithPriceList(search?: string) {
+  const cleanSearch = search?.trim()
+
+  let custCodeFilter: string[] | null = null
+  if (cleanSearch) {
+    const matchingCusts = await prisma.tbCustomers.findMany({
+      where: {
+        OR: [
+          { fdCustName: { contains: cleanSearch } },
+          { fdCustCode: { contains: cleanSearch } },
+        ],
+      },
+      select: { fdCustCode: true },
+      take: 200,
+    })
+    custCodeFilter = matchingCusts.map((c) => c.fdCustCode.trim())
+  }
+
+  const where: Prisma.TbCustomerPriceListUploadWhereInput = {
+    isSuperseded: false,
+    status: { not: 'FAILED' },
+  }
+
+  if (cleanSearch) {
+    const orConds: Prisma.TbCustomerPriceListUploadWhereInput[] = [
+      { fdCustCode: { contains: cleanSearch } },
+      { fileName: { contains: cleanSearch } },
+    ]
+    if (custCodeFilter && custCodeFilter.length > 0) {
+      orConds.push({ fdCustCode: { in: custCodeFilter } })
+    }
+    where.OR = orConds
+  }
+
   const rows = await prisma.tbCustomerPriceListUpload.findMany({
-    where: { isSuperseded: false, status: { not: 'FAILED' } },
+    where,
     orderBy: { uploadedAt: 'desc' },
     select: {
       id: true,
@@ -86,16 +119,17 @@ export async function listCustomersWithPriceList() {
   })
 
   // Enrich dengan nama customer
-  const custCodes = [...new Set(rows.map((r) => r.fdCustCode))]
+  const custCodes = [...new Set(rows.map((r) => r.fdCustCode.trim()))]
   const customers = await prisma.tbCustomers.findMany({
     where: { fdCustCode: { in: custCodes } },
     select: { fdCustCode: true, fdCustName: true },
   })
-  const custMap = new Map(customers.map((c) => [c.fdCustCode, c.fdCustName ?? '-']))
+  const custMap = new Map(customers.map((c) => [c.fdCustCode.trim(), c.fdCustName?.trim() ?? '-']))
 
   return rows.map((r) => ({
     ...r,
-    custName: custMap.get(r.fdCustCode) ?? '-',
+    fdCustCode: r.fdCustCode.trim(),
+    custName: custMap.get(r.fdCustCode.trim()) ?? '-',
     itemCount: r._count.items,
   }))
 }
@@ -133,20 +167,50 @@ export async function listCustomerUploads(fdCustCode: string, page = 1, pageSize
 }
 
 /**
- * Ambil item price list aktif per customer (upload terbaru non-superseded).
+ * Ambil item price list aktif per customer (menggabungkan item dari seluruh upload aktif non-superseded).
  */
 export async function getActiveCustomerPriceList(fdCustCode: string) {
-  const latestUpload = await prisma.tbCustomerPriceListUpload.findFirst({
-    where: { fdCustCode, isSuperseded: false, status: { not: 'FAILED' } },
+  const activeUploads = await prisma.tbCustomerPriceListUpload.findMany({
+    where: { fdCustCode, isSuperseded: false, status: { notIn: ['FAILED', 'DELETED'] } },
     include: { markings: true },
     orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
   })
-  if (!latestUpload) return null
+  if (activeUploads.length === 0) return null
 
-  const items = await prisma.tbCustomerPriceListItem.findMany({
-    where: { uploadId: latestUpload.id },
-    orderBy: [{ mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
+  const latestUpload = activeUploads[0]
+  const uploadIds = activeUploads.map((u) => u.id)
+
+  const rawItems = await prisma.tbCustomerPriceListItem.findMany({
+    where: {
+      uploadId: { in: uploadIds },
+      endDate: null,
+    },
+    include: { upload: { select: { markings: true } } },
+    orderBy: [{ effectiveDate: 'desc' }, { id: 'desc' }],
   })
+
+  // Deduplikasi per (mode, branch, category), prioritaskan yang effectiveDate paling baru
+  const itemMap = new Map<string, typeof rawItems[0]>()
+  for (const it of rawItems) {
+    const key = `${(it.mode || '').trim().toUpperCase()}||${(it.branch || '').trim().toUpperCase()}||${(it.category || '').trim().toUpperCase()}`
+    if (!itemMap.has(key)) {
+      itemMap.set(key, it)
+    }
+  }
+
+  const items = Array.from(itemMap.values()).sort((a, b) =>
+    (a.mode || '').localeCompare(b.mode || '') ||
+    (a.branch || '').localeCompare(b.branch || '') ||
+    (a.category || '').localeCompare(b.category || '')
+  )
+
+  const allMarkings = activeUploads.flatMap((u) => u.markings || [])
+  const uniqueMarkingsMap = new Map<string, typeof allMarkings[0]>()
+  for (const m of allMarkings) {
+    if (!uniqueMarkingsMap.has(m.markingCode)) {
+      uniqueMarkingsMap.set(m.markingCode, m)
+    }
+  }
 
   return {
     uploadId: latestUpload.id,
@@ -155,12 +219,12 @@ export async function getActiveCustomerPriceList(fdCustCode: string) {
     priceDate: latestUpload.priceDate,
     uploadedAt: latestUpload.uploadedAt,
     fileName: latestUpload.fileName,
-    markings: latestUpload.markings?.map((m) => ({
+    markings: Array.from(uniqueMarkingsMap.values()).map((m) => ({
       id: m.id,
       markingCode: m.markingCode,
       agentName: m.agentName,
       mode: m.mode,
-    })) || [],
+    })),
     items: items.map((it) => ({
       id: it.id,
       mode: it.mode,
@@ -168,7 +232,7 @@ export async function getActiveCustomerPriceList(fdCustCode: string) {
       transitTime: it.transitTime,
       category: it.category,
       price: Number(it.price),
-      markings: latestUpload.markings?.map((m) => ({
+      markings: (it.upload?.markings || latestUpload.markings)?.map((m) => ({
         id: m.id,
         markingCode: m.markingCode,
         agentName: m.agentName,
@@ -482,12 +546,15 @@ export async function lookupCustomerPriceList(
     }
 
     // 2. Pengecekan Level 2: Master Customer Upload Default
-    if (!upload) {
-      upload = await prisma.tbCustomerPriceListUpload.findFirst({
+    let matchingUploads: any[] = []
+    if (isMarkingOverride && upload) {
+      matchingUploads = [upload]
+    } else {
+      matchingUploads = await prisma.tbCustomerPriceListUpload.findMany({
         where: {
           fdCustCode: cleanCustCode,
           effectiveDate: { lte: targetDate },
-          status: { not: 'FAILED' },
+          status: { notIn: ['FAILED', 'DELETED'] },
           isSuperseded: false,
         },
         include: { markings: true },
@@ -498,7 +565,7 @@ export async function lookupCustomerPriceList(
       })
     }
 
-    if (!upload) {
+    if (matchingUploads.length === 0) {
       return {
         found: false,
         fdCustCode: cleanCustCode,
@@ -509,8 +576,11 @@ export async function lookupCustomerPriceList(
       }
     }
 
+    const latestUpload = matchingUploads[0]
+    const uploadIds = matchingUploads.map((u) => u.id)
+
     const baseWhere: Prisma.TbCustomerPriceListItemWhereInput = {
-      uploadId: upload.id,
+      uploadId: { in: uploadIds },
       fdCustCode: cleanCustCode,
       AND: [
         { OR: [{ effectiveDate: null }, { effectiveDate: { lte: targetDate } }] },
@@ -530,10 +600,26 @@ export async function lookupCustomerPriceList(
       }
     }
 
-    const items = await prisma.tbCustomerPriceListItem.findMany({
+    const rawItems = await prisma.tbCustomerPriceListItem.findMany({
       where: baseWhere,
-      orderBy: [{ mode: 'asc' }, { branch: 'asc' }, { category: 'asc' }],
+      include: { upload: { include: { markings: true } } },
+      orderBy: [{ effectiveDate: 'desc' }, { id: 'desc' }],
     })
+
+    // Deduplikasi per (mode, branch, category), prioritaskan yang effectiveDate paling baru
+    const itemMap = new Map<string, typeof rawItems[0]>()
+    for (const it of rawItems) {
+      const key = `${(it.mode || '').trim().toUpperCase()}||${(it.branch || '').trim().toUpperCase()}||${(it.category || '').trim().toUpperCase()}`
+      if (!itemMap.has(key)) {
+        itemMap.set(key, it)
+      }
+    }
+
+    const items = Array.from(itemMap.values()).sort((a, b) =>
+      (a.mode || '').localeCompare(b.mode || '') ||
+      (a.branch || '').localeCompare(b.branch || '') ||
+      (a.category || '').localeCompare(b.category || '')
+    )
 
     // Fetch active commodity mapping aliases for this customer
     const mappings = await prisma.tbCommodityMapping.findMany({
@@ -569,22 +655,30 @@ export async function lookupCustomerPriceList(
       }
     }
 
+    const allMarkings = matchingUploads.flatMap((u) => u.markings || [])
+    const uniqueMarkingsMap = new Map<string, typeof allMarkings[0]>()
+    for (const m of allMarkings) {
+      if (!uniqueMarkingsMap.has(m.markingCode)) {
+        uniqueMarkingsMap.set(m.markingCode, m)
+      }
+    }
+
     return {
       found: items.length > 0,
       fdCustCode: cleanCustCode,
       targetDate,
       uploadInfo: {
-        uploadId: upload.id,
-        fileName: upload.fileName,
-        effectiveDate: upload.effectiveDate,
-        priceDate: upload.priceDate,
-        uploadedAt: upload.uploadedAt,
-        markings: upload.markings?.map((m: any) => ({
+        uploadId: latestUpload.id,
+        fileName: latestUpload.fileName,
+        effectiveDate: latestUpload.effectiveDate,
+        priceDate: latestUpload.priceDate,
+        uploadedAt: latestUpload.uploadedAt,
+        markings: Array.from(uniqueMarkingsMap.values()).map((m: any) => ({
           id: m.id,
           markingCode: m.markingCode,
           agentName: m.agentName,
           mode: m.mode,
-        })) || [],
+        })),
       },
       isMarkingOverride,
       items: items.map((it) => {
@@ -603,7 +697,7 @@ export async function lookupCustomerPriceList(
           category: it.category,
           price: Number(it.price),
           aliases: combinedAliases,
-          markings: upload.markings?.map((m: any) => ({
+          markings: (it.upload?.markings || latestUpload.markings)?.map((m: any) => ({
             id: m.id,
             markingCode: m.markingCode,
             agentName: m.agentName,
@@ -946,42 +1040,81 @@ export async function listCustomerCommodityPrices(params: {
   const pageSize = Math.min(100, Math.max(1, Number(params.pageSize || 20)))
   const skip = (page - 1) * pageSize
 
-  const where: Prisma.TbCustomerPriceListItemWhereInput = {}
+  const andConditions: Prisma.TbCustomerPriceListItemWhereInput[] = []
 
   if (params.fdCustCode) {
-    where.fdCustCode = params.fdCustCode.trim()
+    andConditions.push({ fdCustCode: params.fdCustCode.trim() })
   }
 
   if (params.mode && params.mode !== 'ALL') {
-    where.mode = normalizeMode(params.mode) || params.mode
+    andConditions.push({ mode: normalizeMode(params.mode) || params.mode })
   }
 
   if (params.branch && params.branch !== 'ALL') {
-    where.branch = params.branch.trim()
+    andConditions.push({ branch: params.branch.trim() })
   }
 
   if (params.search) {
     const s = params.search.trim()
-    where.OR = [
+
+    // 1. Cari customer code yang nama customer atau kodenya cocok
+    const matchingCustomers = await prisma.tbCustomers.findMany({
+      where: {
+        OR: [
+          { fdCustName: { contains: s } },
+          { fdCustCode: { contains: s } },
+        ],
+      },
+      select: { fdCustCode: true },
+      take: 200,
+    })
+    const matchingCustCodes = matchingCustomers.map((c) => c.fdCustCode.trim()).filter(Boolean)
+
+    // 2. Cari komoditi dari tbCommodityMapping yang aliasnya cocok
+    const matchingMappings = await prisma.tbCommodityMapping.findMany({
+      where: { commodityName: { contains: s } },
+      select: { targetCommodity: true },
+      take: 50,
+    })
+    const matchingCommodities = [...new Set(matchingMappings.map((m) => m.targetCommodity.trim()).filter(Boolean))]
+
+    const searchOrConditions: Prisma.TbCustomerPriceListItemWhereInput[] = [
       { category: { contains: s } },
       { fdCustCode: { contains: s } },
       { branch: { contains: s } },
       { notes: { contains: s } },
     ]
+
+    if (matchingCustCodes.length > 0) {
+      searchOrConditions.push({ fdCustCode: { in: matchingCustCodes } })
+    }
+
+    if (matchingCommodities.length > 0) {
+      searchOrConditions.push({ category: { in: matchingCommodities } })
+    }
+
+    andConditions.push({ OR: searchOrConditions })
   }
 
   const now = new Date()
   if (params.status === 'ACTIVE') {
-    where.AND = [
-      { OR: [{ endDate: null }, { endDate: { gte: now } }] },
-      { upload: { isSuperseded: false, status: { not: 'FAILED' } } },
-    ]
+    andConditions.push({
+      AND: [
+        { OR: [{ endDate: null }, { endDate: { gte: now } }] },
+        { upload: { isSuperseded: false, status: { not: 'FAILED' } } },
+      ],
+    })
   } else if (params.status === 'EXPIRED') {
-    where.OR = [
-      { endDate: { lt: now } },
-      { upload: { isSuperseded: true } },
-    ]
+    andConditions.push({
+      OR: [
+        { endDate: { lt: now } },
+        { upload: { isSuperseded: true } },
+      ],
+    })
   }
+
+  const where: Prisma.TbCustomerPriceListItemWhereInput =
+    andConditions.length > 0 ? { AND: andConditions } : {}
 
   const [items, total] = await Promise.all([
     prisma.tbCustomerPriceListItem.findMany({
@@ -1064,6 +1197,22 @@ export async function listCustomerCommodityPrices(params: {
       totalPages: Math.ceil(total / pageSize),
     },
   }
+}
+
+/**
+ * Ambil master daftar cabang dari tbCabang
+ */
+export async function getCustomerPriceListBranches() {
+  const rows = await prisma.tbCabang.findMany({
+    select: { fdBranchCode: true, fdBranchName: true },
+    orderBy: { fdBranchCode: 'asc' },
+  })
+  return rows
+    .map((r) => ({
+      code: (r.fdBranchCode || '').trim(),
+      name: (r.fdBranchName || '').trim(),
+    }))
+    .filter((r) => r.code && r.code !== '--')
 }
 
 

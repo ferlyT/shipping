@@ -144,5 +144,10 @@ export const billingApi = {
         timeout: 120000,
       }
     ),
+
+  customerHarga: (custCode: string) =>
+    apiClient.get<{ data: import('../types/billing.types').CustomerHargaDetailResult }>(
+      `/billing/customer-harga/${encodeURIComponent(custCode)}`
+    ),
 }
 

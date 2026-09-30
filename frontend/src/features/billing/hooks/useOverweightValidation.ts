@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { calculateOverweight } from '@/lib/utils'
+import type { RelatedBillsSummary } from '../types/billing.types'
 
 // Interface minimal yang kompatibel dengan M3CheckResponse dari BillingValidationCard maupun BillingValidationSummaryModal
 interface M3ResForOverweight {
@@ -11,6 +12,7 @@ interface M3ResForOverweight {
   totalBeratPerMarking?: number | null
   profileHarga?: { rasio?: number | null } | null
   recommendedM3?: number | null
+  relatedBillsSummary?: RelatedBillsSummary | null
 }
 
 interface InvoiceDetailMin {
@@ -36,13 +38,25 @@ interface UseOverweightValidationParams {
    * Umumnya: targetKomplainM3 ?? gudangValues[0] ?? plValues[0] ?? res?.recommendedM3
    */
   refM3Fallback?: number
+  /** True jika invoice anak pecahan yang digabung ke invoice induk */
+  isChildBillMerged?: boolean
+}
+
+export interface WeightCandidate {
+  sourceKey: string
+  sourceName: string
+  weightKg: number
+  overweightKg: number
+  isOverweight: boolean
 }
 
 export interface OverweightValidationResult {
-  /** Berat KG yang efektif ditagihkan (dengan fallback scan nama item) */
+  /** Berat KG yang efektif ditagihkan (dengan fallback scan nama item atau bill terkait) */
   effectiveBilledKg: number
   /** Berat aktual fisik (kg) dari operasional */
   actualWeightKg: number
+  /** Sumber acuan berat fisik yang digunakan */
+  weightSource: string
   /** Rasio berat/m3 dari profil harga */
   rasio: number
   /** M3 referensi yang digunakan untuk hitung batas berat */
@@ -59,12 +73,22 @@ export interface OverweightValidationResult {
   isBilledOverweightExactMatch: boolean
   /** True jika tagihan KG dalam toleransi plus minus 1 kg dari overweight */
   isBilledOverweightTolerated: boolean
-  /** True jika tagihan KG sudah menutup overweight (exact atau toleransi) */
+  /** True jika tagihan KG sudah menutup overweight (exact, toleransi, atau cocok kandidat fallback) */
   isBilledOverweightMatch: boolean
   /** True jika ada tagihan KG padahal fisik tidak overweight */
   isBilledUnneededOverweight: boolean
   /** Selisih tagihan KG vs overweight aktual */
   overweightDiff: number | null
+  /** True jika invoice anak yang digabung ke induk (validasi terpusat di induk) */
+  isChildBillMerged: boolean
+  /** True jika kalkulasi overweight menggunakan fallback akumulasi bill terkait */
+  isRelatedBillsOverweight: boolean
+  /** Nomor invoice induk (jika ada relasi) */
+  parentInvNo?: string
+  /** Nama sumber kandidat berat fallback yang cocok dengan tagihan KG */
+  matchedCandidateSource?: string | null
+  /** Seluruh daftar kandidat berat fisik operasional */
+  candidates: WeightCandidate[]
 }
 
 /**
@@ -92,6 +116,7 @@ export function computeEffectiveBilledKg(
 /**
  * Hook terpusat untuk kalkulasi validasi overweight/KG billing.
  * Single source of truth untuk BillingValidationCard dan BillingValidationSummaryModal.
+ * Mendukung fallback akumulasi bill terkait & per batch marking.
  */
 export function useOverweightValidation({
   res,
@@ -101,68 +126,176 @@ export function useOverweightValidation({
   isAir,
   isGabungan,
   refM3Fallback = 0,
+  isChildBillMerged = false,
 }: UseOverweightValidationParams): OverweightValidationResult {
-  const effectiveBilledKg = useMemo(
+  const relatedBills = res?.relatedBillsSummary
+  const hasRelatedBills = Boolean(relatedBills?.hasRelatedBills && (relatedBills?.sumBerat ?? 0) > 0)
+  const isRelatedBillsOverweight = !isAir && hasRelatedBills
+
+  // 1. Hitung tagihan KG efektif (prioritas billedKg langsung -> scan item -> akumulasi keluarga bill)
+  const directBilledKg = useMemo(
     () => computeEffectiveBilledKg(billedKg, isAir, invoiceDetails),
     [billedKg, isAir, invoiceDetails]
   )
 
-  const actualWeightKg = useMemo(() => {
-    const gudang = res?.fdJmlBeratGudang ?? 0
+  const effectiveBilledKg = useMemo(() => {
+    if (directBilledKg > 0) return directBilledKg
+    if (!isAir && hasRelatedBills && (relatedBills?.totalBilledKg ?? 0) > 0) {
+      return relatedBills!.totalBilledKg!
+    }
+    return 0
+  }, [directBilledKg, isAir, hasRelatedBills, relatedBills])
+
+  // 2. Evaluasi berat aktual fisik dengan fallback berhirarki
+  const { actualWeightKg, weightSource } = useMemo(() => {
+    if (isChildBillMerged) {
+      return {
+        actualWeightKg: 0,
+        weightSource: `Digabung ke ${relatedBills?.parentInvNo || 'Invoice Induk'}`,
+      }
+    }
+
+    // Prioritas 1: Jika terdapat keluarga bill terkait, gunakan akumulasi fisik bill terkait (sumBerat)
+    if (hasRelatedBills && relatedBills) {
+      return {
+        actualWeightKg: relatedBills.sumBerat,
+        weightSource: `Bill Terkait (${relatedBills.relatedInvoices.map((i) => i.invNo).join(' + ')})`,
+      }
+    }
+
+    const gudang = res?.fdJmlBeratGudang ? Number(res.fdJmlBeratGudang) : 0
     const list = res?.fdBeratList ? Number(res.fdBeratList) : 0
     const komplain = res?.fdJmlBeratKomplain ? Number(res.fdJmlBeratKomplain) : 0
     const sjList = res?.fdBeratSJ ? Number(res.fdBeratSJ) : 0
-    const sj = res?.totalJmlBeratSJ ?? 0
-    const perMarking = res?.totalBeratPerMarking ?? 0
+    const sj = res?.totalJmlBeratSJ ? Number(res.totalJmlBeratSJ) : 0
+    const perMarking = res?.totalBeratPerMarking ? Number(res.totalBeratPerMarking) : 0
 
     if (isGabungan) {
-      if (komplain > 0) return komplain
-      if (perMarking > 0) return perMarking
-      if (sj > 0) return sj
+      if (komplain > 0) return { actualWeightKg: komplain, weightSource: 'Komplain' }
+      if (perMarking > 0) return { actualWeightKg: perMarking, weightSource: 'Per Batch Marking' }
+      if (sj > 0) return { actualWeightKg: sj, weightSource: 'Surat Jalan (Batch)' }
     }
 
-    // Hirarki KG untuk Bill Reguler: 1. Berat Komplain -> 2. Berat SJ (ListCode) -> 3. Berat Gudang -> 4. Berat List
-    if (komplain > 0) return komplain
-    if (sjList > 0) return sjList
-    if (gudang > 0) return gudang
-    if (list > 0) return list
-    return 0
-  }, [res, isGabungan])
+    // Hirarki KG untuk Bill Reguler: 1. Komplain -> 2. SJ (ListCode) -> 3. Gudang -> 4. List
+    if (komplain > 0) return { actualWeightKg: komplain, weightSource: 'Komplain' }
+    if (sjList > 0) return { actualWeightKg: sjList, weightSource: 'Surat Jalan' }
+    if (gudang > 0) return { actualWeightKg: gudang, weightSource: 'Timbangan Gudang' }
+    if (list > 0) return { actualWeightKg: list, weightSource: 'Entry List' }
+    return { actualWeightKg: 0, weightSource: '—' }
+  }, [res, isGabungan, isChildBillMerged, hasRelatedBills, relatedBills])
 
+  // 3. Batas kuota rasio & perhitungan overweight
   const rasio = res?.profileHarga?.rasio ?? 0
-  const rawRefM3 = billedM3 > 0 ? billedM3 : refM3Fallback
+  const rawRefM3 = billedM3 > 0
+    ? billedM3
+    : (isChildBillMerged && relatedBills
+        ? (relatedBills.totalBilledM3 || relatedBills.sumM3Gudang || refM3Fallback)
+        : refM3Fallback)
+
   // Semua tagihan laut yang di bawah 0.1 m³ wajib dinaikkan menjadi 0.1 m³ untuk validasi kg
   const isMinM3EnforcedForKg = !isAir && rawRefM3 > 0 && rawRefM3 < 0.1
   const refM3 = isMinM3EnforcedForKg ? 0.1 : rawRefM3
 
   const maxAllowedWeight = !isAir && rasio > 0 && refM3 > 0 ? refM3 * rasio : 0
-  const overweightKg = !isAir && rasio > 0 && refM3 > 0 && actualWeightKg > 0
+
+  const rawOverweightKg = !isAir && !isChildBillMerged && rasio > 0 && refM3 > 0 && actualWeightKg > 0
     ? calculateOverweight(actualWeightKg, refM3, rasio)
     : 0
+
+  const overweightKg = Math.max(0, rawOverweightKg)
   const isOverweight = overweightKg > 0
 
-  const isBilledOverweightExactMatch = !isAir && isOverweight && effectiveBilledKg > 0
+  // 4. Daftar kandidat berat fisik multi-sumber (Mirip seaCandidates pada M3)
+  const candidates: WeightCandidate[] = useMemo(() => {
+    if (isAir || rasio <= 0 || refM3 <= 0) return []
+    const list: Array<{ key: string; name: string; weight: number }> = []
+
+    if (hasRelatedBills && (relatedBills?.sumBerat ?? 0) > 0) {
+      list.push({
+        key: 'RelatedBills',
+        name: `Bill Terkait (${relatedBills!.relatedInvoices.map((i) => i.invNo).join(' + ')})`,
+        weight: relatedBills!.sumBerat,
+      })
+    }
+    if ((res?.fdJmlBeratKomplain ?? 0) > 0) {
+      list.push({ key: 'Komplain', name: 'Komplain', weight: Number(res!.fdJmlBeratKomplain!) })
+    }
+    if ((res?.fdJmlBeratGudang ?? 0) > 0) {
+      list.push({ key: 'Gudang', name: 'Timbangan Gudang', weight: Number(res!.fdJmlBeratGudang!) })
+    }
+    if ((res?.fdBeratSJ ?? 0) > 0) {
+      list.push({ key: 'SJ', name: 'Surat Jalan (List)', weight: Number(res!.fdBeratSJ!) })
+    }
+    if ((Number(res?.fdBeratList || 0)) > 0) {
+      list.push({ key: 'List', name: 'Entry List', weight: Number(res!.fdBeratList!) })
+    }
+    if ((res?.totalBeratPerMarking ?? 0) > 0) {
+      list.push({ key: 'Marking', name: 'Per Batch Marking', weight: Number(res!.totalBeratPerMarking!) })
+    }
+    if ((res?.totalJmlBeratSJ ?? 0) > 0 && res!.totalJmlBeratSJ! !== res?.totalBeratPerMarking) {
+      list.push({ key: 'TotalSJBatch', name: 'Total SJ Batch', weight: Number(res!.totalJmlBeratSJ!) })
+    }
+
+    return list.map((item) => {
+      const ow = calculateOverweight(item.weight, refM3, rasio)
+      return {
+        sourceKey: item.key,
+        sourceName: item.name,
+        weightKg: item.weight,
+        overweightKg: Math.max(0, ow),
+        isOverweight: ow > 0,
+      }
+    })
+  }, [isAir, rasio, refM3, hasRelatedBills, relatedBills, res])
+
+  // 5. Evaluasi kesesuaian penagihan KG vs Overweight
+  const isBilledOverweightExactMatch = !isAir && !isChildBillMerged && isOverweight && effectiveBilledKg > 0
     && Math.abs(effectiveBilledKg - overweightKg) < 0.01
-  const isBilledOverweightTolerated = !isAir && isOverweight && effectiveBilledKg > 0
+
+  const isBilledOverweightTolerated = !isAir && !isChildBillMerged && isOverweight && effectiveBilledKg > 0
     && !isBilledOverweightExactMatch && Math.abs(effectiveBilledKg - overweightKg) <= 1
-  const isBilledOverweightMatch = !isAir && isOverweight && effectiveBilledKg > 0
-    && (isBilledOverweightExactMatch || isBilledOverweightTolerated)
-  const isBilledUnneededOverweight = !isAir && !isOverweight && effectiveBilledKg > 0
-  const overweightDiff = effectiveBilledKg > 0 ? effectiveBilledKg - overweightKg : null
+
+  // Fallback pencocokan kandidat: jika tagihan KG cocok dengan salah satu kandidat berat fisik operasional
+  const matchedCandidate = useMemo(() => {
+    if (isAir || isChildBillMerged || effectiveBilledKg <= 0) return null
+    if (isBilledOverweightExactMatch || isBilledOverweightTolerated) return null
+    return candidates.find(
+      (c) => c.isOverweight && (
+        Math.abs(effectiveBilledKg - c.overweightKg) < 0.01 ||
+        Math.abs(effectiveBilledKg - c.overweightKg) <= 1
+      )
+    ) || null
+  }, [isAir, isChildBillMerged, effectiveBilledKg, isBilledOverweightExactMatch, isBilledOverweightTolerated, candidates])
+
+  const isBilledOverweightMatch = Boolean(
+    isChildBillMerged ||
+    isBilledOverweightExactMatch ||
+    isBilledOverweightTolerated ||
+    Boolean(matchedCandidate)
+  )
+
+  const isBilledUnneededOverweight = !isAir && !isChildBillMerged && !isOverweight && !matchedCandidate && effectiveBilledKg > 0
+  const overweightDiff = effectiveBilledKg > 0 ? effectiveBilledKg - (matchedCandidate?.overweightKg ?? overweightKg) : null
 
   return {
     effectiveBilledKg,
     actualWeightKg,
+    weightSource,
     rasio,
     refM3,
     maxAllowedWeight,
-    overweightKg,
+    overweightKg: isChildBillMerged ? 0 : overweightKg,
     isMinM3EnforcedForKg,
-    isOverweight,
-    isBilledOverweightExactMatch,
+    isOverweight: isChildBillMerged ? false : isOverweight,
+    isBilledOverweightExactMatch: isChildBillMerged ? true : isBilledOverweightExactMatch,
     isBilledOverweightTolerated,
     isBilledOverweightMatch,
-    isBilledUnneededOverweight,
+    isBilledUnneededOverweight: isChildBillMerged ? false : isBilledUnneededOverweight,
     overweightDiff,
+    isChildBillMerged,
+    isRelatedBillsOverweight,
+    parentInvNo: relatedBills?.parentInvNo,
+    matchedCandidateSource: matchedCandidate?.sourceName || null,
+    candidates,
   }
 }

@@ -32,6 +32,7 @@ import { formatCurrency, formatNumber, formatDecimal, formatDate, displayCustNam
 import { BillingListItem } from '../../src/features/finance/components/BillingListItem'
 import { ValidationListItem } from '../../src/features/finance/components/ValidationListItem'
 import { InvoiceDetailSheet } from '../../src/features/finance/components/InvoiceDetailSheet'
+import { useBillingsQuery } from '../../src/features/finance/hooks/useBillings'
 import { useDebounce } from '../../src/hooks/useDebounce'
 import apiClient from '../../src/api/client'
 
@@ -91,17 +92,8 @@ export default function FinanceScreen() {
     staleTime: 30000,
   })
 
-  // Billing data
-  const { data: billingData, isLoading: isBillingLoading, refetch: refetchBilling, isRefetching: isRefetchingBilling } = useQuery({
-    queryKey: ['finance-billing', debouncedSearch],
-    queryFn: async () => {
-      const params: any = { limit: 20 }
-      if (debouncedSearch.trim()) params.search = debouncedSearch.trim()
-      const res = await apiClient.get('/billing', { params })
-      return res.data.data || []
-    },
-    enabled: activeTab === 'billing',
-  })
+  // Billing data via Infinite Query
+  const billings = useBillingsQuery(debouncedSearch, activeTab === 'billing')
 
   // Validation data
   const { data: rawValidationData, isLoading: isValLoading, refetch: refetchVal, isRefetching: isRefetchingVal } = useQuery({
@@ -267,13 +259,26 @@ export default function FinanceScreen() {
         {/* Billing List */}
         {activeTab === 'billing' && (
           <FlatList
-            data={billingData}
-            keyExtractor={(item) => item.fdInvNo || Math.random().toString()}
-            refreshing={isRefetchingBilling}
-            onRefresh={refetchBilling}
+            data={billings.data}
+            keyExtractor={(item, index) => `${item.fdInvNo || 'inv'}-${index}`}
+            refreshing={billings.isRefetching}
+            onRefresh={billings.refetch}
+            onEndReached={() => {
+              if (billings.hasNextPage && !billings.isFetchingNextPage) {
+                billings.fetchNextPage()
+              }
+            }}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              billings.isFetchingNextPage ? (
+                <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+                  <ActivityIndicator size="small" color={colors.tertiary} />
+                </View>
+              ) : null
+            }
             contentContainerStyle={styles.listContent}
             ListEmptyComponent={
-              isBillingLoading ? (
+              billings.isLoading ? (
                 <View style={{ gap: 10 }}>
                   <SkeletonShimmer height={95} />
                   <SkeletonShimmer height={95} />

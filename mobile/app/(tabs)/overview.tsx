@@ -34,6 +34,9 @@ import { AlertDetailModal } from '../../src/features/overview/components/AlertDe
 import { ExitActivityKpiGrid } from '../../src/features/overview/components/ExitActivityKpiGrid'
 import { ExitBatchListItem } from '../../src/features/overview/components/ExitBatchListItem'
 import { BatchManifestSheet } from '../../src/features/logistics/components/BatchManifestSheet'
+import { useToastStore } from '../../src/stores/toastStore'
+import { useInspectionMutations } from '../../src/features/inspection/hooks/useInspectionMutations'
+import { InspectionFormSheet } from '../../src/features/inspection/components/InspectionFormSheet'
 
 type ExitScope = 'today' | 'yesterday' | 'tomorrow' | 'recent' | 'eta_not_exit' | 'missed_sla'
 
@@ -50,6 +53,40 @@ export default function OverviewScreen() {
   const [refreshing, setRefreshing] = useState(false)
   const [selectedBatch, setSelectedBatch] = useState<any | null>(null)
   const scrollViewRef = useRef<ScrollView>(null)
+
+  const { showToast } = useToastStore()
+
+  // BAP from manifest state
+  const [bapInitialData, setBapInitialData] = useState<any | null>(null)
+  const [isBapFormVisible, setIsBapFormVisible] = useState(false)
+  const { createMutation: createBapMutation } = useInspectionMutations()
+
+  const handleCreateBapFromShipment = (shipment: any) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+    const prefilled = {
+      fdListType: shipment.fdListType ? (Number(shipment.fdListType) as 1 | 2) : 2,
+      fdMarkingCode: shipment.fdMarkingCode?.trim() || '',
+      fdMarkingNo: shipment.fdMarkingNo?.trim() || '',
+      fdListCode: shipment.fdListCode?.trim() || '',
+      fdTerima: shipment.fdTerima?.trim() || '',
+      fdNamaCustomer: shipment.fdCustName?.trim() || '',
+      fdReportDate: new Date().toISOString(),
+      fdStatus: '1',
+    }
+    setBapInitialData(prefilled)
+    setIsBapFormVisible(true)
+  }
+
+  const handleBapSubmit = async (payload: any) => {
+    try {
+      await createBapMutation.mutateAsync(payload)
+      setIsBapFormVisible(false)
+      setBapInitialData(null)
+      showToast('Berita Acara Pemeriksaan berhasil dibuat', 'success')
+    } catch {
+      // handled by mutation
+    }
+  }
 
   const isAlertScope = activeScope === 'eta_not_exit' || activeScope === 'missed_sla'
 
@@ -506,6 +543,19 @@ export default function OverviewScreen() {
         selectedBatch={selectedBatch}
         onClose={() => setSelectedBatch(null)}
         setSelectedBatch={setSelectedBatch}
+        onCreateBap={handleCreateBapFromShipment}
+      />
+
+      {/* Create BAP from Manifest Modal */}
+      <InspectionFormSheet
+        visible={isBapFormVisible}
+        initialData={bapInitialData}
+        onClose={() => {
+          setIsBapFormVisible(false)
+          setBapInitialData(null)
+        }}
+        onSubmit={handleBapSubmit}
+        isSaving={createBapMutation.isPending}
       />
     </SafeAreaView>
   )

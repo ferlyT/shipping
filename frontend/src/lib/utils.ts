@@ -77,6 +77,13 @@ export function formatWeight(num: number | null | undefined): string {
   return `${formatDecimal(num, 2)} Kg`
 }
 
+// Format kubikasi M3 ke 4 digit desimal standar proyek, mis. "0.0257 m³"
+export function formatM3(num: number | null | undefined, includeUnit = false): string {
+  if (num == null) return '—'
+  const formatted = formatDecimal(num, 4)
+  return includeUnit ? `${formatted} m³` : formatted
+}
+
 // Truncate string
 export function truncate(str: string, maxLength: number): string {
   return str.length > maxLength ? str.slice(0, maxLength) + '…' : str
@@ -205,7 +212,7 @@ export function getInitials(name?: string | null): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase()
 }
 
-// Helper untuk resolve URL media / avatar yang diunggah ke backend (mendukung dev local & production)
+// Helper untuk resolve URL media / avatar / foto BAP yang diunggah ke backend
 export function resolveMediaUrl(url?: string | null): string | undefined {
   if (!url || typeof url !== 'string') return undefined
   const trimmed = url.trim()
@@ -227,23 +234,21 @@ export function resolveMediaUrl(url?: string | null): string | undefined {
       normalizedPath = `/${normalizedPath}`
     } else if (normalizedPath.startsWith('avatars/')) {
       normalizedPath = `/uploads/${normalizedPath}`
+    } else if (normalizedPath.startsWith('bap-photos/')) {
+      normalizedPath = `/uploads/${normalizedPath}`
     } else {
-      normalizedPath = `/uploads/avatars/${normalizedPath}`
+      normalizedPath = `/uploads/${normalizedPath}`
     }
   }
 
   const apiBase = import.meta.env.VITE_API_BASE_URL || ''
-  const isDev = import.meta.env.DEV
-
-  // Di Production: Jika VITE_API_BASE_URL mengarah ke host tertentu (misal http://36.93.22.142:3010)
-  if (!isDev && apiBase.startsWith('http')) {
+  if (apiBase.startsWith('http')) {
     try {
       const urlObj = new URL(apiBase)
       return `${urlObj.origin}${normalizedPath}`
     } catch {}
   }
 
-  // Di Development Local: Gunakan relative path yang di-proxy oleh dev server Vite
   return normalizedPath
 }
 

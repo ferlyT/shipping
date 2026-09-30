@@ -18,8 +18,8 @@ export function useDeliveryOrdersQuery(search: string, enabled: boolean) {
     getNextPageParam: (lastPage: any, allPages: any[]) => {
       const currentPage = lastPage.meta?.page ?? allPages.length
       const totalPages = lastPage.meta?.totalPages
-      if (totalPages !== undefined && currentPage < totalPages) {
-        return currentPage + 1
+      if (totalPages !== undefined) {
+        return currentPage < totalPages ? currentPage + 1 : undefined
       }
       if (lastPage.data && lastPage.data.length === 20) {
         return currentPage + 1

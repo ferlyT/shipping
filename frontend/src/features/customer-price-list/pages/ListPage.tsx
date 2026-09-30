@@ -15,7 +15,9 @@ import {
   Trash2,
   Ban,
   FileSpreadsheet,
+  X,
 } from 'lucide-react'
+import { useDebounce } from '@/hooks/useDebounce'
 import { customerPriceListApi } from '../services/customerPriceList.service'
 import type { CustomerPriceListUploadRow, CustomerSpecialPriceItem } from '../types'
 import { ROUTES } from '@/lib/constants'
@@ -39,11 +41,13 @@ export function ListPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
+  const debouncedSearch = useDebounce(search, 300)
 
   // Special Prices state
   const [specialPrices, setSpecialPrices] = useState<CustomerSpecialPriceItem[]>([])
   const [isLoadingSpecial, setIsLoadingSpecial] = useState(true)
   const [specialSearch, setSpecialSearch] = useState('')
+  const debouncedSpecialSearch = useDebounce(specialSearch, 300)
   const [specialMode, setSpecialMode] = useState<string>('ALL')
   const [specialStatus, setSpecialStatus] = useState<'ALL' | 'ACTIVE' | 'EXPIRED'>('ACTIVE')
 
@@ -59,20 +63,20 @@ export function ListPage() {
   const fetchMasterUploads = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await customerPriceListApi.listCustomers()
+      const res = await customerPriceListApi.listCustomers({ search: debouncedSearch.trim() || undefined })
       setRows(res.data.data)
     } catch (err: any) {
       setError(err?.response?.data?.message || err?.message || 'Gagal memuat daftar upload customer')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [debouncedSearch])
 
   const fetchSpecialPrices = useCallback(async () => {
     try {
       setIsLoadingSpecial(true)
       const res = await customerPriceListApi.listSpecialPrices({
-        search: specialSearch || undefined,
+        search: debouncedSpecialSearch.trim() || undefined,
         mode: specialMode !== 'ALL' ? specialMode : undefined,
         status: specialStatus !== 'ALL' ? specialStatus : undefined,
         limit: 100,
@@ -83,7 +87,7 @@ export function ListPage() {
     } finally {
       setIsLoadingSpecial(false)
     }
-  }, [specialSearch, specialMode, specialStatus])
+  }, [debouncedSpecialSearch, specialMode, specialStatus])
 
   useEffect(() => {
     fetchMasterUploads()
@@ -96,11 +100,12 @@ export function ListPage() {
   // Filtered Master Uploads
   const filteredRows = useMemo(() => {
     if (!search.trim()) return rows
-    const q = search.toLowerCase()
+    const q = search.toLowerCase().trim()
     return rows.filter(
       (r) =>
         r.fdCustCode.toLowerCase().includes(q) ||
-        (r.custName && r.custName.toLowerCase().includes(q))
+        (r.custName && r.custName.toLowerCase().includes(q)) ||
+        (r.fileName && r.fileName.toLowerCase().includes(q))
     )
   }, [rows, search])
 
@@ -112,9 +117,20 @@ export function ListPage() {
         if (specialMode === 'AIR' && !itemIsAir) return false
         if (specialMode === 'SEA' && itemIsAir) return false
       }
+      if (specialSearch.trim()) {
+        const q = specialSearch.toLowerCase().trim()
+        const matchesName = item.custName && item.custName.toLowerCase().includes(q)
+        const matchesCode = item.fdCustCode && item.fdCustCode.toLowerCase().includes(q)
+        const matchesCategory = item.category && item.category.toLowerCase().includes(q)
+        const matchesBranch = item.branch && item.branch.toLowerCase().includes(q)
+        const matchesAlias = item.aliases && item.aliases.some((a) => a.toLowerCase().includes(q))
+        if (!matchesName && !matchesCode && !matchesCategory && !matchesBranch && !matchesAlias) {
+          return false
+        }
+      }
       return true
     })
-  }, [specialPrices, specialMode])
+  }, [specialPrices, specialMode, specialSearch])
 
   // Deactivate handler
   const handleConfirmDeactivate = async () => {
@@ -478,8 +494,18 @@ export function ListPage() {
                 placeholder={t('customerPriceList.searchSpecialPlaceholder')}
                 value={specialSearch}
                 onChange={(e) => setSpecialSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-xl focus:outline-hidden focus:border-[var(--color-tertiary)] text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] transition-all"
+                className="w-full pl-9 pr-8 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-xl focus:outline-hidden focus:border-[var(--color-tertiary)] text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] transition-all"
               />
+              {specialSearch && (
+                <button
+                  type="button"
+                  onClick={() => setSpecialSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-primary)] p-0.5 rounded-md cursor-pointer transition-colors"
+                  title="Bersihkan pencarian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             {/* Filter Pills */}
@@ -657,8 +683,18 @@ export function ListPage() {
                 placeholder={t('customerPriceList.searchUploadPlaceholder')}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-xl focus:outline-hidden focus:border-[var(--color-tertiary)] text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] transition-all"
+                className="w-full pl-9 pr-8 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-xl focus:outline-hidden focus:border-[var(--color-tertiary)] text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] transition-all"
               />
+              {search && (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-primary)] p-0.5 rounded-md cursor-pointer transition-colors"
+                  title="Bersihkan pencarian"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
 
             <div className="flex items-center justify-between sm:justify-end gap-2 text-xs text-[var(--color-secondary)] font-medium">

@@ -794,5 +794,56 @@ model TbCustomerWalletLedger {
   @@map("tbCustomerWalletLedger")
 }
 
+// ─── INSPECTION REPORT (BAP) MODULE ──────────────────────────────
+
+model TbInspectionReport {
+  fdId           Int       @id @default(autoincrement())
+  fdReportNumber String    @unique @db.NVarChar(30)
+  fdReportDate   DateTime  @db.DateTime2
+  fdListType     Int       @default(2)
+  fdListCode     String?   @db.Char(7)
+  fdMarkingCode  String?   @db.NVarChar(50)
+  fdMarkingNo    String?   @db.NVarChar(50)
+  fdNamaCustomer String    @db.NVarChar(150)
+  fdTerima       String?   @db.NVarChar(50)
+  fdKeterangan   String?   @db.NVarChar(Max)
+  fdStatus       String    @default("1") @db.NVarChar(1)
+  fdCreatedBy    String    @db.NVarChar(100)
+  fdCreatedAt    DateTime  @default(now()) @db.DateTime2
+  fdUpdatedAt    DateTime  @default(now()) @updatedAt @db.DateTime2
+  fdDeletedAt    DateTime? @db.DateTime2
+
+  photos         TbInspectionPhoto[]
+
+  @@index([fdListCode])
+  @@index([fdMarkingCode])
+  @@index([fdCreatedBy])
+  @@index([fdCreatedAt(sort: Desc)])
+  @@map("tbInspectionReport")
+}
+
+model TbInspectionPhoto {
+  fdId         Int                @id @default(autoincrement())
+  fdReportId   Int
+  fdPhotoUrl   String             @db.NVarChar(500)
+  fdCaption    String?            @db.NVarChar(255)
+  fdUploadedBy String             @db.NVarChar(100)
+  fdCreatedAt  DateTime           @default(now()) @db.DateTime2
+
+  report       TbInspectionReport @relation(fields: [fdReportId], references: [fdId], onDelete: Cascade)
+
+  @@index([fdReportId])
+  @@map("tbInspectionPhoto")
+}
+
+model TbBAPCounter {
+  fdYear  Int
+  fdMonth Int
+  fdCount Int @default(0)
+
+  @@id([fdYear, fdMonth])
+  @@map("tbBAPCounter")
+}
+
 
 

@@ -19,6 +19,7 @@ import {
   deactivateCustomerCommodityPriceItem,
   deleteCustomerCommodityPriceItem,
   listCustomerCommodityPrices,
+  getCustomerPriceListBranches,
 } from './customer-price-list.service'
 
 
@@ -30,6 +31,13 @@ customerPriceListRoutes.use(
   requirePermission('/mshipping/finance/customer-price-list'),
 )
 
+// GET /api/customer-price-list/branches
+// Daftar branch resmi dari master tbCabang
+customerPriceListRoutes.get('/branches', async (c) => {
+  const branches = await getCustomerPriceListBranches()
+  return successResponse(c, branches)
+})
+
 // GET /api/customer-price-list/filters
 // Filter options (modes, branches, categories) dari semua price list customer
 customerPriceListRoutes.get('/filters', async (c) => {
@@ -40,7 +48,8 @@ customerPriceListRoutes.get('/filters', async (c) => {
 // GET /api/customer-price-list
 // Daftar semua customer yang punya price list aktif
 customerPriceListRoutes.get('/', async (c) => {
-  const rows = await listCustomersWithPriceList()
+  const search = c.req.query('search')
+  const rows = await listCustomersWithPriceList(search)
   return successResponse(c, rows)
 })
 

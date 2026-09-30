@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AlertTriangle } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { useToastStore } from '@/stores/toastStore'
@@ -27,6 +28,8 @@ export function CustMarkingDetailModal({
     sortedRows,
     aggregates,
     branches,
+    selectedCommodityType,
+    setSelectedCommodityType,
     rasioValue,
     displayCustName,
     isLoading,
@@ -69,7 +72,13 @@ export function CustMarkingDetailModal({
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="full" zIndex="z-[100]">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="full"
+      className="h-[840px] max-h-[94vh] w-[98vw] max-w-[98vw] flex flex-col"
+      zIndex="z-[100]"
+    >
       <Modal.Header
         title="Detail Fisik & Tagihan Per Marking"
         subtitle={
@@ -79,9 +88,29 @@ export function CustMarkingDetailModal({
           </span>
         }
         badge={
-          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-secondary)]">
-            {filteredRows.length} baris data
-          </span>
+          <div className="flex items-center gap-2">
+            {branches.length > 1 && (
+              <span
+                className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                title={`Peringatan: Terdeteksi ${branches.length} cabang (${branches.join(', ')})`}
+              >
+                <AlertTriangle className="w-3 h-3 text-amber-500" />
+                Multi-Cabang: {branches.join(', ')}
+              </span>
+            )}
+            {aggregates.countQtyKomplainMismatch > 0 && (
+              <span
+                className="inline-flex items-center gap-1 text-[10.5px] font-bold px-2 py-0.5 rounded-full border border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400 animate-pulse"
+                title={`Peringatan: ${aggregates.countQtyKomplainMismatch} baris data Qty Komplain berbeda dengan Qty Gudang`}
+              >
+                <AlertTriangle className="w-3 h-3 text-amber-500" />
+                Selisih Qty K ({aggregates.countQtyKomplainMismatch})
+              </span>
+            )}
+            <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-secondary)]">
+              {filteredRows.length} baris data
+            </span>
+          </div>
         }
         onClose={onClose}
       />
@@ -100,18 +129,25 @@ export function CustMarkingDetailModal({
         isExporting={isExporting}
         totalAll={normalizedRows.length}
         hasSelisihCount={aggregates.countSelisih}
+        countQtyKomplainMismatch={aggregates.countQtyKomplainMismatch}
       />
 
-      <CustMarkingSummaryBanner aggregates={aggregates} rasioValue={rasioValue} />
+      <CustMarkingSummaryBanner
+        aggregates={aggregates}
+        rasioValue={rasioValue}
+        isAirMode={normalizedRows.some((r) => r.listType === 1)}
+        selectedCommodityType={selectedCommodityType}
+        onSelectCommodityType={setSelectedCommodityType}
+      />
 
-      <Modal.Body noPadding className="flex flex-col min-h-0 bg-[var(--color-surface)]">
+      <Modal.Body noPadding className="flex flex-col min-h-0 flex-1 overflow-hidden bg-[var(--color-surface)]">
         {isLoading ? (
-          <div className="p-12 text-center text-xs text-[var(--color-secondary)] space-y-2">
+          <div className="flex-1 flex flex-col items-center justify-center p-12 text-center text-xs text-[var(--color-secondary)] space-y-2">
             <div className="h-6 w-36 mx-auto rounded-lg skeleton-shimmer" />
             <p>Memuat data fisik & marking dari server...</p>
           </div>
         ) : isError ? (
-          <div className="p-8 text-center text-xs text-rose-500 space-y-2">
+          <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-xs text-rose-500 space-y-2">
             <p>Terjadi kesalahan saat memuat data marking.</p>
             <Button size="sm" variant="secondary" onClick={() => refetch()}>
               Coba Lagi

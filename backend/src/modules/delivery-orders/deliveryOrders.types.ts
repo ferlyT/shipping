@@ -365,3 +365,194 @@ export interface CreateDeliveryOrderDto {
   fdBranchCode?: string
 }
 
+export interface DeliveryMonitoringItem {
+  fdSJNo: string
+  fdSJDate: string | null
+  fdEstimasi: string | null
+  fdSent: number
+  fdSndDate: string | null
+  fdCarID: string | null
+  fdSupir: string | null
+  fdTelpSupir: string | null
+  fdCustCode: string | null
+  fdCustName: string
+  fdCustNameSJ: string | null
+  fdListCode: string | null
+  fdListType: number | null
+  fdJmlPackSJ: number
+  fdSatuan: string | null
+  fdJmlBeratSJ: number
+  fdDescr: string | null
+  fdPrint: number | null
+  fdPrintDate: string | null
+  fdGive: number | null
+  fdGiveDate: string | null
+  fdAddr: string | null
+  fdCity: string | null
+  fdContact: string | null
+  fdHp: string | null
+  fdTelp: string | null
+  fdMarkingCode: string | null
+  fdMarkingNo: string | null
+  fdM3: number
+  agingDays: number
+  isOverdue: boolean
+  overdueDays: number
+}
+
+export interface DeliveryMonitoringKPIs {
+  totalPending: number
+  overdueCount: number
+  todayCount: number
+  aging1to2Count: number
+  aging3to5Count: number
+  aging6to7Count: number
+  agingOver7Count: number
+  airCount: number
+  seaCount: number
+  totalPackages: number
+  totalWeight: number
+}
+
+export interface DeliveryMonitoringResponse {
+  data: DeliveryMonitoringItem[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+  kpis: DeliveryMonitoringKPIs
+}
+
+export interface ConfirmDeliveryDto {
+  sjNos: string[]
+  fdSndDate: string // YYYY-MM-DD
+  fdCarID: string
+  fdSupir: string
+  fdTelpSupir?: string | null
+  expedition?: {
+    fdExpID: string
+    fdResiExp: string
+    fdCurrExp?: string
+    fdTotalExp?: number
+    fdPaid?: number
+  } | null
+}
+
+export interface DeliveryConfirmBatchItem {
+  batchDate: string
+  batchSession: 'Pagi' | 'Sore'
+  batchLabel: string
+  batchTimestamp: string
+  sjUdara: number
+  sjLaut: number
+  totalSj: number
+  packUdara: number
+  packLaut: number
+  totalPack: number
+  weightUdara: number
+  weightLaut: number
+  totalWeight: number
+}
+
+export interface DeliveryDailyCompareItem {
+  date: string // YYYY-MM-DD
+  displayDate: string // DD MMM
+  dayName: string // e.g. "Kam"
+  // Realisasi Terkonfirmasi (tbDeliveryConfirm)
+  realSjUdara: number
+  realSjLaut: number
+  totalRealSj: number
+  realPackUdara: number
+  realPackLaut: number
+  totalRealPack: number
+  realWeightUdara: number
+  realWeightLaut: number
+  totalRealWeight: number
+  batchCount: number
+  // Target Estimasi Kirim (tbDelivery.fdEstimasi)
+  estSjUdara: number
+  estSjLaut: number
+  totalEstSj: number
+  estPackUdara: number
+  estPackLaut: number
+  totalEstPack: number
+  estWeightUdara: number
+  estWeightLaut: number
+  totalEstWeight: number
+  // Komparasi & Ketercapaian
+  achievementPct: number // % realisasi terhadap target estimasi
+  diffSj: number // totalRealSj - totalEstSj
+  // Analisis Pending & Toleransi Estimasi (fdEstimasi + 1 hari max)
+  pendingOverdueSj: number // Belum terkirim dan sudah lewat fdEstimasi + 1
+  pendingToleransiSj: number // Belum terkirim tapi masih dalam toleransi <= fdEstimasi + 1
+  pendingSjTotal: number // Total belum terkirim (fdSent = 0)
+  sentOnTimeSj: number // Terkirim tepat waktu (<= fdEstimasi + 1)
+  sentLateSj: number // Terkirim lewat batas (> fdEstimasi + 1)
+  pendingOverduePack: number
+  pendingOverdueWeight: number
+}
+
+export interface DeliveryConfirmTrendsSummary {
+  days: number
+  totalBatches: number
+  // Realisasi
+  totalSjSent: number
+  totalSjUdara: number
+  totalSjLaut: number
+  totalColySent: number
+  totalWeightSent: number
+  avgSjPerBatch: number
+  // Estimasi
+  totalSjEstimated: number
+  totalEstUdara: number
+  totalEstLaut: number
+  totalEstColy: number
+  totalEstWeight: number
+  // Ketercapaian Global
+  overallAchievementPct: number
+  diffTotalSj: number
+  // Pending Overdue Global (> fdEstimasi + 1)
+  totalPendingOverdueSj: number
+  totalPendingSj: number
+}
+
+export interface DeliveryConfirmTrendsResponse {
+  days: number
+  summary: DeliveryConfirmTrendsSummary
+  batches: DeliveryConfirmBatchItem[]
+  dailyComparison: DeliveryDailyCompareItem[]
+}
+
+export interface DeliveryEstimasiDetailItem {
+  fdSJNo: string
+  fdSJDate: string | null
+  fdEstimasi: string | null
+  maxToleranceDate: string | null // fdEstimasi + 1 hari
+  fdSent: number
+  fdLoad: string | null // Waktu realisasi konfirmasi pengiriman riil (tbDelivery.fdLoad)
+  fdSndDate: string | null
+  fdKembali: string | null
+  fdCustCode: string | null
+  custName: string
+  fdListCode: string | null
+  fdMarkingCode: string | null
+  fdMarkingNo: string | null
+  fdJmlPackSJ: number
+  fdSatuan: string
+  fdJmlBeratSJ: number
+  fdCarID: string | null
+  fdSupir: string | null
+  fdTelpSupir: string | null
+  fdListType: number // 1: Udara, 2: Laut
+  overdueDays: number // Hari keterlambatan setelah fdEstimasi + 1
+  isOverdueHPlus1: boolean // True jika fdSent = 0 dan GETDATE > fdEstimasi + 1
+  statusLabel: string // 'PENDING_OVERDUE' | 'PENDING_TOLERANCE' | 'SENT_ONTIME' | 'SENT_LATE'
+  fdTerima: string | null
+  fdDescr: string | null
+  isBilled: boolean
+  invNos: string | null
+  invDates: string | null
+  billCount: number
+}

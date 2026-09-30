@@ -4,7 +4,7 @@ import { X } from 'lucide-react'
 import { useModalEscape } from '@/hooks/useModalEscape'
 import { cn } from '@/lib/utils'
 
-export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full'
+export type ModalSize = 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | 'full'
 
 export interface ModalProps {
   isOpen: boolean
@@ -22,7 +22,8 @@ const sizeClasses: Record<ModalSize, string> = {
   lg: 'max-w-3xl',
   xl: 'max-w-5xl',
   '2xl': 'max-w-6xl',
-  full: 'max-w-[96vw] w-[96vw] max-h-[94vh]',
+  '3xl': 'max-w-7xl',
+  full: 'max-w-[98vw] w-[98vw] max-h-[95vh]',
 }
 
 export function Modal({
@@ -51,7 +52,7 @@ export function Modal({
   const content = (
     <div
       className={cn(
-        'fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-black/60 backdrop-blur-xs animate-fadeIn',
+        'fixed inset-0 flex items-center justify-center p-2 sm:p-3 bg-black/60 backdrop-blur-xs animate-fadeIn',
         zIndex
       )}
       onClick={(e) => {

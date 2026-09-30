@@ -19,4 +19,6 @@ export interface BillingValidationSummaryModalProps {
   billType?: BillType
   onOpenCustMarkingModal?: () => void
   onOpenIssueModal?: () => void
+  onSelectInvoice?: (invNo: string) => void
 }
+

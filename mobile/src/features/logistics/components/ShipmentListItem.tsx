@@ -1,7 +1,7 @@
 import React from 'react'
-import { View, Text } from 'react-native'
+import { View, Text, TouchableOpacity } from 'react-native'
 import * as Haptics from 'expo-haptics'
-import { Receipt, Tag } from 'lucide-react-native'
+import { Receipt, Tag, ClipboardList } from 'lucide-react-native'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { useThemeStore } from '@/theme/themeStore'
@@ -11,10 +11,12 @@ import { getShipmentStatusBadge } from '../utils/logistics.utils'
 interface ShipmentListItemProps {
   item: any
   onPress: (item: any) => void
+  onCreateBap?: (item: any) => void
 }
 
-export function ShipmentListItem({ item, onPress }: ShipmentListItemProps) {
-  const { colors } = useThemeStore()
+export function ShipmentListItem({ item, onPress, onCreateBap }: ShipmentListItemProps) {
+  const { colors, mode } = useThemeStore()
+  const isDark = mode === 'midnight'
   const statusBadge = getShipmentStatusBadge(item.shipmentStatus)
 
   return (
@@ -83,9 +85,38 @@ export function ShipmentListItem({ item, onPress }: ShipmentListItemProps) {
         borderTopColor: 'rgba(255,255,255,0.06)',
         paddingTop: 6,
       }}>
-        <Text style={{ fontSize: 11.5, fontWeight: '500', color: colors.secondary, fontVariant: ['tabular-nums'] }}>
+        <Text style={{ fontSize: 11.5, fontWeight: '500', color: colors.secondary, fontVariant: ['tabular-nums'], flex: 1 }}>
           {formatNumber(item.fdJmlPack ?? item.fdColy)} {item.fdSatuan || 'Koli'} • {formatDecimal(item.fdJmlBerat ?? item.fdWeight, 1)} kg • {formatDecimal(item.fdM3, 4)} m³
         </Text>
+
+        {onCreateBap && (
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={(e) => {
+              e.stopPropagation()
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+              onCreateBap(item)
+            }}
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 4,
+              paddingHorizontal: 8,
+              paddingVertical: 3,
+              borderRadius: 6,
+              borderWidth: 1,
+              borderColor: colors.tabBarActive,
+              backgroundColor: isDark
+                ? 'rgba(56, 189, 248, 0.12)'
+                : 'rgba(2, 132, 199, 0.08)',
+            }}
+          >
+            <ClipboardList size={11} color={colors.tabBarActive} />
+            <Text style={{ fontSize: 10.5, fontWeight: '700', color: colors.tabBarActive }}>
+              + BAP
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
     </Card>
   )

@@ -256,6 +256,13 @@ export default function ListPage() {
               </button>
             </div>
 
+            <Link to={ROUTES.DELIVERY_ORDERS_MONITORING}>
+              <Button variant="secondary" size="sm" className="gap-1.5 cursor-pointer text-amber-600 dark:text-amber-400 border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10 font-medium">
+                <Clock size={14} />
+                <span>Monitoring Pending</span>
+              </Button>
+            </Link>
+
             <Link to={ROUTES.DELIVERY_ORDERS}>
               <Button variant="secondary" size="sm" className="gap-1.5 cursor-pointer">
                 <LayoutDashboard size={14} className="text-[var(--color-tertiary)]" />

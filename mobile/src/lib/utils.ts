@@ -87,7 +87,7 @@ export function resolveAvatarUrl(url?: string | null): string | null {
   if (!url) return null
   if (url.startsWith('http://') || url.startsWith('https://')) return url
   const cleanPath = url.startsWith('/') ? url : `/${url}`
-  return `http://36.93.22.142:3010${cleanPath}`
+  return `https://app.sampai.co${cleanPath}`
 }
 
 export function getInitials(name?: string | null): string {

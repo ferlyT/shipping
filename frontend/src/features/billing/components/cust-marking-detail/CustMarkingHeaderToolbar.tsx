@@ -1,4 +1,4 @@
-import { Search, FileSpreadsheet, Loader2 } from 'lucide-react'
+import { Search, FileSpreadsheet, Loader2, AlertTriangle } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import type { ColumnPreset } from './types'
 
@@ -16,6 +16,7 @@ export interface CustMarkingHeaderToolbarProps {
   isExporting: boolean
   totalAll: number
   hasSelisihCount?: number
+  countQtyKomplainMismatch?: number
 }
 
 export function CustMarkingHeaderToolbar({
@@ -32,7 +33,10 @@ export function CustMarkingHeaderToolbar({
   isExporting,
   totalAll,
   hasSelisihCount = 0,
+  countQtyKomplainMismatch = 0,
 }: CustMarkingHeaderToolbarProps) {
+  const hasMultipleBranches = branches.length > 1
+
   return (
     <div className="space-y-2.5 p-3.5 sm:p-4 bg-[var(--color-surface)] border-b border-[var(--color-border)] shrink-0">
       {/* Search & Actions Bar */}
@@ -118,8 +122,17 @@ export function CustMarkingHeaderToolbar({
       {/* Filter Row: Branches & Komplain toggle */}
       <div className="flex items-center justify-between gap-2 flex-wrap text-xs pt-1">
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider mr-1">
-            Cabang:
+          <span className="text-[11px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider mr-1 flex items-center gap-1.5">
+            <span>Cabang:</span>
+            {hasMultipleBranches && (
+              <span
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400"
+                title={`Peringatan: Terdeteksi ${branches.length} cabang (${branches.join(', ')})`}
+              >
+                <AlertTriangle className="w-3 h-3 text-amber-500" />
+                Multi ({branches.length})
+              </span>
+            )}
           </span>
           <button
             type="button"
@@ -165,6 +178,43 @@ export function CustMarkingHeaderToolbar({
           </label>
         </div>
       </div>
+
+      {/* Warning Alert Banner saat terdeteksi lebih dari 1 cabang */}
+      {hasMultipleBranches && (
+        <div className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11.5px]">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <span className="truncate">
+              <strong>Peringatan Multi-Cabang:</strong> Terdeteksi <strong>{branches.length} cabang</strong> berbeda (
+              <strong className="text-amber-600 dark:text-amber-400">{branches.join(', ')}</strong>) pada data marking ini. Pastikan audit pemisahan fisik muatan kargo antar cabang.
+            </span>
+          </div>
+          {selectedBranch !== 'ALL' ? (
+            <span className="text-[10.5px] text-[var(--color-secondary)] shrink-0">
+              Filter aktif: <strong className="text-[var(--color-primary)]">{selectedBranch}</strong>
+            </span>
+          ) : (
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+              Tampilan Gabungan Semua Cabang
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Warning Alert Banner saat terdeteksi Qty Komplain > 0 dan berbeda dengan Qty Gudang */}
+      {countQtyKomplainMismatch > 0 && (
+        <div className="flex items-center justify-between gap-2.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11.5px]">
+          <div className="flex items-center gap-2 min-w-0">
+            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
+            <span className="truncate">
+              <strong>Peringatan Selisih Qty Komplain:</strong> Terdeteksi <strong>{countQtyKomplainMismatch} baris data</strong> dengan Qty Komplain &gt; 0 dan berbeda dengan Qty Gudang.
+            </span>
+          </div>
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+            Audit Qty K Diperlukan
+          </span>
+        </div>
+      )}
     </div>
   )
 }

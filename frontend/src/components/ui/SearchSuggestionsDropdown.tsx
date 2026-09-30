@@ -27,6 +27,7 @@ interface SearchSuggestionsDropdownProps {
   suggestions: SuggestionItem[]
   isLoading?: boolean
   title?: string
+  selectedIndex?: number
   onSelect: (item: SuggestionItem) => void
   onClose: () => void
   className?: string
@@ -37,6 +38,7 @@ export function SearchSuggestionsDropdown({
   suggestions,
   isLoading = false,
   title = 'Saran Pencarian',
+  selectedIndex = -1,
   onSelect,
   onClose,
   className,
@@ -106,14 +108,19 @@ export function SearchSuggestionsDropdown({
           {title}
           {isLoading && <Loader2 className="w-3 h-3 animate-spin text-[var(--color-tertiary)]" />}
         </span>
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-0.5 rounded hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-          title="Tutup saran"
-        >
-          <X className="w-3 h-3" />
-        </button>
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:inline text-[9.5px] font-normal lowercase tracking-normal text-[var(--color-secondary)]/70">
+            ↑↓ navigasi · ↵ pilih
+          </span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-0.5 rounded hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
+            title="Tutup saran (Esc)"
+          >
+            <X className="w-3 h-3" />
+          </button>
+        </div>
       </div>
 
       {/* Suggestion Items */}
@@ -123,34 +130,54 @@ export function SearchSuggestionsDropdown({
         </div>
       ) : (
         <div className="max-h-60 overflow-y-auto divide-y divide-[var(--color-border)]">
-          {suggestions.map((item, idx) => (
-            <button
-              key={`${item.type}-${item.value}-${idx}`}
-              type="button"
-              onClick={() => onSelect(item)}
-              className="w-full text-left px-3 py-2 flex items-center gap-2.5 hover:bg-[var(--color-neutral)]/60 transition-colors cursor-pointer group"
-            >
-              <div
+          {suggestions.map((item, idx) => {
+            const isSelected = idx === selectedIndex
+            return (
+              <button
+                key={`${item.type}-${item.value}-${idx}`}
+                type="button"
+                onClick={() => onSelect(item)}
                 className={cn(
-                  'w-6 h-6 rounded-md border flex items-center justify-center shrink-0',
-                  getBadgeStyle(item.type)
+                  'w-full text-left px-3 py-2 flex items-center gap-2.5 transition-colors cursor-pointer group',
+                  isSelected
+                    ? 'bg-blue-500/10 dark:bg-blue-500/20 text-[var(--color-primary)] font-medium'
+                    : 'hover:bg-[var(--color-neutral)]/60'
                 )}
               >
-                {getIcon(item.type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-[var(--color-primary)] truncate group-hover:text-[var(--color-tertiary)] transition-colors">
-                  {item.title}
+                <div
+                  className={cn(
+                    'w-6 h-6 rounded-md border flex items-center justify-center shrink-0',
+                    getBadgeStyle(item.type)
+                  )}
+                >
+                  {getIcon(item.type)}
                 </div>
-                {item.subtitle && (
-                  <div className="text-[10.5px] text-[var(--color-secondary)] truncate">
-                    {item.subtitle}
+                <div className="flex-1 min-w-0">
+                  <div
+                    className={cn(
+                      'text-xs font-semibold truncate transition-colors',
+                      isSelected ? 'text-blue-600 dark:text-blue-400' : 'text-[var(--color-primary)] group-hover:text-[var(--color-tertiary)]'
+                    )}
+                  >
+                    {item.title}
                   </div>
-                )}
-              </div>
-              <ChevronRight className="w-3.5 h-3.5 text-[var(--color-secondary)]/50 group-hover:text-[var(--color-primary)] transition-colors shrink-0" />
-            </button>
-          ))}
+                  {item.subtitle && (
+                    <div className="text-[10.5px] text-[var(--color-secondary)] truncate">
+                      {item.subtitle}
+                    </div>
+                  )}
+                </div>
+                <ChevronRight
+                  className={cn(
+                    'w-3.5 h-3.5 transition-colors shrink-0',
+                    isSelected
+                      ? 'text-blue-600 dark:text-blue-400 translate-x-0.5'
+                      : 'text-[var(--color-secondary)]/50 group-hover:text-[var(--color-primary)]'
+                  )}
+                />
+              </button>
+            )
+          })}
         </div>
       )}
     </div>

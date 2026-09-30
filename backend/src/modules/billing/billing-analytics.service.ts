@@ -86,24 +86,50 @@ export async function getBillingTrends(query?: Record<string, string | undefined
 
   const dailyStart = days[0]!.start
   const dailyEnd = days[days.length - 1]!.end
-  const monthlyStart = months[0]!.start
+  // Untuk data bulanan dan YoY (Year-over-Year), tarik rentang dari 12 bulan sebelum bulan pertama (24 bulan)
+  const monthlyStart = new Date(months[0]!.start.getFullYear() - 1, months[0]!.start.getMonth(), 1)
   const monthlyEnd = months[months.length - 1]!.end
 
   const [dailyRows, monthlyRows] = await Promise.all([
-    prisma.$queryRaw<{ day: Date; totalBill: number; totalTagihan: unknown }[]>`
+    prisma.$queryRaw<{
+      day: Date
+      totalBill: number
+      totalTagihan: unknown
+      billUdara: number
+      tagihanUdara: unknown
+      billLaut: number
+      tagihanLaut: unknown
+    }[]>`
       SELECT CAST(fdInvDate AS DATE) AS day,
              COUNT(*) AS totalBill,
-             SUM(ISNULL(fdJumlah1, 0)) AS totalTagihan
-      FROM tbBilling
+             SUM(ISNULL(fdJumlah1, 0)) AS totalTagihan,
+             SUM(CASE WHEN fdListType = 1 THEN 1 ELSE 0 END) AS billUdara,
+             SUM(CASE WHEN fdListType = 1 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanUdara,
+             SUM(CASE WHEN fdListType = 2 THEN 1 ELSE 0 END) AS billLaut,
+             SUM(CASE WHEN fdListType = 2 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanLaut
+      FROM tbBilling WITH (NOLOCK)
       WHERE fdInvDate >= ${dailyStart} AND fdInvDate <= ${dailyEnd}
       GROUP BY CAST(fdInvDate AS DATE)
     `,
-    prisma.$queryRaw<{ yr: number; mo: number; totalBill: number; totalTagihan: unknown }[]>`
+    prisma.$queryRaw<{
+      yr: number
+      mo: number
+      totalBill: number
+      totalTagihan: unknown
+      billUdara: number
+      tagihanUdara: unknown
+      billLaut: number
+      tagihanLaut: unknown
+    }[]>`
       SELECT YEAR(fdInvDate) AS yr,
              MONTH(fdInvDate) AS mo,
              COUNT(*) AS totalBill,
-             SUM(ISNULL(fdJumlah1, 0)) AS totalTagihan
-      FROM tbBilling
+             SUM(ISNULL(fdJumlah1, 0)) AS totalTagihan,
+             SUM(CASE WHEN fdListType = 1 THEN 1 ELSE 0 END) AS billUdara,
+             SUM(CASE WHEN fdListType = 1 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanUdara,
+             SUM(CASE WHEN fdListType = 2 THEN 1 ELSE 0 END) AS billLaut,
+             SUM(CASE WHEN fdListType = 2 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanLaut
+      FROM tbBilling WITH (NOLOCK)
       WHERE fdInvDate >= ${monthlyStart} AND fdInvDate <= ${monthlyEnd}
       GROUP BY YEAR(fdInvDate), MONTH(fdInvDate)
     `,
@@ -112,14 +138,28 @@ export async function getBillingTrends(query?: Record<string, string | undefined
   const dailyMap = new Map(
     dailyRows.map((r) => [
       new Date(r.day).toISOString().slice(0, 10),
-      { totalBill: Number(r.totalBill), totalTagihan: Number(r.totalTagihan ?? 0) },
+      {
+        totalBill: Number(r.totalBill),
+        totalTagihan: Number(r.totalTagihan ?? 0),
+        billUdara: Number(r.billUdara ?? 0),
+        tagihanUdara: Number(r.tagihanUdara ?? 0),
+        billLaut: Number(r.billLaut ?? 0),
+        tagihanLaut: Number(r.tagihanLaut ?? 0),
+      },
     ])
   )
 
   const monthlyMap = new Map(
     monthlyRows.map((r) => [
       `${r.yr}-${r.mo}`,
-      { totalBill: Number(r.totalBill), totalTagihan: Number(r.totalTagihan ?? 0) },
+      {
+        totalBill: Number(r.totalBill),
+        totalTagihan: Number(r.totalTagihan ?? 0),
+        billUdara: Number(r.billUdara ?? 0),
+        tagihanUdara: Number(r.tagihanUdara ?? 0),
+        billLaut: Number(r.billLaut ?? 0),
+        tagihanLaut: Number(r.tagihanLaut ?? 0),
+      },
     ])
   )
 
@@ -130,16 +170,85 @@ export async function getBillingTrends(query?: Record<string, string | undefined
       label: d.label,
       totalBill: agg?.totalBill || 0,
       totalTagihan: agg?.totalTagihan || 0,
+      billUdara: agg?.billUdara || 0,
+      tagihanUdara: agg?.tagihanUdara || 0,
+      billLaut: agg?.billLaut || 0,
+      tagihanLaut: agg?.tagihanLaut || 0,
     }
   })
 
   const monthly = months.map((m) => {
-    const key = `${m.start.getFullYear()}-${m.start.getMonth() + 1}`
+    const yr = m.start.getFullYear()
+    const mo = m.start.getMonth() + 1
+    const key = `${yr}-${mo}`
+    const prevKey = `${yr - 1}-${mo}`
+
     const agg = monthlyMap.get(key)
+    const prevAgg = monthlyMap.get(prevKey)
+
+    const totalBill = agg?.totalBill || 0
+    const prevTotalBill = prevAgg?.totalBill || 0
+    const totalTagihan = agg?.totalTagihan || 0
+    const prevTotalTagihan = prevAgg?.totalTagihan || 0
+
+    const billUdara = agg?.billUdara || 0
+    const prevBillUdara = prevAgg?.billUdara || 0
+    const tagihanUdara = agg?.tagihanUdara || 0
+    const prevTagihanUdara = prevAgg?.tagihanUdara || 0
+
+    const billLaut = agg?.billLaut || 0
+    const prevBillLaut = prevAgg?.billLaut || 0
+    const tagihanLaut = agg?.tagihanLaut || 0
+    const prevTagihanLaut = prevAgg?.tagihanLaut || 0
+
+    const totalBillYoYPct = prevTotalBill > 0
+      ? Number((((totalBill - prevTotalBill) / prevTotalBill) * 100).toFixed(1))
+      : (totalBill > 0 ? 100 : 0)
+
+    const totalTagihanYoYPct = prevTotalTagihan > 0
+      ? Number((((totalTagihan - prevTotalTagihan) / prevTotalTagihan) * 100).toFixed(1))
+      : (totalTagihan > 0 ? 100 : 0)
+
+    const billUdaraYoYPct = prevBillUdara > 0
+      ? Number((((billUdara - prevBillUdara) / prevBillUdara) * 100).toFixed(1))
+      : (billUdara > 0 ? 100 : 0)
+
+    const tagihanUdaraYoYPct = prevTagihanUdara > 0
+      ? Number((((tagihanUdara - prevTagihanUdara) / prevTagihanUdara) * 100).toFixed(1))
+      : (tagihanUdara > 0 ? 100 : 0)
+
+    const billLautYoYPct = prevBillLaut > 0
+      ? Number((((billLaut - prevBillLaut) / prevBillLaut) * 100).toFixed(1))
+      : (billLaut > 0 ? 100 : 0)
+
+    const tagihanLautYoYPct = prevTagihanLaut > 0
+      ? Number((((tagihanLaut - prevTagihanLaut) / prevTagihanLaut) * 100).toFixed(1))
+      : (tagihanLaut > 0 ? 100 : 0)
+
+    const prevDate = new Date(yr - 1, mo - 1, 1)
+    const prevYearLabel = prevDate.toLocaleString('id-ID', { month: 'short', year: 'numeric' })
+
     return {
       label: m.label,
-      totalBill: agg?.totalBill || 0,
-      totalTagihan: agg?.totalTagihan || 0,
+      prevYearLabel,
+      totalBill,
+      prevTotalBill,
+      totalTagihan,
+      prevTotalTagihan,
+      billUdara,
+      prevBillUdara,
+      tagihanUdara,
+      prevTagihanUdara,
+      billLaut,
+      prevBillLaut,
+      tagihanLaut,
+      prevTagihanLaut,
+      totalBillYoYPct,
+      totalTagihanYoYPct,
+      billUdaraYoYPct,
+      tagihanUdaraYoYPct,
+      billLautYoYPct,
+      tagihanLautYoYPct,
     }
   })
 
@@ -242,19 +351,22 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
   ])
 
   const isTarget = (r: any) => {
-    const statusKirim = String(r.StatusKirim || '').toUpperCase().trim()
-    if (statusKirim.includes('BELUM DITERIMA GDG')) return false
-
     const cust = String(r.Customer || '').toUpperCase().trim()
     if (cust.includes('MR.X') || cust.includes('MR X') || cust === 'NO NAME' || cust === 'NONAME') return false
 
-    const st = String(r.Status || '').toUpperCase().trim()
     const typeStr = String(r.Type || '').toUpperCase().trim()
     const comodityStr = String(r.Comodity || '').toUpperCase().trim()
+    const isFcl = typeStr.includes('FCL') || comodityStr.includes('FCL')
 
+    // Kargo FCL harus muncul tanpa melihat status gudang
+    if (!isFcl) {
+      const statusKirim = String(r.StatusKirim || '').toUpperCase().trim()
+      if (statusKirim.includes('BELUM DITERIMA GDG')) return false
+    }
+
+    const st = String(r.Status || '').toUpperCase().trim()
     const isCodOrUrgent = st.includes('COD') || st.includes('URGENT')
     const isAgingGt7 = Number(r.hari || 0) > 7
-    const isFcl = typeStr.includes('FCL') || comodityStr.includes('FCL')
 
     return isCodOrUrgent || isAgingGt7 || isFcl
   }
@@ -348,19 +460,22 @@ export async function getBillingTargetDetails(query: Record<string, string | und
   const picFilter = query.pic?.trim().toLowerCase() || 'all'
 
   const isTarget = (r: any) => {
-    const statusKirim = String(r.StatusKirim || '').toUpperCase().trim()
-    if (statusKirim.includes('BELUM DITERIMA GDG')) return false
-
     const cust = String(r.Customer || '').toUpperCase().trim()
     if (cust.includes('MR.X') || cust.includes('MR X') || cust === 'NO NAME' || cust === 'NONAME') return false
 
-    const st = String(r.Status || '').toUpperCase().trim()
     const typeStr = String(r.Type || '').toUpperCase().trim()
     const comodityStr = String(r.Comodity || '').toUpperCase().trim()
+    const isFcl = typeStr.includes('FCL') || comodityStr.includes('FCL')
 
+    // Kargo FCL harus muncul tanpa melihat status gudang
+    if (!isFcl) {
+      const statusKirim = String(r.StatusKirim || '').toUpperCase().trim()
+      if (statusKirim.includes('BELUM DITERIMA GDG')) return false
+    }
+
+    const st = String(r.Status || '').toUpperCase().trim()
     const isCodOrUrgent = st.includes('COD') || st.includes('URGENT')
     const isAgingGt7 = Number(r.hari || 0) > 7
-    const isFcl = typeStr.includes('FCL') || comodityStr.includes('FCL')
 
     return isCodOrUrgent || isAgingGt7 || isFcl
   }

@@ -7,6 +7,7 @@ import {
   ArrowRight,
   ListChecks,
   CheckCircle2,
+  Clock,
 } from 'lucide-react'
 import { deliveryOrdersApi } from '../services/delivery-orders.service'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -98,6 +99,12 @@ export default function DashboardPage() {
               <Button variant="secondary" size="sm" className="gap-1.5 cursor-pointer shadow-xs font-semibold">
                 <ListChecks size={14} />
                 <span>{t('nav.deliveryOrderList')}</span>
+              </Button>
+            </Link>
+            <Link to={ROUTES.DELIVERY_ORDERS_MONITORING}>
+              <Button variant="secondary" size="sm" className="gap-1.5 cursor-pointer shadow-xs font-semibold text-amber-600 dark:text-amber-400 border border-amber-500/30 bg-amber-500/5 hover:bg-amber-500/10">
+                <Clock size={14} />
+                <span>Monitoring Pending</span>
               </Button>
             </Link>
             <Button

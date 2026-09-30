@@ -243,6 +243,19 @@ billingRoutes.get('/customer-tariff-audit/:custCode?', async (c) => {
   return successResponse(c, result)
 })
 
+billingRoutes.get('/customer-harga/:custCode?', async (c) => {
+  const custCode = c.req.param('custCode') || c.req.query('custCode') || ''
+  if (!custCode) {
+    return errorResponse(c, 'Parameter custCode wajib diisi', 400)
+  }
+  const { getCustomerHargaDetail } = await import('./customer-tariff-audit.service')
+  const result = await getCustomerHargaDetail(custCode)
+  if (!result) {
+    return errorResponse(c, `Data tarif untuk customer ${custCode} tidak ditemukan`, 404)
+  }
+  return successResponse(c, result)
+})
+
 billingRoutes.get('/freight-charge', async (c) => {
   const custCode = c.req.query('custCode') || ''
   const markingCode = c.req.query('markingCode') || ''

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -18,6 +18,8 @@ import {
   Truck,
   AlertTriangle,
   Lock,
+  Mic,
+  RefreshCw,
 } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { Button } from '@/components/ui/Button'
@@ -26,6 +28,11 @@ import { formatDate, copyToClipboard, cn, displayCustName } from '@/lib/utils'
 import { BillingValidationCard } from '../components/BillingValidationCard'
 import { ValidationListDrawer } from '../components/ValidationListDrawer'
 import { BillingValidationSummaryModal } from '../components/BillingValidationSummaryModal'
+import { extractInvoiceOpenTarget } from '../utils/voiceSearch.utils'
+import { useVoiceAssistantStore } from '@/stores/voiceAssistantStore'
+import { useVoiceRecognition } from '../hooks/useVoiceRecognition'
+import type { ValidationCardTab } from '../components/validation-card/types'
+import type { SummaryModalTab } from '../components/validation-summary/types'
 import type { M3CheckResponse } from '../types/billing.types'
 import { BillingPrintButtons } from '../components/BillingPrintButtons'
 import { CustomerBillingHistoryModal } from '../components/CustomerBillingHistoryModal'
@@ -38,7 +45,7 @@ import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { useToastStore } from '@/stores/toastStore'
 import type { Billing, BillingDetail } from '../types/billing.types'
-import { formatQtyDecimal, isMktCustomer, evaluateItemPrice } from '../utils/billing.utils'
+import { formatQtyDecimal, isMktCustomer, evaluateItemPrice, downloadInvoicePdf } from '../utils/billing.utils'
 import { useBillingValidation } from '../hooks/useBillingValidation'
 
 // ─── Skeleton ────────────────────────────────────────────────────────────────
@@ -200,9 +207,18 @@ export function ValidationDetailPage() {
   const queryClient = useQueryClient()
   const { addToast } = useToastStore()
 
+  const { suppressVoice, registerContext, unregisterContext } = useVoiceAssistantStore()
+
+  // Supresi asisten suara global selama halaman validasi aktif (menggunakan voice mandiri lokal)
+  useEffect(() => {
+    const unsuppress = suppressVoice()
+    return () => unsuppress()
+  }, [suppressVoice])
+
   // ── Modal / Drawer states ──
   const [isListDrawerOpen, setIsListDrawerOpen] = useState(false)
   const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(true)
+  const [summaryInitialTab, setSummaryInitialTab] = useState<SummaryModalTab | undefined>(undefined)
   const [isCopied, setIsCopied] = useState(false)
   const [isCopiedInv, setIsCopiedInv] = useState(false)
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false)
@@ -211,9 +227,28 @@ export function ValidationDetailPage() {
   const [isEditItemsModalOpen, setIsEditItemsModalOpen] = useState(false)
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false)
   const [mobileTab, setMobileTab] = useState<'validation' | 'items'>('validation')
+  const [validationCardTab, setValidationCardTab] = useState<ValidationCardTab | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const drawerClosedAtRef = useRef<number>(0)
 
-  // Re-open summary modal on invoice change
-  useEffect(() => { if (id) setIsSummaryModalOpen(true) }, [id])
+  const handleCloseDrawer = useCallback(() => {
+    drawerClosedAtRef.current = Date.now()
+    setIsListDrawerOpen(false)
+  }, [])
+
+  const handleSelectInvoice = useCallback((invNo: string) => {
+    drawerClosedAtRef.current = Date.now()
+    setIsListDrawerOpen(false)
+    navigate(ROUTES.BILLING_VALIDATION_DETAIL(invNo))
+  }, [navigate])
+
+  // Re-open summary modal on invoice change & reset card tab
+  useEffect(() => {
+    if (id) {
+      setIsSummaryModalOpen(true)
+      setValidationCardTab(null)
+    }
+  }, [id])
 
   // Ctrl+F → open list drawer
   useEffect(() => {
@@ -359,7 +394,549 @@ export function ValidationDetailPage() {
     hasUnbilledTransport,
     underchargedItems,
     evaluatedItems,
+    isCurrencyInputError,
+    currencyInputErrorDetail,
+    isAir,
+    isType2,
   } = validation
+
+  // ── Handler Refresh Data Validasi & Tagihan ──
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true)
+    try {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['billingDetail', id] }),
+        queryClient.invalidateQueries({ queryKey: ['m3-check'] }),
+        queryClient.invalidateQueries({ queryKey: ['billingTransportCheck'] }),
+      ])
+      addToast({ type: 'success', message: 'Data validasi & tarif berhasil disegarkan' })
+    } catch {
+      addToast({ type: 'error', message: 'Gagal menyegarkan data validasi' })
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 500)
+    }
+  }, [id, queryClient, addToast])
+
+  // ── Register Voice Assistant Context for Detail Page Actions ──
+  useEffect(() => {
+    if (!data) return
+    registerContext({
+      currentInvNo: data.fdInvNo,
+      isIssued: Number(data.fdGive) === 1,
+      underchargedCount: underchargedItems.length,
+      onOpenSummary: (tab) => {
+        if (tab) setSummaryInitialTab(tab)
+        setIsSummaryModalOpen(true)
+      },
+      onCloseSummary: () => setIsSummaryModalOpen(false),
+      onTriggerIssue: () => setIsIssueModalOpen(true),
+      onRefreshValidation: handleRefresh,
+    })
+
+    return () => {
+      unregisterContext()
+    }
+  }, [data?.fdInvNo, data?.fdGive, underchargedItems.length, registerContext, unregisterContext, handleRefresh])
+
+  const isAnyModalOpen = Boolean(
+    isListDrawerOpen ||
+    isSummaryModalOpen ||
+    isIssueModalOpen ||
+    isHistoryModalOpen ||
+    isResiModalOpen ||
+    isEditItemsModalOpen ||
+    isAuditModalOpen
+  )
+  const isAnyModalOpenRef = useRef(isAnyModalOpen)
+  useEffect(() => {
+    isAnyModalOpenRef.current = isAnyModalOpen
+  }, [isAnyModalOpen])
+
+  const isManuallyStoppedRef = useRef(false)
+  const rearmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const voiceCommandTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const {
+    isSupported,
+    isListening,
+    transcript,
+    interimTranscript,
+    startListening,
+    stopListening,
+    resetTranscript,
+  } = useVoiceRecognition({
+    lang: 'id-ID',
+    continuous: true,
+    interimResults: true,
+    onEnd: () => {
+      // Auto re-arm standby jika tidak ada modal yang terbuka dan tidak dihentikan manual
+      if (!isAnyModalOpenRef.current && !isManuallyStoppedRef.current) {
+        if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+        rearmTimerRef.current = setTimeout(() => {
+          if (!isAnyModalOpenRef.current && !isManuallyStoppedRef.current) {
+            startListening()
+          }
+        }, 200)
+      }
+    },
+  })
+
+  // Standby otomatis mendengarkan saat berada di halaman validasi (tanpa modal aktif)
+  useEffect(() => {
+    if (!isAnyModalOpen && isSupported) {
+      isManuallyStoppedRef.current = false
+      const timer = setTimeout(() => {
+        if (!isAnyModalOpenRef.current) {
+          startListening()
+        }
+      }, 200)
+      return () => {
+        clearTimeout(timer)
+        if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+        if (voiceCommandTimerRef.current) {
+          clearTimeout(voiceCommandTimerRef.current)
+          voiceCommandTimerRef.current = null
+        }
+      }
+    } else {
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      if (voiceCommandTimerRef.current) {
+        clearTimeout(voiceCommandTimerRef.current)
+        voiceCommandTimerRef.current = null
+      }
+      stopListening()
+      resetTranscript()
+    }
+  }, [isAnyModalOpen, isSupported, startListening, stopListening, resetTranscript])
+
+  // Shortcut Alt+V di halaman validasi untuk toggle mic lokal
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isAltV = e.altKey && (e.key?.toLowerCase() === 'v' || e.code === 'KeyV')
+      if (isAltV) {
+        if (isAnyModalOpenRef.current) return
+        e.preventDefault()
+        e.stopPropagation()
+        if (isListening) {
+          isManuallyStoppedRef.current = true
+          if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+          if (voiceCommandTimerRef.current) {
+            clearTimeout(voiceCommandTimerRef.current)
+            voiceCommandTimerRef.current = null
+          }
+          stopListening()
+          resetTranscript()
+        } else {
+          isManuallyStoppedRef.current = false
+          resetTranscript()
+          startListening()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown, true)
+    return () => window.removeEventListener('keydown', handleKeyDown, true)
+  }, [isListening, startListening, stopListening, resetTranscript])
+
+  const isNavigatingInvoiceRef = useRef(false)
+
+  // Reset flag navigasi invoice saat id berubah
+  useEffect(() => {
+    isNavigatingInvoiceRef.current = false
+  }, [id])
+
+  // Handler navigasi langsung ke detail validasi invoice via perintah suara
+  const handleOpenInvoiceByVoice = useCallback(
+    async (target: string) => {
+      if (!target) return
+      if (isNavigatingInvoiceRef.current) return
+      isNavigatingInvoiceRef.current = true
+
+      // Matikan mic sementara saat memproses navigasi
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      stopListening()
+      resetTranscript()
+
+      const cleanTarget = target.trim().toUpperCase()
+      const currentInv = (data?.fdInvNo || id || '').trim().toUpperCase()
+      const currentPrefix = currentInv ? currentInv.split('-')[0]?.trim().toUpperCase() : ''
+
+      // Deteksi jika pengguna menyebut kode cabang secara eksplisit (misal 'GZS', 'GZA', 'YWS')
+      const branchMatch = cleanTarget.match(/^(GZS|GZA|YWS|YWA|JKS|JKA|SUB|SG|HK|BKK|KR|SZ|SH)[-\s]?/i)
+      const explicitBranch = branchMatch ? branchMatch[1].toUpperCase() : ''
+      const targetBranch = explicitBranch || currentPrefix || ''
+
+      // Ambil angka murni dari input: e.g. "GZS-11023" -> "11023", "011023" -> "011023"
+      const cleanDigits = cleanTarget.replace(/\D/g, '')
+      const unpaddedDigits = cleanDigits.replace(/^0+/, '')
+      const padded6Digits = cleanDigits.length <= 6 ? cleanDigits.padStart(6, '0') : cleanDigits
+
+      // 1. Jika format benar-benar lengkap dengan tahun (misal "GZS-011023-09-2026")
+      const isCompleteInv = /^[A-Z]{2,4}-\d{3,}-\d{2}-\d{4}$/i.test(cleanTarget)
+      if (isCompleteInv) {
+        if (cleanTarget === currentInv) {
+          addToast({ type: 'info', message: `Invoice ${cleanTarget} sedang dibuka saat ini` })
+          isNavigatingInvoiceRef.current = false
+          return
+        }
+        addToast({ type: 'success', message: `Membuka invoice ${cleanTarget}...` })
+        setIsListDrawerOpen(false)
+        setIsSummaryModalOpen(false)
+        navigate(ROUTES.BILLING_VALIDATION_DETAIL(cleanTarget))
+        return
+      }
+
+      // 2. Pencarian cerdas ke backend: Prioritas UTAMA cari dari data bill yang BELUM ISSUED (draftOnly: true)
+      try {
+        const searchKeyword = unpaddedDigits || cleanTarget
+        addToast({ type: 'info', message: `Mencari invoice belum issued "${searchKeyword}"...` })
+
+        // Helper penilaian kecocokan invoice
+        const evaluateMatch = (b: Billing) => {
+          const invNo = (b.fdInvNo || '').trim().toUpperCase()
+          const branch = invNo.split('-')[0]?.trim() || ''
+
+          const parts = invNo.split('-')
+          const seqPart = parts.length > 1 ? parts[1].trim() : parts[0].trim()
+          const seqDigits = seqPart.replace(/\D/g, '')
+          const unpaddedSeq = seqDigits.replace(/^0+/, '')
+
+          let score = 0
+          // Match persis nomor urut faktur (misal 11023 == 11023 atau 011023 == 011023)
+          if (unpaddedDigits && (unpaddedSeq === unpaddedDigits || seqDigits === padded6Digits || seqDigits === cleanDigits)) {
+            score += 100
+          } else if (invNo.includes(cleanTarget) || (unpaddedDigits && invNo.includes(unpaddedDigits))) {
+            score += 60
+          }
+
+          // Bonus kecocokan cabang (cabang eksplisit yang disebutkan atau cabang invoice saat ini)
+          if (targetBranch && branch === targetBranch) {
+            score += 40
+          }
+
+          return { bill: b, invNo, score, branch }
+        }
+
+        // Kueri 1: Cari dari data bill yang BELUM ISSUED (draftOnly = true, hasAmount = true)
+        const draftRes = await billingApi.list({
+          search: searchKeyword,
+          draftOnly: 'true',
+          hasAmount: 'true',
+          minYear: '2023',
+          noPagination: 'true',
+        })
+        const draftBillings = ((draftRes.data?.data || []) as Billing[]).filter((b) => {
+          const isDraft = (b.fdGive ?? 0) !== 1 && (b.fdGive2 ?? 0) !== 1 && !b.fdCekDate
+          const hasAmt = Number(b.fdJumlah1 || 0) > 0 || Number(b.fdJumlah2 || 0) > 0
+          return isDraft && hasAmt
+        })
+
+        const rankedDrafts = draftBillings
+          .map(evaluateMatch)
+          .filter((item) => item.score > 0)
+          .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score
+            const dateA = a.bill.fdInvDate ? new Date(a.bill.fdInvDate).getTime() : 0
+            const dateB = b.bill.fdInvDate ? new Date(b.bill.fdInvDate).getTime() : 0
+            return dateB - dateA
+          })
+
+        if (rankedDrafts.length > 0) {
+          const best = rankedDrafts[0]
+          if (best.invNo === currentInv) {
+            addToast({ type: 'info', message: `Invoice ${best.invNo} sedang dibuka saat ini` })
+            isNavigatingInvoiceRef.current = false
+            return
+          }
+
+          addToast({ type: 'success', message: `Membuka invoice ${best.invNo}...` })
+          setIsListDrawerOpen(false)
+          setIsSummaryModalOpen(false)
+          navigate(ROUTES.BILLING_VALIDATION_DETAIL(best.invNo))
+          return
+        }
+
+        // Kueri 2: Fallback jika tidak ditemukan di data belum issued (mungkin invoice sudah diterbitkan/issued sebelumnya)
+        const allRes = await billingApi.list({
+          search: searchKeyword,
+          hasAmount: 'true',
+          minYear: '2023',
+          noPagination: 'true',
+        })
+        const allBillings = (allRes.data?.data || []) as Billing[]
+        const rankedAll = allBillings
+          .map(evaluateMatch)
+          .filter((item) => item.score > 0)
+          .sort((a, b) => {
+            if (b.score !== a.score) return b.score - a.score
+            const dateA = a.bill.fdInvDate ? new Date(a.bill.fdInvDate).getTime() : 0
+            const dateB = b.bill.fdInvDate ? new Date(b.bill.fdInvDate).getTime() : 0
+            return dateB - dateA
+          })
+
+        if (rankedAll.length > 0) {
+          const best = rankedAll[0]
+          if (best.invNo === currentInv) {
+            addToast({ type: 'info', message: `Invoice ${best.invNo} sedang dibuka saat ini` })
+            isNavigatingInvoiceRef.current = false
+            return
+          }
+
+          const isAlreadyIssued = Number(best.bill.fdGive ?? 0) === 1
+          if (isAlreadyIssued) {
+            addToast({ type: 'info', message: `Membuka invoice ${best.invNo} (sudah berstatus Terbit / Issued)...` })
+          } else {
+            addToast({ type: 'success', message: `Membuka invoice ${best.invNo}...` })
+          }
+
+          setIsListDrawerOpen(false)
+          setIsSummaryModalOpen(false)
+          navigate(ROUTES.BILLING_VALIDATION_DETAIL(best.invNo))
+          return
+        }
+
+        // Jika sama sekali tidak ditemukan di database
+        addToast({
+          type: 'error',
+          message: `Invoice "${cleanTarget}" tidak ditemukan di data tagihan belum issued`,
+        })
+        isNavigatingInvoiceRef.current = false
+      } catch {
+        addToast({
+          type: 'error',
+          message: `Gagal mencari invoice "${cleanTarget}"`,
+        })
+        isNavigatingInvoiceRef.current = false
+      } finally {
+        setTimeout(() => {
+          isNavigatingInvoiceRef.current = false
+        }, 1000)
+      }
+    },
+    [data?.fdInvNo, id, navigate, addToast, stopListening, resetTranscript]
+  )
+
+  // Definisi executor perintah suara halaman validasi (disimpan pada ref agar selalu menggunakan state terbaru)
+  const executeVoiceCommandRef = useRef<(rawText: string) => void>(() => {})
+
+  executeVoiceCommandRef.current = (rawText: string) => {
+    if (isAnyModalOpenRef.current) return
+    const text = rawText.toLowerCase().trim()
+    if (!text) return
+
+    // 0. Perintah Buka No Invoice Langsung ("buka no invoice GZS 010751", "buka invoice 010751", "buka 010751", dsb)
+    const openInvoiceTarget = extractInvoiceOpenTarget(text)
+    if (openInvoiceTarget) {
+      resetTranscript()
+      handleOpenInvoiceByVoice(openInvoiceTarget)
+      return
+    }
+
+    // 1. Perintah Cari / Pilih Invoice -> Buka drawer cari invoice (HANYA pilih invoice / cari)
+    if (/\b(pilih\s+invoice|pilih\s+faktur|pilih\s+bill|cari|cari\s+invoice|cari\s+faktur|cari\s+bill|drawer|daftar\s+invoice|ganti\s+invoice)\b/i.test(text)) {
+      // Cegah auto-reopen jika drawer baru saja ditutup (cooldown 1000ms untuk eliminasi sisa ucapan)
+      if (Date.now() - drawerClosedAtRef.current < 1000) {
+        resetTranscript()
+        return
+      }
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      stopListening()
+      resetTranscript()
+      setIsListDrawerOpen(true)
+      return
+    }
+
+    // 2. Perintah Refresh / Segarkan Halaman & Data Validasi
+    if (/\b(refresh|segarkan|muat\s*ulang|reload|cek\s*ulang|sinkron|update\s*data)\b/i.test(text)) {
+      resetTranscript()
+      handleRefresh()
+      return
+    }
+
+    // 3. Perintah Cetak / Print Invoice
+    if (/\b(cetak|print|unduh\s*pdf|download\s*pdf|cetak\s*invoice|cetak\s*faktur)\b/i.test(text)) {
+      resetTranscript()
+      if (data?.fdInvNo) {
+        downloadInvoicePdf(data.fdInvNo)
+        addToast({ type: 'info', message: `Mencetak/Mengunduh PDF Invoice ${data.fdInvNo}...` })
+      }
+      return
+    }
+
+    // 4. Perintah Ganti Tab Nomor Urut 1 - 5 (Mandiri tanpa harus kata "buka")
+    const isSea = !isAir && !isType2
+
+    // Tab 1: Item & Tarif
+    if (/(?:buka\s+)?(?:tab\s*(?:1|satu|pertama)|tab\s*item|tab\s*tarif|tab\s*harga|item\s*tarif)\b/i.test(text)) {
+      resetTranscript()
+      setMobileTab('validation')
+      setValidationCardTab('profile')
+      return
+    }
+
+    // Tab 2: Validasi M3 / Timbangan Fisik
+    if (/(?:buka\s+)?(?:tab\s*(?:2|dua|kedua)|tab\s*m3|tab\s*timbangan|validasi\s*m3|kubikasi)\b/i.test(text)) {
+      resetTranscript()
+      setMobileTab('validation')
+      setValidationCardTab('m3_weight')
+      return
+    }
+
+    // Tab 3: Overweight (Laut) atau Freight Charge (Udara / Type 2)
+    if (/(?:buka\s+)?(?:tab\s*(?:3|tiga|ketiga))\b/i.test(text)) {
+      resetTranscript()
+      setMobileTab('validation')
+      setValidationCardTab(isSea ? 'overweight' : 'freight')
+      return
+    }
+
+    // Tab 4: Freight Charge (Laut) atau Ekspedisi (Udara / Type 2)
+    if (/(?:buka\s+)?(?:tab\s*(?:4|empat|keempat))\b/i.test(text)) {
+      resetTranscript()
+      setMobileTab('validation')
+      setValidationCardTab(isSea ? 'freight' : 'transport')
+      return
+    }
+
+    // Tab 5: Ekspedisi (Laut)
+    if (/(?:buka\s+)?(?:tab\s*(?:5|lima|kelima))\b/i.test(text)) {
+      if (isSea) {
+        resetTranscript()
+        setMobileTab('validation')
+        setValidationCardTab('transport')
+        return
+      }
+    }
+
+    // Tab spesifik berdasarkan nama
+    if (/\b(overweight|kelebihan\s*berat|lebih\s*kg|lebih\s*berat)\b/i.test(text)) {
+      if (isSea) {
+        resetTranscript()
+        setMobileTab('validation')
+        setValidationCardTab('overweight')
+        return
+      }
+    }
+
+    if (/\b(freight|freight\s*charge|fc)\b/i.test(text)) {
+      resetTranscript()
+      setMobileTab('validation')
+      setValidationCardTab('freight')
+      return
+    }
+
+    if (/\b(ekspedisi|transport|ongkir|tbexpindo)\b/i.test(text)) {
+      resetTranscript()
+      setMobileTab('validation')
+      setValidationCardTab('transport')
+      return
+    }
+
+    // Tab Mobile: Info & Item Tagihan
+    if (/\b(info\s*tagihan|rincian\s*item|daftar\s*item|tab\s*info)\b/i.test(text)) {
+      resetTranscript()
+      setMobileTab('items')
+      return
+    }
+
+    // 5. Aksi Cepat Ribbon / Modal
+    if (/\b(terbitkan|terbitkan\s*invoice|issue\s*invoice|terbitkan\s*bill)\b/i.test(text)) {
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      stopListening()
+      resetTranscript()
+      setIsIssueModalOpen(true)
+      return
+    }
+
+    if (/\b(inspeksi|audit\s*summary|ringkasan|kesimpulan|modal\s*audit)\b/i.test(text)) {
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      stopListening()
+      resetTranscript()
+      setIsSummaryModalOpen(true)
+      return
+    }
+
+    if (/\b(resi|marking|persebaran\s*marking|cek\s*resi)\b/i.test(text)) {
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      stopListening()
+      resetTranscript()
+      setIsResiModalOpen(true)
+      return
+    }
+
+    if (/\b(history|riwayat|riwayat\s*tagihan|billing\s*history)\b/i.test(text)) {
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      stopListening()
+      resetTranscript()
+      setIsHistoryModalOpen(true)
+      return
+    }
+
+    if (/\b(audit\s*tarif|tarif\s*customer|pricelist\s*customer|audit\s*harga)\b/i.test(text)) {
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      stopListening()
+      resetTranscript()
+      setIsAuditModalOpen(true)
+      return
+    }
+
+    if (/\b(kembali|daftar\s*validasi|antrean|back)\b/i.test(text)) {
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      stopListening()
+      resetTranscript()
+      navigate(ROUTES.BILLING_VALIDATION_LIST)
+      return
+    }
+
+    // Jika setelah 1 detik tidak cocok dengan perintah apapun, bersihkan transkrip agar siap menerima ucapan berikutnya
+    resetTranscript()
+  }
+
+  // Pemrosesan perintah suara lokal halaman validasi dengan buffer jeda hening ~1 detik (1000ms):
+  // Menunggu 1 detik jeda hening setelah ucapan terakhir pengguna agar kata majemuk & nomor invoice lengkap tidak terpotong
+  useEffect(() => {
+    if (isAnyModalOpen) {
+      if (voiceCommandTimerRef.current) {
+        clearTimeout(voiceCommandTimerRef.current)
+        voiceCommandTimerRef.current = null
+      }
+      return
+    }
+
+    const combined = `${transcript} ${interimTranscript}`.trim()
+    if (!combined) {
+      if (voiceCommandTimerRef.current) {
+        clearTimeout(voiceCommandTimerRef.current)
+        voiceCommandTimerRef.current = null
+      }
+      return
+    }
+
+    // Reset dan tunda eksekusi selama 1000ms (1 detik) setiap kali ada kata atau token suara baru yang terdeteksi
+    if (voiceCommandTimerRef.current) {
+      clearTimeout(voiceCommandTimerRef.current)
+    }
+
+    voiceCommandTimerRef.current = setTimeout(() => {
+      voiceCommandTimerRef.current = null
+      executeVoiceCommandRef.current(combined)
+    }, 1000)
+
+    return () => {
+      if (voiceCommandTimerRef.current) {
+        clearTimeout(voiceCommandTimerRef.current)
+        voiceCommandTimerRef.current = null
+      }
+    }
+  }, [transcript, interimTranscript, isAnyModalOpen])
 
   // ── Early returns ──
   if (isLoading) return <ValidationDetailPageSkeleton />
@@ -540,6 +1117,70 @@ export function ValidationDetailPage() {
 
             <button
               type="button"
+              onClick={handleRefresh}
+              disabled={isRefreshing}
+              className="px-1.5 sm:px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] shadow-2xs transition-all flex items-center gap-1 cursor-pointer shrink-0 disabled:opacity-50"
+              title="Segarkan Data Validasi & Tagihan (Katakan 'Refresh' atau 'Segarkan')"
+            >
+              <RefreshCw className={cn("w-3.5 h-3.5 text-cyan-600 dark:text-cyan-400", isRefreshing && "animate-spin")} />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+
+            {/* Standby Voice Telemetry Button */}
+            {isSupported && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (isListening) {
+                    isManuallyStoppedRef.current = true
+                    if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+                    if (voiceCommandTimerRef.current) {
+                      clearTimeout(voiceCommandTimerRef.current)
+                      voiceCommandTimerRef.current = null
+                    }
+                    stopListening()
+                    resetTranscript()
+                  } else {
+                    isManuallyStoppedRef.current = false
+                    resetTranscript()
+                    startListening()
+                  }
+                }}
+                className={cn(
+                  "px-2 py-1 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs shrink-0",
+                  isListening
+                    ? "bg-emerald-500/10 border-emerald-500/35 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15"
+                    : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)]"
+                )}
+                title={
+                  isListening
+                    ? (`${transcript} ${interimTranscript}`.trim()
+                      ? `Mendengarkan: "${`${transcript} ${interimTranscript}`.trim()}" (menunggu jeda 1 detik sebelum dieksekusi...)`
+                      : 'Standby Suara Aktif (Jeda 1 detik setelah bicara): Katakan "Buka [No Invoice]", "Tab 1-5", "Refresh", "Cari", "Terbitkan", dll. Klik untuk jeda (Alt+V).')
+                    : 'Klik untuk aktifkan standby suara (Alt+V)'
+                }
+              >
+                {isListening ? (
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                  </span>
+                ) : (
+                  <span className="h-2 w-2 rounded-full bg-slate-400 shrink-0" />
+                )}
+                <Mic className={cn("w-3.5 h-3.5", isListening ? "text-emerald-500" : "text-[var(--color-secondary)]")} />
+                <span className="hidden md:inline font-medium max-w-[200px] truncate">
+                  {isListening
+                    ? (`${transcript} ${interimTranscript}`.trim()
+                      ? `🎙️ "${`${transcript} ${interimTranscript}`.trim()}"`
+                      : 'Standby Suara')
+                    : 'Suara Jeda'}
+                </span>
+              </button>
+            )}
+
+            <button
+              type="button"
               onClick={() => setIsListDrawerOpen(true)}
               className="p-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] shadow-2xs transition-all cursor-pointer shrink-0"
               title="Cari Invoice Lain (Ctrl+F)"
@@ -665,6 +1306,39 @@ export function ValidationDetailPage() {
               </div>
             </div>
 
+            {/* Alert: Kesalahan Input Mata Uang */}
+            {isCurrencyInputError && currencyInputErrorDetail && (
+              <div className="p-2.5 sm:p-3 rounded-lg bg-rose-500/10 border border-rose-500/35 text-xs flex items-start gap-2.5 text-rose-700 dark:text-rose-300">
+                <div className="w-5 h-5 rounded bg-rose-500/20 text-rose-600 dark:text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
+                  <AlertTriangle size={13} className="stroke-[2.5]" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-bold text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-500/40 text-rose-800 dark:text-rose-200">
+                      ⚠️ Kesalahan Input: Anomali Mata Uang
+                    </span>
+                    <span className="text-[10px] text-rose-600 dark:text-rose-400 font-mono font-semibold">
+                      Header: {currencyInputErrorDetail.foreignCurr} {currencyInputErrorDetail.fdJumlah2.toLocaleString('id-ID', { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+                  <p className="text-[11px] leading-snug text-rose-800 dark:text-rose-200">
+                    Header invoice mencatat valas <strong className="font-mono">{currencyInputErrorDetail.foreignCurr} {currencyInputErrorDetail.fdJumlah2.toLocaleString('id-ID', { minimumFractionDigits: 2 })}</strong> di kolom valas (<code className="font-mono px-1 rounded bg-rose-500/15">fdJumlah2</code>), namun <strong>tidak ada satu pun item</strong> yang menggunakan satuan/valas {currencyInputErrorDetail.foreignCurr} (seluruh item dalam Rupiah/Rp.).
+                    {currencyInputErrorDetail.matchedItemName && (
+                      <span> Nilai item <strong>"{currencyInputErrorDetail.matchedItemName}"</strong> (Rp {currencyInputErrorDetail.fdJumlah2.toLocaleString('id-ID')}) keliru diinput ke slot valas.</span>
+                    )}
+                  </p>
+                  <div className="flex items-center gap-2 pt-0.5 flex-wrap text-[10.5px]">
+                    <span className="text-emerald-700 dark:text-emerald-300 font-semibold">
+                      Total Riil Tagihan (Rp): Rp {currencyInputErrorDetail.correctTotalRp.toLocaleString('id-ID')}
+                    </span>
+                    <span className="text-[var(--color-secondary)]">
+                      (Jumlah 1: Rp {Number(data.fdJumlah1 || 0).toLocaleString('id-ID')} + Jumlah 2: Rp {currencyInputErrorDetail.fdJumlah2.toLocaleString('id-ID')})
+                    </span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Sub-row: Pembuat & Kasir */}
             <div className="pt-2.5 mt-1 border-t border-[var(--color-border)]/70 flex items-center justify-between text-xs text-[var(--color-secondary)]">
               <span>Pembuat: <strong className="text-[var(--color-primary)] font-semibold">{data.employee?.fdEmpName || '—'}</strong></span>
@@ -754,9 +1428,20 @@ export function ValidationDetailPage() {
                       <div key={row.fdID} className="p-3 space-y-2 hover:bg-[var(--color-neutral)]/30 transition-colors">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="font-semibold text-[var(--color-primary)] text-xs leading-snug" title={row.fdItemName}>
-                              {row.fdItemName}
-                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-semibold text-[var(--color-primary)] text-xs leading-snug" title={row.fdItemName}>
+                                {row.fdItemName}
+                              </p>
+                              {isCurrencyInputError && currencyInputErrorDetail && Math.abs(Number(row.fdTotal || 0) - currencyInputErrorDetail.fdJumlah2) < 1 && (
+                                <span
+                                  className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-0.5 shrink-0"
+                                  title={`Nilai item ini (${formatWithCurrency(row.fdTotal, 'Rp.')}) keliru diinput sebagai valas ${currencyInputErrorDetail.foreignCurr}`}
+                                >
+                                  <AlertTriangle size={9} className="shrink-0" />
+                                  <span>Salah Input ke Valas</span>
+                                </span>
+                              )}
+                            </div>
                             {/* Baris Rincian tbExpIndo jika item adalah Transport */}
                             {/(TRANSPORT|DELIVERY|ONGKIR|TRUCKING)/i.test(row.fdItemName || '') && (
                               <div className="text-[10px] text-[var(--color-secondary)] flex items-center gap-1.5 mt-1 flex-wrap">
@@ -879,9 +1564,20 @@ export function ValidationDetailPage() {
                       {details.map((row) => (
                         <tr key={row.fdID} className="hover:bg-[var(--color-neutral)]/30 transition-colors">
                           <td className="px-3.5 py-2.5 leading-snug">
-                            <p className="font-semibold text-[var(--color-primary)] text-xs line-clamp-2" title={row.fdItemName}>
-                              {row.fdItemName}
-                            </p>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <p className="font-semibold text-[var(--color-primary)] text-xs line-clamp-2" title={row.fdItemName}>
+                                {row.fdItemName}
+                              </p>
+                              {isCurrencyInputError && currencyInputErrorDetail && Math.abs(Number(row.fdTotal || 0) - currencyInputErrorDetail.fdJumlah2) < 1 && (
+                                <span
+                                  className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-0.5 shrink-0"
+                                  title={`Nilai item ini (${formatWithCurrency(row.fdTotal, 'Rp.')}) keliru diinput sebagai valas ${currencyInputErrorDetail.foreignCurr}`}
+                                >
+                                  <AlertTriangle size={9} className="shrink-0" />
+                                  <span>Salah Input ke Valas</span>
+                                </span>
+                              )}
+                            </div>
                             {/* Baris Rincian tbExpIndo jika item adalah Transport */}
                             {/(TRANSPORT|DELIVERY|ONGKIR|TRUCKING)/i.test(row.fdItemName || '') && (
                               <div className="text-[10px] text-[var(--color-secondary)] flex items-center gap-1.5 mt-1 flex-wrap">
@@ -997,13 +1693,28 @@ export function ValidationDetailPage() {
                   </span>
                 ))}
               </div>
-              <div className="flex items-baseline gap-2 ml-auto">
+              <div className="flex items-center gap-2 ml-auto flex-wrap justify-end">
                 <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] tracking-wider">Total:</span>
-                <span className="font-mono font-bold text-base sm:text-lg text-[var(--color-tertiary)]">
-                  {Number(data.fdJumlah2 || 0) > 0
-                    ? formatWithCurrency(data.fdJumlah2, data.fdCurr1)
-                    : formatWithCurrency(data.fdJumlah1, 'Rp.')}
-                </span>
+                {isCurrencyInputError && currencyInputErrorDetail ? (
+                  <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <span className="font-mono font-bold text-base sm:text-lg text-[var(--color-tertiary)]">
+                      {formatWithCurrency(currencyInputErrorDetail.correctTotalRp, 'Rp.')}
+                    </span>
+                    <span
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 flex items-center gap-1 whitespace-nowrap"
+                      title={`fdJumlah2 ${currencyInputErrorDetail.foreignCurr} ${currencyInputErrorDetail.fdJumlah2.toLocaleString('id-ID')} adalah kesalahan input FoxPro (nilai riil Rupiah)`}
+                    >
+                      <AlertTriangle size={9} className="shrink-0" />
+                      <span>⚠ fdJumlah2 {currencyInputErrorDetail.foreignCurr} Keliru</span>
+                    </span>
+                  </div>
+                ) : (
+                  <span className="font-mono font-bold text-base sm:text-lg text-[var(--color-tertiary)]">
+                    {Number(data.fdJumlah2 || 0) > 0
+                      ? formatWithCurrency(data.fdJumlah2, data.fdCurr1)
+                      : formatWithCurrency(data.fdJumlah1, 'Rp.')}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -1029,10 +1740,12 @@ export function ValidationDetailPage() {
               markingCode={data.fdMarkingCode}
               markingNo={data.fdMarkingNo}
               invoiceNo={data.fdInvNo}
-              customerName={displayCustName(data.customer?.fdCustName)}
+              customerName={displayCustName(data.customer?.fdCustName || data.fdCustCode)}
               custCode={data.fdCustCode}
               onOpenSummaryModal={() => setIsSummaryModalOpen(true)}
               onOpenAuditModal={() => setIsAuditModalOpen(true)}
+              activeTab={validationCardTab}
+              onTabChange={(tab) => setValidationCardTab(tab)}
             />
           )}
         </div>
@@ -1042,9 +1755,15 @@ export function ValidationDetailPage() {
       {createPortal(
         <button
           onClick={() => setIsListDrawerOpen(true)}
-          className="fixed right-3 bottom-6 z-40 p-3 rounded-full bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xl hover:opacity-90 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center border-2 border-[var(--color-surface)]"
-          title={`${t('billing.validation.selectInvoiceTitle')} (Ctrl + F)`}
+          className="fixed right-3 bottom-6 z-40 p-3 rounded-full bg-[var(--color-primary)] text-[var(--color-on-primary)] shadow-2xl hover:opacity-90 hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center border-2 border-[var(--color-surface)] relative group"
+          title={`${t('billing.validation.selectInvoiceTitle')} (Katakan "Cari" / "Pilih invoice" atau Ctrl + F)`}
         >
+          {isSupported && isListening && (
+            <span className="absolute -top-1 -right-1 flex h-3 w-3">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500 border border-[var(--color-surface)]"></span>
+            </span>
+          )}
           <ListFilter className="w-4 h-4 text-[var(--color-on-primary)]" />
         </button>,
         document.body
@@ -1053,14 +1772,15 @@ export function ValidationDetailPage() {
       {/* ─── MODALS ─── */}
       <ValidationListDrawer
         isOpen={isListDrawerOpen}
-        onClose={() => setIsListDrawerOpen(false)}
+        onClose={handleCloseDrawer}
         currentInvNo={data.fdInvNo}
-        onSelectInvoice={(invNo) => navigate(ROUTES.BILLING_VALIDATION_DETAIL(invNo))}
+        onSelectInvoice={handleSelectInvoice}
       />
 
       <BillingValidationSummaryModal
         isOpen={isSummaryModalOpen}
         onClose={() => setIsSummaryModalOpen(false)}
+        initialTab={summaryInitialTab}
         billingData={data}
         validation={validation}
         validationData={validationData}
@@ -1070,12 +1790,13 @@ export function ValidationDetailPage() {
         billedVfc={billedVfc}
         unitTotals={unitTotals}
         onOpenIssueModal={() => setIsIssueModalOpen(true)}
+        onSelectInvoice={handleOpenInvoiceByVoice}
       />
 
       <CustomerBillingHistoryModal
         isOpen={isHistoryModalOpen}
         custCode={data.fdCustCode}
-        custName={displayCustName(data.customer?.fdCustName)}
+        custName={displayCustName(data.customer?.fdCustName || data.fdCustCode)}
         tglAgent={data.fdTglAgent}
         typeComodity={data.fdTypeComodityName}
         onClose={() => setIsHistoryModalOpen(false)}
@@ -1088,7 +1809,7 @@ export function ValidationDetailPage() {
         custName={displayCustName(data.customer?.fdCustName || data.fdCustCode)}
         custCode={data.fdCustCode || undefined}
         invDate={data.fdInvDate}
-        totalAmount={Number(data.fdJumlah2 || data.fdJumlah1 || 0)}
+        totalAmount={isCurrencyInputError && currencyInputErrorDetail ? currencyInputErrorDetail.correctTotalRp : Number(data.fdJumlah2 || data.fdJumlah1 || 0)}
         underchargedItems={underchargedItems}
       />
 
@@ -1124,6 +1845,7 @@ export function ValidationDetailPage() {
         onSuccess={() => {
           queryClient.invalidateQueries({ queryKey: ['billingDetail', id] })
           queryClient.invalidateQueries({ queryKey: ['m3-check'] })
+          queryClient.invalidateQueries({ queryKey: ['billingTransportCheck'] })
         }}
       />
     </div>
