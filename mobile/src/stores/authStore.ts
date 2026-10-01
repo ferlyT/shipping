@@ -20,6 +20,7 @@ interface AuthState {
   isAuthenticated: boolean
   isInitialized: boolean
   login: (token: string, user: User) => Promise<void>
+  setToken: (token: string) => Promise<void>
   updateUser: (partial: Partial<User>) => void
   logout: () => Promise<void>
   initializeAuth: () => Promise<void>
@@ -42,6 +43,15 @@ export const useAuthStore = create<AuthState>((set) => ({
       console.warn('Gagal menyimpan token ke SecureStore', e)
     }
     set({ token, user, isAuthenticated: true })
+  },
+
+  setToken: async (token: string) => {
+    try {
+      await SecureStore.setItemAsync(TOKEN_KEY, token)
+    } catch (e) {
+      console.warn('Gagal memperbarui token ke SecureStore', e)
+    }
+    set({ token, isAuthenticated: true })
   },
 
   updateUser: (partial) => {

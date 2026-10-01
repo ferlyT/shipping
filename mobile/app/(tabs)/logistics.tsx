@@ -13,6 +13,7 @@ import { useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import * as Haptics from 'expo-haptics'
 import { Card } from '../../src/components/ui/Card'
+import { ErrorRetryCard } from '../../src/components/ui/ErrorRetryCard'
 import { SearchBar } from '../../src/components/ui/SearchBar'
 import { SegmentedControl } from '../../src/components/ui/SegmentedControl'
 import { SkeletonShimmer } from '../../src/components/ui/SkeletonShimmer'
@@ -272,6 +273,11 @@ export default function LogisticsScreen() {
                   <SkeletonShimmer height={90} />
                   <SkeletonShimmer height={90} />
                 </View>
+              ) : shipments.isError ? (
+                <ErrorRetryCard
+                  onRetry={() => shipments.refetch()}
+                  isRetrying={shipments.isRefetching}
+                />
               ) : (
                 <Card style={styles.emptyCard}>
                   <Text style={{ color: colors.secondary }}>{t('logistics.noShipments', 'Tidak ada data resi pengiriman')}</Text>
@@ -311,6 +317,11 @@ export default function LogisticsScreen() {
                   <SkeletonShimmer height={80} />
                   <SkeletonShimmer height={80} />
                 </View>
+              ) : batches.isError ? (
+                <ErrorRetryCard
+                  onRetry={() => batches.refetch()}
+                  isRetrying={batches.isRefetching}
+                />
               ) : (
                 <Card style={styles.emptyCard}>
                   <Text style={{ color: colors.secondary, textAlign: 'center' }}>
@@ -363,6 +374,11 @@ export default function LogisticsScreen() {
                   <SkeletonShimmer height={80} />
                   <SkeletonShimmer height={80} />
                 </View>
+              ) : deliveryOrders.isError ? (
+                <ErrorRetryCard
+                  onRetry={() => deliveryOrders.refetch()}
+                  isRetrying={deliveryOrders.isRefetching}
+                />
               ) : (
                 <Card style={styles.emptyCard}>
                   <Text style={{ color: colors.secondary }}>{t('logistics.noDelivery', 'Tidak ada surat jalan')}</Text>

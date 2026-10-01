@@ -19,6 +19,7 @@ import * as Haptics from 'expo-haptics'
 import { X, User, Search } from 'lucide-react-native'
 import { Card } from '../../src/components/ui/Card'
 import { Badge } from '../../src/components/ui/Badge'
+import { ErrorRetryCard } from '../../src/components/ui/ErrorRetryCard'
 import { SearchBar } from '../../src/components/ui/SearchBar'
 import { SegmentedControl } from '../../src/components/ui/SegmentedControl'
 import { SkeletonShimmer } from '../../src/components/ui/SkeletonShimmer'
@@ -96,7 +97,7 @@ export default function FinanceScreen() {
   const billings = useBillingsQuery(debouncedSearch, activeTab === 'billing')
 
   // Validation data
-  const { data: rawValidationData, isLoading: isValLoading, refetch: refetchVal, isRefetching: isRefetchingVal } = useQuery({
+  const { data: rawValidationData, isLoading: isValLoading, refetch: refetchVal, isRefetching: isRefetchingVal, isError: isValError } = useQuery({
     queryKey: ['finance-validation', debouncedSearch],
     queryFn: async () => {
       const params: any = { hasAmount: 'true', draftOnly: 'true', noPagination: 'true', minYear: '2023' }
@@ -284,6 +285,11 @@ export default function FinanceScreen() {
                   <SkeletonShimmer height={95} />
                   <SkeletonShimmer height={95} />
                 </View>
+              ) : billings.isError ? (
+                <ErrorRetryCard
+                  onRetry={() => billings.refetch()}
+                  isRetrying={billings.isRefetching}
+                />
               ) : (
                 <Card style={styles.emptyCard}>
                   <Text style={{ color: colors.secondary }}>{t('finance.noBilling', 'Tidak ada invoice ditemukan')}</Text>
@@ -309,6 +315,11 @@ export default function FinanceScreen() {
                   <SkeletonShimmer height={105} />
                   <SkeletonShimmer height={105} />
                 </View>
+              ) : isValError ? (
+                <ErrorRetryCard
+                  onRetry={() => refetchVal()}
+                  isRetrying={isRefetchingVal}
+                />
               ) : (
                 <Card style={styles.emptyCard}>
                   <Text style={{ color: colors.secondary, fontSize: 12 }}>{t('finance.noValidation', 'Tidak ada antrean validasi')}</Text>

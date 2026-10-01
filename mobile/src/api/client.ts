@@ -24,9 +24,16 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
-// Handle 401 unauthorized
+// Handle 401 unauthorized & transparent sliding token refresh
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Sliding token refresh: jika backend menyertakan token baru pada header, simpan otomatis
+    const refreshedToken = response.headers?.['x-refreshed-token']
+    if (refreshedToken && typeof refreshedToken === 'string') {
+      useAuthStore.getState().setToken(refreshedToken)
+    }
+    return response
+  },
   (error) => {
     if (error.response?.status === 401) {
       // Don't auto logout if error is from login endpoint
