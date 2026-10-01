@@ -11,6 +11,7 @@ import type {
   ComodityTypeOption,
   RelatedBillsSummary,
   RelatedInvoiceItem,
+  RelatedListCodeItem,
 } from './m3-check.types'
 
 /**
@@ -27,7 +28,7 @@ export function parseInvoiceFamily(invNo: string) {
   if (!match) return null
 
   const [, prefix, headChar, seq5, tail] = match
-  const isChild = headChar !== '0' && /[A-Za-z]/.test(headChar)
+  const isChild = Boolean(headChar && headChar !== '0' && /[A-Za-z]/.test(headChar))
   const isParent = headChar === '0'
   const parentInvNo = `${prefix}0${seq5}${tail}`
 
@@ -805,6 +806,9 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
   // Customer Price List items
   let customerPriceListItems: any[] = []
   let customerPriceEffectiveDate: string | null = null
+  let customerPriceEndDate: string | null = null
+  let isCustomerPriceExpired = false
+  let isCustomerPriceExpiringSoon = false
   let hasCustomerPriceList = false
 
   if (custLookupResult && custLookupResult.found && custLookupResult.items?.length > 0) {
@@ -812,15 +816,36 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
     customerPriceEffectiveDate = custLookupResult.uploadInfo?.effectiveDate
       ? new Date(custLookupResult.uploadInfo.effectiveDate).toISOString()
       : null
-    customerPriceListItems = custLookupResult.items.map((it: any) => ({
-      id: it.id,
-      sheetType: 'CUSTOMER',
-      mode: it.mode,
-      branch: it.branch,
-      category: it.category,
-      price: Number(it.price),
-      isCustomerPrice: true,
-    }))
+    customerPriceEndDate = custLookupResult.uploadInfo?.endDate
+      ? new Date(custLookupResult.uploadInfo.endDate).toISOString()
+      : null
+
+    const checkDate = agentDate || new Date()
+    if (customerPriceEndDate && new Date(customerPriceEndDate) < checkDate) {
+      isCustomerPriceExpired = true
+    } else if (
+      customerPriceEndDate &&
+      new Date(customerPriceEndDate).getTime() - checkDate.getTime() <= 7 * 24 * 60 * 60 * 1000
+    ) {
+      isCustomerPriceExpiringSoon = true
+    }
+
+    customerPriceListItems = custLookupResult.items.map((it: any) => {
+      const itEnd = it.endDate ? new Date(it.endDate) : (customerPriceEndDate ? new Date(customerPriceEndDate) : null)
+      const itExpired = Boolean(itEnd && itEnd < checkDate)
+      return {
+        id: it.id,
+        sheetType: 'CUSTOMER',
+        mode: it.mode,
+        branch: it.branch,
+        category: it.category,
+        price: Number(it.price),
+        effectiveDate: it.effectiveDate ? new Date(it.effectiveDate).toISOString() : customerPriceEffectiveDate,
+        endDate: itEnd ? itEnd.toISOString() : null,
+        isExpired: itExpired,
+        isCustomerPrice: true,
+      }
+    })
   }
 
   const allPriceListItems = [...customerPriceListItems, ...masterPriceListItems]
@@ -889,31 +914,132 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
 
         // Hanya bentuk summary jika terdapat lebih dari 1 invoice terkait atau ada relasi induk/anak
         if (relatedBatchBills.length > 1 || (parsedFam?.isChild && relatedBatchBills.length > 0)) {
-          const relatedListCodes = Array.from(
-            new Set(
-              relatedBatchBills
-                .map((b) => (b.fdListCode ? String(b.fdListCode).trim() : ''))
-                .filter(Boolean)
-            )
-          )
+          // 1. Ambil data fisik dari tbEntryList untuk batch customer ini jika belum lengkap di detailRows
+          const batchEntryLists = await safeRunRaw(async () => {
+            return prisma.tbEntryList.findMany({
+              where: {
+                fdCustCode: resolvedCustCode,
+                OR: [
+                  { fdMarkingCode: { startsWith: cleanBatchCode.slice(0, 7) } },
+                  { fdMarkingNo: { startsWith: cleanBatchCode.slice(0, 7) } },
+                ],
+              },
+              select: {
+                fdListCode: true,
+                fdMarkingCode: true,
+                fdMarkingNo: true,
+                fdJmlPack: true,
+                fdJmlBerat: true,
+                fdM3: true,
+              },
+              orderBy: { fdListCode: 'asc' },
+            })
+          }, 'get_related_batch_entry_lists')
 
-          // Akumulasi dari detailRows untuk listCode terkait
-          let sumM3Gudang = 0
-          let sumM3PL = 0
-          let sumM3Komplain = 0
-          let sumQty = 0
-          let sumBerat = 0
-
-          for (const d of (detailRows || [])) {
-            const lc = String(d.fdListCode || '').trim()
-            if (relatedListCodes.includes(lc)) {
-              sumM3Gudang += parseM3Val(d.fdM3 ?? d['M3'] ?? d.m3_gdg) || 0
-              sumM3PL += parseM3Val(d.fdM3PackingList ?? d.fdM3PL ?? d['M3 PL'] ?? d['M3_PL'] ?? d.m3_pl ?? d.fdm3PL) || 0
-              sumM3Komplain += parseM3Val(d.fdM3Komplain ?? d.fdm3Komplain ?? d['M3 K'] ?? d['M3_K']) || 0
-              sumQty += parseM3Val(d.fdTotalQty ?? d.fdQtyPL ?? d.fdTotalQtySJ ?? d.fdJmlPack) || 0
-              sumBerat += parseM3Val(d.fdTotalBeratSJ ?? d.fdJmlBerat ?? d.berat ?? d.Berat) || 0
+          // 2. Mapping data fisik per fdListCode (mengutamakan detailRows dari SP, dilengkapi tbEntryList)
+          const detailByListCode = new Map<string, any>()
+          if (Array.isArray(batchEntryLists)) {
+            for (const el of batchEntryLists) {
+              const lc = String(el.fdListCode || '').trim()
+              if (lc) {
+                detailByListCode.set(lc, {
+                  fdListCode: lc,
+                  fdM3: el.fdM3,
+                  fdJmlBerat: el.fdJmlBerat,
+                  fdJmlPack: el.fdJmlPack,
+                  fdMarkingNo: el.fdMarkingNo,
+                })
+              }
             }
           }
+          for (const d of (detailRows || [])) {
+            const lc = String(d.fdListCode || '').trim()
+            if (lc) {
+              const existing = detailByListCode.get(lc) || {}
+              detailByListCode.set(lc, {
+                ...existing,
+                fdListCode: lc,
+                fdM3: parseM3Val(d.fdM3 ?? d['M3'] ?? d.m3_gdg) || existing.fdM3 || 0,
+                fdM3PackingList: parseM3Val(d.fdM3PackingList ?? d.fdM3PL ?? d['M3 PL'] ?? d['M3_PL'] ?? d.m3_pl ?? d.fdm3PL) || existing.fdM3PackingList || 0,
+                fdM3Komplain: parseM3Val(d.fdM3Komplain ?? d.fdm3Komplain ?? d['M3 K'] ?? d['M3_K']) || existing.fdM3Komplain || 0,
+                fdTotalQty: parseM3Val(d.fdTotalQty ?? d.fdQtyPL ?? d.fdTotalQtySJ ?? d.fdJmlPack) || existing.fdJmlPack || 0,
+                fdTotalBeratSJ: parseM3Val(d.fdTotalBeratSJ ?? d.fdJmlBerat ?? d.berat ?? d.Berat) || existing.fdJmlBerat || 0,
+                fdMarkingNo: d.fdMarkingNo || existing.fdMarkingNo || '',
+              })
+            }
+          }
+
+          // 3. Mapping bill per fdListCode (header maupun baris detail)
+          const billByListCode = new Map<string, any>()
+          for (const b of relatedBatchBills) {
+            const directListCode = (b.fdListCode || '').trim()
+            if (directListCode) {
+              billByListCode.set(directListCode, b)
+            }
+            for (const d of (b.details || [])) {
+              const dListCode = (d.fdListCode || '').trim()
+              if (dListCode && is7DigitListCode(dListCode) && !billByListCode.has(dListCode)) {
+                billByListCode.set(dListCode, b)
+              }
+            }
+          }
+
+          // 4. Himpun seluruh fdListCode yang ada di batch ini (dari entryList maupun bill)
+          const allBatchListCodesSet = new Set<string>()
+          for (const lc of detailByListCode.keys()) {
+            allBatchListCodesSet.add(lc)
+          }
+          for (const b of relatedBatchBills) {
+            const lc = (b.fdListCode || '').trim()
+            if (lc) allBatchListCodesSet.add(lc)
+          }
+          const allBatchListCodes = Array.from(allBatchListCodesSet).sort()
+
+          // 5. Bangun listCodeBreakdown (status setiap listcode: apakah ada bill atau missing)
+          const listCodeBreakdown: RelatedListCodeItem[] = allBatchListCodes.map((lc) => {
+            const p = detailByListCode.get(lc)
+            const b = billByListCode.get(lc)
+            const bInv = b ? b.fdInvNo.replace(/^[\x00-\x1F]+/, '').trim() : null
+            const bFam = bInv ? parseInvoiceFamily(bInv) : null
+            const isP = bFam ? bFam.isParent : bInv === parentInvNo
+
+            let invBilledM3 = 0
+            if (b) {
+              for (const item of (b.details || [])) {
+                const u = (item.fdListCode || '').trim().toUpperCase()
+                const n = (item.fdItemName || '').toUpperCase()
+                const q = Number(item.fdQty || 0)
+                if (u === 'M3' || (!u && n.includes('(M3)'))) {
+                  invBilledM3 += q
+                }
+              }
+            }
+
+            const m3G = p ? parseM3Val(p.fdM3 ?? p['M3'] ?? p.m3_gdg) || 0 : 0
+            const m3PL = p ? parseM3Val(p.fdM3PackingList ?? p.fdM3PL ?? p['M3 PL'] ?? p['M3_PL'] ?? p.m3_pl ?? p.fdm3PL) || 0 : 0
+            const m3K = p ? parseM3Val(p.fdM3Komplain ?? p.fdm3Komplain ?? p['M3 K'] ?? p['M3_K']) || 0 : 0
+            const qty = p ? parseM3Val(p.fdTotalQty ?? p.fdQtyPL ?? p.fdTotalQtySJ ?? p.fdJmlPack) || 0 : 0
+            const berat = p ? parseM3Val(p.fdTotalBeratSJ ?? p.fdJmlBerat ?? p.berat ?? p.Berat) || 0 : 0
+
+            return {
+              listCode: lc,
+              invNo: bInv,
+              isParent: isP,
+              isCurrent: bInv === targetInvNo,
+              childLetter: bFam?.isChild ? bFam.headChar : undefined,
+              m3Gudang: parseFloat(m3G.toFixed(4)),
+              m3PL: parseFloat(m3PL.toFixed(4)),
+              m3Komplain: parseFloat(m3K.toFixed(4)),
+              berat: parseFloat(berat.toFixed(2)),
+              qty: parseFloat(qty.toFixed(2)),
+              billedM3: parseFloat(invBilledM3.toFixed(4)),
+              hasBill: !!bInv,
+              firstItemName: b?.details?.[0]?.fdItemName ? String(b.details[0].fdItemName).trim() : undefined,
+            }
+          })
+
+          const missingBillsCount = listCodeBreakdown.filter((x) => !x.hasBill).length
+          const allListCodesHaveBill = missingBillsCount === 0 && listCodeBreakdown.length > 0
 
           let totalBilledM3 = 0
           let totalBilledKg = 0
@@ -921,6 +1047,8 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
             const bInv = b.fdInvNo.replace(/^[\x00-\x1F]+/, '').trim()
             const bFam = parseInvoiceFamily(bInv)
             const isP = bFam ? bFam.isParent : bInv === parentInvNo
+            const lc = b.fdListCode ? String(b.fdListCode).trim() : ''
+            const p = detailByListCode.get(lc)
 
             let invBilledM3 = 0
             let invBilledKg = 0
@@ -937,16 +1065,32 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
             totalBilledM3 += invBilledM3
             totalBilledKg += invBilledKg
 
+            const m3G = p ? parseM3Val(p.fdM3 ?? p['M3'] ?? p.m3_gdg) || 0 : 0
+            const m3PL = p ? parseM3Val(p.fdM3PackingList ?? p.fdM3PL ?? p['M3 PL'] ?? p['M3_PL'] ?? p.m3_pl ?? p.fdm3PL) || 0 : 0
+            const qty = p ? parseM3Val(p.fdTotalQty ?? p.fdQtyPL ?? p.fdTotalQtySJ ?? p.fdJmlPack) || 0 : 0
+            const berat = p ? parseM3Val(p.fdTotalBeratSJ ?? p.fdJmlBerat ?? p.berat ?? p.Berat) || 0 : 0
+
             return {
               invNo: bInv,
-              listCode: b.fdListCode ? String(b.fdListCode).trim() : '',
+              listCode: lc,
               isParent: isP,
+              isCurrent: bInv === targetInvNo,
               billedM3: parseFloat(invBilledM3.toFixed(4)),
               billedKg: parseFloat(invBilledKg.toFixed(2)),
               markingNo: b.fdMarkingNo ? String(b.fdMarkingNo).trim() : '',
               firstItemName: b.details?.[0]?.fdItemName ? String(b.details[0].fdItemName).trim() : undefined,
+              m3Gudang: parseFloat(m3G.toFixed(4)),
+              m3PL: parseFloat(m3PL.toFixed(4)),
+              berat: parseFloat(berat.toFixed(2)),
+              qty: parseFloat(qty.toFixed(2)),
             }
           })
+
+          const sumM3Gudang = listCodeBreakdown.reduce((acc, x) => acc + x.m3Gudang, 0)
+          const sumM3PL = listCodeBreakdown.reduce((acc, x) => acc + (x.m3PL || 0), 0)
+          const sumM3Komplain = listCodeBreakdown.reduce((acc, x) => acc + (x.m3Komplain || 0), 0)
+          const sumQty = listCodeBreakdown.reduce((acc, x) => acc + x.qty, 0)
+          const sumBerat = listCodeBreakdown.reduce((acc, x) => acc + x.berat, 0)
 
           relatedBillsSummary = {
             hasRelatedBills: true,
@@ -955,7 +1099,11 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
             parentInvNo,
             childLetter: parsedFam?.isChild ? parsedFam.headChar : undefined,
             relatedInvoices,
-            relatedListCodes,
+            relatedListCodes: allBatchListCodes,
+            listCodeBreakdown,
+            allListCodesHaveBill,
+            totalListCodesCount: listCodeBreakdown.length,
+            missingBillsCount,
             sumM3Gudang: parseFloat(sumM3Gudang.toFixed(4)),
             sumM3PL: parseFloat(sumM3PL.toFixed(4)),
             sumM3Komplain: parseFloat(sumM3Komplain.toFixed(4)),
@@ -1001,6 +1149,9 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
       effectiveDate: hasCustomerPriceList ? (customerPriceEffectiveDate || priceEffectiveDate) : priceEffectiveDate,
       masterEffectiveDate: priceEffectiveDate,
       customerEffectiveDate: customerPriceEffectiveDate,
+      customerEndDate: customerPriceEndDate,
+      isCustomerPriceExpired,
+      isCustomerPriceExpiringSoon,
       hasCustomerPriceList,
       isMarkingOverride: hasCustomerPriceList
         ? (custLookupResult?.isMarkingOverride || false)

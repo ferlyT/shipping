@@ -174,3 +174,29 @@ export interface BoxDimensionDetailResponse {
   original?: BoxDimensionItem[]
 }
 
+export * from './marking.utils'
+
+import { z } from 'zod'
+
+export const MarkingSizeAuditQuerySchema = z.object({
+  sort: z.coerce.number().optional().default(1),
+})
+
+export const MarkingSuggestionsQuerySchema = z.object({
+  q: z.string().optional().default(''),
+})
+
+export const MarkingListQuerySchema = z.object({
+  page: z.coerce.number().min(1).optional().default(1),
+  limit: z.coerce.number().min(1).max(500).optional().default(20),
+  search: z.string().optional(),
+  sortBy: z.string().optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
+  listType: z.string().optional(),
+  exitScope: z.string().optional(),
+  isClosed: z.string().optional(),
+  groupMode: z.string().optional(),
+  groupValue: z.string().optional(),
+  year: z.string().optional(),
+})
+

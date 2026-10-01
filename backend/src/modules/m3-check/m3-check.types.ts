@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 export interface CustomerInfo {
   fdListCode: string
   fdMarkingCode: string
@@ -78,6 +80,9 @@ export interface UnifiedM3CheckResult {
     effectiveDate: string | null
     masterEffectiveDate: string | null
     customerEffectiveDate: string | null
+    customerEndDate?: string | null
+    isCustomerPriceExpired?: boolean
+    isCustomerPriceExpiringSoon?: boolean
     hasCustomerPriceList: boolean
     isMarkingOverride?: boolean
     matchedMarkingCode?: string | null
@@ -168,9 +173,30 @@ export interface RelatedInvoiceItem {
   invNo: string
   listCode: string
   isParent: boolean
+  isCurrent?: boolean
   billedM3: number
   billedKg: number
   markingNo: string
+  firstItemName?: string
+  m3Gudang?: number
+  m3PL?: number
+  berat?: number
+  qty?: number
+}
+
+export interface RelatedListCodeItem {
+  listCode: string
+  invNo?: string | null
+  isParent?: boolean
+  isCurrent?: boolean
+  childLetter?: string | null
+  m3Gudang: number
+  m3PL?: number
+  m3Komplain?: number
+  berat: number
+  qty: number
+  billedM3: number
+  hasBill: boolean
   firstItemName?: string
 }
 
@@ -182,6 +208,10 @@ export interface RelatedBillsSummary {
   childLetter?: string
   relatedInvoices: RelatedInvoiceItem[]
   relatedListCodes: string[]
+  listCodeBreakdown?: RelatedListCodeItem[]
+  allListCodesHaveBill?: boolean
+  totalListCodesCount?: number
+  missingBillsCount?: number
   sumM3Gudang: number
   sumM3PL: number
   sumM3Komplain: number
@@ -190,3 +220,20 @@ export interface RelatedBillsSummary {
   totalBilledM3: number
   totalBilledKg?: number
 }
+
+export const EvaluateM3CheckSchema = z
+  .object({
+    listCode: z.string().optional(),
+    identifier: z.string().optional(),
+    markingCode: z.string().optional(),
+  })
+  .refine(
+    (data) => !!(data.listCode || data.identifier || data.markingCode),
+    { message: 'Salah satu dari listCode, identifier, atau markingCode wajib diisi' }
+  )
+
+export const M3CustMarkingDetailsQuerySchema = z.object({
+  custCode: z.string().min(1, 'Parameter custCode wajib diisi'),
+  markingCode: z.string().min(1, 'Parameter markingCode wajib diisi'),
+})
+

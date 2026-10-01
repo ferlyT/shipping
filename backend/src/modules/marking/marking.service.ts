@@ -4,6 +4,7 @@ import { logger } from '../../config/logger'
 import { suggestionCache } from '../../utils/cache'
 
 import { computeExitPrediction } from './marking-analytics.service'
+import { calculateSizeSummaryMetrics, calculateVfc } from './marking.utils'
 
 // Re-export types & analytics
 export * from './marking.types'
@@ -736,11 +737,16 @@ export async function getMarkingSizeAudit(
   const listType = Number(headerRow?.fdListType ?? (items[0]?.fdListType ?? 2))
   const totalPackPL = Number(headerRow?.fdJmlPack) || items.reduce((acc, it) => acc + it.fdJmlPack, 0)
   const totalM3PL = Number(headerRow?.fdM3) || (items[0]?.fdM3PL ?? items.reduce((acc, it) => acc + it.fdM3List, 0))
-  const selisihPack = totalPackPL - totalPackGdg
-  const totalM3Net = Math.max(0, totalM3Gdg - totalM3Komplain)
-  const selisihM3 = totalM3Gdg - totalM3PL
-  const persenSelisihM3 = totalM3PL > 0 ? (selisihM3 / totalM3PL) * 100 : 0
-  const totalBeratNet = Math.max(0, (totalBeratGdg || totalBeratList) - totalBeratKomplain)
+  const metrics = calculateSizeSummaryMetrics({
+    totalPackPL,
+    totalPackGdg,
+    totalM3PL,
+    totalM3Gdg,
+    totalM3Komplain,
+    totalBeratList,
+    totalBeratGdg,
+    totalBeratKomplain,
+  })
 
   return {
     header: {
@@ -764,19 +770,19 @@ export async function getMarkingSizeAudit(
       etaDate: headerRow?.fdEtaDate ? new Date(headerRow.fdEtaDate).toISOString() : null,
       totalPackPL,
       totalPackGdg,
-      selisihPack,
+      selisihPack: metrics.selisihPack,
       totalM3PL: Number(totalM3PL.toFixed(4)),
       totalM3Gdg: Number(totalM3Gdg.toFixed(4)),
       totalM3Komplain: Number(totalM3Komplain.toFixed(4)),
-      totalM3Net: Number(totalM3Net.toFixed(4)),
-      selisihM3: Number(selisihM3.toFixed(4)),
-      persenSelisihM3: Number(persenSelisihM3.toFixed(2)),
+      totalM3Net: metrics.totalM3Net,
+      selisihM3: metrics.selisihM3,
+      persenSelisihM3: metrics.persenSelisihM3,
       totalBeratList: Number(totalBeratList.toFixed(2)),
       totalBeratGdg: Number(totalBeratGdg.toFixed(2)),
       totalBeratSJ: Number(totalBeratSJ.toFixed(2)),
       totalBeratKomplain: Number(totalBeratKomplain.toFixed(2)),
-      totalBeratNet: Number(totalBeratNet.toFixed(2)),
-      totalVFC: Number((((totalM3Gdg * 1000000) / 6000)).toFixed(2)),
+      totalBeratNet: metrics.totalBeratNet,
+      totalVFC: calculateVfc(totalM3Gdg),
       totalRowCount: items.length,
       totalMarkupCount: markupSet.size,
     },

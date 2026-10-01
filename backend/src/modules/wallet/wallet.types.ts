@@ -31,6 +31,14 @@ export const AdjustWalletSchema = z.object({
 
 export type AdjustWalletDto = z.infer<typeof AdjustWalletSchema>
 
+export const OverpaymentWalletSchema = z.object({
+  custCode: z.string().min(1, 'Kode customer wajib diisi'),
+  amount: z.number().positive('Nominal kelebihan bayar harus lebih dari 0'),
+  cashierId: z.string().min(1, 'ID kasir wajib diisi'),
+})
+
+export type OverpaymentWalletDto = z.infer<typeof OverpaymentWalletSchema>
+
 export interface CustomerWalletSummary {
   fdWalletID: string
   fdCustCode: string

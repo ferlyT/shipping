@@ -1,6 +1,7 @@
 import { prisma } from '../../config/database'
 import { logger } from '../../config/logger'
 import type { PrediksiExitItem } from './marking.types'
+import { categorizeExitPrediction } from './marking.utils'
 
 export async function computeExitPrediction(where: any): Promise<{
   prediksiTerlambatCount: number
@@ -61,8 +62,7 @@ export async function computeExitPrediction(where: any): Promise<{
       predictedExitDate.setDate(predictedExitDate.getDate() + Math.round(avgDelayDays))
 
       const daysUntil = Math.round((predictedExitDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-      const category: PrediksiExitItem['category'] =
-        daysUntil < 0 ? 'terlambat' : daysUntil <= 3 ? 'segera' : daysUntil <= 7 ? 'dekat' : 'normal'
+      const category: PrediksiExitItem['category'] = categorizeExitPrediction(daysUntil)
 
       return {
         fdMarkingCode: b.fdMarkingCode.trim(),

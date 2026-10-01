@@ -18,8 +18,12 @@ export interface PaginationResult {
 }
 
 export function parsePagination(query: Record<string, string | undefined>): PaginationParams {
-  const page = Math.max(1, parseInt(query.page ?? '1'))
-  const limit = Math.min(100, Math.max(1, parseInt(query.limit ?? '20')))
+  const rawPage = parseInt(query.page ?? '1', 10)
+  const page = isNaN(rawPage) ? 1 : Math.max(1, rawPage)
+
+  const rawLimit = parseInt(query.limit ?? '20', 10)
+  const limit = isNaN(rawLimit) ? 20 : Math.min(100, Math.max(1, rawLimit))
+
   return { page, limit }
 }
 

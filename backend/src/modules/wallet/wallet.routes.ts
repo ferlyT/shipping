@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { authMiddleware } from '../../middleware/auth'
+import { validateBody } from '../../middleware/requestValidator'
 import { successResponse, errorResponse } from '../../utils/response'
 import {
   getWalletStats,
@@ -15,6 +16,7 @@ import {
   TopupWalletSchema,
   WithdrawWalletSchema,
   AdjustWalletSchema,
+  OverpaymentWalletSchema,
 } from './wallet.types'
 
 const walletRoutes = new Hono()
@@ -67,18 +69,13 @@ walletRoutes.get('/ledger', async (c) => {
 // ─── TRANSAKSI WALLET ────────────────────────────────────────────────
 
 // POST /api/wallet/topup
-walletRoutes.post('/topup', async (c) => {
+walletRoutes.post('/topup', validateBody(TopupWalletSchema), async (c) => {
   try {
     const user = c.get('user' as any) as any
     const username = user?.username || 'SYSTEM'
-    const body = await c.req.json()
+    const data = c.req.valid('json')
 
-    const parsed = TopupWalletSchema.safeParse(body)
-    if (!parsed.success) {
-      return errorResponse(c, parsed.error.issues[0]?.message || 'Input top-up tidak valid', 400)
-    }
-
-    const result = await topupCustomerWallet(parsed.data, username)
+    const result = await topupCustomerWallet(data, username)
     return successResponse(c, result, 'Top-up saldo deposit berhasil')
   } catch (err: any) {
     return errorResponse(c, err.message || 'Gagal melakukan top-up deposit', 400)
@@ -86,18 +83,13 @@ walletRoutes.post('/topup', async (c) => {
 })
 
 // POST /api/wallet/withdraw
-walletRoutes.post('/withdraw', async (c) => {
+walletRoutes.post('/withdraw', validateBody(WithdrawWalletSchema), async (c) => {
   try {
     const user = c.get('user' as any) as any
     const username = user?.username || 'SYSTEM'
-    const body = await c.req.json()
+    const data = c.req.valid('json')
 
-    const parsed = WithdrawWalletSchema.safeParse(body)
-    if (!parsed.success) {
-      return errorResponse(c, parsed.error.issues[0]?.message || 'Input penarikan tidak valid', 400)
-    }
-
-    const result = await withdrawCustomerWallet(parsed.data, username)
+    const result = await withdrawCustomerWallet(data, username)
     return successResponse(c, result, 'Penarikan saldo deposit berhasil')
   } catch (err: any) {
     return errorResponse(c, err.message || 'Gagal melakukan penarikan saldo deposit', 400)
@@ -105,18 +97,13 @@ walletRoutes.post('/withdraw', async (c) => {
 })
 
 // POST /api/wallet/adjust
-walletRoutes.post('/adjust', async (c) => {
+walletRoutes.post('/adjust', validateBody(AdjustWalletSchema), async (c) => {
   try {
     const user = c.get('user' as any) as any
     const username = user?.username || 'SYSTEM'
-    const body = await c.req.json()
+    const data = c.req.valid('json')
 
-    const parsed = AdjustWalletSchema.safeParse(body)
-    if (!parsed.success) {
-      return errorResponse(c, parsed.error.issues[0]?.message || 'Input penyesuaian tidak valid', 400)
-    }
-
-    const result = await adjustCustomerWallet(parsed.data, username)
+    const result = await adjustCustomerWallet(data, username)
     return successResponse(c, result, 'Penyesuaian saldo berhasil')
   } catch (err: any) {
     return errorResponse(c, err.message || 'Gagal melakukan penyesuaian saldo', 400)
@@ -124,16 +111,11 @@ walletRoutes.post('/adjust', async (c) => {
 })
 
 // POST /api/wallet/overpayment (Alihkan kelebihan kasir ke deposit)
-walletRoutes.post('/overpayment', async (c) => {
+walletRoutes.post('/overpayment', validateBody(OverpaymentWalletSchema), async (c) => {
   try {
     const user = c.get('user' as any) as any
     const username = user?.username || 'SYSTEM'
-    const body = await c.req.json()
-
-    const { custCode, amount, cashierId } = body
-    if (!custCode || !amount || !cashierId || amount <= 0) {
-      return errorResponse(c, 'Data kelebihan bayar tidak lengkap atau nominal tidak valid', 400)
-    }
+    const { custCode, amount, cashierId } = c.req.valid('json')
 
     const result = await overpaymentToCustomerWallet(custCode, Number(amount), cashierId, username)
     return successResponse(c, result, 'Kelebihan bayar berhasil dialihkan ke saldo deposit pelanggan')

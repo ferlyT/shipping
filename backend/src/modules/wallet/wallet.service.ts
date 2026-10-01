@@ -1,6 +1,5 @@
 import { prisma } from '../../config/database'
 import { logger } from '../../config/logger'
-import { v4 as uuidv4 } from 'uuid'
 import type {
   TopupWalletDto,
   WithdrawWalletDto,
@@ -36,7 +35,7 @@ export async function getOrCreateCustomerWallet(custCode: string): Promise<Custo
   if (!wallet) {
     wallet = await prisma.tbCustomerWallet.create({
       data: {
-        fdWalletID: uuidv4(),
+        fdWalletID: crypto.randomUUID(),
         fdCustCode: cleanCode,
         fdBalance: 0.0,
         fdCurrency: 'RP.',
@@ -100,7 +99,7 @@ export async function topupCustomerWallet(
     if (!wallet) {
       wallet = await tx.tbCustomerWallet.create({
         data: {
-          fdWalletID: uuidv4(),
+          fdWalletID: crypto.randomUUID(),
           fdCustCode: cleanCode,
           fdBalance: 0.0,
           fdCurrency: 'RP.',
@@ -240,7 +239,7 @@ export async function refundWalletPayment(
     if (!wallet) {
       wallet = await tx.tbCustomerWallet.create({
         data: {
-          fdWalletID: uuidv4(),
+          fdWalletID: crypto.randomUUID(),
           fdCustCode: cleanCode,
           fdBalance: 0.0,
           fdCurrency: 'RP.',
@@ -303,7 +302,7 @@ export async function overpaymentToCustomerWallet(
     if (!wallet) {
       wallet = await tx.tbCustomerWallet.create({
         data: {
-          fdWalletID: uuidv4(),
+          fdWalletID: crypto.randomUUID(),
           fdCustCode: cleanCode,
           fdBalance: 0.0,
           fdCurrency: 'RP.',
@@ -425,7 +424,7 @@ export async function adjustCustomerWallet(
     if (!wallet) {
       wallet = await tx.tbCustomerWallet.create({
         data: {
-          fdWalletID: uuidv4(),
+          fdWalletID: crypto.randomUUID(),
           fdCustCode: cleanCode,
           fdBalance: 0.0,
           fdCurrency: 'RP.',
