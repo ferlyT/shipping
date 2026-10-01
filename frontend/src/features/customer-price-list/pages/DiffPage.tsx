@@ -1175,8 +1175,9 @@ export function DiffPage() {
           onClose={() => setIsEditingEffectiveDate(false)}
           uploadId={uploadId}
           currentEffectiveDate={data.currentEffectiveDate}
-          onSave={async (newDate) => {
-            await customerPriceListApi.updateEffectiveDate(uploadId, newDate)
+          currentEndDate={data.currentEndDate}
+          onSave={async (newDate, newEndDate) => {
+            await customerPriceListApi.updateEffectiveDate(uploadId, newDate, newEndDate)
             loadData()
           }}
         />

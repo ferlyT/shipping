@@ -70,12 +70,13 @@ export function CustMarkingSummaryBanner({
   const maxOverweight = Math.max(totalOw, totalOwGdg, totalOwSJ, totalOwK)
 
   const cardBaseClass =
-    'relative flex flex-col justify-between p-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-neutral)]/15 hover:bg-[var(--color-neutral)]/25 hover:border-[var(--color-border)]/80 transition-all duration-150'
+    'relative flex flex-col justify-between p-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-neutral)]/20 hover:bg-[var(--color-neutral)]/30 hover:border-[var(--color-border)] transition-all duration-150 shadow-2xs'
 
   return (
-    <div className="p-3 sm:p-4 bg-[var(--color-surface)] border-b border-[var(--color-border)] shrink-0 space-y-2.5">
-      {/* 6 KPI Cards Grid */}
+    <div className="p-3 sm:p-3.5 bg-[var(--color-surface)] border-b border-[var(--color-border)] shrink-0 space-y-2.5">
+      {/* 6 KPI Executive Cards Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5">
+        
         {/* 1. Total Invoice (Utama, Gabungan, Tambahan) */}
         <div className={cardBaseClass}>
           <div className="flex items-center justify-between gap-1 mb-1">
@@ -97,7 +98,7 @@ export function CustMarkingSummaryBanner({
             <span className="text-[11px] font-medium text-[var(--color-secondary)]">Utama</span>
           </div>
 
-          <div className="flex items-center gap-1.5 text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/40 mt-1">
+          <div className="flex items-center gap-1.5 text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/50 mt-1">
             <span>
               Gab: <strong className="text-blue-500 font-bold">{countBillGabungan}</strong>
             </span>
@@ -118,11 +119,11 @@ export function CustMarkingSummaryBanner({
               </span>
             </div>
             {countSelisih > 0 ? (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
+              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
                 {countSelisih} Selisih
               </span>
             ) : (
-              <span className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 shrink-0">
+              <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 shrink-0">
                 <CheckCircle2 className="w-2.5 h-2.5" /> Cocok
               </span>
             )}
@@ -135,9 +136,9 @@ export function CustMarkingSummaryBanner({
             <span className="text-[11px] font-medium text-[var(--color-secondary)]">Resi</span>
           </div>
 
-          <div className="text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/40 mt-1">
+          <div className="text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/50 mt-1">
             {countSelisih > 0 ? (
-              <span className="text-amber-600 dark:text-amber-400 font-medium">
+              <span className="text-amber-600 dark:text-amber-400 font-semibold">
                 {countSelisih} resi ada selisih
               </span>
             ) : (
@@ -157,7 +158,7 @@ export function CustMarkingSummaryBanner({
             </div>
             {countQtyKomplainMismatch > 0 ? (
               <span
-                className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse flex items-center gap-0.5 shrink-0"
+                className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 animate-pulse flex items-center gap-0.5 shrink-0"
                 title={`${countQtyKomplainMismatch} baris data Qty Komplain berbeda dengan Qty Gudang`}
               >
                 <AlertTriangle className="w-2.5 h-2.5" /> K ({countQtyKomplainMismatch})
@@ -176,7 +177,7 @@ export function CustMarkingSummaryBanner({
             <span className="text-[11px] font-medium text-[var(--color-secondary)]">Koli</span>
           </div>
 
-          <div className="flex items-center gap-1 text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/40 mt-1">
+          <div className="flex items-center gap-1 text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/50 mt-1">
             <span>
               Gdg: <strong className="text-[var(--color-primary)]">{formatNumber(totalQtyGdg)}</strong>
             </span>
@@ -223,7 +224,7 @@ export function CustMarkingSummaryBanner({
             <span className="text-[11px] font-medium text-[var(--color-secondary)]">kg</span>
           </div>
 
-          <div className="flex items-center gap-1 text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/40 mt-1">
+          <div className="flex items-center gap-1 text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/50 mt-1">
             <span>SJ: {formatDecimal(totalWeightSJ, 1)}</span>
             <span className="text-[var(--color-border)]">·</span>
             <span>
@@ -249,13 +250,13 @@ export function CustMarkingSummaryBanner({
             </div>
             {isUnderbilled ? (
               <span
-                className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 shrink-0"
+                className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 shrink-0"
                 title={`Underbilled: Selisih ${formatDecimal(volGdg - volBill, volDecimals)} ${volUnit}`}
               >
                 Underbilled
               </span>
             ) : (
-              <span className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 shrink-0">
+              <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 shrink-0">
                 <CheckCircle2 className="w-2.5 h-2.5" /> Sesuai
               </span>
             )}
@@ -268,7 +269,7 @@ export function CustMarkingSummaryBanner({
             <span className="text-[11px] font-medium text-[var(--color-secondary)]">Bill {volUnit}</span>
           </div>
 
-          <div className="flex items-center gap-1 text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/40 mt-1">
+          <div className="flex items-center gap-1 text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/50 mt-1">
             <span>Gdg: {formatDecimal(volGdg, volDecimals)}</span>
             {volK > 0 && (
               <>
@@ -285,21 +286,31 @@ export function CustMarkingSummaryBanner({
           </div>
         </div>
 
-        {/* 6. Status Lebih KG - fdJmlBerat, Berat SJ, dan Berat Komplain (Hybrid) */}
-        <div className={cardBaseClass}>
+        {/* 6. Status Lebih KG - Overweight Indicator */}
+        <div
+          className={`${cardBaseClass} ${
+            hasAnyOw
+              ? 'border-rose-500/40 bg-rose-500/5 dark:bg-rose-950/20 shadow-[0_0_15px_-3px_rgba(244,63,94,0.15)]'
+              : ''
+          }`}
+        >
           <div className="flex items-center justify-between gap-1 mb-1">
             <div className="flex items-center gap-1.5 min-w-0">
-              <Scale className="w-3.5 h-3.5 text-[var(--color-secondary)]/80 shrink-0" />
-              <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--color-secondary)] truncate">
+              <Scale className={`w-3.5 h-3.5 shrink-0 ${hasAnyOw ? 'text-rose-500' : 'text-[var(--color-secondary)]/80'}`} />
+              <span
+                className={`text-[10px] uppercase font-bold tracking-wider truncate ${
+                  hasAnyOw ? 'text-rose-600 dark:text-rose-400' : 'text-[var(--color-secondary)]'
+                }`}
+              >
                 Lebih KG
               </span>
             </div>
             {hasAnyOw ? (
-              <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 animate-pulse shrink-0">
+              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-full bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30 animate-pulse shrink-0">
                 Overweight
               </span>
             ) : (
-              <span className="text-[9px] font-medium text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 shrink-0">
+              <span className="text-[9px] font-semibold text-emerald-600 dark:text-emerald-400 flex items-center gap-0.5 shrink-0">
                 <CheckCircle2 className="w-2.5 h-2.5" /> Normal
               </span>
             )}
@@ -323,7 +334,7 @@ export function CustMarkingSummaryBanner({
             )}
           </div>
 
-          <div className="flex items-center gap-1 text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/40 mt-1">
+          <div className="flex items-center gap-1 text-[10px] text-[var(--color-secondary)] font-mono truncate pt-1 border-t border-[var(--color-border)]/50 mt-1">
             <span>
               Gdg:{' '}
               <strong className={totalOwGdg > 0 ? 'text-rose-500' : 'text-[var(--color-primary)]'}>
@@ -355,9 +366,9 @@ export function CustMarkingSummaryBanner({
         </div>
       </div>
 
-      {/* Group Pill: Tipe Comodity */}
+      {/* Group Pill: Tipe Commodity Filter Bar */}
       {commodityTypes && commodityTypes.length > 0 && (
-        <div className="flex items-center gap-2 pt-2 border-t border-[var(--color-border)]/60 text-xs overflow-x-auto scrollbar-thin">
+        <div className="flex items-center gap-2 pt-1.5 border-t border-[var(--color-border)]/60 text-xs overflow-x-auto scrollbar-thin">
           <div className="flex items-center gap-1.5 text-[10.5px] font-bold uppercase tracking-wider text-[var(--color-secondary)] shrink-0 select-none">
             <Tags className="w-3.5 h-3.5 text-[var(--color-secondary)]/70" />
             <span>Filter Komoditas:</span>
@@ -366,7 +377,7 @@ export function CustMarkingSummaryBanner({
             <button
               type="button"
               onClick={() => onSelectCommodityType?.('ALL')}
-              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
                 selectedCommodityType === 'ALL'
                   ? 'border border-[var(--color-tertiary)] text-[var(--color-tertiary)] bg-[var(--color-tertiary)]/15 font-bold shadow-2xs'
                   : 'border border-[var(--color-border)] bg-[var(--color-neutral)]/20 text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-tertiary)]/40'
@@ -384,7 +395,7 @@ export function CustMarkingSummaryBanner({
                   key={c.type}
                   type="button"
                   onClick={() => onSelectCommodityType?.(c.type)}
-                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
                     isSelected
                       ? 'border border-[var(--color-tertiary)] text-[var(--color-tertiary)] bg-[var(--color-tertiary)]/15 font-bold shadow-2xs'
                       : 'border border-[var(--color-border)] bg-[var(--color-neutral)]/20 text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-tertiary)]/40'

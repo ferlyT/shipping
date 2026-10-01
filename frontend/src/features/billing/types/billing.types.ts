@@ -16,6 +16,20 @@ export interface BillingEmployee {
   fdEmpName: string | null
 }
 
+/**
+ * Timeline siklus kargo — 8 milestone kronologis proses logistik
+ */
+export interface BillingTimeline {
+  fdTglAgent: string | null    // Diterima Agen
+  fdLoadDate: string | null    // Loading
+  fdETD: string | null         // ETD
+  fdETA: string | null         // ETA
+  fdTgl_IN: string | null      // Masuk Gudang
+  fdSjDate: string | null      // Surat Jalan
+  fdSndDate: string | null     // Dikirim (MAX)
+  fdGiveDate: string | null    // Diserahkan
+}
+
 export interface BillingDetail {
   fdInvNo: string
   fdID: string
@@ -123,6 +137,7 @@ export interface TargetBillingItem {
   tglAgen: string | null
   exitDate: string | null
   statusKirim: string
+  isSjSent?: boolean
   harga: number
   hargaDb?: number
   diffAmount?: number
@@ -146,6 +161,8 @@ export interface TargetBillingItem {
   commodityOverrideDetail?: string
   matchedCategory?: string
   custCode?: string
+  billTo?: string
+  consignee?: string
   listNo?: string
   listCode?: string
   createdDate?: string | null
@@ -278,7 +295,7 @@ export interface TargetPriceCheckData {
   } | null
 }
 
-export type GroupKey = 'all' | 'partial' | 'fcl' | 'cod' | 'urgent' | 'aging' | 'no_type'
+export type GroupKey = 'all' | 'sj_sent' | 'partial' | 'fcl' | 'cod' | 'urgent' | 'aging' | 'no_type'
 export type PicKey = 'all' | 'yati' | 'kiki' | 'thara' | 'ferly' | 'rico'
 
 export interface BillingByEmployeeDailySeries {
@@ -335,6 +352,41 @@ export interface Trend {
   direction: 'up' | 'down' | 'flat'
 }
 
+export interface PeriodBillingMetrics {
+  year: number
+  month: number
+  monthName: string
+  totalInvoices: number
+  totalTagihan: number
+  invoicesUdara: number
+  tagihanUdara: number
+  invoicesLaut: number
+  tagihanLaut: number
+  avgInvoiceValue: number
+  uniqueCustomers: number
+}
+
+export interface MetricComparison {
+  current: number
+  prev: number
+  momDiff: number
+  momPercent: number
+  lastYear: number
+  yoyDiff: number
+  yoyPercent: number
+}
+
+export interface BillingComparisons {
+  totalInvoices: MetricComparison
+  totalTagihan: MetricComparison
+  invoicesUdara: MetricComparison
+  tagihanUdara: MetricComparison
+  invoicesLaut: MetricComparison
+  tagihanLaut: MetricComparison
+  avgInvoiceValue: MetricComparison
+  uniqueCustomers: MetricComparison
+}
+
 export interface BillingKpis {
   totalInvoices: number
   totalTagihan: number
@@ -344,6 +396,10 @@ export interface BillingKpis {
     invoicesBulanIni: Trend
     tagihanBulanIni: Trend
   }
+  currentMonth?: PeriodBillingMetrics
+  prevMonth?: PeriodBillingMetrics
+  lastYearSameMonth?: PeriodBillingMetrics
+  comparisons?: BillingComparisons
 }
 
 export interface SjVsBillPoint {
@@ -766,6 +822,9 @@ export interface PriceItem {
   branch: string
   category: string
   price: number
+  effectiveDate?: string | null
+  endDate?: string | null
+  isExpired?: boolean
 }
 
 export interface MarkingDetailItem {
@@ -807,6 +866,9 @@ export interface M3CheckResponse {
     effectiveDate: string | null
     masterEffectiveDate?: string | null
     customerEffectiveDate?: string | null
+    customerEndDate?: string | null
+    isCustomerPriceExpired?: boolean
+    isCustomerPriceExpiringSoon?: boolean
     hasCustomerPriceList?: boolean
     isMarkingOverride?: boolean
     matchedMarkingCode?: string | null
@@ -892,9 +954,30 @@ export interface RelatedInvoiceItem {
   invNo: string
   listCode: string
   isParent: boolean
+  isCurrent?: boolean
   billedM3: number
   billedKg: number
   markingNo: string
+  firstItemName?: string
+  m3Gudang?: number
+  m3PL?: number
+  berat?: number
+  qty?: number
+}
+
+export interface RelatedListCodeItem {
+  listCode: string
+  invNo?: string | null
+  isParent?: boolean
+  isCurrent?: boolean
+  childLetter?: string | null
+  m3Gudang: number
+  m3PL?: number
+  m3Komplain?: number
+  berat: number
+  qty: number
+  billedM3: number
+  hasBill: boolean
   firstItemName?: string
 }
 
@@ -906,6 +989,10 @@ export interface RelatedBillsSummary {
   childLetter?: string
   relatedInvoices: RelatedInvoiceItem[]
   relatedListCodes: string[]
+  listCodeBreakdown?: RelatedListCodeItem[]
+  allListCodesHaveBill?: boolean
+  totalListCodesCount?: number
+  missingBillsCount?: number
   sumM3Gudang: number
   sumM3PL: number
   sumM3Komplain: number

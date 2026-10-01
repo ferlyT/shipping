@@ -263,7 +263,12 @@ export function BillingValidationSummaryModal({
 
   const hasUnderchargePrice = !isLoadingValidation && underchargedItems.length > 0
   const hasUnbilledTransportActive = !isLoadingValidation && hasUnbilledTransport
-  const hasWarning = !isLoadingValidation && (!isOverallValid || Boolean(v.isBilledBelowMinM3))
+  const isOverweightUnbilled = overweight.isOverweight && !overweight.isBilledOverweightMatch
+  const hasOverweightIssue = !isAir && !isType2 && (
+    isOverweightUnbilled ||
+    overweight.isBilledUnneededOverweight
+  )
+  const hasWarning = !isLoadingValidation && isOverallValid && (Boolean(v.isBilledBelowMinM3) || Boolean(v.isCodUrgentShortfall))
 
   // Definisi executor perintah suara lokal modal (disimpan pada ref agar selalu menggunakan state terbaru)
   const executeModalVoiceCommandRef = useRef<(rawText: string) => void>(() => {})
@@ -457,7 +462,7 @@ export function BillingValidationSummaryModal({
     if (res && !isLoadingValidation && hasAutoSelectedRef.current !== String(billingData.fdInvNo)) {
       if (!isMatch) {
         setActiveTab('m3_weight')
-      } else if (overweight.isOverweight && !overweight.isBilledOverweightMatch) {
+      } else if (hasOverweightIssue) {
         setActiveTab('overweight')
       } else if (hasUnderchargePrice) {
         setActiveTab('items')
@@ -476,8 +481,7 @@ export function BillingValidationSummaryModal({
     res,
     isLoadingValidation,
     isMatch,
-    overweight.isOverweight,
-    overweight.isBilledOverweightMatch,
+    hasOverweightIssue,
     hasUnderchargePrice,
     hasUnbilledTransportActive,
   ])
@@ -494,8 +498,6 @@ export function BillingValidationSummaryModal({
   }, [billingData, details])
 
   // Verdict calculation via centralized helper
-  const isOverweightUnbilled = overweight.isOverweight && !overweight.isBilledOverweightMatch
-
   const { title: verdictTitle, description: verdictDescription } = useMemo(() => {
     return calculateValidationVerdict({
       isLoadingValidation,
@@ -585,7 +587,7 @@ export function BillingValidationSummaryModal({
         hasPhysicalDiscrepancy={!isLoadingValidation && !isMatch}
         isBilledBelowMinM3={!isLoadingValidation && v.isBilledBelowMinM3}
         isCodUrgentShortfall={!isLoadingValidation && v.isCodUrgentShortfall}
-        hasOverweightIssue={!isLoadingValidation && (isOverweightUnbilled || overweight.isBilledUnneededOverweight)}
+        hasOverweightIssue={!isLoadingValidation && hasOverweightIssue}
         hasUnbilledTransport={!isLoadingValidation && hasUnbilledTransport}
         hasFreightCharge={Boolean(res?.freightChargeSummary?.totalFc && res.freightChargeSummary.totalFc > 0)}
         freightChargeSummary={res?.freightChargeSummary}
@@ -626,6 +628,7 @@ export function BillingValidationSummaryModal({
                 recommendedM3={res?.recommendedM3}
                 custCode={billingData.fdCustCode}
                 custName={resolvedCustName}
+                onSelectInvoice={onSelectInvoice}
               />
             )}
 

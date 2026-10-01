@@ -4,7 +4,7 @@ import { Check, AlertTriangle, Info, X, RefreshCw } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner'
 import { useTranslation } from '@/hooks/useTranslation'
-import { formatDecimal, displayCustName } from '@/lib/utils'
+import { formatDecimal, formatNumber, displayCustName } from '@/lib/utils'
 import { evaluateItemPrice } from '../utils/billing.utils'
 import { useOverweightValidation } from '../hooks/useOverweightValidation'
 import { PriceListDetailModal } from './PriceListDetailModal'
@@ -288,6 +288,31 @@ export function BillingValidationCard({
   const recommendedM3 = res?.recommendedM3 ?? 0
   const isCodUrgentShortfall = validation ? validation.isCodUrgentShortfall : (!isAir && isCodOrUrgent && recommendedM3 > billedM3 + 0.001)
 
+  // Overweight Calculations (Sea only) — via useOverweightValidation (single source of truth)
+  const refM3Fallback = komplainValues[0] ?? gudangValues[0] ?? plValues[0] ?? res?.recommendedM3 ?? 0
+  const fallbackOverweight = useOverweightValidation({
+    res,
+    invoiceDetails,
+    billedM3,
+    billedKg,
+    isAir,
+    isGabungan,
+    refM3Fallback,
+  })
+  const overweight = validation ? validation.overweight : fallbackOverweight
+  const {
+    isOverweight,
+    isBilledOverweightTolerated,
+    isBilledOverweightMatch,
+    isBilledUnneededOverweight,
+  } = overweight
+
+  // Helper cek selisih overweight & rasio berat fisik (jalur laut)
+  const hasOverweightIssue = !isAir && !isType2 && (
+    (!isBilledOverweightMatch && isOverweight) ||
+    isBilledUnneededOverweight
+  )
+
   // Overall status badge variant
   let badgeVariant: 'success' | 'info' | 'warning' | 'danger' = 'success'
   let StatusIcon = Check
@@ -300,10 +325,19 @@ export function BillingValidationCard({
       badgeVariant = 'success'
       StatusIcon = Check
     }
+  } else if (!isAir && hasOverweightIssue) {
+    badgeVariant = 'danger'
+    StatusIcon = X
+  } else if (matchStatus === 'NO_MATCH') {
+    badgeVariant = 'danger'
+    StatusIcon = X
   } else if (isCodUrgentShortfall) {
     badgeVariant = 'warning'
     StatusIcon = AlertTriangle
   } else if (isBilledBelowMinM3) {
+    badgeVariant = 'warning'
+    StatusIcon = AlertTriangle
+  } else if (!isAir && isOverweight && isBilledOverweightTolerated) {
     badgeVariant = 'warning'
     StatusIcon = AlertTriangle
   } else if (matchStatus === 'MATCH_PRIMARY') {
@@ -331,36 +365,29 @@ export function BillingValidationCard({
         : effectiveBilledKg === 0
           ? 'TAGIHAN BERAT (0 KG) BELUM DIISI'
           : `SELISIH BERAT (${formatDecimal(effectiveBilledKg, 2)} kg ≠ Real: ${formatDecimal(beratList, 2)} kg)`
-      : isCodUrgentShortfall
-        ? t('billing.validation.statusCodUrgentWarning')
-        : matchStatus === 'NO_MATCH'
-          ? t('billing.validation.statusNoMatch')
-          : isBilledBelowMinM3
-            ? `DI BAWAH MIN. CHARGE (${formatDecimal(billedM3, 4)} m³ < ${formatDecimal(effectiveMinChargeM3, 3)} m³ · ${matchedSourceName || 'GUDANG'})`
-            : isMinChargeApplied
-              ? `COCOK (ATURAN MIN. ${formatDecimal(effectiveMinChargeM3, 3)} m³ · ${matchedSourceName})`
-              : t('billing.validation.statusMatch', { source: matchedSourceName })
+      : !isAir && hasOverweightIssue
+        ? isBilledUnneededOverweight
+          ? `SELISIH KG (DITAGIH ${formatNumber(overweight.effectiveBilledKg)} KG TANPA OVERWEIGHT)`
+          : overweight.effectiveBilledKg > 0
+            ? `SELISIH OVERWEIGHT (+${formatNumber(Math.max(0, overweight.overweightKg - overweight.effectiveBilledKg))} KG KURANG TAGIH)`
+            : `SELISIH OVERWEIGHT (+${formatNumber(overweight.overweightKg)} KG BELUM DITAGIH)`
+        : isCodUrgentShortfall
+          ? t('billing.validation.statusCodUrgentWarning')
+          : matchStatus === 'NO_MATCH'
+            ? t('billing.validation.statusNoMatch')
+            : isBilledBelowMinM3
+              ? `DI BAWAH MIN. CHARGE (${formatDecimal(billedM3, 4)} m³ < ${formatDecimal(effectiveMinChargeM3, 3)} m³ · ${matchedSourceName || 'GUDANG'})`
+              : !isAir && isOverweight && isBilledOverweightTolerated
+                ? `PEMBULATAN WAJAR ${Math.abs(overweight.overweightDiff ?? 1)} KG (${matchedSourceName || 'GUDANG'})`
+                : isMinChargeApplied
+                  ? `COCOK (ATURAN MIN. ${formatDecimal(effectiveMinChargeM3, 3)} m³ · ${matchedSourceName})`
+                  : t('billing.validation.statusMatch', { source: matchedSourceName })
+
+  const badgeTitle = !isAir && isOverweight && isBilledOverweightTolerated
+    ? `Tagihan memuat item penagihan KG sebesar ${formatNumber(overweight.effectiveBilledKg)} kg. Terdapat selisih pembulatan wajar ${Math.abs(overweight.overweightDiff ?? 1)} kg dengan perhitungan sistem (+${formatNumber(overweight.overweightKg)} kg).`
+    : undefined
 
   const isMatch = validation ? validation.isMatch : (matchStatus === 'MATCH_PRIMARY' || matchStatus === 'MATCH_MARKING')
-
-  // Overweight Calculations (Sea only) — via useOverweightValidation (single source of truth)
-  const refM3Fallback = komplainValues[0] ?? gudangValues[0] ?? plValues[0] ?? res?.recommendedM3 ?? 0
-  const fallbackOverweight = useOverweightValidation({
-    res,
-    invoiceDetails,
-    billedM3,
-    billedKg,
-    isAir,
-    isGabungan,
-    refM3Fallback,
-  })
-  const overweight = validation ? validation.overweight : fallbackOverweight
-  const {
-    isOverweight,
-    isBilledOverweightExactMatch,
-    isBilledOverweightMatch,
-    isBilledUnneededOverweight,
-  } = overweight
 
   // Price Discrepancy Check across all items
   const fallbackEvaluatedItems = useMemo(() => {
@@ -389,13 +416,6 @@ export function BillingValidationCard({
   const hasUnbilledTransport = validation ? validation.hasUnbilledTransport : false
 
   const hasFreightCharge = Boolean(res?.freightChargeSummary?.totalFc && res.freightChargeSummary.totalFc > 0)
-
-  // Helper cek selisih overweight & rasio berat fisik (jalur laut)
-  const hasOverweightIssue = !isAir && !isType2 && (
-    (isOverweight && !isBilledOverweightExactMatch) ||
-    isBilledUnneededOverweight ||
-    (!isBilledOverweightMatch && isOverweight)
-  )
 
   // Auto-determined active tab based on problem hierarchy
   const activeTab: ValidationCardTab = useMemo(() => {
@@ -565,6 +585,7 @@ export function BillingValidationCard({
         listCode={listCode}
         badgeVariant={badgeVariant}
         badgeText={badgeText}
+        badgeTitle={badgeTitle}
         StatusIcon={StatusIcon}
         refetch={refetch}
         isFetching={isFetching}

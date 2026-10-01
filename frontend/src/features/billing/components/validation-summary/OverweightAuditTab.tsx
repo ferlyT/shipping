@@ -104,7 +104,7 @@ export function OverweightAuditTab({ overweight, billedM3 }: OverweightAuditTabP
                 isChildBillMerged || isBilledOverweightExactMatch || isBilledOverweightTolerated || (isBilledOverweightMatch && matchedCandidateSource)
                   ? 'AMAN'
                   : isBilledUnneededOverweight
-                    ? 'PERINGATAN'
+                    ? 'SELISIH'
                     : isOverweight
                       ? 'SELISIH'
                       : 'AMAN'
@@ -133,8 +133,8 @@ export function OverweightAuditTab({ overweight, billedM3 }: OverweightAuditTabP
               ⚠ Tagihan memuat item penagihan KG sebesar {formatNumber(effectiveBilledKg)} kg. Terdapat selisih pembulatan wajar {Math.abs(overweightDiff ?? 0)} kg dengan sistem (+{formatNumber(overweightKg)} kg).
             </span>
           ) : isBilledUnneededOverweight ? (
-            <span className="text-amber-800 dark:text-amber-300 font-medium">
-              ⚠ Berat fisik aktual ({formatNumber(actualWeightKg)} kg) masih berada dalam batas kuota rasio (0 kg overweight), namun invoice menagihkan item KG sebesar {formatNumber(effectiveBilledKg)} kg.
+            <span className="text-rose-800 dark:text-rose-300 font-medium">
+              ❌ Kesalahan Hitung: Berat fisik aktual ({formatNumber(actualWeightKg)} kg) masih berada dalam batas kuota rasio (0 kg overweight), namun invoice menagihkan item KG sebesar {formatNumber(effectiveBilledKg)} kg.
             </span>
           ) : isOverweight ? (
             effectiveBilledKg > 0 ? (

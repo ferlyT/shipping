@@ -545,8 +545,125 @@ export function PairingLocalChargePage() {
             </div>
           </div>
 
-          {/* Spreadsheet Visual Grid Table */}
-          <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xs overflow-hidden">
+          {/* Mobile Cards View (< md) */}
+          <div className="block md:hidden space-y-3">
+            {filteredRows.length > 0 ? (
+              filteredRows.map((r) => (
+                <div
+                  key={r.rowIndex}
+                  className={cn(
+                    'rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5 shadow-2xs space-y-2.5',
+                    r.validationStatus === 'SELISIH' && 'border-rose-500/30 bg-rose-500/5',
+                    r.validationStatus === 'COCOK' && 'border-emerald-500/30'
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-[var(--color-neutral)] text-[var(--color-secondary)]">
+                          #{r.rowIndex}
+                        </span>
+                        <span className="font-mono font-bold text-xs text-[var(--color-primary)]">
+                          {r.receiptNo || '—'}
+                        </span>
+                        {r.receiptNosParsed.length > 1 && (
+                          <span
+                            title={`Dipecah menjadi: ${r.receiptNosParsed.join(', ')}`}
+                            className="text-[9px] px-1 py-0.2 rounded bg-amber-500/10 text-amber-500 border border-amber-500/30"
+                          >
+                            +{r.receiptNosParsed.length - 1}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-[10px] text-[var(--color-secondary)] mt-0.5">{r.date || '—'}</p>
+                    </div>
+                    <ValidationStatusCell row={r} />
+                  </div>
+
+                  <div className="text-xs space-y-0.5">
+                    <p className="font-semibold text-[var(--color-primary)] truncate" title={r.customer}>
+                      {r.customer || '—'}
+                    </p>
+                    {r.from && (
+                      <p className="text-[11px] text-[var(--color-secondary)]">
+                        Asal: <span className="text-[var(--color-primary)]">{r.from}</span>
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-1.5 text-center p-2 rounded-lg bg-[var(--color-neutral)]/40 border border-[var(--color-border)] text-xs font-mono">
+                    <div>
+                      <span className="text-[9px] text-[var(--color-secondary)] block uppercase">Ctn</span>
+                      <span className="font-semibold text-[var(--color-primary)]">{r.ctn || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-[var(--color-secondary)] block uppercase">Kg</span>
+                      <span className="font-semibold text-[var(--color-primary)]">{r.kg || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-[var(--color-secondary)] block uppercase">M³</span>
+                      <span className="font-semibold text-[var(--color-primary)]">{r.cbm || '—'}</span>
+                    </div>
+                    <div>
+                      <span className="text-[9px] text-[var(--color-secondary)] block uppercase">Biaya</span>
+                      <span className="font-bold text-[var(--color-primary)]">{formatNumber(r.charge)}</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] pt-1 border-t border-[var(--color-border)]/60">
+                    <div className="truncate max-w-[180px]">
+                      <span className="text-[var(--color-secondary)] text-[10px] uppercase font-bold block">Marking:</span>
+                      <span className="font-semibold text-[var(--color-primary)] truncate" title={r.shippingMark}>
+                        {r.shippingMark || '—'}
+                      </span>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      <span className="text-[var(--color-secondary)] text-[10px] uppercase font-bold block">Invoice:</span>
+                      {r.invNos && r.invNos.length > 0 ? (
+                        <div className="flex flex-col items-end gap-0.5">
+                          {r.invNos.map((inv) => {
+                            const cleanInv = inv.replace(/[\x00-\x1F\x7F]/g, '').trim()
+                            return (
+                              <Link
+                                key={cleanInv}
+                                to={ROUTES.BILLING_DETAIL(cleanInv)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 font-bold text-sky-600 dark:text-sky-400 hover:underline"
+                              >
+                                <span>{cleanInv}</span>
+                                <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      ) : r.invNo ? (
+                        <Link
+                          to={ROUTES.BILLING_DETAIL(r.invNo.replace(/[\x00-\x1F\x7F]/g, '').trim())}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 font-bold text-sky-600 dark:text-sky-400 hover:underline"
+                        >
+                          <span>{r.invNo.replace(/[\x00-\x1F\x7F]/g, '').trim()}</span>
+                          <ExternalLink className="w-2.5 h-2.5 opacity-70" />
+                        </Link>
+                      ) : (
+                        <span className="text-[var(--color-secondary)] italic">—</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="p-6 text-center text-xs text-[var(--color-secondary)] rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+                Tidak ada data yang cocok dengan kriteria pencarian atau filter status.
+              </div>
+            )}
+          </div>
+
+          {/* Desktop Spreadsheet Visual Grid Table (>= md) */}
+          <div className="hidden md:block rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xs overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-left text-xs font-mono">
                 <thead>

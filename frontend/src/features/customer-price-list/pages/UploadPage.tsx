@@ -53,6 +53,8 @@ export function UploadPage() {
   const [dragging, setDragging] = useState(false)
   const [file, setFile] = useState<File | null>(null)
   const [effectiveDate, setEffectiveDate] = useState(defaultEffectiveDate())
+  const [hasEndDate, setHasEndDate] = useState(false)
+  const [endDate, setEndDate] = useState('')
   const [custCode, setCustCode] = useState('')
   const [custName, setCustName] = useState('')
 
@@ -100,6 +102,14 @@ export function UploadPage() {
       setError('Format file harus .xlsx atau .xls')
       return
     }
+    if (f.size > 50 * 1024 * 1024) {
+      setError('Ukuran file melebihi batas maksimum 50MB')
+      return
+    }
+    if (f.size === 0) {
+      setError('File kosong (0 bytes), silakan pilih file Excel yang valid')
+      return
+    }
     setFile(f)
     setResult(null)
     setError(null)
@@ -114,6 +124,12 @@ export function UploadPage() {
 
   const handleSubmit = async () => {
     if (!file || !effectiveDate || !custCode) return
+
+    if (hasEndDate && endDate && new Date(endDate) < new Date(effectiveDate)) {
+      setError('Tanggal berakhir tidak boleh lebih awal dari tanggal mulai berlaku')
+      return
+    }
+
     setUploading(true)
     setProgress(0)
     setError(null)
@@ -122,6 +138,9 @@ export function UploadPage() {
     const form = new FormData()
     form.append('file', file)
     form.append('effectiveDate', effectiveDate)
+    if (hasEndDate && endDate) {
+      form.append('endDate', endDate)
+    }
 
     const progressInterval = setInterval(() => {
       setProgress((p) => (p < 90 ? p + 10 : p))
@@ -242,21 +261,62 @@ export function UploadPage() {
           )}
         </div>
 
-        {/* Effective Date */}
-        <div>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--color-secondary)] mb-1.5">
-            {t('priceList.effectiveDate')} <span className="text-rose-500">*</span>
-          </label>
-          <input
-            type="date"
-            value={effectiveDate}
-            onChange={(e) => setEffectiveDate(e.target.value)}
-            disabled={uploading}
-            className="w-full sm:w-64 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm text-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-50"
-          />
-          <p className="text-xs text-[var(--color-secondary)] mt-1">
-            Tanggal berlakunya harga khusus dalam file ini untuk customer terpilih.
-          </p>
+        {/* Effective Date & End Date */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold uppercase tracking-wider text-[var(--color-secondary)] mb-1.5">
+              Mulai Berlaku (Effective Date) <span className="text-rose-500">*</span>
+            </label>
+            <input
+              type="date"
+              value={effectiveDate}
+              onChange={(e) => setEffectiveDate(e.target.value)}
+              disabled={uploading}
+              className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm text-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-50"
+            />
+            <p className="text-xs text-[var(--color-secondary)] mt-1">
+              Tanggal mulai berlakunya harga khusus untuk customer terpilih.
+            </p>
+          </div>
+
+          <div className="p-3 bg-[var(--color-neutral)]/40 rounded-lg border border-[var(--color-border)] space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold uppercase tracking-wider text-[var(--color-secondary)]">
+                Berlaku Sampai (End Date)
+              </label>
+              <label className="flex items-center gap-1.5 text-xs text-[var(--color-secondary)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!hasEndDate}
+                  disabled={uploading}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setHasEndDate(!checked)
+                    if (checked) setEndDate('')
+                  }}
+                  className="rounded border-[var(--color-border)] text-blue-600 focus:ring-0 cursor-pointer"
+                />
+                <span>Tanpa batas waktu (Selamanya)</span>
+              </label>
+            </div>
+
+            {hasEndDate && (
+              <div className="pt-1">
+                <input
+                  type="date"
+                  value={endDate}
+                  min={effectiveDate}
+                  disabled={uploading}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-3 py-2 text-sm text-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] disabled:opacity-50"
+                  required={hasEndDate}
+                />
+                <p className="text-[11px] text-[var(--color-secondary)] mt-1">
+                  Setelah tanggal ini, tarif customer otomatis kedaluwarsa pada validasi tagihan.
+                </p>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Drop zone */}

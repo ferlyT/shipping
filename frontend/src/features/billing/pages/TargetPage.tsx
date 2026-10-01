@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { Search, Plane, Ship, Download, Users, Layers, Clock, X, FileSpreadsheet, AlertTriangle, CheckCircle2, Tag, Info, Sparkles, TrendingUp, Copy, Check } from 'lucide-react'
@@ -35,6 +35,7 @@ const PIC_OPTIONS_BY_TYPE = {
 
 const GROUP_OPTIONS: { key: GroupKey; name: string; borderAccent?: string; activeClass?: string }[] = [
   { key: 'all',     name: 'Semua' },
+  { key: 'sj_sent', name: 'SJ Terkirim',    borderAccent: 'border-blue-500/40 text-blue-600 dark:text-blue-400',     activeClass: 'border-blue-500 text-blue-600 dark:text-blue-400 bg-blue-500/10' },
   { key: 'partial', name: 'PARSIAL',        borderAccent: 'border-purple-500/40 text-purple-600 dark:text-purple-400', activeClass: 'border-purple-500 text-purple-600 dark:text-purple-400 bg-purple-500/10' },
   { key: 'fcl',     name: 'FCL',            borderAccent: 'border-indigo-500/40 text-indigo-600 dark:text-indigo-400', activeClass: 'border-indigo-500 text-indigo-600 dark:text-indigo-400 bg-indigo-500/10' },
   { key: 'cod',     name: 'COD',            borderAccent: 'border-rose-500/40 text-rose-600 dark:text-rose-400',     activeClass: 'border-rose-500 text-rose-600 dark:text-rose-400 bg-rose-500/10' },
@@ -43,9 +44,28 @@ const GROUP_OPTIONS: { key: GroupKey; name: string; borderAccent?: string; activ
   { key: 'no_type', name: 'Belum Set Tipe', borderAccent: 'border-amber-500/40 text-amber-600 dark:text-amber-400',   activeClass: 'border-amber-500 text-amber-600 dark:text-amber-400 bg-amber-500/10' },
 ]
 
+export function isFclTargetItem(item: { type?: string; comodity?: string; markingCode?: string }): boolean {
+  const typeStr     = String(item.type     || '').toUpperCase().trim()
+  const comodityStr = String(item.comodity || '').toUpperCase().trim()
+  const markingStr  = String(item.markingCode || '').toUpperCase().trim()
+  return (
+    typeStr.includes('FCL') ||
+    typeStr.includes('KONTAINER') ||
+    comodityStr.includes('FCL') ||
+    markingStr.startsWith('26FCL') ||
+    markingStr.includes('FCL-') ||
+    markingStr.includes('FCL')
+  )
+}
+
+export function isNoTypeTargetItem(typeText?: string): boolean {
+  const trimmed = String(typeText || '').toUpperCase().trim()
+  return !trimmed || trimmed === '-' || trimmed === '0' || trimmed === 'NONE' || trimmed === 'N/A' || trimmed === 'NA' || trimmed === 'NULL'
+}
+
 function CategoryTypeBadge({ typeText }: { typeText?: string }) {
   const trimmed = (typeText || '').trim()
-  if (!trimmed || trimmed === '-' || trimmed === '0') {
+  if (isNoTypeTargetItem(trimmed)) {
     return (
       <span className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wide rounded bg-amber-500/15 border border-amber-500/40 text-amber-600 dark:text-amber-400">
         Belum Set Tipe
@@ -82,6 +102,123 @@ function CategoryTypeBadge({ typeText }: { typeText?: string }) {
       {trimmed}
     </span>
   )
+}
+
+function normalizeSearchText(text: string): string {
+  return (text || '')
+    .toLowerCase()
+    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function matchTargetSearch(item: TargetBillingItem, rawQuery: string): boolean {
+  if (!rawQuery.trim()) return true
+  const qClean = normalizeSearchText(rawQuery)
+  const qRaw = rawQuery.toLowerCase().trim()
+  const qTokens = qClean.split(' ').filter(Boolean)
+
+  // 1. Raw exact substring check for identifiers (custCode, markingCode, markingNo, listNo/listCode)
+  const custCode = (item.custCode || '').toLowerCase().trim()
+  const markingCode = (item.markingCode || '').toLowerCase().trim()
+  const markingNo = (item.markingNo || '').toLowerCase().trim()
+  const listNo = (item.listNo || item.listCode || '').toLowerCase().trim()
+
+  if (
+    (custCode && custCode.includes(qRaw)) ||
+    (markingCode && markingCode.includes(qRaw)) ||
+    (markingNo && markingNo.includes(qRaw)) ||
+    (listNo && listNo.includes(qRaw))
+  ) {
+    return true
+  }
+
+  // 2. Expand common abbreviation synonyms in query tokens (e.g. tk <-> toko, pt, mr, dll)
+  const expandedTokens = qTokens.map((tok) => {
+    if (tok === 'tk') return ['tk', 'toko']
+    if (tok === 'toko') return ['toko', 'tk']
+    return [tok]
+  })
+
+  // 3. Normalized comprehensive text pool
+  const pool = normalizeSearchText(
+    [
+      item.customer,
+      item.custCode,
+      item.billTo,
+      item.consignee,
+      item.markingCode,
+      item.markingNo,
+      item.listNo,
+      item.listCode,
+      item.branch,
+      item.sales,
+      item.comodity,
+      item.type,
+      item.pic,
+    ]
+      .filter(Boolean)
+      .join(' ')
+  )
+
+  // Every token (or its expanded synonym) must match in the pool
+  const allTokensMatch = expandedTokens.every((tokenVariants) =>
+    tokenVariants.some((variant) => pool.includes(variant))
+  )
+  if (allTokensMatch) return true
+
+  // 4. Special check: if user searches for company / individual name (e.g. "PT BINTANG TIMUR" or "MR KEVIN")
+  // Check against customer normalized string
+  const custNormalized = normalizeSearchText(item.customer || '')
+  if (
+    custNormalized &&
+    expandedTokens.every((variants) => variants.some((v) => custNormalized.includes(v)))
+  ) {
+    return true
+  }
+
+  if (item.isPartial && (qRaw === 'parsial' || qRaw === 'partial')) {
+    return true
+  }
+
+  if (isFclTargetItem(item) && (qRaw === 'fcl' || qRaw === 'kontainer' || qRaw === 'container')) {
+    return true
+  }
+
+  return false
+}
+
+function computeTargetSearchScore(item: TargetBillingItem, rawQuery: string): number {
+  if (!rawQuery.trim()) return 0
+  const qClean = normalizeSearchText(rawQuery)
+  const qRaw = rawQuery.toLowerCase().trim()
+  const custName = (item.customer || '').toLowerCase().trim()
+  const custClean = normalizeSearchText(item.customer || '')
+  const billTo = (item.billTo || '').toLowerCase().trim()
+  const markingCode = (item.markingCode || '').toLowerCase().trim()
+  const markingNo = (item.markingNo || '').toLowerCase().trim()
+  const custCode = (item.custCode || '').toLowerCase().trim()
+
+  // 1. Exact match customer / billTo / custCode -> highest priority
+  if (custName === qRaw || custClean === qClean || custCode === qRaw) return 100
+  if (billTo === qRaw) return 95
+
+  // 2. Starts with customer / billTo
+  if (custName.startsWith(qRaw) || custClean.startsWith(qClean)) return 80
+  if (billTo.startsWith(qRaw)) return 75
+
+  // 3. Exact match markingCode / markingNo
+  if (markingCode === qRaw || markingNo === qRaw) return 70
+
+  // 4. Customer contains query
+  if (custName.includes(qRaw) || custClean.includes(qClean)) return 60
+  if (billTo.includes(qRaw)) return 55
+
+  // 5. Marking contains query
+  if (markingCode.includes(qRaw) || markingNo.includes(qRaw)) return 40
+
+  // 6. Generic token match
+  return 20
 }
 
 function TargetTableSkeleton() {
@@ -170,11 +307,15 @@ export default function TargetPage() {
   const typeParam   = searchParams.get('type')
   const initialType = (typeParam === 'laut' ? 'laut' : typeParam === 'udara' ? 'udara' : 'all') as 'all' | 'udara' | 'laut'
   const initialPic  = searchParams.get('pic') || 'all'
+  const groupParam  = searchParams.get('group') as GroupKey | null
+  const validGroups: GroupKey[] = ['all', 'sj_sent', 'partial', 'fcl', 'cod', 'urgent', 'aging', 'no_type']
+  const initialSearch = searchParams.get('search') || searchParams.get('q') || ''
+  const initialGroup = groupParam && validGroups.includes(groupParam) ? groupParam : 'all'
 
   const [activeType,       setActiveType]       = useState<'all' | 'udara' | 'laut'>(initialType)
   const [activePic,        setActivePic]        = useState<string>(initialPic)
-  const [activeGroup,      setActiveGroup]      = useState<GroupKey>('all')
-  const [searchQuery,      setSearchQuery]      = useState('')
+  const [activeGroup,      setActiveGroup]      = useState<GroupKey>(initialGroup)
+  const [searchQuery,      setSearchQuery]      = useState(initialSearch)
   const [mismatchItem,     setMismatchItem]     = useState<TargetBillingItem | null>(null)
   const [partialModalItem, setPartialModalItem] = useState<TargetBillingItem | null>(null)
   const [priceCheckItem,   setPriceCheckItem]   = useState<TargetBillingItem | null>(null)
@@ -182,6 +323,48 @@ export default function TargetPage() {
   const [copiedKey,        setCopiedKey]        = useState<string | null>(null)
 
   const { addToast } = useToastStore()
+
+  // Reaktif terhadap perubahan URL searchParams (deep link / navigasi internal / klik dari dashboard)
+  useEffect(() => {
+    const typeP  = searchParams.get('type')
+    const picP   = searchParams.get('pic') || 'all'
+    const groupP = searchParams.get('group') as GroupKey | null
+    const qP     = searchParams.get('search') || searchParams.get('q') || ''
+
+    if (typeP === 'laut' || typeP === 'udara' || typeP === 'all') {
+      setActiveType((cur) => (cur !== typeP ? typeP : cur))
+    }
+    setActivePic((cur) => (cur !== picP ? picP : cur))
+    if (groupP && validGroups.includes(groupP)) {
+      setActiveGroup((cur) => (cur !== groupP ? groupP : cur))
+    } else if (!groupP) {
+      setActiveGroup((cur) => (cur !== 'all' ? 'all' : cur))
+    }
+    setSearchQuery((cur) => (cur !== qP ? qP : cur))
+  }, [searchParams])
+
+  // Sync search query ke URL query param (debounced)
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setSearchParams((prev) => {
+        const currentParam = prev.get('search') || prev.get('q') || ''
+        const trimmed = searchQuery.trim()
+        if (trimmed) {
+          if (currentParam === trimmed) return prev
+          const next = new URLSearchParams(prev)
+          next.set('search', trimmed)
+          return next
+        } else if (currentParam) {
+          const next = new URLSearchParams(prev)
+          next.delete('search')
+          next.delete('q')
+          return next
+        }
+        return prev
+      })
+    }, 300)
+    return () => clearTimeout(handler)
+  }, [searchQuery, setSearchParams])
 
   const handleCopyTargetItem = async (item: TargetBillingItem) => {
     const markingFull = [item.markingCode, item.markingNo ? `#${item.markingNo.trim()}` : ''].filter(Boolean).join(' ')
@@ -223,18 +406,57 @@ export default function TargetPage() {
     const validKeys = PIC_OPTIONS_BY_TYPE[type].map((o) => o.key)
     const nextPic   = validKeys.includes(activePic) ? activePic : 'all'
     setActivePic(nextPic)
+    let nextGroup = activeGroup
+    if (type === 'udara' && activeGroup === 'fcl') {
+      nextGroup = 'all'
+      setActiveGroup('all')
+    }
     setSearchParams((prev) => {
-      type === 'all' ? prev.delete('type') : prev.set('type', type)
-      nextPic === 'all' ? prev.delete('pic') : prev.set('pic', nextPic)
-      return prev
+      const next = new URLSearchParams(prev)
+      type === 'all' ? next.delete('type') : next.set('type', type)
+      nextPic === 'all' ? next.delete('pic') : next.set('pic', nextPic)
+      if (nextGroup !== activeGroup) {
+        nextGroup === 'all' ? next.delete('group') : next.set('group', nextGroup)
+      }
+      return next
     })
   }
 
   const handlePicChange = (pic: string) => {
     setActivePic(pic)
     setSearchParams((prev) => {
-      pic === 'all' ? prev.delete('pic') : prev.set('pic', pic)
-      return prev
+      const next = new URLSearchParams(prev)
+      pic === 'all' ? next.delete('pic') : next.set('pic', pic)
+      return next
+    })
+  }
+
+  const handleGroupChange = (group: GroupKey) => {
+    setActiveGroup(group)
+    let nextType = activeType
+    let nextPic = activePic
+
+    // Jika filter FCL dipilih dan moda masih Udara, alihkan ke Laut (karena kargo FCL hanya ada di Laut)
+    if (group === 'fcl' && activeType === 'udara') {
+      nextType = 'laut'
+      setActiveType('laut')
+    }
+    // Jika filter FCL dipilih dan PIC aktif bukan yang menangani FCL ('all' atau 'ferly'), reset PIC ke 'all'
+    if (group === 'fcl' && activePic !== 'all' && activePic !== 'ferly') {
+      nextPic = 'all'
+      setActivePic('all')
+    }
+
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      group === 'all' ? next.delete('group') : next.set('group', group)
+      if (nextType !== activeType) {
+        nextType === 'all' ? next.delete('type') : next.set('type', nextType)
+      }
+      if (nextPic !== activePic) {
+        nextPic === 'all' ? next.delete('pic') : next.set('pic', nextPic)
+      }
+      return next
     })
   }
 
@@ -262,6 +484,8 @@ export default function TargetPage() {
       pic: String(r.pic ?? r.Pic ?? '').trim(),
       customer: String(r.customer ?? r.Customer ?? '').trim(),
       custCode: String(r.custCode ?? r.CustCode ?? r.fdCustCode ?? '').trim(),
+      billTo: String(r.billTo ?? r.BillTo ?? r.fdBillTo ?? '').trim(),
+      consignee: String(r.consignee ?? r.Consignee ?? r.fdConsignee ?? '').trim(),
       branch: String(r.branch ?? r.Branch ?? '').trim(),
       sales: String(r.sales ?? r.Sales ?? '').trim(),
       markingCode: String(r.markingCode ?? r.Marking_code ?? r.marking_code ?? '').trim(),
@@ -278,6 +502,11 @@ export default function TargetPage() {
       tglAgen: r.tglAgen ?? r.Tgl_Agen ?? null,
       exitDate: r.exitDate ?? r.ExitDate ?? null,
       statusKirim: String(r.statusKirim ?? r.StatusKirim ?? '').trim(),
+      isSjSent: Boolean(
+        r.isSjSent ??
+        (String(r.statusKirim ?? r.StatusKirim ?? '').toUpperCase().includes('TERKIRIM') ||
+         String(r.statusKirim ?? r.StatusKirim ?? '').toUpperCase().includes('TERIMA SJ'))
+      ),
       harga: Number(r.harga ?? r.Harga ?? 0),
       updateBy: String(r.updateBy ?? r.UpdateBy ?? '').trim(),
       updateDate: r.updateDate ?? r.UpdateDate ?? null,
@@ -304,56 +533,81 @@ export default function TargetPage() {
 
   // Summary counts per group (from picFilteredList)
   const groupCounts = useMemo(() => {
-    const counts: Record<GroupKey, number> = { all: picFilteredList.length, partial: 0, fcl: 0, cod: 0, urgent: 0, aging: 0, no_type: 0 }
+    const counts: Record<GroupKey, number> = { all: picFilteredList.length, sj_sent: 0, partial: 0, fcl: 0, cod: 0, urgent: 0, aging: 0, no_type: 0 }
     for (const item of picFilteredList) {
-      const typeStr     = String(item.type     || '').toUpperCase().trim()
-      const comodityStr = String(item.comodity || '').toUpperCase().trim()
-      const st          = String(item.status   || '').toUpperCase().trim()
-      const hari        = Number(item.hari     || 0)
-      if (item.isPartial)        counts.partial++
-      if (typeStr.includes('FCL') || comodityStr.includes('FCL')) counts.fcl++
-      if (st.includes('COD'))    counts.cod++
-      if (st.includes('URGENT')) counts.urgent++
-      if (hari > 7)              counts.aging++
-      if (!typeStr || typeStr === '-' || typeStr === '0') counts.no_type++
+      const st   = String(item.status || '').toUpperCase().trim()
+      const hari = Number(item.hari || 0)
+      if (item.isSjSent)                 counts.sj_sent++
+      if (item.isPartial)                counts.partial++
+      if (isFclTargetItem(item))         counts.fcl++
+      if (st.includes('COD'))            counts.cod++
+      if (st.includes('URGENT'))         counts.urgent++
+      if (hari > 7)                      counts.aging++
+      if (isNoTypeTargetItem(item.type)) counts.no_type++
     }
     return counts
   }, [picFilteredList])
+
+  // Summary counts across all PICs for current active mode
+  const rawGroupCounts = useMemo(() => {
+    const counts: Record<GroupKey, number> = { all: rawList.length, sj_sent: 0, partial: 0, fcl: 0, cod: 0, urgent: 0, aging: 0, no_type: 0 }
+    for (const item of rawList) {
+      const st   = String(item.status || '').toUpperCase().trim()
+      const hari = Number(item.hari || 0)
+      if (item.isSjSent)                 counts.sj_sent++
+      if (item.isPartial)                counts.partial++
+      if (isFclTargetItem(item))         counts.fcl++
+      if (st.includes('COD'))            counts.cod++
+      if (st.includes('URGENT'))         counts.urgent++
+      if (hari > 7)                      counts.aging++
+      if (isNoTypeTargetItem(item.type)) counts.no_type++
+    }
+    return counts
+  }, [rawList])
 
   // Filtered by group
   const groupedList = useMemo(() => {
     if (activeGroup === 'all') return picFilteredList
     return picFilteredList.filter((item) => {
-      const typeStr     = String(item.type     || '').toUpperCase().trim()
-      const comodityStr = String(item.comodity || '').toUpperCase().trim()
-      const st          = String(item.status   || '').toUpperCase().trim()
-      const hari        = Number(item.hari     || 0)
+      const st   = String(item.status || '').toUpperCase().trim()
+      const hari = Number(item.hari || 0)
+      if (activeGroup === 'sj_sent') return !!item.isSjSent
       if (activeGroup === 'partial') return !!item.isPartial
-      if (activeGroup === 'fcl')    return typeStr.includes('FCL') || comodityStr.includes('FCL')
-      if (activeGroup === 'cod')    return st.includes('COD')
-      if (activeGroup === 'urgent') return st.includes('URGENT')
-      if (activeGroup === 'aging')  return hari > 7
-      if (activeGroup === 'no_type') return !typeStr || typeStr === '-' || typeStr === '0'
+      if (activeGroup === 'fcl')     return isFclTargetItem(item)
+      if (activeGroup === 'cod')     return st.includes('COD')
+      if (activeGroup === 'urgent')  return st.includes('URGENT')
+      if (activeGroup === 'aging')   return hari > 7
+      if (activeGroup === 'no_type') return isNoTypeTargetItem(item.type)
       return true
     })
   }, [picFilteredList, activeGroup])
 
-  // Filtered by search query (client-side)
+  // Total FCL items available across the entire loaded list
+  const totalFclInRawList = useMemo(() => {
+    return rawGroupCounts.fcl
+  }, [rawGroupCounts.fcl])
+
+  // Total matches across the entire activeType mode
+  const totalSearchMatchesInMode = useMemo(() => {
+    if (!searchQuery.trim()) return rawList.length
+    return rawList.filter((it) => matchTargetSearch(it, searchQuery)).length
+  }, [rawList, searchQuery])
+
+  // Total matches within the active PIC across all categories
+  const totalSearchMatchesInPic = useMemo(() => {
+    if (!searchQuery.trim()) return picFilteredList.length
+    return picFilteredList.filter((it) => matchTargetSearch(it, searchQuery)).length
+  }, [picFilteredList, searchQuery])
+
+  // Filtered by search query (client-side) using smart multi-token matcher + relevance sorting
   const filteredList = useMemo(() => {
     if (!searchQuery.trim()) return groupedList
-    const q = searchQuery.toLowerCase().trim()
-    return groupedList.filter((item) => {
-      return (
-        String(item.customer    || '').toLowerCase().includes(q) ||
-        String(item.markingCode || '').toLowerCase().includes(q) ||
-        String(item.markingNo   || '').toLowerCase().includes(q) ||
-        String(item.listNo      || '').toLowerCase().includes(q) ||
-        String(item.branch      || '').toLowerCase().includes(q) ||
-        String(item.comodity    || '').toLowerCase().includes(q) ||
-        String(item.type        || '').toLowerCase().includes(q) ||
-        String(item.pic         || '').toLowerCase().includes(q) ||
-        (item.isPartial && (q === 'parsial' || q === 'partial'))
-      )
+    const matched = groupedList.filter((item) => matchTargetSearch(item, searchQuery))
+    return [...matched].sort((a, b) => {
+      const scoreB = computeTargetSearchScore(b, searchQuery)
+      const scoreA = computeTargetSearchScore(a, searchQuery)
+      if (scoreB !== scoreA) return scoreB - scoreA
+      return (Number(b.hari) || 0) - (Number(a.hari) || 0)
     })
   }, [groupedList, searchQuery])
 
@@ -513,19 +767,27 @@ export default function TargetPage() {
             {GROUP_OPTIONS.map((opt) => {
               const isActive = activeGroup === opt.key
               const count    = groupCounts[opt.key]
+              const isFclUdara = opt.key === 'fcl' && activeType === 'udara'
               return (
                 <button
                   key={opt.key}
-                  onClick={() => setActiveGroup(opt.key)}
+                  onClick={() => handleGroupChange(opt.key)}
+                  title={isFclUdara ? 'Kargo FCL hanya tersedia di moda Laut (klik untuk otomatis beralih ke Laut)' : undefined}
                   className={`relative flex items-center gap-1 px-2.5 sm:px-3 py-1 sm:py-1.5 text-[11px] font-semibold rounded-lg border transition-all cursor-pointer shrink-0 ${
                     isActive
                       ? opt.activeClass || 'bg-transparent border-[var(--color-tertiary)] text-[var(--color-tertiary)] shadow-xs font-bold'
+                      : isFclUdara
+                      ? 'bg-[var(--color-surface)] text-[var(--color-secondary)]/60 border-[var(--color-border)] hover:bg-[var(--color-neutral)] hover:text-[var(--color-primary)]'
                       : 'bg-[var(--color-surface)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)] hover:text-[var(--color-primary)]'
                   }`}
                 >
                   {opt.key === 'aging' && <Clock className="w-3 h-3 shrink-0" />}
                   <span>{opt.name}</span>
-                  <span className="ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center inline-flex items-center justify-center transition-colors bg-[var(--color-tertiary)] text-white dark:bg-[var(--color-surface)] dark:text-[var(--color-tertiary)] dark:border dark:border-[var(--color-tertiary)] shadow-2xs">
+                  <span className={`ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center inline-flex items-center justify-center transition-colors ${
+                    isFclUdara && count === 0
+                      ? 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)]'
+                      : 'bg-[var(--color-tertiary)] text-white dark:bg-[var(--color-surface)] dark:text-[var(--color-tertiary)] dark:border dark:border-[var(--color-tertiary)] shadow-2xs'
+                  }`}>
                     {count}
                   </span>
                 </button>
@@ -539,7 +801,7 @@ export default function TargetPage() {
               <Search className="absolute left-2.5 sm:left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--color-secondary)]" />
               <input
                 type="text"
-                placeholder="Cari customer, marking..."
+                placeholder="Cari customer, kode, marking..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-8 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-lg focus:outline-none focus:ring-2 focus:ring-[var(--color-tertiary)]/20 focus:border-[var(--color-tertiary)] text-[var(--color-primary)] transition-all"
@@ -591,7 +853,10 @@ export default function TargetPage() {
               </span>
             )}
             <button
-              onClick={() => { setActiveType('all'); setActivePic('all'); setActiveGroup('all'); setSearchQuery(''); setSearchParams({}) }}
+              onClick={() => {
+                setSearchQuery('')
+                setSearchParams({})
+              }}
               className="ml-auto text-[10px] font-semibold text-[var(--color-tertiary)] hover:underline flex items-center gap-0.5 cursor-pointer"
             >
               <X className="w-2.5 h-2.5" /> Reset semua
@@ -612,6 +877,7 @@ export default function TargetPage() {
             <span className="text-xs text-[var(--color-secondary)] ml-1.5">
               {activeGroup !== 'all' ? `· ${activeGroupOpt?.name}` : '· semua kategori'}
               {activePic !== 'all' ? ` · PIC ${activePic}` : ''}
+              {searchQuery && ` · hasil pencarian "${searchQuery}"`}
             </span>
           </div>
           <span className="text-[10px] text-[var(--color-secondary)]">
@@ -619,17 +885,130 @@ export default function TargetPage() {
           </span>
         </div>
 
+        {/* Partial category context notification */}
+        {activeGroup === 'partial' && filteredList.length > 0 && (
+          <div className="px-4 py-2 border-b border-purple-500/20 bg-purple-500/5 flex items-center gap-2 text-xs animate-fadeIn">
+            <Layers className="w-3.5 h-3.5 shrink-0 text-purple-500" />
+            <span className="text-purple-700 dark:text-purple-300">
+              <strong>Kategori Parsial:</strong> Menampilkan {filteredList.length} kargo dengan pengiriman parsial multi-marking (1 tanda terima agen berisi lebih dari 1 marking). Klik tombol <span className="font-bold underline text-purple-600 dark:text-purple-400">PARSIAL</span> untuk melihat rincian pengiriman terkait.
+            </span>
+          </div>
+        )}
+
         {isLoading && !resData ? (
           <TargetTableSkeleton />
         ) : filteredList.length === 0 ? (
           <div className="h-72 flex flex-col items-center justify-center gap-3 text-center px-8">
             <div className="w-14 h-14 rounded-2xl bg-[var(--color-neutral)] flex items-center justify-center">
-              <Download className="w-6 h-6 text-[var(--color-secondary)]" />
+              {searchQuery ? <Search className="w-6 h-6 text-[var(--color-secondary)]" /> : <Download className="w-6 h-6 text-[var(--color-secondary)]" />}
             </div>
             <div>
               <p className="text-sm font-semibold text-[var(--color-primary)]">Tidak ada data</p>
-              <p className="text-xs text-[var(--color-secondary)] mt-0.5">Coba sesuaikan filter atau ubah pencarian</p>
+              <p className="text-xs text-[var(--color-secondary)] mt-0.5 max-w-md">
+                {searchQuery
+                  ? `Tidak ada item yang cocok dengan "${searchQuery}" di filter aktif saat ini.`
+                  : activeGroup === 'fcl' && activeType === 'udara'
+                  ? 'Kargo FCL hanya tersedia pada moda Laut. Silakan beralih ke tab Laut atau Semua.'
+                  : activeGroup === 'fcl' && activePic !== 'all' && totalFclInRawList > 0
+                  ? `Kargo FCL ditangani oleh PIC Ferly. Tidak ada kargo FCL pada PIC ${activePic.toUpperCase()}.`
+                  : activeGroup === 'fcl' && totalFclInRawList === 0
+                  ? 'Saat ini seluruh kargo FCL sudah terbit invoice (tidak ada target penagihan FCL).'
+                  : activeGroup === 'sj_sent' && activePic !== 'all' && rawGroupCounts.sj_sent > 0
+                  ? `Tidak ada kargo Surat Jalan (SJ) terkirim pada PIC ${activePic.toUpperCase()}, tetapi tersedia di PIC lain.`
+                  : activeGroup === 'sj_sent'
+                  ? 'Tidak ada kargo dengan Surat Jalan (SJ) terkirim yang belum dibuatkan invoice.'
+                  : activeGroup === 'partial' && activePic !== 'all' && rawGroupCounts.partial > 0
+                  ? `Tidak ada kargo parsial pada PIC ${activePic.toUpperCase()}, tetapi tersedia di PIC lain.`
+                  : activeGroup === 'partial'
+                  ? 'Tidak ada kargo berstatus parsial yang menunggu pembuatan invoice.'
+                  : activeGroup === 'cod' && activePic !== 'all' && rawGroupCounts.cod > 0
+                  ? `Tidak ada kargo COD pada PIC ${activePic.toUpperCase()}, tetapi tersedia di PIC lain.`
+                  : activeGroup === 'cod'
+                  ? 'Tidak ada kargo dengan status COD yang belum dibuatkan invoice.'
+                  : activeGroup === 'urgent' && activePic !== 'all' && rawGroupCounts.urgent > 0
+                  ? `Tidak ada kargo URGENT pada PIC ${activePic.toUpperCase()}, tetapi tersedia di PIC lain.`
+                  : activeGroup === 'urgent'
+                  ? 'Tidak ada kargo dengan status URGENT yang belum dibuatkan invoice.'
+                  : activeGroup === 'aging' && activePic !== 'all' && rawGroupCounts.aging > 0
+                  ? `Tidak ada kargo tertahan (> 7 hari) pada PIC ${activePic.toUpperCase()}, tetapi ada di PIC lain.`
+                  : activeGroup === 'aging'
+                  ? 'Bagus! Seluruh kargo bergerak lancar, tidak ada kargo tertahan (aging) melebihi 7 hari.'
+                  : activeGroup === 'no_type' && activePic !== 'all' && rawGroupCounts.no_type > 0
+                  ? `Tidak ada kargo tanpa tipe pada PIC ${activePic.toUpperCase()}, tetapi ada di PIC lain.`
+                  : activeGroup === 'no_type'
+                  ? 'Semua kargo sudah terdefinisi tipe komoditasnya dengan lengkap.'
+                  : 'Coba sesuaikan filter atau ubah pencarian'}
+              </p>
             </div>
+            {!searchQuery && activeGroup === 'fcl' && activeType === 'udara' && (
+              <button
+                onClick={() => handleTypeChange('laut')}
+                className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+              >
+                <Ship className="w-3.5 h-3.5" />
+                <span>Beralih ke Tab Laut</span>
+              </button>
+            )}
+            {!searchQuery && activeGroup !== 'all' && activePic !== 'all' && rawGroupCounts[activeGroup] > 0 && (
+              <button
+                onClick={() => handlePicChange('all')}
+                className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-[var(--color-tertiary)] text-white hover:opacity-90 transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+              >
+                <span>Tampilkan di Semua PIC</span>
+                <span className="px-1.5 py-0.2 bg-white/20 rounded-full text-[10px] font-bold">
+                  {rawGroupCounts[activeGroup]}
+                </span>
+              </button>
+            )}
+            {!searchQuery && activeGroup !== 'all' && picFilteredList.length > 0 && (
+              <button
+                onClick={() => handleGroupChange('all')}
+                className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-transparent border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-all cursor-pointer inline-flex items-center gap-1.5"
+              >
+                <span>Tampilkan Semua Kategori</span>
+                <span className="px-1.5 py-0.2 bg-[var(--color-neutral)] rounded-full text-[10px] font-bold">
+                  {picFilteredList.length}
+                </span>
+              </button>
+            )}
+            {searchQuery && activeGroup !== 'all' && totalSearchMatchesInPic > 0 && (
+              <button
+                onClick={() => handleGroupChange('all')}
+                className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-[var(--color-tertiary)] text-white hover:opacity-90 transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+              >
+                <span>Tampilkan di Semua Kategori</span>
+                <span className="px-1.5 py-0.2 bg-white/20 rounded-full text-[10px] font-bold">
+                  {totalSearchMatchesInPic}
+                </span>
+              </button>
+            )}
+            {searchQuery && activePic !== 'all' && totalSearchMatchesInMode > 0 && (
+              <button
+                onClick={() => handlePicChange('all')}
+                className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-[var(--color-tertiary)] text-white hover:opacity-90 transition-all cursor-pointer shadow-xs inline-flex items-center gap-1.5"
+              >
+                <span>Tampilkan di Semua PIC</span>
+                <span className="px-1.5 py-0.2 bg-white/20 rounded-full text-[10px] font-bold">
+                  {totalSearchMatchesInMode}
+                </span>
+              </button>
+            )}
+            {searchQuery && activeType !== 'all' && totalSearchMatchesInMode === 0 && (
+              <button
+                onClick={() => handleTypeChange('all')}
+                className="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-transparent border border-[var(--color-tertiary)] text-[var(--color-tertiary)] hover:bg-[var(--color-tertiary)]/10 transition-all cursor-pointer"
+              >
+                Cari di Semua Mode (Udara & Laut)
+              </button>
+            )}
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="text-[11px] font-semibold text-[var(--color-secondary)] hover:text-[var(--color-primary)] underline cursor-pointer mt-1"
+              >
+                Bersihkan kata kunci
+              </button>
+            )}
           </div>
         ) : (
           <>
@@ -650,6 +1029,17 @@ export default function TargetPage() {
                           {badge.label}
                         </span>
                         <StatusBadge status={item.status} />
+                        {item.isPartial && (
+                          <button
+                            type="button"
+                            onClick={() => setPartialModalItem(item)}
+                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-purple-500/15 border border-purple-500/50 text-purple-600 dark:text-purple-400 cursor-pointer shadow-2xs"
+                            title={`Kargo ini memiliki pengiriman parsial multi-marking (${item.countTerima || 2} marking). Klik untuk lihat rincian.`}
+                          >
+                            <Layers className="w-2.5 h-2.5 shrink-0" />
+                            <span>PARSIAL ({item.countTerima || 2})</span>
+                          </button>
+                        )}
                         {item.isBroker && (
                           <BrokerBadge size="xs" />
                         )}
@@ -678,9 +1068,17 @@ export default function TargetPage() {
                     {/* Customer & Branch */}
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-bold text-[var(--color-primary)] text-sm leading-tight truncate" title={item.customer}>
+                        <span className="font-bold text-[var(--color-primary)] text-sm leading-tight truncate" title={item.consignee ? `${item.customer} (Consignee: ${item.consignee})` : item.customer}>
                           {item.customer || '-'}
                         </span>
+                        {item.custCode && (
+                          <span
+                            className="text-[9.5px] font-mono font-medium px-1.5 py-0.5 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-secondary)] shrink-0"
+                            title={`Kode Customer: ${item.custCode}`}
+                          >
+                            {item.custCode}
+                          </span>
+                        )}
                         {(item.custCode || item.customer) && (
                           <button
                             type="button"
@@ -696,6 +1094,11 @@ export default function TargetPage() {
                           </button>
                         )}
                       </div>
+                      {item.billTo && item.billTo.trim().toUpperCase() !== item.customer.trim().toUpperCase() && (
+                        <div className="text-[10px] text-[var(--color-secondary)] truncate mt-0.5" title={`Bill To: ${item.billTo}`}>
+                          Bill to: {item.billTo}
+                        </div>
+                      )}
                       <div className="text-[11px] text-[var(--color-secondary)] mt-0.5 flex items-center gap-1.5 flex-wrap">
                         <span>{item.branch || '-'}</span>
                         {item.sales && <span>· Sales: {item.sales}</span>}
@@ -714,9 +1117,11 @@ export default function TargetPage() {
                               <button
                                 type="button"
                                 onClick={() => setPartialModalItem(item)}
-                                className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-purple-500/10 border border-purple-500/40 text-purple-600 dark:text-purple-400 cursor-pointer"
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-purple-500/15 border border-purple-500/50 text-purple-600 dark:text-purple-400 cursor-pointer shadow-2xs"
+                                title={`Klik untuk melihat ${item.countTerima || 2} data pengiriman parsial terkait`}
                               >
-                                PARSIAL
+                                <Layers className="w-2.5 h-2.5 shrink-0" />
+                                <span>PARSIAL ({item.countTerima || 2})</span>
                               </button>
                             )}
                             {item.validasiMismatch && activeType !== 'udara' && (
@@ -902,9 +1307,17 @@ export default function TargetPage() {
                         {/* Customer & Status */}
                         <td className="px-4 py-3 border-b border-[var(--color-border)] max-w-[240px]">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-[var(--color-primary)] text-xs truncate leading-snug" title={item.customer}>
+                            <span className="font-semibold text-[var(--color-primary)] text-xs truncate leading-snug" title={item.consignee ? `${item.customer} (Consignee: ${item.consignee})` : item.customer}>
                               {item.customer || '-'}
                             </span>
+                            {item.custCode && (
+                              <span
+                                className="text-[9.5px] font-mono font-medium px-1.5 py-0.5 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-secondary)] shrink-0"
+                                title={`Kode Customer: ${item.custCode}`}
+                              >
+                                {item.custCode}
+                              </span>
+                            )}
                             {(item.custCode || item.customer) && (
                               <button
                                 type="button"
@@ -920,8 +1333,24 @@ export default function TargetPage() {
                               </button>
                             )}
                           </div>
+                          {item.billTo && item.billTo.trim().toUpperCase() !== item.customer.trim().toUpperCase() && (
+                            <div className="text-[10px] text-[var(--color-secondary)] truncate mt-0.5" title={`Bill To: ${item.billTo}`}>
+                              Bill to: {item.billTo}
+                            </div>
+                          )}
                           <div className="mt-1 flex items-center gap-1.5 flex-nowrap">
                             <StatusBadge status={item.status} />
+                            {item.isPartial && (
+                              <button
+                                type="button"
+                                onClick={() => setPartialModalItem(item)}
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-purple-500/15 border border-purple-500/50 text-purple-600 dark:text-purple-400 hover:bg-purple-500/25 transition-colors cursor-pointer shadow-2xs shrink-0"
+                                title={`Kargo ini memiliki pengiriman parsial multi-marking (${item.countTerima || 2} marking). Klik untuk lihat rincian.`}
+                              >
+                                <Layers className="w-2.5 h-2.5 shrink-0" />
+                                <span>PARSIAL ({item.countTerima || 2} Resi)</span>
+                              </button>
+                            )}
                             {item.isBroker && (
                               <BrokerBadge size="xs" />
                             )}
@@ -943,12 +1372,13 @@ export default function TargetPage() {
                                 type="button"
                                 onClick={() => setPartialModalItem(item)}
                                 className="inline-flex items-center cursor-pointer group/parsial"
-                                title={`Klik untuk melihat ${item.countTerima || 1} data pengiriman parsial terkait di tbEntryList`}
+                                title={`Klik untuk melihat ${item.countTerima || 2} data pengiriman parsial terkait di tbEntryList`}
                               >
                                 <span
-                                  className="inline-flex items-center px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-transparent border border-purple-500/50 text-purple-600 dark:text-purple-400 group-hover/parsial:bg-purple-500/10 group-hover/parsial:border-purple-500 transition-colors shadow-2xs shrink-0"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-purple-500/15 border border-purple-500/50 text-purple-600 dark:text-purple-400 group-hover/parsial:bg-purple-500/25 transition-colors shadow-2xs shrink-0"
                                 >
-                                  PARSIAL
+                                  <Layers className="w-2.5 h-2.5 shrink-0" />
+                                  PARSIAL ({item.countTerima || 2})
                                 </span>
                               </button>
                             )}

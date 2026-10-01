@@ -1,5 +1,6 @@
 import { formatDecimal, formatCurrency } from '@/lib/utils'
 import { ROUTES } from '@/lib/constants'
+import type { Billing, BillingDetail } from '../types/billing.types'
 
 export type BillingStatus = 'draft' | 'issued' | 'collected'
 
@@ -7,6 +8,60 @@ export interface StatusRow {
   fdGive?: number | null
   fdGive2?: number | null
   fdCekDate?: string | null
+}
+
+/**
+ * Menghitung total nilai invoice dan mata uang efektif (mendukung valas / foreign currency).
+ * Otomatis menangani:
+ * 1. Kesalahan input valas (header valas tapi semua item Rupiah) -> pakai total riil Rupiah
+ * 2. Valas murni (fdJumlah2 > 0 dan item bervalas cocok)
+ * 3. Tagihan Rupiah resmi (fdJumlah1 > 0)
+ * 4. Tagihan draft / belum terbit yang fdJumlah1 masih 0 -> akumulasi sum(details)
+ */
+export function getEffectiveInvoiceTotal(
+  billingData: Billing,
+  details: BillingDetail[] = []
+): { total: number; currency: string } {
+  const rawJumlah2 = Number(billingData.fdJumlah2 || 0)
+  const foreignCurr = (billingData.fdCurr1 || '').trim().toUpperCase()
+  const isForeignCandidate = rawJumlah2 > 0 && foreignCurr && !['RP', 'RP.', 'IDR'].includes(foreignCurr)
+
+  // Cek apakah ada item yang menggunakan valas tersebut
+  const hasMatchingForeignItem = isForeignCandidate && details.some((d) => {
+    const listCode = (d.fdListCode || '').trim().toUpperCase()
+    const curr = (d.fdCurr || '').trim().toUpperCase()
+    if (listCode === foreignCurr || curr === foreignCurr) return true
+    if (foreignCurr.includes('S$') && (listCode === 'SGD' || listCode === 'S$' || curr === 'S$' || curr === 'SGD')) return true
+    if (foreignCurr.includes('HK$') && (listCode === 'HKD' || listCode === 'HK$' || curr === 'HK$' || curr === 'HKD')) return true
+    if (foreignCurr.includes('US$') && (listCode === 'USD' || listCode === 'US$' || curr === 'US$' || curr === 'USD')) return true
+    return false
+  })
+
+  // Jika ada fdJumlah2 valas namun tidak ada item yang bervalas -> ini kesalahan input, total riil dalam Rupiah
+  if (isForeignCandidate && !hasMatchingForeignItem) {
+    const sumAllItems = details.reduce(
+      (sum, d) => sum + (Number(d.fdTotal) || Number(d.fdQty || 0) * Number(d.fdItemPrice || 0)),
+      0
+    )
+    const total = sumAllItems > 0 ? sumAllItems : (Number(billingData.fdJumlah1 || 0) + rawJumlah2)
+    return { total, currency: 'Rp.' }
+  }
+
+  const isForeign = rawJumlah2 > 0
+  const currency = isForeign
+    ? billingData.fdCurr1?.trim() || 'Rp.'
+    : details.find((d) => d?.fdCurr?.trim())?.fdCurr?.trim() || 'Rp.'
+
+  const total = isForeign
+    ? Number(billingData.fdJumlah2)
+    : Number(billingData.fdJumlah1 || 0) > 0
+      ? Number(billingData.fdJumlah1)
+      : details.reduce(
+          (sum, d) => sum + (Number(d.fdTotal) || Number(d.fdQty || 0) * Number(d.fdItemPrice || 0)),
+          0
+        )
+
+  return { total, currency }
 }
 
 /**
@@ -262,6 +317,7 @@ export interface ItemPriceEvaluation {
   hasTargetPrice: boolean
   isTaxReturnItem: boolean
   isKgOverweightItem: boolean
+  isM3MainItem?: boolean
   isTransportItem: boolean
   isFreightChargeItem?: boolean
   isNonValidatedBranchDashFee?: boolean
@@ -271,8 +327,13 @@ export interface ItemPriceEvaluation {
   difference: number
   isUndercharge?: boolean
   isOvercharge?: boolean
+  isProfileMatchOverMaster?: boolean
+  isProfileMatchUnderMaster?: boolean
+  masterPriceDiff?: number
   tierSource?: string
   transportExpedisi?: TransportExpedisiRef | null
+  isCustomerPriceExpired?: boolean
+  customerPriceEndDate?: string | null
 }
 
 function isSingleGenuineBattery(rawToken: string): boolean {
@@ -732,6 +793,8 @@ export function evaluateItemPrice(
     : null
   let typeId = itemTypeId ?? (defaultTypeId && defaultTypeId > 0 ? defaultTypeId : null) ?? res?.markingComodityType ?? null
   let directComodityName = ''
+  let isCustPriceExpired = Boolean(res?.priceValidation?.isCustomerPriceExpired)
+  let expiredCustEndDate: string | null = res?.priceValidation?.customerEndDate || null
 
   // 1. Ekstraksi teks nama barang / komoditas dari item invoice
   const textAfterDash = itemNameUpper.includes('-')
@@ -907,6 +970,10 @@ export function evaluateItemPrice(
   const isKgOverweightItem =
     !isAir &&
     (itemUnit === 'KG' || itemNameUpper.includes('(KG)') || itemNameUpper.includes('PARCELS TO JAKARTA (KG)'))
+  const isM3MainItem =
+    !isAir &&
+    itemUnit === 'M3' &&
+    !isTaxReturnItem
 
   // 2. Tentukan nama komoditi
   let comodityName = ''
@@ -923,6 +990,9 @@ export function evaluateItemPrice(
   } else if (isGenuineLaptop(itemNameUpper)) {
     comodityName = !isAir && isAppleDevice(itemNameUpper) ? 'APPLE LAPTOP' : 'LAPTOP'
   } else {
+    // Prioritaskan spesifikasi barang dari teks item invoice (setelah tanda '-') jika ada
+    const itemSpecificText = textAfterDash && textAfterDash !== 'M3' && textAfterDash !== 'KG' ? textAfterDash : ''
+
     if (typeId) {
       const matchType = res?.comodityTypes?.find(
         (c: any) => c.fdTypeComodity === typeId && (listType ? c.fdListType === listType : true)
@@ -932,8 +1002,9 @@ export function evaluateItemPrice(
       }
     }
     const rawTarget = (item?.fdComodity || '').trim()
-    if (!comodityName) {
-      comodityName = rawTarget || (defaultComodityName !== '—' ? defaultComodityName : '') || itemNameUpper || '—'
+    if (!comodityName || (itemSpecificText && (comodityName.toUpperCase().includes('LARTAS') || comodityName === '—'))) {
+      // Jika nama komoditas umum (LARTAS - S / LARTAS - N) tapi item punya teks barang spesifik, gunakan teks barang spesifik
+      comodityName = itemSpecificText || rawTarget || (defaultComodityName !== '—' ? defaultComodityName : '') || comodityName || itemNameUpper || '—'
     }
   }
 
@@ -958,10 +1029,18 @@ export function evaluateItemPrice(
     const isMkt = isMktCustomer(res?.customer, res?.customer?.fdSalesNM || (res as any)?.sales)
     const expectedSheetType = isMkt ? 'MKT' : 'CS'
 
+    const targetDateStr = ctx.res?.fdTglAgent || (ctx.res as any)?.tglAgent || ctx.res?.billing?.fdInvDate || null
+    const targetDate = targetDateStr ? new Date(targetDateStr) : new Date()
+
     const custCandidates = res.priceValidation.items.filter((p: any) => {
       if (p.sheetType?.toUpperCase() !== 'CUSTOMER') return false
       if (modeFilter && p.mode && p.mode.toUpperCase() !== modeFilter.toUpperCase()) return false
       if (branchFilter && p.branch && !isBranchMatched(p.branch, branchFilter)) return false
+      if (p.endDate && new Date(p.endDate) < targetDate) {
+        isCustPriceExpired = true
+        expiredCustEndDate = p.endDate
+        return false
+      }
       return true
     })
 
@@ -1059,21 +1138,62 @@ export function evaluateItemPrice(
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('ls &') || String(p?.category || '').toLowerCase().includes('food')) || null
         }
       } else {
-        if (normName.includes('UMUM') || normName.includes('GENERAL')) {
+        if (
+          normName.includes('UMUM') ||
+          normName.includes('GENERAL') ||
+          textAfterDash.includes('GLASS') ||
+          textAfterDash.includes('ACCESSORIES') ||
+          textAfterDash.includes('SPAREPART')
+        ) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('general goods') || String(p?.category || '').toUpperCase() === 'UMUM') || null
         } else if (normName.includes('TEKSTIL')) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('fabric') || String(p?.category || '').toUpperCase() === 'TEKSTIL') || null
-        } else if (normName.includes('LARTAS N') || normName.includes('LARTAS NORMAL')) {
+        } else if (
+          normName.includes('LARTAS N') ||
+          normName.includes('LARTAS NORMAL') ||
+          textAfterDash.includes('TABLEWARE') ||
+          textAfterDash.includes('STAINLESS') ||
+          textAfterDash.includes('CUPS')
+        ) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('lartas normal') || String(p?.category || '').toUpperCase().includes('LARTAS NORMAL') || String(p?.category || '').toUpperCase().includes('LARTAS - N') || String(p?.category || '').toUpperCase().includes('LARTAS-N')) || null
-        } else if (normName.includes('ALKES') || normName.includes('MAKANAN') || normName.includes('FOOD') || /\bLS\b/i.test(normName)) {
+        } else if (
+          normName.includes('ALKES') ||
+          normName.includes('MAKANAN') ||
+          normName.includes('FOOD') ||
+          /\bLS\b/i.test(normName) ||
+          textAfterDash.includes('MEDICAL') ||
+          textAfterDash.includes('ALKES') ||
+          textAfterDash.includes('MEDIS')
+        ) {
           heuristicItem = items.find((p: any) => {
             const cat = String(p?.category || '').toLowerCase()
             return cat.includes('alkes') || cat.includes('makanan') || /\bls\b/i.test(cat)
           }) || null
-        } else if (normName.includes('LARTAS S') || normName.includes('LARTAS SUPER') || normName.includes('LARTAS SPECIAL') || normName.includes('KOSMETIK')) {
+        } else if (
+          normName.includes('LARTAS S') ||
+          normName.includes('LARTAS SUPER') ||
+          normName.includes('LARTAS SPECIAL') ||
+          normName.includes('KOSMETIK') ||
+          textAfterDash.includes('KOSMETIK') ||
+          textAfterDash.includes('COSMETIC') ||
+          textAfterDash.includes('SKINCARE') ||
+          textAfterDash.includes('OBAT') ||
+          textAfterDash.includes('SUPPLEMENT')
+        ) {
+          const isCosmetic =
+            textAfterDash.includes('KOSMETIK') ||
+            textAfterDash.includes('COSMETIC') ||
+            textAfterDash.includes('SKINCARE') ||
+            textAfterDash.includes('OBAT') ||
+            textAfterDash.includes('SUPPLEMENT') ||
+            normName.includes('KOSMETIK')
+
           const matchedItems = items.filter((p: any) => {
             const cat = String(p?.category || '').toLowerCase()
             const catUpper = String(p?.category || '').toUpperCase()
+            if (isCosmetic) {
+              return cat.includes('kosmetik') || cat.includes('obat')
+            }
             return cat.includes('kosmetik') || cat.includes('obat') || cat.includes('alkes') || cat.includes('makanan') || /\bls\b/i.test(cat) || catUpper.includes('LARTAS S') || catUpper.includes('LARTAS-S')
           })
           if (matchedItems.length > 0) {
@@ -1144,7 +1264,7 @@ export function evaluateItemPrice(
     maxTargetPrice = Number(priceItem.price || 0)
   }
 
-  // 4. Harga profil customer di DB (Overweight KG & Tax Return sebagai acuan, Komoditi biasa sebagai pembanding saja)
+  // 4. Harga profil customer di DB (Overweight KG & Tax Return sebagai acuan agen/khusus; Komoditi biasa sebagai pembanding)
   let profilePrice = 0
   if (isKgOverweightItem) {
     profilePrice = Number(res?.profileHarga?.kg || 0)
@@ -1152,25 +1272,45 @@ export function evaluateItemPrice(
     maxTargetPrice = profilePrice
   } else if (isTaxReturnItem) {
     profilePrice = Number(res?.profileHarga?.taxReturnPrice || 0)
+    minTargetPrice = profilePrice
+    maxTargetPrice = profilePrice
   } else {
-    // Tampilkan profil customer dari DB sebagai data pembanding (TIDAK menjadi acuan validasi tarif)
+    // Tampilkan profil customer dari DB sebagai data pembanding (inputan manual CS di FoxPro)
     profilePrice = Number(res?.profileHarga?.harga || 0)
+    // Fallback: HANYA jika tidak ditemukan tarif di Price List (priceItem === null && tier0Price === null),
+    // dan customer memiliki tarif flat M3 di profilnya (profilePrice > 0), barulah jadikan profilePrice sebagai target acuan
+    if (!priceItem && (tier0Price === null || tier0Price === 0) && profilePrice > 0 && isM3MainItem) {
+      minTargetPrice = profilePrice
+      maxTargetPrice = profilePrice
+    }
   }
 
   const billedPrice = Number(item?.fdItemPrice || 0)
 
   // 5. Evaluasi kecocokan harga
+  // Prioritas 1: Cocok dengan Price List resmi sistem (Tier 0 / Customer Price List / Master Price List CS/MKT)
+  const hasPriceList = priceItem !== null || (tier0Price !== null && tier0Price > 0)
+  const isPriceListMatched = hasPriceList && billedPrice >= minTargetPrice - 0.01 && billedPrice <= maxTargetPrice + 0.01
+
+  // Prioritas 2: Cocok dengan kesepakatan flat M3 profil pelanggan (profileHarga.harga)
+  const isProfileFlatMatched = isM3MainItem && profilePrice > 0 && Math.abs(billedPrice - profilePrice) < 0.01
+
+  // Deteksi Hybrid: Cocok dengan Profil CS tapi berbeda dengan Master/Customer Price List
+  const isProfileMatchOverMaster = isProfileFlatMatched && hasPriceList && billedPrice > maxTargetPrice + 0.01
+  const isProfileMatchUnderMaster = isProfileFlatMatched && hasPriceList && billedPrice < minTargetPrice - 0.01
+  const masterPriceDiff = hasPriceList ? (billedPrice - (isProfileMatchOverMaster ? maxTargetPrice : minTargetPrice)) : 0
+
   const isMatched = isKgOverweightItem
     ? (profilePrice > 0 && Math.abs(billedPrice - profilePrice) < 0.01)
     : isTaxReturnItem
     ? (profilePrice > 0 && Math.abs(billedPrice - profilePrice) < 0.01)
-    : (priceItem ? (billedPrice >= minTargetPrice - 0.01 && billedPrice <= maxTargetPrice + 0.01) : false)
+    : (isPriceListMatched || isProfileFlatMatched)
 
   const hasTargetPrice = isKgOverweightItem
     ? profilePrice > 0
     : isTaxReturnItem
     ? profilePrice > 0
-    : (priceItem !== null || (tier0Price !== null && tier0Price > 0))
+    : (hasPriceList || (isM3MainItem && profilePrice > 0))
 
   const targetColName = isKgOverweightItem
     ? 'Tarif KG Agen'
@@ -1180,6 +1320,8 @@ export function evaluateItemPrice(
     ? (isCustMapping ? 'Tarif Khusus Cust (Tier 0)' : 'Tarif Komoditas (Tier 0)')
     : priceItem
     ? (priceItem.sheetType === 'CUSTOMER' ? 'Price List Cust' : 'Price List Master')
+    : (isM3MainItem && profilePrice > 0)
+    ? 'Tarif M3 Profile'
     : 'Tidak Ada Acuan'
 
   let priceListDisplay = '—'
@@ -1201,6 +1343,8 @@ export function evaluateItemPrice(
     } else {
       priceListDisplay = `${formatCurrency(priceItem.price)}${sheetSuffix}`
     }
+  } else if (isM3MainItem && profilePrice > 0) {
+    priceListDisplay = `${formatCurrency(profilePrice)}/M3 (Profile)`
   }
 
   let statusType: 'MATCH' | 'LOWER' | 'HIGHER' | 'NO_TARGET' = 'NO_TARGET'
@@ -1210,14 +1354,14 @@ export function evaluateItemPrice(
 
   if (isMatched) {
     statusType = 'MATCH'
-  } else if (hasTargetPrice && (isTaxReturnItem ? profilePrice > 0 : priceItem !== null)) {
-    const targetRef = isTaxReturnItem ? profilePrice : maxTargetPrice
+  } else if (hasTargetPrice) {
+    const targetRef = (isTaxReturnItem || isKgOverweightItem || (!hasPriceList && isM3MainItem)) ? profilePrice : maxTargetPrice
     if (billedPrice > targetRef) {
       statusType = 'HIGHER'
       difference = billedPrice - targetRef
       isOvercharge = true
     } else {
-      const minRef = isTaxReturnItem ? profilePrice : minTargetPrice
+      const minRef = (isTaxReturnItem || isKgOverweightItem || (!hasPriceList && isM3MainItem)) ? profilePrice : minTargetPrice
       statusType = 'LOWER'
       difference = billedPrice - minRef
       isUndercharge = true
@@ -1234,14 +1378,20 @@ export function evaluateItemPrice(
     hasTargetPrice,
     isTaxReturnItem,
     isKgOverweightItem,
+    isM3MainItem,
     isTransportItem: false,
     targetColName,
     priceListDisplay,
     statusType,
-    difference,
+    difference: isProfileMatchOverMaster || isProfileMatchUnderMaster ? masterPriceDiff : difference,
     isUndercharge,
-    isOvercharge,
+    isOvercharge: isOvercharge || isProfileMatchOverMaster,
+    isProfileMatchOverMaster,
+    isProfileMatchUnderMaster,
+    masterPriceDiff,
     tierSource,
+    isCustomerPriceExpired: isCustPriceExpired,
+    customerPriceEndDate: expiredCustEndDate,
   }
 }
 

@@ -9,7 +9,7 @@ export const billingApi = {
     return apiClient.get(`/billing/${id}`)
   },
 
-  getKPIs: (params: { search?: string }) => {
+  getKPIs: (params?: { search?: string; year?: number; month?: number }) => {
     return apiClient.get('/billing/kpi', { params })
   },
 
@@ -24,7 +24,7 @@ export const billingApi = {
   sjVsBillDetails: (params: { pic: string; type: string }) =>
     apiClient.get('/billing/chart/sj-vs-bill/details', { params }),
 
-  targetDetails: (params: { type: 'all' | 'udara' | 'laut'; pic?: string }) =>
+  targetDetails: (params: { type: 'all' | 'udara' | 'laut'; pic?: string; search?: string }) =>
     apiClient.get('/billing/target-details', { params }),
 
   m3Check: (listCode: string) =>
@@ -149,5 +149,12 @@ export const billingApi = {
     apiClient.get<{ data: import('../types/billing.types').CustomerHargaDetailResult }>(
       `/billing/customer-harga/${encodeURIComponent(custCode)}`
     ),
+
+  timeline: (invNo: string) =>
+    apiClient
+      .get<{ data: import('../types/billing.types').BillingTimeline }>(
+        `/billing/${encodeURIComponent(invNo)}/timeline`
+      )
+      .then((r) => r.data.data),
 }
 

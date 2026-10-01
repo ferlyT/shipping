@@ -10,6 +10,7 @@ import { Table } from '@/components/ui/Table'
 import { Pagination } from '@/components/ui/Pagination'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { CurrencyValue } from '@/components/ui/CurrencyValue'
+import { Skeleton } from '@/components/ui/Skeleton'
 import { BillingStatusTag } from '../components/BillingStatusTag'
 import { BillingFilterBar, type BillingModeFilter, type BillingStatusFilter } from '../components/BillingFilterBar'
 import { BillingToolbar } from '../components/BillingToolbar'
@@ -310,7 +311,23 @@ export default function ListPage() {
 
           {/* Mobile Short List */}
           <div className="flex sm:hidden flex-1 min-h-0 flex-col overflow-auto bg-[var(--color-surface)]">
-            {filteredData.length === 0 ? (
+            {isInitialLoading ? (
+              <div className="p-3 space-y-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="p-3.5 space-y-2.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)]">
+                    <div className="flex justify-between items-center">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </div>
+                    <Skeleton className="h-3.5 w-40" />
+                    <div className="flex justify-between items-center pt-1 border-t border-[var(--color-border)]/60">
+                      <Skeleton className="h-3.5 w-20" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : filteredData.length === 0 ? (
               <div className="flex-1 flex items-center justify-center p-8 text-sm text-[var(--color-secondary)] text-center">
                 {t('common.noData')}
               </div>

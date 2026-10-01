@@ -47,6 +47,7 @@ interface IssueInvoiceModalProps {
   custCode?: string
   invDate?: string | Date
   totalAmount?: number
+  currency?: string
   onSuccess?: () => void
   underchargedItems?: UnderchargedItemInfo[]
 }
@@ -64,6 +65,7 @@ export function IssueInvoiceModal({
   custCode,
   invDate,
   totalAmount,
+  currency,
   onSuccess,
   underchargedItems,
 }: IssueInvoiceModalProps) {
@@ -390,7 +392,7 @@ export function IssueInvoiceModal({
     >
       <div
         className={cn(
-          'relative w-full max-w-lg bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-2xl overflow-hidden animate-slideUp flex flex-col max-h-[92vh] transition-all',
+          'relative w-full max-w-2xl bg-[var(--color-surface)] border border-[var(--color-border)] rounded-2xl shadow-2xl overflow-hidden animate-slideUp flex flex-col max-h-[92vh] transition-all',
           hasUndercharge && 'border-amber-500/40 dark:border-amber-500/30'
         )}
         onClick={(e) => e.stopPropagation()}
@@ -406,11 +408,11 @@ export function IssueInvoiceModal({
         />
 
         {/* Modal Header */}
-        <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/40 shrink-0">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="flex items-center justify-between px-5 sm:px-6 py-3.5 sm:py-4 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/40 shrink-0">
+          <div className="flex items-center gap-3.5 min-w-0">
             <div
               className={cn(
-                'w-9 h-9 rounded-xl flex items-center justify-center shrink-0 border shadow-2xs',
+                'w-10 h-10 rounded-xl flex items-center justify-center shrink-0 border shadow-2xs',
                 hasUndercharge
                   ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
                   : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600 dark:text-emerald-400'
@@ -419,14 +421,14 @@ export function IssueInvoiceModal({
               {hasUndercharge ? (
                 <AlertTriangle className="w-5 h-5 stroke-[2.2]" />
               ) : (
-                <Send className="w-4 h-4 stroke-[2.2]" />
+                <Send className="w-5 h-5 stroke-[2.2]" />
               )}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3
                   id="issue-invoice-modal-title"
-                  className="text-[14px] sm:text-[15px] font-bold font-[var(--font-label)] uppercase tracking-wide text-[var(--color-primary)] truncate"
+                  className="text-[15px] sm:text-[16px] font-bold font-[var(--font-label)] uppercase tracking-wide text-[var(--color-primary)] truncate"
                 >
                   Penerbitan Invoice Resmi
                 </h3>
@@ -434,7 +436,7 @@ export function IssueInvoiceModal({
                   DRAFT &rarr; ISSUED
                 </span>
               </div>
-              <p className="text-[11px] text-[var(--color-secondary)] truncate">
+              <p className="text-[11.5px] text-[var(--color-secondary)] truncate mt-0.5">
                 Konfirmasi legalitas dan pencatatan staf penyerah invoice
               </p>
             </div>
@@ -452,11 +454,11 @@ export function IssueInvoiceModal({
         </div>
 
         {/* Modal Body (Scrollable) */}
-        <div className="p-4 sm:p-5 space-y-3.5 overflow-y-auto min-h-0 flex-1 text-xs">
+        <div className="p-5 sm:p-6 space-y-4 overflow-y-auto min-h-0 flex-1 text-xs">
           {/* 1. Executive Summary Card */}
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs overflow-hidden">
             {/* Top Identity Row */}
-            <div className="p-3 sm:p-3.5 bg-[var(--color-neutral)]/30 border-b border-[var(--color-border)] flex items-center justify-between gap-3 flex-wrap">
+            <div className="px-4 py-3 bg-[var(--color-neutral)]/30 border-b border-[var(--color-border)] flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2">
                 <span className="text-[10px] uppercase font-bold tracking-wider text-[var(--color-secondary)]">
                   No. Faktur
@@ -479,7 +481,7 @@ export function IssueInvoiceModal({
               </div>
 
               {invDate && (
-                <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-secondary)] font-mono">
+                <div className="flex items-center gap-1.5 text-[11.5px] text-[var(--color-secondary)] font-mono">
                   <Calendar size={13} className="text-[var(--color-secondary)] shrink-0" />
                   <span>{formatDate(invDate)}</span>
                 </div>
@@ -487,41 +489,57 @@ export function IssueInvoiceModal({
             </div>
 
             {/* Customer & Total Tagihan Grid */}
-            <div className="p-3 sm:p-3.5 grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-12 gap-3.5 items-stretch">
               {/* Customer Box */}
-              <div className="sm:col-span-6 flex items-center gap-2.5 min-w-0">
-                <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center shrink-0 font-bold text-xs text-blue-600 dark:text-blue-400 font-mono">
+              <div className="sm:col-span-7 flex items-center gap-3 min-w-0 pr-1">
+                <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/25 flex items-center justify-center shrink-0 font-bold text-xs text-blue-600 dark:text-blue-400 font-mono shadow-2xs">
                   {customerInitials}
                 </div>
                 <div className="min-w-0 flex-1">
-                  <div className="text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider">
+                  <div className="text-[10px] font-bold text-[var(--color-secondary)] uppercase tracking-wider">
                     Pelanggan
                   </div>
-                  <div className="font-semibold text-xs sm:text-[13px] text-[var(--color-primary)] truncate">
+                  <div
+                    className="font-bold text-[13px] sm:text-[14px] text-[var(--color-primary)] leading-snug line-clamp-2"
+                    title={customerDisplayName}
+                  >
                     {customerDisplayName}
                   </div>
                   {custCode && (
-                    <span className="inline-block text-[10px] font-mono text-[var(--color-secondary)]">
-                      Kode: {custCode}
+                    <span className="inline-block text-[10.5px] font-mono text-[var(--color-secondary)] mt-0.5">
+                      Kode: <strong className="text-[var(--color-primary)]">{custCode}</strong>
                     </span>
                   )}
                 </div>
               </div>
 
-              {/* Total Tagihan KPI Ribbon */}
-              <div className="sm:col-span-6 p-2.5 sm:p-3 rounded-xl bg-emerald-500/5 dark:bg-emerald-500/10 border border-emerald-500/25 flex items-center justify-between sm:justify-end gap-3 text-right">
-                <div className="text-left sm:text-right">
-                  <div className="text-[9.5px] uppercase font-bold tracking-wider text-emerald-700 dark:text-emerald-300">
-                    Total Tagihan Resmi
-                  </div>
-                  <div className="text-[10px] text-[var(--color-secondary)] hidden sm:block">
+              {/* Total Tagihan KPI Box */}
+              <div className="sm:col-span-5 p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 flex flex-col justify-between gap-1 shadow-2xs">
+                <div className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider text-emerald-700 dark:text-emerald-300">
+                  <span>Total Tagihan Resmi</span>
+                  <span className="text-[9px] font-semibold px-1.5 py-0.2 rounded-full bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
                     Siap Ditagihkan
-                  </div>
+                  </span>
                 </div>
-                <div className="font-mono font-bold text-base sm:text-lg tabular-nums text-emerald-600 dark:text-emerald-400 tracking-tight">
-                  {typeof totalAmount === 'number' && totalAmount > 0
-                    ? formatCurrency(totalAmount)
-                    : '—'}
+                <div className="flex items-baseline justify-end gap-1.5 font-mono whitespace-nowrap mt-1">
+                  {typeof totalAmount === 'number' && totalAmount >= 0 ? (
+                    <>
+                      <span className="text-xs sm:text-sm font-semibold text-emerald-600/80 dark:text-emerald-400/80">
+                        {(() => {
+                          const sym = (currency || 'Rp.').trim()
+                          return sym.toUpperCase() === 'RP' || sym.toUpperCase() === 'RP.' ? 'Rp.' : sym
+                        })()}
+                      </span>
+                      <span className="text-xl sm:text-2xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400 tracking-tight">
+                        {new Intl.NumberFormat('en-US', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        }).format(totalAmount)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-lg font-bold text-[var(--color-secondary)]">—</span>
+                  )}
                 </div>
               </div>
             </div>

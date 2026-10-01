@@ -8,10 +8,25 @@ import type {
   SjVsBillPoint,
 } from '../types/billing.types'
 
+export interface TargetCategories {
+  sjSent: number
+  codUrgent: number
+  agingGt7: number
+  fcl: number
+}
+
 export interface BillingDashboardData {
   kpis: BillingKpis & {
-    targetBillUdara?: { total: number; breakdown: { kiki: number; yati: number } }
-    targetBillLaut?: { total: number; breakdown: { thara: number; rico: number; ferly: number } }
+    targetBillUdara?: {
+      total: number
+      breakdown: { kiki: number; yati: number }
+      categories?: TargetCategories
+    }
+    targetBillLaut?: {
+      total: number
+      breakdown: { thara: number; rico: number; ferly: number }
+      categories?: TargetCategories
+    }
     invoicesBulanIniBreakdown?: { udara: number; laut: number }
     tagihanBulanIniBreakdown?: { udara: number; laut: number }
   } | undefined
@@ -26,11 +41,15 @@ export interface BillingDashboardData {
   isLoadingSjVsBill: boolean
 }
 
-export function useBillingDashboard(daysFilter: number = 30): BillingDashboardData {
+export function useBillingDashboard(
+  daysFilter: number = 30,
+  selectedYear?: number,
+  selectedMonth?: number
+): BillingDashboardData {
   const { data: kpiData, isLoading: isLoadingKpi } = useQuery({
-    queryKey: ['billingKpi'],
+    queryKey: ['billingKpi', selectedYear, selectedMonth],
     queryFn: async () => {
-      const res = await billingApi.getKPIs({})
+      const res = await billingApi.getKPIs({ year: selectedYear, month: selectedMonth })
       return res.data as { data: BillingDashboardData['kpis'] }
     },
     staleTime: 60_000,

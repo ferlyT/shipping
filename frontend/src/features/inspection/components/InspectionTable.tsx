@@ -50,7 +50,8 @@ export function InspectionTable({
 
   return (
     <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden shadow-xs">
-      <div className="overflow-x-auto">
+      {/* Desktop Table View */}
+      <div className="hidden md:block overflow-x-auto">
         <table className="w-full text-left border-collapse text-[11px] sm:text-xs">
           <thead>
             <tr className="border-b border-[var(--color-border)] bg-[var(--color-neutral)] text-[var(--color-secondary)] uppercase tracking-wider font-semibold text-[10px]">
@@ -193,6 +194,130 @@ export function InspectionTable({
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Touch Card View */}
+      <div className="block md:hidden divide-y divide-[var(--color-border)]">
+        {reports.map((report) => {
+          const photoCount = report.photoCount || (report.photos ? report.photos.length : 0)
+          const isAir = report.fdListType === 1
+          const isDone = report.fdStatus === '2'
+
+          return (
+            <div
+              key={report.fdId}
+              onClick={() => onViewDetail(report)}
+              className="p-3.5 sm:p-4 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/40 transition-colors cursor-pointer space-y-2.5"
+            >
+              {/* Header: No BAP + Moda + Status Badge */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-mono font-bold text-xs text-[var(--color-primary)]">
+                    {report.fdReportNumber}
+                  </span>
+                  <span
+                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold border ${
+                      isAir
+                        ? 'bg-sky-500/10 text-sky-500 border-sky-500/20'
+                        : 'bg-blue-500/10 text-blue-500 border-blue-500/20'
+                    }`}
+                  >
+                    {isAir ? <Plane size={10} /> : <Ship size={10} />}
+                    {isAir ? 'Udara' : 'Laut'}
+                  </span>
+                </div>
+                <Badge variant={isDone ? 'success' : 'warning'}>
+                  {isDone ? t('bap.statusDone') : t('bap.statusDraft')}
+                </Badge>
+              </div>
+
+              {/* Customer & Marking */}
+              <div>
+                <div className="font-semibold text-xs text-[var(--color-primary)]">
+                  {report.fdNamaCustomer || '—'}
+                </div>
+                <div className="flex items-center gap-1.5 text-[11px] text-[var(--color-secondary)] mt-0.5">
+                  <span>Marking:</span>
+                  <span className="font-medium text-[var(--color-primary)]">
+                    {report.fdMarkingCode || '—'}
+                    {report.fdMarkingNo ? ` #${report.fdMarkingNo}` : ''}
+                  </span>
+                  {report.fdListCode ? (
+                    <span className="font-mono text-[10px] text-[var(--color-secondary)]">
+                      ({report.fdListCode})
+                    </span>
+                  ) : null}
+                </div>
+              </div>
+
+              {/* Info Grid: Tanggal, Resi */}
+              <div className="grid grid-cols-2 gap-2 text-[11px] pt-1.5 border-t border-[var(--color-border)]/60 text-[var(--color-secondary)]">
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider block text-[var(--color-secondary)]/70">Tanggal</span>
+                  <span className="font-medium text-[var(--color-primary)]">
+                    {new Date(report.fdReportDate).toLocaleDateString('id-ID', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })}
+                  </span>
+                </div>
+                <div>
+                  <span className="text-[10px] uppercase tracking-wider block text-[var(--color-secondary)]/70">No. Resi</span>
+                  <span className="font-mono font-medium text-[var(--color-primary)]">
+                    {report.fdTerima || '—'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Actions & Photo button */}
+              <div
+                className="flex items-center justify-between pt-2 border-t border-[var(--color-border)]/60"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button
+                  type="button"
+                  onClick={() => onViewDetail(report, 'attachments')}
+                  className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-mono font-bold border transition-colors ${
+                    photoCount > 0
+                      ? 'bg-sky-500/10 text-sky-500 border-sky-500/30'
+                      : 'bg-neutral-500/10 text-neutral-400 border-neutral-500/20'
+                  }`}
+                >
+                  <Camera size={11} />
+                  <span>{photoCount} Foto</span>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => onViewDetail(report)}
+                    className="p-1.5 text-[var(--color-secondary)] hover:text-blue-500 rounded-lg hover:bg-[var(--color-neutral)] transition-colors"
+                    title={t('common.detail')}
+                  >
+                    <Eye size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onEdit(report)}
+                    className="p-1.5 text-[var(--color-secondary)] hover:text-amber-500 rounded-lg hover:bg-[var(--color-neutral)] transition-colors"
+                    title={t('common.edit')}
+                  >
+                    <Edit2 size={15} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDelete(report)}
+                    className="p-1.5 text-[var(--color-secondary)] hover:text-red-500 rounded-lg hover:bg-[var(--color-neutral)] transition-colors"
+                    title={t('common.delete')}
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

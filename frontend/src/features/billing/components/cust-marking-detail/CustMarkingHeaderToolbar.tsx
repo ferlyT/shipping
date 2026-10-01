@@ -1,4 +1,4 @@
-import { Search, FileSpreadsheet, Loader2, AlertTriangle } from 'lucide-react'
+import { Search, FileSpreadsheet, Loader2, AlertTriangle, X } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import type { ColumnPreset } from './types'
 
@@ -38,29 +38,40 @@ export function CustMarkingHeaderToolbar({
   const hasMultipleBranches = branches.length > 1
 
   return (
-    <div className="space-y-2.5 p-3.5 sm:p-4 bg-[var(--color-surface)] border-b border-[var(--color-border)] shrink-0">
-      {/* Search & Actions Bar */}
+    <div className="p-3 sm:p-3.5 bg-[var(--color-surface)] border-b border-[var(--color-border)] shrink-0 space-y-2">
+      {/* Baris 1: Pencarian Cepat, Preset Kolom & Export Excel */}
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-secondary)]" />
+        {/* Search Field */}
+        <div className="relative flex-1 max-w-sm">
+          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none" />
           <input
             type="text"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Cari invoice, listcode, resi, komoditas..."
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-lg text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] focus:outline-hidden focus:border-[var(--color-tertiary)] transition-colors"
+            className="w-full pl-8.5 pr-8 py-1.5 text-xs bg-[var(--color-neutral)]/40 border border-[var(--color-border)] rounded-lg text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] focus:outline-hidden focus:border-[var(--color-tertiary)] transition-colors"
           />
+          {search && (
+            <button
+              type="button"
+              onClick={() => onSearchChange('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] hover:text-[var(--color-primary)] cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
+        {/* Preset Kolom & Export Excel */}
         <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap">
-          {/* Preset Buttons */}
-          <div className="inline-flex items-center p-0.5 bg-[var(--color-neutral)] border border-[var(--color-border)] rounded-lg text-[11px] font-medium">
+          {/* Segmented Preset Switcher */}
+          <div className="inline-flex items-center p-0.5 bg-[var(--color-neutral)]/60 border border-[var(--color-border)] rounded-lg text-[11px] font-medium">
             <button
               type="button"
               onClick={() => onColumnPresetChange('all')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
                 columnPreset === 'all'
-                  ? 'bg-transparent border border-[var(--color-tertiary)] text-[var(--color-tertiary)] font-semibold shadow-xs'
+                  ? 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-tertiary)] font-bold shadow-2xs'
                   : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
@@ -71,7 +82,7 @@ export function CustMarkingHeaderToolbar({
               onClick={() => onColumnPresetChange('physical')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
                 columnPreset === 'physical'
-                  ? 'bg-transparent border border-[var(--color-tertiary)] text-[var(--color-tertiary)] font-semibold shadow-xs'
+                  ? 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-tertiary)] font-bold shadow-2xs'
                   : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
@@ -80,20 +91,23 @@ export function CustMarkingHeaderToolbar({
             <button
               type="button"
               onClick={() => onColumnPresetChange('complaint')}
-              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md transition-all cursor-pointer flex items-center gap-1.5 ${
                 columnPreset === 'complaint'
-                  ? 'bg-transparent border border-[var(--color-tertiary)] text-[var(--color-tertiary)] font-semibold shadow-xs'
+                  ? 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-tertiary)] font-bold shadow-2xs'
                   : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
-              Komplain
+              <span>Komplain</span>
+              {countQtyKomplainMismatch > 0 && (
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse" />
+              )}
             </button>
             <button
               type="button"
               onClick={() => onColumnPresetChange('finance')}
               className={`px-2.5 py-1 rounded-md transition-all cursor-pointer ${
                 columnPreset === 'finance'
-                  ? 'bg-transparent border border-[var(--color-tertiary)] text-[var(--color-tertiary)] font-semibold shadow-xs'
+                  ? 'bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-tertiary)] font-bold shadow-2xs'
                   : 'text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               }`}
             >
@@ -107,7 +121,7 @@ export function CustMarkingHeaderToolbar({
             size="sm"
             onClick={onExportExcel}
             disabled={isExporting}
-            className="text-xs font-semibold px-2.5 py-1 gap-1.5"
+            className="text-xs font-semibold px-2.5 py-1 gap-1.5 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 hover:bg-emerald-500/15"
           >
             {isExporting ? (
               <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-500" />
@@ -119,28 +133,20 @@ export function CustMarkingHeaderToolbar({
         </div>
       </div>
 
-      {/* Filter Row: Branches & Komplain toggle */}
-      <div className="flex items-center justify-between gap-2 flex-wrap text-xs pt-1">
+      {/* Baris 2: Filter Cabang & Toggle Selisih */}
+      <div className="flex items-center justify-between gap-2.5 flex-wrap text-xs pt-0.5">
+        {/* Cabang Filter Pills */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[11px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider mr-1 flex items-center gap-1.5">
-            <span>Cabang:</span>
-            {hasMultipleBranches && (
-              <span
-                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400"
-                title={`Peringatan: Terdeteksi ${branches.length} cabang (${branches.join(', ')})`}
-              >
-                <AlertTriangle className="w-3 h-3 text-amber-500" />
-                Multi ({branches.length})
-              </span>
-            )}
+          <span className="text-[10.5px] font-bold text-[var(--color-secondary)] uppercase tracking-wider mr-0.5">
+            Cabang:
           </span>
           <button
             type="button"
             onClick={() => onBranchSelect('ALL')}
-            className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
+            className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
               selectedBranch === 'ALL'
-                ? 'border border-[var(--color-tertiary)] text-[var(--color-tertiary)] font-semibold'
-                : 'border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                ? 'border border-[var(--color-tertiary)] text-[var(--color-tertiary)] bg-[var(--color-tertiary)]/10 font-bold shadow-2xs'
+                : 'border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] bg-[var(--color-neutral)]/20'
             }`}
           >
             Semua ({totalAll})
@@ -150,10 +156,10 @@ export function CustMarkingHeaderToolbar({
               key={bc}
               type="button"
               onClick={() => onBranchSelect(bc)}
-              className={`px-2 py-0.5 rounded-full text-[11px] font-medium transition-colors cursor-pointer ${
+              className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
                 selectedBranch === bc
-                  ? 'border border-[var(--color-tertiary)] text-[var(--color-tertiary)] font-semibold'
-                  : 'border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
+                  ? 'border border-[var(--color-tertiary)] text-[var(--color-tertiary)] bg-[var(--color-tertiary)]/10 font-bold shadow-2xs'
+                  : 'border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] bg-[var(--color-neutral)]/20'
               }`}
             >
               {bc}
@@ -161,58 +167,65 @@ export function CustMarkingHeaderToolbar({
           ))}
         </div>
 
-        <div className="flex items-center gap-3">
-          <label className="inline-flex items-center gap-1.5 text-[11.5px] text-[var(--color-secondary)] hover:text-[var(--color-primary)] cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={onlyKomplain}
-              onChange={onToggleKomplain}
-              className="rounded border-[var(--color-border)] text-[var(--color-tertiary)] focus:ring-0"
+        {/* Toggle Hanya Selisih / Komplain */}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleKomplain}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+              onlyKomplain
+                ? 'border border-amber-500/50 bg-amber-500/15 text-amber-600 dark:text-amber-400 font-bold'
+                : 'border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-tertiary)]/40'
+            }`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${
+                onlyKomplain ? 'bg-amber-500 animate-pulse' : 'bg-[var(--color-secondary)]/50'
+              }`}
             />
             <span>Hanya Selisih / Komplain</span>
             {hasSelisihCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-bold bg-transparent border border-rose-500/40 text-rose-500">
+              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-transparent border border-rose-500/40 text-rose-500">
                 {hasSelisihCount}
               </span>
             )}
-          </label>
+          </button>
         </div>
       </div>
 
-      {/* Warning Alert Banner saat terdeteksi lebih dari 1 cabang */}
-      {hasMultipleBranches && (
-        <div className="flex items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11.5px]">
+      {/* Ribbon Compact Alert Bar (Multi-Cabang / Selisih Qty Komplain) */}
+      {(hasMultipleBranches || countQtyKomplainMismatch > 0) && (
+        <div className="flex items-center justify-between gap-3 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/25 text-amber-700 dark:text-amber-300 text-[11px]">
           <div className="flex items-center gap-2 min-w-0">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span className="truncate">
-              <strong>Peringatan Multi-Cabang:</strong> Terdeteksi <strong>{branches.length} cabang</strong> berbeda (
-              <strong className="text-amber-600 dark:text-amber-400">{branches.join(', ')}</strong>) pada data marking ini. Pastikan audit pemisahan fisik muatan kargo antar cabang.
-            </span>
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <div className="truncate flex items-center gap-2">
+              {hasMultipleBranches && (
+                <span>
+                  <strong>Multi-Cabang:</strong> {branches.join(', ')} ({branches.length} cabang dalam satu marking).
+                </span>
+              )}
+              {hasMultipleBranches && countQtyKomplainMismatch > 0 && (
+                <span className="opacity-40">|</span>
+              )}
+              {countQtyKomplainMismatch > 0 && (
+                <span>
+                  <strong>Selisih Qty Komplain:</strong> {countQtyKomplainMismatch} baris data Qty Komplain berbeda dengan Qty Gudang.
+                </span>
+              )}
+            </div>
           </div>
-          {selectedBranch !== 'ALL' ? (
-            <span className="text-[10.5px] text-[var(--color-secondary)] shrink-0">
-              Filter aktif: <strong className="text-[var(--color-primary)]">{selectedBranch}</strong>
-            </span>
-          ) : (
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
-              Tampilan Gabungan Semua Cabang
-            </span>
-          )}
-        </div>
-      )}
 
-      {/* Warning Alert Banner saat terdeteksi Qty Komplain > 0 dan berbeda dengan Qty Gudang */}
-      {countQtyKomplainMismatch > 0 && (
-        <div className="flex items-center justify-between gap-2.5 px-3 py-1.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-700 dark:text-amber-300 text-[11.5px]">
-          <div className="flex items-center gap-2 min-w-0">
-            <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0" />
-            <span className="truncate">
-              <strong>Peringatan Selisih Qty Komplain:</strong> Terdeteksi <strong>{countQtyKomplainMismatch} baris data</strong> dengan Qty Komplain &gt; 0 dan berbeda dengan Qty Gudang.
-            </span>
+          <div className="shrink-0 flex items-center gap-1.5 text-[10.5px]">
+            {selectedBranch !== 'ALL' ? (
+              <span className="text-[var(--color-secondary)]">
+                Filter cabang aktif: <strong className="text-[var(--color-primary)] font-mono">{selectedBranch}</strong>
+              </span>
+            ) : (
+              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+                Gabungan Semua Cabang
+              </span>
+            )}
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30 shrink-0">
-            Audit Qty K Diperlukan
-          </span>
         </div>
       )}
     </div>

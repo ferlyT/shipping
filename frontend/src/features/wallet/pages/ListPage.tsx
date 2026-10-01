@@ -289,8 +289,8 @@ export function ListPage() {
               </div>
             </div>
 
-            {/* Table */}
-            <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
+            {/* Desktop Table */}
+            <div className="hidden md:block overflow-x-auto border border-[var(--color-border)] rounded-lg">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-[var(--color-border)] bg-[var(--color-neutral)] text-[11px] uppercase tracking-wider font-semibold text-[var(--color-secondary)]">
@@ -386,6 +386,89 @@ export function ListPage() {
               </table>
             </div>
 
+            {/* Mobile Touch Card View */}
+            <div className="block md:hidden border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)] overflow-hidden">
+              {isLoadingCust ? (
+                <div className="p-4 space-y-2.5">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-24 w-full rounded-lg skeleton-shimmer" />
+                  ))}
+                </div>
+              ) : customers.length === 0 ? (
+                <div className="p-6 text-center text-xs text-[var(--color-secondary)]">
+                  Tidak ada data customer yang cocok.
+                </div>
+              ) : (
+                customers.map((c) => (
+                  <div key={c.fdCustCode} className="p-3.5 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/40 transition-colors space-y-2.5">
+                    {/* Header: Name + Code + Status */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div>
+                        <div className="font-semibold text-xs text-[var(--color-primary)]">
+                          {c.fdCustName}
+                        </div>
+                        <div className="font-mono text-[10px] text-[var(--color-secondary)]">
+                          {c.fdCustCode}
+                        </div>
+                      </div>
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border border-emerald-500/40 text-emerald-500">
+                        {c.fdStatus}
+                      </span>
+                    </div>
+
+                    {/* Balance & Updated Date */}
+                    <div className="flex items-baseline justify-between pt-1 border-t border-[var(--color-border)]/50">
+                      <div>
+                        <span className="text-[10px] uppercase tracking-wider text-[var(--color-secondary)] block">Saldo Deposit</span>
+                        <span className="font-bold text-sm text-emerald-500 tabular-nums">
+                          {formatCurrency(c.fdBalance)}
+                        </span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] uppercase tracking-wider text-[var(--color-secondary)] block">Update</span>
+                        <span className="text-[10px] text-[var(--color-secondary)]">
+                          {c.fdLastUpdated ? formatDateTime(c.fdLastUpdated) : '-'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Actions Grid */}
+                    <div className="grid grid-cols-4 gap-1.5 pt-1 border-t border-[var(--color-border)]/50">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenTopup({ code: c.fdCustCode, name: c.fdCustName })}
+                        className="py-1 px-1 rounded text-center text-[10px] font-semibold border border-sky-500/40 text-sky-400 hover:bg-sky-500/10 transition-colors"
+                      >
+                        + Topup
+                      </button>
+                      <button
+                        type="button"
+                        disabled={c.fdBalance <= 0}
+                        onClick={() => handleOpenWithdraw({ code: c.fdCustCode, name: c.fdCustName, balance: c.fdBalance })}
+                        className="py-1 px-1 rounded text-center text-[10px] font-semibold border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 transition-colors disabled:opacity-40"
+                      >
+                        - Tarik
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleOpenAdjust({ code: c.fdCustCode, name: c.fdCustName, balance: c.fdBalance })}
+                        className="py-1 px-1 rounded text-center text-[10px] font-semibold border border-amber-500/40 text-amber-400 hover:bg-amber-500/10 transition-colors"
+                      >
+                        Koreksi
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleFilterLedgerByCustomer(c.fdCustCode)}
+                        className="py-1 px-1 rounded text-center text-[10px] font-medium border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors"
+                      >
+                        Mutasi
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
             {/* Pagination */}
             {custTotal > custLimit && (
               <Pagination
@@ -444,8 +527,8 @@ export function ListPage() {
               </div>
             </div>
 
-            {/* Ledger Table */}
-            <div className="overflow-x-auto border border-[var(--color-border)] rounded-lg">
+            {/* Desktop Ledger Table */}
+            <div className="hidden md:block overflow-x-auto border border-[var(--color-border)] rounded-lg">
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr className="border-b border-[var(--color-border)] bg-[var(--color-neutral)] text-[11px] uppercase tracking-wider font-semibold text-[var(--color-secondary)]">
@@ -538,6 +621,77 @@ export function ListPage() {
                   )}
                 </tbody>
               </table>
+            </div>
+
+            {/* Mobile Touch Card View for Ledgers */}
+            <div className="block md:hidden border border-[var(--color-border)] rounded-lg divide-y divide-[var(--color-border)] overflow-hidden">
+              {isLoadingLedger ? (
+                <div className="p-4 space-y-2.5">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="h-24 w-full rounded-lg skeleton-shimmer" />
+                  ))}
+                </div>
+              ) : ledgers.length === 0 ? (
+                <div className="p-6 text-center text-xs text-[var(--color-secondary)]">
+                  Belum ada catatan transaksi buku besar.
+                </div>
+              ) : (
+                ledgers.map((l) => {
+                  const isCredit = l.fdDirection === 'CREDIT'
+                  return (
+                    <div key={l.fdLedgerID} className="p-3.5 bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/40 transition-colors space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[10px] font-mono text-[var(--color-secondary)]">
+                          {formatDateTime(l.fdCreatedDate)}
+                        </span>
+                        <span
+                          className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border ${
+                            l.fdTxType === 'TOPUP' || l.fdTxType === 'OVERPAYMENT'
+                              ? 'border-emerald-500/40 text-emerald-400'
+                              : l.fdTxType === 'PAYMENT'
+                              ? 'border-sky-500/40 text-sky-400'
+                              : l.fdTxType === 'WITHDRAWAL'
+                              ? 'border-rose-500/40 text-rose-400'
+                              : 'border-amber-500/40 text-amber-400'
+                          }`}
+                        >
+                          {l.fdTxType}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <div className="font-semibold text-xs text-[var(--color-primary)]">
+                            {l.fdCustName || l.fdCustCode}
+                          </div>
+                          <div className="text-[10px] font-mono text-[var(--color-secondary)]">
+                            {l.fdCustCode}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`font-bold text-xs tabular-nums ${isCredit ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            {isCredit ? '+' : '-'} {formatCurrency(l.fdAmount)}
+                          </div>
+                          <div className="text-[10px] text-[var(--color-secondary)] tabular-nums">
+                            Sisa: {formatCurrency(l.fdBalanceAfter)}
+                          </div>
+                        </div>
+                      </div>
+
+                      {(l.fdRefNo || l.fdNotes || l.fdCreatedBy) && (
+                        <div className="text-[10px] pt-1.5 border-t border-[var(--color-border)]/50 text-[var(--color-secondary)] flex items-center justify-between gap-2">
+                          <span className="truncate max-w-[200px]">
+                            {l.fdRefNo ? `Ref: ${l.fdRefNo}` : ''} {l.fdNotes ? `(${l.fdNotes})` : ''}
+                          </span>
+                          <span className="shrink-0 font-medium">
+                            {l.fdCreatedBy || '-'}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })
+              )}
             </div>
 
             {/* Pagination */}

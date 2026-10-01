@@ -865,7 +865,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Metric Selector Pills */}
-          <div className="inline-flex p-1 rounded-xl bg-[var(--color-neutral)] border border-[var(--color-border)] text-xs font-semibold">
+          <div className="inline-flex p-1 rounded-xl bg-[var(--color-neutral)] border border-[var(--color-border)] text-xs font-semibold overflow-x-auto max-w-full no-scrollbar">
             <button
               type="button"
               onClick={() => setChartMetric('all')}

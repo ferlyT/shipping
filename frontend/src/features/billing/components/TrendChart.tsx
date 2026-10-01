@@ -202,7 +202,7 @@ export function TrendChart({
             {totals.hasYoYData && (
               <span
                 className={cn(
-                  "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums",
+                  "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums whitespace-nowrap",
                   totals.yoyUdaraGrowthPct > 0
                     ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
                     : totals.yoyUdaraGrowthPct < 0
@@ -211,7 +211,7 @@ export function TrendChart({
                 )}
                 title={`YoY Udara (12 Bln vs Tahun Lalu): ${totals.yoyUdaraGrowthPct > 0 ? '+' : ''}${totals.yoyUdaraGrowthPct}% (${totals.yoyUdaraDiff > 0 ? '+' : ''}${isCount ? formatNumber(totals.yoyUdaraDiff) + ' Bill' : formatCompactRupiah(totals.yoyUdaraDiff)})`}
               >
-                YoY {totals.yoyUdaraGrowthPct > 0 ? `▲ +${totals.yoyUdaraGrowthPct}%` : totals.yoyUdaraGrowthPct < 0 ? `▼ ${totals.yoyUdaraGrowthPct}%` : `→ 0%`}
+                YoY (12 Bln) {totals.yoyUdaraGrowthPct > 0 ? `▲ +${totals.yoyUdaraGrowthPct}%` : totals.yoyUdaraGrowthPct < 0 ? `▼ ${totals.yoyUdaraGrowthPct}%` : `→ 0%`}
               </span>
             )}
           </div>
@@ -232,7 +232,7 @@ export function TrendChart({
             {totals.hasYoYData && (
               <span
                 className={cn(
-                  "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums",
+                  "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums whitespace-nowrap",
                   totals.yoyLautGrowthPct > 0
                     ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
                     : totals.yoyLautGrowthPct < 0
@@ -241,7 +241,7 @@ export function TrendChart({
                 )}
                 title={`YoY Laut (12 Bln vs Tahun Lalu): ${totals.yoyLautGrowthPct > 0 ? '+' : ''}${totals.yoyLautGrowthPct}% (${totals.yoyLautDiff > 0 ? '+' : ''}${isCount ? formatNumber(totals.yoyLautDiff) + ' Bill' : formatCompactRupiah(totals.yoyLautDiff)})`}
               >
-                YoY {totals.yoyLautGrowthPct > 0 ? `▲ +${totals.yoyLautGrowthPct}%` : totals.yoyLautGrowthPct < 0 ? `▼ ${totals.yoyLautGrowthPct}%` : `→ 0%`}
+                YoY (12 Bln) {totals.yoyLautGrowthPct > 0 ? `▲ +${totals.yoyLautGrowthPct}%` : totals.yoyLautGrowthPct < 0 ? `▼ ${totals.yoyLautGrowthPct}%` : `→ 0%`}
               </span>
             )}
           </div>
@@ -256,7 +256,7 @@ export function TrendChart({
             {totals.hasYoYData && (
               <span
                 className={cn(
-                  "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums",
+                  "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums whitespace-nowrap",
                   totals.yoyGrowthPct > 0
                     ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
                     : totals.yoyGrowthPct < 0
@@ -265,7 +265,7 @@ export function TrendChart({
                 )}
                 title={`Total YoY (12 Bln vs Tahun Lalu): ${totals.yoyGrowthPct > 0 ? '+' : ''}${totals.yoyGrowthPct}% (${totals.yoyDiff > 0 ? '+' : ''}${isCount ? formatNumber(totals.yoyDiff) + ' Bill' : formatCompactRupiah(totals.yoyDiff)})`}
               >
-                YoY {totals.yoyGrowthPct > 0 ? `▲ +${totals.yoyGrowthPct}%` : totals.yoyGrowthPct < 0 ? `▼ ${totals.yoyGrowthPct}%` : `→ 0%`}
+                YoY (12 Bln) {totals.yoyGrowthPct > 0 ? `▲ +${totals.yoyGrowthPct}%` : totals.yoyGrowthPct < 0 ? `▼ ${totals.yoyGrowthPct}%` : `→ 0%`}
               </span>
             )}
           </div>

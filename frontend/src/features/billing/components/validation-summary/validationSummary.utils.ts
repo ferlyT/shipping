@@ -1,4 +1,4 @@
-import { formatCurrency, formatDecimal } from '@/lib/utils'
+import { formatCurrency, formatDecimal, formatNumber } from '@/lib/utils'
 import type { Billing, BillingDetail } from '../../types/billing.types'
 
 const TRANSPORT_ITEM_KEYWORDS = ['TRANSPORT', 'DELIVERY', 'ONGKIR', 'TRUCKING'] as const
@@ -34,54 +34,7 @@ export function getEffectiveTransportAmount(
   return jumlah2 > 0 ? jumlah2 : Number(billingData.fdJumlah1 || 0)
 }
 
-/**
- * Menghitung total nilai invoice dan mata uang efektif (mendukung valas / foreign currency).
- */
-export function getEffectiveInvoiceTotal(
-  billingData: Billing,
-  details: BillingDetail[]
-): { total: number; currency: string } {
-  const rawJumlah2 = Number(billingData.fdJumlah2 || 0)
-  const foreignCurr = (billingData.fdCurr1 || '').trim().toUpperCase()
-  const isForeignCandidate = rawJumlah2 > 0 && foreignCurr && !['RP', 'RP.', 'IDR'].includes(foreignCurr)
-
-  // Cek apakah ada item yang menggunakan valas tersebut
-  const hasMatchingForeignItem = isForeignCandidate && details.some((d) => {
-    const listCode = (d.fdListCode || '').trim().toUpperCase()
-    const curr = (d.fdCurr || '').trim().toUpperCase()
-    if (listCode === foreignCurr || curr === foreignCurr) return true
-    if (foreignCurr.includes('S$') && (listCode === 'SGD' || listCode === 'S$' || curr === 'S$' || curr === 'SGD')) return true
-    if (foreignCurr.includes('HK$') && (listCode === 'HKD' || listCode === 'HK$' || curr === 'HK$' || curr === 'HKD')) return true
-    if (foreignCurr.includes('US$') && (listCode === 'USD' || listCode === 'US$' || curr === 'US$' || curr === 'USD')) return true
-    return false
-  })
-
-  // Jika ada fdJumlah2 valas namun tidak ada item yang bervalas -> ini kesalahan input, total riil dalam Rupiah
-  if (isForeignCandidate && !hasMatchingForeignItem) {
-    const sumAllItems = details.reduce(
-      (sum, d) => sum + (Number(d.fdTotal) || Number(d.fdQty || 0) * Number(d.fdItemPrice || 0)),
-      0
-    )
-    const total = sumAllItems > 0 ? sumAllItems : (Number(billingData.fdJumlah1 || 0) + rawJumlah2)
-    return { total, currency: 'Rp.' }
-  }
-
-  const isForeign = rawJumlah2 > 0
-  const currency = isForeign
-    ? billingData.fdCurr1?.trim() || 'Rp.'
-    : details.find((d) => d?.fdCurr?.trim())?.fdCurr?.trim() || 'Rp.'
-
-  const total = isForeign
-    ? Number(billingData.fdJumlah2)
-    : Number(billingData.fdJumlah1 || 0) > 0
-      ? Number(billingData.fdJumlah1)
-      : details.reduce(
-          (sum, d) => sum + (Number(d.fdTotal) || Number(d.fdQty || 0) * Number(d.fdItemPrice || 0)),
-          0
-        )
-
-  return { total, currency }
-}
+export { getEffectiveInvoiceTotal } from '../../utils/billing.utils'
 
 export interface ValidationVerdictParams {
   isLoadingValidation: boolean
@@ -229,8 +182,8 @@ export function calculateValidationVerdict(params: ValidationVerdictParams): Val
 
   if (isBilledUnneededOverweight) {
     return {
-      title: 'Invoice Menagihkan Item KG Padahal Muatan Tidak Overweight',
-      description: `Berat muatan fisik (${actualWeightKg} kg) masih dalam batas kuota rasio (${formatDecimal(maxAllowedWeight, 1)} kg). Periksa kembali item penagihan KG pada invoice.`,
+      title: `Kesalahan Hitung: Invoice Menagihkan Item KG (${formatNumber(effectiveBilledKg)} kg) Padahal Muatan Tidak Overweight`,
+      description: `Berat muatan fisik aktual (${formatNumber(actualWeightKg)} kg) masih berada dalam batas kuota rasio (${formatDecimal(maxAllowedWeight, 1)} kg). Item penagihan KG sebesar ${formatNumber(effectiveBilledKg)} kg merupakan kesalahan hitung penagihan.`,
     }
   }
 

@@ -12,6 +12,9 @@ export interface CustomerPriceListItem {
   transitTime: string | null
   category: string
   price: number
+  effectiveDate?: string | null
+  endDate?: string | null
+  isExpired?: boolean
   markings?: CustomerItemMarking[]
 }
 
@@ -19,6 +22,7 @@ export interface ActiveCustomerPriceList {
   uploadId: number
   fdCustCode: string
   effectiveDate: string
+  endDate?: string | null
   priceDate: string | null
   uploadedAt: string
   fileName: string
@@ -33,8 +37,11 @@ export interface CustomerPriceListUploadRow {
   uploadedAt: string
   priceDate: string | null
   effectiveDate: string
+  endDate?: string | null
   status: 'PARSED' | 'PARTIAL' | 'FAILED'
   isSuperseded: boolean
+  isExpired?: boolean
+  isExpiringSoon?: boolean
   _count: { items: number }
   custName: string
   itemCount: number
@@ -49,8 +56,11 @@ export interface CustomerUploadHistory {
   uploadedAt: string
   priceDate: string | null
   effectiveDate: string
+  endDate?: string | null
   status: 'PARSED' | 'PARTIAL' | 'FAILED' | 'DELETED'
   isSuperseded: boolean
+  isExpired?: boolean
+  isExpiringSoon?: boolean
   _count: { items: number }
   markings?: CustomerItemMarking[]
 }
@@ -73,8 +83,10 @@ export interface CustomerPriceListDiff {
   fdCustCode: string
   currentUploadId: number
   currentEffectiveDate: string
+  currentEndDate?: string | null
   previousUploadId: number | null
   previousEffectiveDate: string | null
+  previousEndDate?: string | null
   markings?: CustomerItemMarking[]
   diff: CustomerPriceListDiffRow[]
 }
@@ -112,6 +124,7 @@ export interface CustomerPriceLookupResult {
     uploadId: number
     fileName: string
     effectiveDate: string
+    endDate?: string | null
     priceDate: string | null
     uploadedAt: string
   } | null
@@ -131,6 +144,7 @@ export interface CustomerSpecialPriceItem {
   endDate?: string | null
   notes?: string | null
   isExpired?: boolean
+  isExpiringSoon?: boolean
   aliases?: string[]
   fileName?: string
 }

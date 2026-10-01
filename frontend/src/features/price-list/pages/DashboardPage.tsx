@@ -21,6 +21,7 @@ import FadeIn from '@/components/ui/FadeIn'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 type PriceChangeItem = {
   sheetType: string
@@ -282,7 +283,24 @@ export function DashboardPage() {
           />
         </div>
 
-        {hasChanges && (
+        {diffLoading ? (
+          <div className="space-y-4">
+            <div className="card p-4 sm:p-5 border border-[var(--color-border)] rounded-xl bg-[var(--color-surface)] shadow-xs space-y-3">
+              <div className="flex justify-between items-center">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-4 w-4 rounded-full" />
+              </div>
+              <Skeleton className="h-3 w-48" />
+              <div className="grid grid-cols-4 gap-2 pt-3 border-t border-[var(--color-border)]">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <Skeleton key={i} className="h-14 rounded-xl" />
+                ))}
+              </div>
+            </div>
+            <Skeleton className="h-44 w-full rounded-xl" />
+            <Skeleton className="h-44 w-full rounded-xl" />
+          </div>
+        ) : hasChanges ? (
           <div className={`space-y-4 ${activeMobileTab === 'chart' ? 'hidden sm:block' : ''}`}>
             <div className="card p-4 sm:p-5 border border-[var(--color-border)] rounded-xl bg-[var(--color-surface)] shadow-xs">
               <div className="flex items-center justify-between mb-2">
@@ -338,7 +356,7 @@ export function DashboardPage() {
               moreRowsText={t('priceList.moreRows', { count: turun.length - 5, variant: t('priceList.down') })}
             />
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   )

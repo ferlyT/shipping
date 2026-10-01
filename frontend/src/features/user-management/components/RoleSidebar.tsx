@@ -34,7 +34,36 @@ export function RoleSidebar({
         <Badge variant="default">{roles.length} Role</Badge>
       </div>
 
-      <ul className="space-y-1.5">
+      {/* Mobile Horizontal Role Selector */}
+      <div className="lg:hidden flex items-center gap-2 overflow-x-auto pb-2 -mx-1 px-1">
+        {roles.map((role) => {
+          const isSelected = selectedRole === role
+          return (
+            <button
+              key={role}
+              type="button"
+              onClick={() => onSelectRole(role)}
+              className={`shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all capitalize border cursor-pointer ${
+                isSelected
+                  ? 'bg-[var(--color-primary)] text-[var(--color-on-primary)] border-[var(--color-primary)] shadow-xs'
+                  : 'bg-[var(--color-surface)] text-[var(--color-primary)] border-[var(--color-border)] hover:bg-[var(--color-neutral)]'
+              }`}
+            >
+              <span>{role}</span>
+              {role === 'admin' && (
+                <span className={`text-[9px] px-1 py-0.5 rounded font-bold uppercase ${
+                  isSelected ? 'bg-[var(--color-on-primary)]/20 text-[var(--color-on-primary)]' : 'bg-amber-500/20 text-amber-500'
+                }`}>
+                  Super
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Desktop Vertical List */}
+      <ul className="hidden lg:block space-y-1.5">
         {roles.map((role) => {
           const isSelected = selectedRole === role
           return (

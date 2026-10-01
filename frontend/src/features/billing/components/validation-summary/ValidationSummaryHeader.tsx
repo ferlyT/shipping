@@ -1,4 +1,4 @@
-import { X, CheckCircle2, AlertTriangle, XCircle, Mic } from 'lucide-react'
+import { X, CheckCircle2, AlertTriangle, XCircle, Mic, MicOff } from 'lucide-react'
 import { formatDate, displayCustName, cn } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { BillingPrintButtons } from '../BillingPrintButtons'
@@ -91,17 +91,15 @@ export function ValidationSummaryHeader({
             type="button"
             onClick={onToggleVoice}
             className={cn(
-              "px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 border",
+              "relative px-2.5 py-1 rounded-lg text-xs font-semibold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer shrink-0 border",
               isVoiceListening
                 ? "bg-emerald-500/10 border-emerald-500/35 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15"
                 : "bg-slate-500/10 border-slate-500/30 text-slate-500 hover:bg-slate-500/15"
             )}
             title={
               isVoiceListening
-                ? (`${voiceTranscript || ''} ${voiceInterim || ''}`.trim()
-                  ? `Mendengarkan: "${`${voiceTranscript || ''} ${voiceInterim || ''}`.trim()}" (menunggu jeda 1 detik sebelum dieksekusi...)`
-                  : "Standby Suara Aktif (Jeda 1 detik setelah bicara): Siap menerima 'Buka [No Invoice]', 'Terbitkan', 'Tab 1-5', 'Refresh', 'Tutup'. Klik untuk jeda.")
-                : "Klik untuk aktifkan standby suara"
+                ? (`${`${voiceTranscript || ''} ${voiceInterim || ''}`.trim() ? `Mendengarkan: "${`${voiceTranscript || ''} ${voiceInterim || ''}`.trim()}" (jeda 1 detik untuk eksekusi)\n\n` : ''}🎙️ STANDBY SUARA MODAL AKTIF (Jeda 1 detik setelah bicara):\n• Buka Invoice: "Buka [No Invoice]", "Buka 11023"\n• Terbitkan: "Terbitkan" / "Issue Invoice"\n• Tab Modal: "Tab 1", "Tab 2", "Tab 3", "Tab 4", "Tab 5", "Tab Item", "Tab M3", "Tab Overweight", "Tab Freight", "Tab Ekspedisi"\n• Refresh: "Refresh" / "Segarkan"\n• Tutup: "Tutup" / "Batal"\n\nKlik atau tekan Alt+V untuk jeda mikrofon.`)
+                : '🎙️ STANDBY SUARA JEDA:\nKlik atau tekan Alt+V untuk mengaktifkan mikrofon perintah suara.'
             }
           >
             {isVoiceListening ? (
@@ -112,14 +110,19 @@ export function ValidationSummaryHeader({
             ) : (
               <span className="h-2 w-2 rounded-full bg-slate-400 shrink-0" />
             )}
-            <Mic className={cn("w-3.5 h-3.5", isVoiceListening ? "text-emerald-500" : "text-slate-400")} />
-            <span className="hidden sm:inline max-w-[140px] truncate text-[11px] font-medium">
-              {isVoiceListening
-                ? (`${voiceTranscript || ''} ${voiceInterim || ''}`.trim()
-                  ? `🎙️ "${`${voiceTranscript || ''} ${voiceInterim || ''}`.trim()}"`
-                  : 'Standby Suara')
-                : 'Mikrofon Jeda'}
+            {isVoiceListening ? (
+              <Mic className="w-3.5 h-3.5 text-emerald-500" />
+            ) : (
+              <MicOff className="w-3.5 h-3.5 text-slate-400" />
+            )}
+            <span className="hidden sm:inline font-medium text-[11px]">
+              {isVoiceListening ? 'Suara Aktif' : 'Mikrofon Jeda'}
             </span>
+            {isVoiceListening && `${voiceTranscript || ''} ${voiceInterim || ''}`.trim() && (
+              <span className="absolute -bottom-5 right-0 bg-[var(--color-surface)] border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 text-[9px] px-1.5 py-0.5 rounded shadow-xs max-w-[160px] truncate font-mono z-10 pointer-events-none">
+                "{`${voiceTranscript || ''} ${voiceInterim || ''}`.trim()}"
+              </span>
+            )}
           </button>
         )}
 

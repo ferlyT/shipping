@@ -374,6 +374,29 @@ export function HistoryPage() {
                                   year: 'numeric',
                                 })}
                               </span>
+                              {row.endDate ? (
+                                <span className="text-[0.75rem] font-medium text-[var(--color-secondary)]">
+                                  s/d {new Date(row.endDate).toLocaleDateString('id-ID', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                  })}
+                                </span>
+                              ) : (
+                                <span className="text-[0.72rem] text-emerald-600 dark:text-emerald-400 font-medium">
+                                  Tanpa batas waktu
+                                </span>
+                              )}
+                              {row.isExpired && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 w-fit">
+                                  Kedaluwarsa
+                                </span>
+                              )}
+                              {row.isExpiringSoon && !row.isExpired && (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border border-amber-500/40 text-amber-600 dark:text-amber-400 bg-amber-500/10 w-fit animate-pulse">
+                                  Segera Berakhir
+                                </span>
+                              )}
                               {group.items.length > 1 && (
                                 <span className="text-[0.65rem] font-mono font-semibold text-[var(--color-tertiary)] uppercase tracking-wide">
                                   {group.items.length} versi
@@ -548,8 +571,9 @@ export function HistoryPage() {
           uploadId={editingUpload.id}
           fileName={editingUpload.fileName}
           currentEffectiveDate={editingUpload.effectiveDate}
-          onSave={async (newDate) => {
-            await customerPriceListApi.updateEffectiveDate(editingUpload.id, newDate)
+          currentEndDate={editingUpload.endDate}
+          onSave={async (newDate, newEndDate) => {
+            await customerPriceListApi.updateEffectiveDate(editingUpload.id, newDate, newEndDate)
             reload()
           }}
         />

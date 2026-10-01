@@ -51,7 +51,127 @@ export function CashierTable({
 
   return (
     <div className="space-y-3">
-      <div className="rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden shadow-xs overflow-x-auto">
+      {/* Mobile Touch Cards View (< md) */}
+      <div className="md:hidden divide-y divide-[var(--color-border)] rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xs overflow-hidden">
+        {safeItems.map((item) => (
+          <div
+            key={item.fdCashierID}
+            onClick={() => handleRowClick(item.fdCashierID)}
+            className="p-3.5 space-y-3 hover:bg-[var(--color-neutral)]/30 active:bg-[var(--color-neutral)]/50 transition-colors cursor-pointer"
+          >
+            {/* Top row: ID badge + Date + Status */}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-xs font-bold text-[var(--color-tertiary)] bg-[var(--color-neutral)] px-2 py-0.5 rounded border border-[var(--color-border)]">
+                  {item.fdCashierID}
+                </span>
+                <span className="text-[11px] text-[var(--color-secondary)]">
+                  {item.fdCashierDate ? formatDate(item.fdCashierDate) : '-'}
+                </span>
+              </div>
+
+              {/* Status Badge */}
+              {mode === 'OFFICIAL' ? (
+                item.fdPost === 1 ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border border-slate-500/30 bg-slate-500/10 text-slate-400">
+                    {t('cashier.statusPosted')}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border border-sky-500/30 bg-sky-500/10 text-sky-500">
+                    {t('cashier.statusOpen')}
+                  </span>
+                )
+              ) : item.fdPost === 1 ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border border-emerald-500/30 bg-emerald-500/10 text-emerald-500">
+                  {t('cashier.statusAttached')}
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border border-amber-500/30 bg-amber-500/10 text-amber-500">
+                  {t('cashier.statusUnattached')}
+                </span>
+              )}
+            </div>
+
+            {/* Customer Info */}
+            <div>
+              <h4 className="text-xs font-bold text-[var(--color-primary)] line-clamp-1">
+                {item.fdCustName}
+              </h4>
+              <span className="text-[10px] font-mono text-[var(--color-secondary)]">
+                {item.fdCustCode}
+                {mode === 'OFFICIAL' && item.fdCashierXX && (
+                  <span className="ml-2 text-indigo-400">· Ref: {item.fdCashierXX}</span>
+                )}
+              </span>
+            </div>
+
+            {/* Financial Metrics 2-column Grid */}
+            <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-[var(--color-neutral)]/40 border border-[var(--color-border)] text-xs">
+              <div>
+                <span className="text-[10px] uppercase font-semibold text-[var(--color-secondary)] block">
+                  {t('cashier.colTotalRcv')}
+                </span>
+                <span className="font-mono font-bold text-emerald-500 text-xs mt-0.5 block">
+                  {formatCurrency(item.totalRcv)}
+                </span>
+                <span className="text-[10px] text-[var(--color-secondary)]">
+                  {item.rcvCount} instrumen
+                </span>
+              </div>
+
+              <div>
+                <span className="text-[10px] uppercase font-semibold text-[var(--color-secondary)] block">
+                  {t('cashier.colTotalDetail')}
+                </span>
+                <span className="font-mono font-bold text-blue-500 text-xs mt-0.5 block">
+                  {formatCurrency(item.totalDetail)}
+                </span>
+                <span className="text-[10px] text-[var(--color-secondary)]">
+                  {item.detailCount} faktur
+                </span>
+              </div>
+            </div>
+
+            {/* Bottom Row: Balance + Actions */}
+            <div className="flex items-center justify-between pt-1 gap-2">
+              <div>
+                {item.isBalanced ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-semibold border border-emerald-500/30 bg-emerald-500/10 text-emerald-500">
+                    {t('cashier.statusBalanced')}
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-semibold border border-amber-500/30 bg-amber-500/10 text-amber-500">
+                    {t('cashier.statusUnbalanced')} ({formatCurrency(item.balance)})
+                  </span>
+                )}
+              </div>
+
+              <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  onClick={() => handleRowClick(item.fdCashierID)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold text-[var(--color-tertiary)] hover:bg-[var(--color-neutral)] border border-[var(--color-border)] cursor-pointer"
+                >
+                  {t('common.detail')}
+                </button>
+
+                {mode === 'TEMPORARY' && item.fdPost === 0 && onAttachClick && (
+                  <button
+                    type="button"
+                    onClick={() => onAttachClick(item)}
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold text-emerald-500 hover:bg-emerald-500/10 border border-emerald-500/40 cursor-pointer"
+                  >
+                    {t('cashier.btnAttach')}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop Table View (>= md) */}
+      <div className="hidden md:block rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden shadow-xs overflow-x-auto">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="border-b border-[var(--color-border)] bg-[var(--color-neutral)] text-[11px] uppercase tracking-wider font-semibold text-[var(--color-secondary)]">

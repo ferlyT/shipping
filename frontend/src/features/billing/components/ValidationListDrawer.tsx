@@ -1,5 +1,5 @@
 import { useModalEscape } from '@/hooks/useModalEscape'
-import { useState, useEffect, useMemo, useRef } from 'react'
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 import { X, Search, Plane, Ship, LayoutGrid, Check, ChevronRight, FileText, User, Mic, AlertTriangle, Loader2 } from 'lucide-react'
@@ -12,6 +12,7 @@ import { useDebounce } from '@/hooks/useDebounce'
 import { useVoiceRecognition } from '../hooks/useVoiceRecognition'
 import { normalizeInvoiceVoiceTranscript } from '../utils/voiceSearch.utils'
 import { useVoiceAssistantStore } from '@/stores/voiceAssistantStore'
+import { useVoiceAssistantPermission } from '@/hooks/useVoiceAssistantPermission'
 import { cn } from '@/lib/utils'
 
 interface ValidationListDrawerProps {
@@ -59,7 +60,8 @@ export function ValidationListDrawer({
   const [highlightedIndex, setHighlightedIndex] = useState(0)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const canUseVoice = true
+  // DRAWR-01 FIX: gunakan hook permission yang sama dengan Topbar, bukan hardcode true
+  const canUseVoice = useVoiceAssistantPermission()
   const isManuallyStoppedRef = useRef(false)
   const isProcessingActionRef = useRef(false)
   const isOpenRef = useRef(isOpen)
@@ -266,8 +268,8 @@ export function ValidationListDrawer({
     }
   }, [safeHighlightedIndex, isOpen])
 
-  // Eksekusi pemilihan faktur atomik bebas looping
-  const handleSelectAndClose = (invNo: string) => {
+  // DRAWR-02 FIX: useCallback agar dep array effect tidak stale closure
+  const handleSelectAndClose = useCallback((invNo: string) => {
     if (isProcessingActionRef.current) return
     isProcessingActionRef.current = true
     isManuallyStoppedRef.current = true
@@ -276,18 +278,26 @@ export function ValidationListDrawer({
     stopVoiceListening()
     onClose()
     onSelectInvoice(invNo)
-  }
+  }, [resetTranscript, stopVoiceListening, onClose, onSelectInvoice])
 
   // Pemrosesan transkrip suara & eksekusi perintah pilih / navigasi / pencarian
+  // DRAWR-06 FIX: Perintah aksi (tutup/pilih/navigasi) HANYA dieksekusi dari transcript FINAL
+  // agar tidak double-execute saat interim & final masing-masing memicu re-render effect.
+  // Pencarian (search preview) tetap boleh diupdate dari interim untuk live feedback.
   useEffect(() => {
     if (!isOpen || !isOpenRef.current || isProcessingActionRef.current) return
-    const raw = (voiceTranscript || voiceInterim || '').trim()
+
+    const finalText = voiceTranscript.trim()
+    const interimText = voiceInterim.trim()
+    const raw = (finalText || interimText)
     if (!raw) return
 
+    // Text untuk evaluasi aksi: hanya gunakan final transcript
+    const actionLower = finalText.toLowerCase().trim()
     const lower = raw.toLowerCase().trim()
 
-    // 1. Perintah Tutup Drawer
-    if (/^(tutup|batal|cancel|kembali)$/i.test(lower)) {
+    // 1. Perintah Tutup Drawer — hanya dari final transcript
+    if (finalText && /^(tutup|batal|cancel|kembali)$/i.test(actionLower)) {
       isManuallyStoppedRef.current = true
       if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
       stopVoiceListening()
@@ -296,12 +306,11 @@ export function ValidationListDrawer({
       return
     }
 
-    // 2. Perintah Pilih Faktur Terpilih (Murni)
+    // 2. Perintah Pilih Faktur Terpilih (Murni) — hanya dari final transcript
     // Kata "buka" dieliminasi 100% untuk menghindari konflik dengan navigasi tab halaman detail
-    const isPureSelectCmd =
-      /^(pilih|enter|masuk|tampilkan|oke|ok|ya|proses|pilih\s+ini|proses\s+ini|faktur\s+ini|invoice\s+ini|bill\s+ini|oke\s+pilih|ya\s+pilih)$/i.test(
-        lower
-      )
+    const isPureSelectCmd = finalText
+      ? /^(pilih|enter|masuk|tampilkan|oke|ok|ya|proses|pilih\s+ini|proses\s+ini|faktur\s+ini|invoice\s+ini|bill\s+ini|oke\s+pilih|ya\s+pilih)$/i.test(actionLower)
+      : false
 
     if (isPureSelectCmd) {
       if (highlightedBilling && !isProcessingActionRef.current) {
@@ -310,10 +319,12 @@ export function ValidationListDrawer({
       }
     }
 
-    // 2b. Perintah Pilih Komposit (misal: "pilih 010751", "santoso pilih", "010751 enter")
-    const hasSelectActionWord = /\b(pilih|enter|masuk|tampilkan)\b/i.test(lower)
+    // 2b. Perintah Pilih Komposit — hanya dari final transcript (misal: "pilih 010751", "santoso pilih")
+    const hasSelectActionWord = finalText
+      ? /\b(pilih|enter|masuk|tampilkan)\b/i.test(actionLower)
+      : false
     if (hasSelectActionWord) {
-      const stripped = lower.replace(/\b(pilih|enter|masuk|tampilkan|faktur|invoice|bill|tolong|coba|ya|oke|ok)\b/gi, ' ').trim()
+      const stripped = actionLower.replace(/\b(pilih|enter|masuk|tampilkan|faktur|invoice|bill|tolong|coba|ya|oke|ok)\b/gi, ' ').trim()
       if (stripped) {
         const cleanTarget = normalizeInvoiceVoiceTranscript(stripped).toLowerCase()
         const matched = activeDraftBillings.find((b: Billing) => {
@@ -335,14 +346,16 @@ export function ValidationListDrawer({
       }
     }
 
-    // 3. Perintah Navigasi (Ke Bawah / Ke Atas)
-    if (/^(bawah|turun|next|berikutnya|nomor\s+dua|ke\s+bawah)$/i.test(lower)) {
-      setHighlightedIndex((prev) => Math.min(prev + 1, Math.max(0, filteredBillings.length - 1)))
-      return
-    }
-    if (/^(atas|naik|prev|sebelumnya|nomor\s+satu|ke\s+atas)$/i.test(lower)) {
-      setHighlightedIndex((prev) => Math.max(prev - 1, 0))
-      return
+    // 3. Perintah Navigasi (Ke Bawah / Ke Atas) — hanya dari final transcript
+    if (finalText) {
+      if (/^(bawah|turun|next|berikutnya|nomor\s+dua|ke\s+bawah)$/i.test(actionLower)) {
+        setHighlightedIndex((prev) => Math.min(prev + 1, Math.max(0, filteredBillings.length - 1)))
+        return
+      }
+      if (/^(atas|naik|prev|sebelumnya|nomor\s+satu|ke\s+atas)$/i.test(actionLower)) {
+        setHighlightedIndex((prev) => Math.max(prev - 1, 0))
+        return
+      }
     }
 
     // 4. Jika transkrip adalah perintah aksi / navigasi / kata "buka" mandiri, jangan set ke input pencarian
@@ -356,6 +369,7 @@ export function ValidationListDrawer({
     }
 
     // 5. Query Pencarian Invoice / Customer
+    // Boleh dari interim (voiceInterim) untuk live preview pencarian real-time
     // Bersihkan kata awalan "buka", "cari", atau "tolong" jika terucap di awal pencarian
     const cleanRaw = raw.replace(/\b(?:buka|cari|tolong|coba)\b/gi, ' ').trim()
     const clean = normalizeInvoiceVoiceTranscript(cleanRaw)
@@ -375,6 +389,7 @@ export function ValidationListDrawer({
     stopVoiceListening,
     onSelectInvoice,
     onClose,
+    handleSelectAndClose,
   ])
 
   // Shortcut keyboard Alt+V, Enter, ArrowUp, ArrowDown

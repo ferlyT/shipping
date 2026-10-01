@@ -311,72 +311,137 @@ export default function CommodityMappingPage() {
         </div>
 
         {/* Table Content */}
-        <div className="overflow-x-auto">
-          {isLoading ? (
-            <table className="w-full text-left text-xs">
-              <thead className="bg-gray-50/75 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 font-semibold border-b border-gray-200 dark:border-gray-700 uppercase tracking-wider text-[10px]">
-                <tr>
-                  <th className="px-4 py-3">Lingkup & Pelanggan</th>
-                  <th className="px-4 py-3">Nama Komoditas Sumber</th>
-                  <th className="px-4 py-3">Target Kategori Price List</th>
-                  <th className="px-4 py-3">Tarif Khusus (Tier 0)</th>
-                  <th className="px-4 py-3">Moda & Cabang</th>
-                  <th className="px-4 py-3">Periode Berlaku</th>
-                  <th className="px-4 py-3">Catatan</th>
-                  <th className="px-4 py-3 text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60 font-medium">
-                {Array.from({ length: 8 }).map((_, i) => (
-                  <tr key={i} className="bg-white dark:bg-gray-900">
-                    <td className="px-4 py-3.5"><div className="h-5 w-24 rounded-md skeleton-shimmer" /></td>
-                    <td className="px-4 py-3.5"><div className="h-4 w-36 rounded-md skeleton-shimmer" /></td>
-                    <td className="px-4 py-3.5"><div className="h-5 w-28 rounded-full skeleton-shimmer" /></td>
-                    <td className="px-4 py-3.5"><div className="h-5 w-24 rounded-md skeleton-shimmer" /></td>
-                    <td className="px-4 py-3.5"><div className="h-4 w-20 rounded-md skeleton-shimmer" /></td>
-                    <td className="px-4 py-3.5"><div className="h-4 w-24 rounded-md skeleton-shimmer" /></td>
-                    <td className="px-4 py-3.5"><div className="h-3.5 w-32 rounded-md skeleton-shimmer" /></td>
-                    <td className="px-4 py-3.5 text-right"><div className="h-7 w-14 rounded-lg skeleton-shimmer ml-auto" /></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ) : data.length === 0 ? (
-            <div className="p-12">
-              <EmptyState
-                icon={<Tag className="w-7 h-7" />}
-                title="Tidak Ada Aturan Pemetaan"
-                description={
-                  search || scope !== 'all' || mode !== 'ALL'
-                    ? 'Tidak ditemukan pemetaan komoditas yang cocok dengan filter aktif.'
-                    : 'Belum ada pemetaan komoditas yang dibuat. Tambahkan pemetaan komoditas pertama Anda.'
-                }
-                action={
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => openAddModal('customer')}
-                      className="text-xs border-purple-300 text-purple-700 bg-purple-50"
-                    >
-                      <Building2 className="w-3.5 h-3.5 mr-1" />
-                      + Tambah Khusus Customer
-                    </Button>
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => openAddModal('global')}
-                      className="text-xs"
-                    >
-                      <Plus className="w-3.5 h-3.5 mr-1" />
-                      + Tambah Global
-                    </Button>
+        {isLoading ? (
+          <div className="p-4 space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-16 rounded-xl skeleton-shimmer bg-gray-100 dark:bg-gray-800" />
+            ))}
+          </div>
+        ) : data.length === 0 ? (
+          <div className="p-12">
+            <EmptyState
+              icon={<Tag className="w-7 h-7" />}
+              title="Tidak Ada Aturan Pemetaan"
+              description={
+                search || scope !== 'all' || mode !== 'ALL'
+                  ? 'Tidak ditemukan pemetaan komoditas yang cocok dengan filter aktif.'
+                  : 'Belum ada pemetaan komoditas yang dibuat. Tambahkan pemetaan komoditas pertama Anda.'
+              }
+              action={
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => openAddModal('customer')}
+                    className="text-xs border-purple-300 text-purple-700 bg-purple-50"
+                  >
+                    <Building2 className="w-3.5 h-3.5 mr-1" />
+                    + Tambah Khusus Customer
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    onClick={() => openAddModal('global')}
+                    className="text-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5 mr-1" />
+                    + Tambah Global
+                  </Button>
+                </div>
+              }
+            />
+          </div>
+        ) : (
+          <>
+            {/* Mobile View: Cards (< md / 768px) */}
+            <div className="block md:hidden divide-y divide-gray-100 dark:divide-gray-800">
+              {data.map((item) => {
+                const isCustomerScope = Boolean(item.fdCustCode)
+                const isExpired = item.endDate && new Date(item.endDate) < new Date()
+                const hasDirectPrice = item.price != null && item.price > 0
+
+                return (
+                  <div key={item.id} className="p-3.5 space-y-2.5 bg-white dark:bg-gray-900">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="font-bold text-gray-900 dark:text-white font-mono text-xs truncate">
+                          {item.commodityName}
+                        </div>
+                        <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                          <Badge variant="info" className="text-[10px] px-2 py-0.5">
+                            {item.targetCommodity}
+                          </Badge>
+                          {isCustomerScope ? (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800">
+                              <Building2 className="w-2.5 h-2.5 shrink-0" />
+                              <span className="font-mono">{item.fdCustCode}</span>
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9.5px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                              <Globe className="w-2.5 h-2.5 shrink-0" />
+                              <span>Global</span>
+                            </span>
+                          )}
+                          {isExpired && (
+                            <span className="text-[9.5px] font-bold text-red-500 bg-red-50 px-1 rounded border border-red-200">
+                              Kedaluwarsa
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setEditingItem(item)
+                            setIsModalOpen(true)
+                          }}
+                          className="p-1.5 text-gray-500 hover:text-blue-600"
+                        >
+                          <Edit2 className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDeleteTarget(item)}
+                          className="p-1.5 text-gray-500 hover:text-red-600"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {isCustomerScope && item.custName && (
+                      <div className="text-[11px] text-gray-600 dark:text-gray-400 font-medium">
+                        {displayCustName(item.custName)}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1.5 border-t border-gray-100 dark:border-gray-800">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-gray-700 dark:text-gray-300">
+                          {item.mode || 'Semua Moda'}
+                        </span>
+                        {item.branch && (
+                          <span className="text-gray-400">({item.branch})</span>
+                        )}
+                      </div>
+                      {hasDirectPrice && (
+                        <span className="font-bold text-emerald-600 dark:text-emerald-400">
+                          {formatCurrency(item.price!)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                }
-              />
+                )
+              })}
             </div>
-          ) : (
-            <table className="w-full text-left text-xs">
+
+            {/* Desktop View: Table (>= md / 768px) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs">
               <thead className="bg-gray-50/75 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 font-semibold border-b border-gray-200 dark:border-gray-700 uppercase tracking-wider text-[10px]">
                 <tr>
                   <th className="px-4 py-3">Lingkup & Pelanggan</th>
@@ -553,8 +618,9 @@ export default function CommodityMappingPage() {
                 })}
               </tbody>
             </table>
-          )}
-        </div>
+            </div>
+          </>
+        )}
 
         {/* Pagination Footer */}
         {total > limit && (

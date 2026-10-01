@@ -32,6 +32,11 @@ type CompareResult = {
   isGabungan?: boolean
   totalNilaiM3: number
   totalNilaiKG: number
+  totalNilaiM3Efektif: number
+  totalNilaiKGEfektif: number
+  minChargeM3: number
+  minKgEquiv: number
+  minChargeApplied: boolean
   overallWinner: "M3" | "KG"
   totalNilaiTagihanIdeal: number
   totalBilled: number
@@ -53,11 +58,15 @@ type CompareResult = {
     priceKG: number
     nilaiM3: number
     nilaiKG: number
+    nilaiM3Efektif: number
+    nilaiKGEfektif: number
     nilaiTagihan: number
     winner: "M3" | "KG"
     selisihM3vsKG: number
     selisihAbs: number
     isM3Higher: boolean
+    isM3EfektifHigher: boolean
+    minChargeApplied: boolean
   }>
 }
 
@@ -131,6 +140,11 @@ export function Type2ComparisonPanel({ invNo, listCode, markingCode, defaultExpa
                 BASIS: {overallWinner}
               </span>
             )}
+            {data.minChargeApplied && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400">
+                ⚡ MIN CHARGE M3 ({data.minChargeM3} M3 / {data.minKgEquiv} KG)
+              </span>
+            )}
           </div>
           {!hasNoPricing && (
             <p className="mt-0.5 text-[11px] text-[var(--color-secondary)]">
@@ -196,12 +210,23 @@ export function Type2ComparisonPanel({ invNo, listCode, markingCode, defaultExpa
 
               {/* Comparison Summary */}
               <div className="px-4 py-3 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/50">
+                {data.minChargeApplied && (
+                  <div className="flex items-start gap-2 mb-2 p-2 rounded bg-amber-500/8 border border-amber-500/20">
+                    <span className="text-amber-500 shrink-0 mt-0.5">⚡</span>
+                    <p className="text-[11px] text-amber-600 dark:text-amber-400 leading-relaxed">
+                      <strong>Min Charge Diterapkan:</strong> Volume aktual ({data.totalM3.toLocaleString("id-ID", { minimumFractionDigits: 4 })} M3 / {data.totalKG.toLocaleString("id-ID")} KG) di bawah batas minimum.
+                      Nilai ideal dihitung menggunakan min charge <strong>{data.minChargeM3} M3</strong> atau ekuivalen <strong>{data.minKgEquiv} KG</strong> — pilih yang lebih besar.
+                    </p>
+                  </div>
+                )}
                 <div className="flex items-center justify-between text-xs mb-1.5">
                   <span className="font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">Tagihan Aktual</span>
                   <span className="font-bold font-mono text-[var(--color-primary)]">{formatRp(totalBilled)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs mb-1.5">
-                  <span className="font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">Nilai Ideal ({overallWinner})</span>
+                  <span className="font-[var(--font-label)] uppercase tracking-wider text-[var(--color-secondary)]">
+                    Nilai Ideal ({overallWinner}){data.minChargeApplied ? " · Min Charge" : ""}
+                  </span>
                   <span className="font-bold font-mono text-[var(--color-tertiary)]">{formatRp(totalNilaiTagihanIdeal)}</span>
                 </div>
                 <div className="flex items-center justify-between text-xs border-t border-[var(--color-border)] pt-1.5 mt-1">
@@ -211,6 +236,7 @@ export function Type2ComparisonPanel({ invNo, listCode, markingCode, defaultExpa
                   </span>
                 </div>
               </div>
+
 
               {/* Per-Entry Table */}
               {items.length > 0 && (
@@ -229,13 +255,16 @@ export function Type2ComparisonPanel({ invNo, listCode, markingCode, defaultExpa
                     </thead>
                     <tbody className="divide-y divide-[var(--color-border)]">
                       {items.map((item, idx) => (
-                        <tr key={idx} className="hover:bg-[var(--color-neutral)]/40 transition-colors">
+                        <tr key={idx} className={`hover:bg-[var(--color-neutral)]/40 transition-colors ${item.minChargeApplied ? "bg-amber-500/3" : ""}`}>
                           <td className="px-3 py-2">
                             <div className="font-semibold text-[var(--color-primary)] truncate max-w-[160px]" title={item.fdCustName}>
                               {item.fdCustName}
                             </div>
                             {item.fdTerima && <div className="text-[10px] text-[var(--color-secondary)] font-mono">{item.fdTerima}</div>}
                             <div className="text-[10px] text-[var(--color-secondary)]">{item.fdJmlPack} {item.fdSatuan}</div>
+                            {item.minChargeApplied && (
+                              <div className="text-[9px] font-bold text-amber-500 mt-0.5">⚡ Min Charge</div>
+                            )}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-[var(--color-primary)]">
                             <div>{item.m3.toLocaleString("id-ID", { minimumFractionDigits: 4 })}</div>
@@ -246,7 +275,14 @@ export function Type2ComparisonPanel({ invNo, listCode, markingCode, defaultExpa
                             )}
                           </td>
                           <td className={`px-3 py-2 text-right tabular-nums font-semibold ${item.winner === "M3" ? "text-[var(--color-tertiary)]" : "text-[var(--color-secondary)]"}`}>
-                            {formatRp(item.nilaiM3)}
+                            {item.minChargeApplied && item.nilaiM3Efektif !== item.nilaiM3 ? (
+                              <>
+                                <div>{formatRp(item.nilaiM3Efektif)}</div>
+                                <div className="text-[9px] line-through opacity-50 font-normal">{formatRp(item.nilaiM3)}</div>
+                              </>
+                            ) : (
+                              formatRp(item.nilaiM3)
+                            )}
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums text-[var(--color-primary)]">
                             <div>{item.kg.toLocaleString("id-ID", { minimumFractionDigits: 2 })}</div>
@@ -257,7 +293,14 @@ export function Type2ComparisonPanel({ invNo, listCode, markingCode, defaultExpa
                             )}
                           </td>
                           <td className={`px-3 py-2 text-right tabular-nums font-semibold ${item.winner === "KG" ? "text-[var(--color-tertiary)]" : "text-[var(--color-secondary)]"}`}>
-                            {formatRp(item.nilaiKG)}
+                            {item.minChargeApplied && item.nilaiKGEfektif !== item.nilaiKG ? (
+                              <>
+                                <div>{formatRp(item.nilaiKGEfektif)}</div>
+                                <div className="text-[9px] line-through opacity-50 font-normal">{formatRp(item.nilaiKG)}</div>
+                              </>
+                            ) : (
+                              formatRp(item.nilaiKG)
+                            )}
                           </td>
                           <td className="px-3 py-2 text-center">
                             <span className={`inline-flex items-center px-2 py-0.5 rounded font-bold text-[10px] bg-transparent border ${item.winner === "M3" ? "border-[var(--color-tertiary)]/40 text-[var(--color-tertiary)]" : "border-amber-500/40 text-amber-600 dark:text-amber-400"}`}>
@@ -268,6 +311,7 @@ export function Type2ComparisonPanel({ invNo, listCode, markingCode, defaultExpa
                             {item.selisihM3vsKG >= 0 ? "+" : ""}{formatRp(item.selisihM3vsKG)}
                           </td>
                         </tr>
+
                       ))}
                     </tbody>
                   </table>

@@ -1,4 +1,4 @@
-import { Tag } from 'lucide-react'
+import { Tag, TrendingUp } from 'lucide-react'
 import { formatCurrency, cleanFoxProString } from '@/lib/utils'
 import { StatusBadge } from '@/components/ui/StatusBadge'
 import { formatQtyDecimal, type ItemPriceEvaluation } from '../../utils/billing.utils'
@@ -187,6 +187,15 @@ export function FinancialAuditTab({
                         variant={item.isNonValidatedBranchDashFee ? 'neutral' : undefined}
                         size="sm"
                       />
+                      {item.isProfileMatchOverMaster && (
+                        <span
+                          className="inline-flex items-center gap-1 text-[9px] font-bold text-sky-600 dark:text-sky-400 bg-sky-500/10 px-1.5 py-0.2 rounded border border-sky-500/20 whitespace-nowrap"
+                          title={`Sesuai Profil CS (Overcharge vs Master +${formatCurrency(item.masterPriceDiff || item.difference)})`}
+                        >
+                          <TrendingUp className="w-2.5 h-2.5 shrink-0" />
+                          <span>Overcharge (+{formatCurrency(item.masterPriceDiff || item.difference)})</span>
+                        </span>
+                      )}
                     </div>
                   </td>
                   <td className="px-2.5 py-1.5 text-right tabular-nums whitespace-nowrap">

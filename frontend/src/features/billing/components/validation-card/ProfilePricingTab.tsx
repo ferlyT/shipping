@@ -351,27 +351,51 @@ export const ProfilePricingTab: React.FC<ProfilePricingTabProps> = ({
                 isMatched,
                 hasTargetPrice,
                 isTaxReturnItem,
+                isM3MainItem,
+                isKgOverweightItem,
                 targetColName,
               } = evaluation
 
               const billedPrice = Number(item.fdItemPrice || 0)
+              const isProfileValidated = isTaxReturnItem || (!evaluation.priceItem && isM3MainItem && profilePrice > 0) || isKgOverweightItem
 
               const statusBadge = evaluation.isNonValidatedBranchDashFee ? (
                 <Badge variant="default" className="shrink-0 text-[10px]" title="Item biaya invoice cabang -- (tidak divalidasi ke database tarif)">
                   Non-Validasi
                 </Badge>
+              ) : evaluation.isProfileMatchOverMaster ? (
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  <Badge variant="success" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0" title={`Harga invoice (${formatCurrency(billedPrice)}) cocok dengan Profil CS (${formatCurrency(profilePrice)})`}>
+                    <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.5]" />
+                    <span>Sesuai Profil</span>
+                  </Badge>
+                  <Badge variant="info" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0" title={`Harga di atas Master Price List ${priceListDisplay} (Selisih +${formatCurrency(evaluation.masterPriceDiff || evaluation.difference)}) - Diizinkan`}>
+                    <TrendingUp className="w-3 h-3 text-sky-600 dark:text-sky-400 shrink-0" />
+                    <span>Overcharge (+{formatCurrency(evaluation.masterPriceDiff || evaluation.difference)})</span>
+                  </Badge>
+                </div>
+              ) : evaluation.isProfileMatchUnderMaster ? (
+                <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                  <Badge variant="success" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0" title={`Harga invoice (${formatCurrency(billedPrice)}) cocok dengan Profil CS (${formatCurrency(profilePrice)})`}>
+                    <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.5]" />
+                    <span>Sesuai Profil</span>
+                  </Badge>
+                  <Badge variant="warning" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0" title={`Harga di bawah Master Price List ${priceListDisplay} (Diskon khusus profil: -${formatCurrency(Math.abs(evaluation.masterPriceDiff || evaluation.difference))})`}>
+                    <span>Diskon Profil (-{formatCurrency(Math.abs(evaluation.masterPriceDiff || evaluation.difference))})</span>
+                  </Badge>
+                </div>
               ) : isMatched ? (
                 <Badge variant="success" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0">
                   <Check className="w-3 h-3 text-emerald-600 dark:text-emerald-400 shrink-0 stroke-[2.5]" />
                   <span>{t('billing.validation.matchBadge')}</span>
                 </Badge>
-              ) : hasTargetPrice && (isTaxReturnItem ? profilePrice > 0 : evaluation.priceItem !== null) ? (
-                billedPrice > (isTaxReturnItem ? profilePrice : maxTargetPrice) ? (
+              ) : hasTargetPrice && (isProfileValidated ? profilePrice > 0 : evaluation.priceItem !== null) ? (
+                billedPrice > (isProfileValidated ? profilePrice : maxTargetPrice) ? (
                   <Badge variant="info" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0" title={`Harga invoice (${formatCurrency(billedPrice)}) lebih tinggi dari acuan (${priceListDisplay}) - Diizinkan`}>
                     <TrendingUp className="w-3 h-3 text-sky-600 dark:text-sky-400 shrink-0" />
                     <span>Overcharge</span>
                   </Badge>
-                ) : billedPrice < (isTaxReturnItem ? profilePrice : minTargetPrice) ? (
+                ) : billedPrice < (isProfileValidated ? profilePrice : minTargetPrice) ? (
                   <Badge variant="danger" className="inline-flex items-center gap-1 font-semibold text-[10px] shrink-0" title={`Peringatan: Harga invoice (${formatCurrency(billedPrice)}) lebih rendah dari acuan (${priceListDisplay})`}>
                     <TrendingDown className="w-3 h-3 text-rose-600 dark:text-rose-400 shrink-0" />
                     <span>Undercharge</span>
@@ -435,6 +459,11 @@ export const ProfilePricingTab: React.FC<ProfilePricingTabProps> = ({
                       <p className="font-mono font-semibold text-blue-700 dark:text-blue-300 break-all leading-tight">
                         {priceListDisplay}
                       </p>
+                      {evaluation.isCustomerPriceExpired && (
+                        <p className="text-[9px] text-rose-500 font-semibold mt-0.5 flex items-center gap-1">
+                          <span>⚠️ Khusus customer berakhir {evaluation.customerPriceEndDate ? formatDate(evaluation.customerPriceEndDate) : ''}</span>
+                        </p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -454,11 +483,24 @@ export const ProfilePricingTab: React.FC<ProfilePricingTabProps> = ({
                 <span>{t('billing.validation.customerPriceActive') || 'Price List Khusus Customer'}</span>
               </span>
             )}
+            {res.priceValidation.isCustomerPriceExpired && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-rose-600 dark:text-rose-400 bg-transparent px-2 py-0.5 rounded border border-rose-500/40">
+                <span>⚠️ Tarif Customer Kedaluwarsa {res.priceValidation.customerEndDate ? `(Berakhir ${formatDate(res.priceValidation.customerEndDate)})` : ''}</span>
+              </span>
+            )}
+            {res.priceValidation.isCustomerPriceExpiringSoon && !res.priceValidation.isCustomerPriceExpired && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-amber-600 dark:text-amber-400 bg-transparent px-2 py-0.5 rounded border border-amber-500/40 animate-pulse">
+                <span>⏳ Tarif Customer Segera Berakhir {res.priceValidation.customerEndDate ? `(${formatDate(res.priceValidation.customerEndDate)})` : ''}</span>
+              </span>
+            )}
             {res.priceValidation.effectiveDate && (
               <div className="flex items-center gap-1.5 text-[11px] font-medium text-[var(--color-secondary)]">
                 <Tag className="w-3.5 h-3.5 text-blue-500 shrink-0" />
-                <span>{t('billing.validation.effectivePriceDate')}:</span>
-                <span className="font-semibold text-blue-500">{formatDate(res.priceValidation.effectiveDate)}</span>
+                <span>Masa Berlaku:</span>
+                <span className="font-semibold text-blue-500">
+                  {formatDate(res.priceValidation.effectiveDate)}
+                  {res.priceValidation.customerEndDate ? ` s/d ${formatDate(res.priceValidation.customerEndDate)}` : ''}
+                </span>
               </div>
             )}
           </div>

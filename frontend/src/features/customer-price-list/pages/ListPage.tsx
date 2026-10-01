@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/Badge'
 import { ConfirmModal } from '@/components/ui/ConfirmModal'
 import { formatDate, formatCurrency } from '@/lib/utils'
 import { CustomerCommodityPriceModal } from '../components/CustomerCommodityPriceModal'
+import { EditEffectiveDateModal } from '@/features/price-list/components/EditEffectiveDateModal'
 import { toast } from '@/stores/toastStore'
 
 export function ListPage() {
@@ -42,6 +43,7 @@ export function ListPage() {
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
+  const [editingUpload, setEditingUpload] = useState<CustomerPriceListUploadRow | null>(null)
 
   // Special Prices state
   const [specialPrices, setSpecialPrices] = useState<CustomerSpecialPriceItem[]>([])
@@ -271,17 +273,27 @@ export function ListPage() {
     {
       key: 'status',
       header: t('common.status'),
-      render: (row: CustomerSpecialPriceItem) => (
-        <span
-          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border ${
-            row.isExpired
-              ? 'bg-transparent border-amber-500/40 text-amber-600 dark:text-amber-400'
-              : 'bg-transparent border-emerald-500/40 text-emerald-600 dark:text-emerald-400'
-          }`}
-        >
-          {row.isExpired ? t('customerPriceList.statusExpired') : t('customerPriceList.statusActive')}
-        </span>
-      ),
+      render: (row: CustomerSpecialPriceItem) => {
+        if (row.isExpired) {
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border bg-transparent border-amber-500/40 text-amber-600 dark:text-amber-400">
+              {t('customerPriceList.statusExpired')}
+            </span>
+          )
+        }
+        if (row.isExpiringSoon) {
+          return (
+            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border bg-transparent border-amber-500/40 text-amber-600 dark:text-amber-400 animate-pulse">
+              Segera Berakhir
+            </span>
+          )
+        }
+        return (
+          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold border bg-transparent border-emerald-500/40 text-emerald-600 dark:text-emerald-400">
+            {t('customerPriceList.statusActive')}
+          </span>
+        )
+      },
     },
     {
       key: 'actions',
@@ -350,11 +362,21 @@ export function ListPage() {
     },
     {
       key: 'effectiveDate',
-      header: t('customerPriceList.effectiveDateShort'),
+      header: 'Masa Berlaku',
       render: (row: CustomerPriceListUploadRow) => (
-        <span className="text-[var(--color-secondary)]">
-          {formatDate(row.effectiveDate)}
-        </span>
+        <div className="text-xs space-y-0.5">
+          <div className="flex items-center gap-1 text-[var(--color-secondary)]">
+            <span>Mulai:</span>
+            <strong className="text-[var(--color-primary)] font-semibold">{formatDate(row.effectiveDate)}</strong>
+          </div>
+          <div className="text-[11px] text-[var(--color-secondary)]">
+            {row.endDate ? (
+              <span>s/d <strong className="text-[var(--color-primary)]">{formatDate(row.endDate)}</strong></span>
+            ) : (
+              <span className="text-emerald-600 dark:text-emerald-400 font-medium">Tanpa batas waktu</span>
+            )}
+          </div>
+        </div>
       ),
     },
     {
@@ -378,22 +400,48 @@ export function ListPage() {
     {
       key: 'status',
       header: t('common.status'),
-      render: (row: CustomerPriceListUploadRow) => (
-        <Badge
-          variant={
-            row.status === 'PARSED' ? 'success' : row.status === 'PARTIAL' ? 'warning' : 'danger'
-          }
-        >
-          {row.status}
-        </Badge>
-      ),
+      render: (row: CustomerPriceListUploadRow) => {
+        if (row.isExpired) {
+          return (
+            <Badge variant="warning" className="border-amber-500/40 text-amber-600 dark:text-amber-400">
+              Kedaluwarsa
+            </Badge>
+          )
+        }
+        if (row.isExpiringSoon) {
+          return (
+            <Badge variant="warning" className="border-amber-500/40 text-amber-600 dark:text-amber-400 animate-pulse">
+              Segera Berakhir
+            </Badge>
+          )
+        }
+        return (
+          <Badge
+            variant={
+              row.status === 'PARSED' ? 'success' : row.status === 'PARTIAL' ? 'warning' : 'danger'
+            }
+          >
+            {row.status}
+          </Badge>
+        )
+      },
     },
     {
       key: 'actions',
       header: t('common.actions'),
       className: 'text-right',
       render: (row: CustomerPriceListUploadRow) => (
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setEditingUpload(row)}
+            title="Edit Masa Berlaku"
+            className="p-1.5 h-auto text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 cursor-pointer"
+          >
+            <Calendar size={14} className="mr-1" />
+            <span className="text-xs">Masa Berlaku</span>
+          </Button>
           <Button variant="ghost" size="sm" asChild>
             <Link to={ROUTES.CUSTOMER_PRICE_LIST_DETAIL(row.fdCustCode)}>
               <Eye className="w-4 h-4 mr-1.5" />
@@ -848,6 +896,23 @@ export function ListPage() {
         onCancel={() => setItemToDelete(null)}
         isLoading={isProcessingAction}
       />
+
+      {/* Edit Effective Date Modal (Master Upload) */}
+      {editingUpload && (
+        <EditEffectiveDateModal
+          isOpen={Boolean(editingUpload)}
+          onClose={() => setEditingUpload(null)}
+          uploadId={editingUpload.id}
+          fileName={editingUpload.fileName}
+          currentEffectiveDate={editingUpload.effectiveDate}
+          currentEndDate={editingUpload.endDate}
+          onSave={async (newDate, newEndDate) => {
+            await customerPriceListApi.updateEffectiveDate(editingUpload.id, newDate, newEndDate)
+            toast.success('Masa berlaku berhasil diperbarui')
+            fetchMasterUploads()
+          }}
+        />
+      )}
     </div>
   )
 }

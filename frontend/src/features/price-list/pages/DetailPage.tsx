@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ArrowLeft, AlertCircle, TrendingUp, TrendingDown, Anchor, Plane, Ship, Calendar, Tag, RotateCcw } from 'lucide-react'
-import { formatCurrency, formatDate } from '@/lib/utils'
+import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { priceListApi } from '../services/priceList.service'
 import type { DiffResponse, DiffRow } from '../types'
 import { ROUTES } from '@/lib/constants'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { Button } from '@/components/ui/Button'
+import { StatCard } from '@/components/ui/StatCard'
 import { CategoryMultiCombobox } from '../components/DashboardFilters'
 import { EditEffectiveDateModal } from '../components/EditEffectiveDateModal'
 import { MarkingManagerModal } from '../components/MarkingManagerModal'
@@ -429,32 +430,44 @@ export function DetailPage() {
             icon={<TrendingUp size={18} className="text-rose-500" />}
             label="Naik"
             value={stats.naik}
-            color="rose"
-            isActive={activeKpi === 'naik'}
+            accentColor="#f43f5e"
+            className={cn(
+              "cursor-pointer transition-all duration-200",
+              activeKpi === 'naik' && "ring-2 ring-rose-500/50 border-rose-500"
+            )}
             onClick={() => setActiveKpi((prev) => (prev === 'naik' ? 'all' : 'naik'))}
           />
           <StatCard
             icon={<TrendingDown size={18} className="text-emerald-600" />}
             label="Turun"
             value={stats.turun}
-            color="emerald"
-            isActive={activeKpi === 'turun'}
+            accentColor="#10b981"
+            className={cn(
+              "cursor-pointer transition-all duration-200",
+              activeKpi === 'turun' && "ring-2 ring-emerald-500/50 border-emerald-500"
+            )}
             onClick={() => setActiveKpi((prev) => (prev === 'turun' ? 'all' : 'turun'))}
           />
           <StatCard
             icon={<span className="font-bold text-sm text-[var(--color-secondary)]">—</span>}
             label="Tetap"
             value={stats.tetap}
-            color="secondary"
-            isActive={activeKpi === 'tetap'}
+            accentColor="#64748b"
+            className={cn(
+              "cursor-pointer transition-all duration-200",
+              activeKpi === 'tetap' && "ring-2 ring-slate-500/50 border-slate-500"
+            )}
             onClick={() => setActiveKpi((prev) => (prev === 'tetap' ? 'all' : 'tetap'))}
           />
           <StatCard
             icon={<span className="font-bold text-sm text-indigo-500">★</span>}
             label="Baru"
             value={stats.baru}
-            color="tertiary"
-            isActive={activeKpi === 'baru'}
+            accentColor="#6366f1"
+            className={cn(
+              "cursor-pointer transition-all duration-200",
+              activeKpi === 'baru' && "ring-2 ring-indigo-500/50 border-indigo-500"
+            )}
             onClick={() => setActiveKpi((prev) => (prev === 'baru' ? 'all' : 'baru'))}
           />
         </div>
@@ -644,46 +657,3 @@ export function DetailPage() {
 }
 
 
-
-function StatCard({
-  icon,
-  label,
-  value,
-  color,
-  isActive,
-  onClick,
-}: {
-  icon: React.ReactNode
-  label: string
-  value: number
-  color: string
-  isActive?: boolean
-  onClick?: () => void
-}) {
-  const colorMap: Record<string, string> = {
-    rose: 'bg-transparent border-rose-500/40 text-rose-500 hover:border-rose-500',
-    emerald: 'bg-transparent border-emerald-500/40 text-emerald-500 hover:border-emerald-500',
-    secondary: 'bg-transparent border-[var(--color-border)] text-[var(--color-primary)] hover:border-[var(--color-secondary)]',
-    tertiary: 'bg-transparent border-indigo-500/40 text-indigo-500 hover:border-indigo-500',
-  }
-  const activeClassMap: Record<string, string> = {
-    rose: 'ring-2 ring-rose-500/50 border-rose-500',
-    emerald: 'ring-2 ring-emerald-500/50 border-emerald-500',
-    secondary: 'ring-2 ring-[var(--color-primary)]/40 border-[var(--color-primary)]',
-    tertiary: 'ring-2 ring-indigo-500/50 border-indigo-500',
-  }
-  return (
-    <div
-      className={`p-4 border rounded-xl flex items-center gap-3 cursor-pointer transition-all duration-200 ${
-        colorMap[color] ?? ''
-      } ${isActive ? activeClassMap[color] : ''}`}
-      onClick={onClick}
-    >
-      <div className="hidden sm:flex p-2 rounded-lg bg-transparent border border-[var(--color-border)]">{icon}</div>
-      <div>
-        <div className="text-[1.5rem] font-bold font-mono text-[var(--color-primary)] leading-none">{value}</div>
-        <div className="text-[0.72rem] uppercase tracking-wider text-[var(--color-secondary)] font-semibold mt-0.5">{label}</div>
-      </div>
-    </div>
-  )
-}

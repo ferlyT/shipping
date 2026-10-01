@@ -67,22 +67,28 @@ export function CustMarkingDataTable({
   return (
     <div className="flex-1 min-h-0 overflow-auto bg-[var(--color-surface)] font-[var(--font-body)]">
       <table className="w-full text-left text-xs border-collapse min-w-max">
-        {/* Sticky Header - 23 Columns matching FoxPro Grid1 exactly */}
-        <thead className="bg-[var(--color-surface)] sticky top-0 z-20 border-b border-[var(--color-border)] shadow-2xs">
+        {/* Sticky Header - 23 Columns with Sticky Identity Columns (No, BC, No. Invoice) */}
+        <thead className="bg-[var(--color-surface)] sticky top-0 z-30 border-b border-[var(--color-border)] shadow-xs">
           <tr>
-            {/* 1. No */}
-            <th className="px-2 py-2 w-9 text-center text-[10.5px] font-bold uppercase tracking-wider text-[var(--color-secondary)] border-b border-[var(--color-border)]">
+            {/* 1. No - Sticky Left 0 */}
+            <th className="sticky left-0 z-40 bg-[var(--color-surface)] px-2 py-2 w-10 text-center text-[10.5px] font-bold uppercase tracking-wider text-[var(--color-secondary)] border-b border-r border-[var(--color-border)]">
               No.
             </th>
-            {/* 2. BC */}
-            <th onClick={() => onSort('branchCode')} className={`${thClass} text-center w-12`}>
+            {/* 2. BC - Sticky Left 40px (left-10) */}
+            <th
+              onClick={() => onSort('branchCode')}
+              className={`sticky left-10 z-40 bg-[var(--color-surface)] ${thClass} text-center w-12 border-r border-[var(--color-border)]`}
+            >
               <div className="flex items-center justify-center gap-1">
                 <span>BC.</span>
                 {renderSortIcon('branchCode')}
               </div>
             </th>
-            {/* 3. No. Invoice */}
-            <th onClick={() => onSort('invoice')} className={thClass}>
+            {/* 3. No. Invoice - Sticky Left 88px */}
+            <th
+              onClick={() => onSort('invoice')}
+              className={`sticky left-[88px] z-40 bg-[var(--color-surface)] ${thClass} border-r border-[var(--color-border)] shadow-[4px_0_10px_-2px_rgba(0,0,0,0.25)]`}
+            >
               <div className="flex items-center gap-1">
                 <span>No. Invoice</span>
                 {renderSortIcon('invoice')}
@@ -288,258 +294,273 @@ export function CustMarkingDataTable({
               const m3Current = isAirMode ? r.vfcGdg : r.m3Gdg
               const m3Komplain = isAirMode ? r.vfcK : r.m3K
               const m3Billing = isAirMode ? r.vfcBill : r.m3Bill
+              const hasRowDiscrepancy =
+                r.isQtyKomplainMismatch ||
+                (r.owGdg || 0) > 0 ||
+                (r.owSJ || 0) > 0 ||
+                (r.owK || 0) > 0 ||
+                r.isUnderbilledM3
 
-                  return (
-                    <tr
-                      key={`${r.invoice}-${r.listCode}-${idx}`}
-                      className="hover:bg-[var(--color-neutral)]/40 transition-colors text-[11px]"
-                    >
-                      {/* 1. No */}
-                      <td className="px-2 py-1.5 text-center text-[var(--color-secondary)] font-mono tabular-nums">
-                        {idx + 1}
+              return (
+                <tr
+                  key={`${r.invoice}-${r.listCode}-${idx}`}
+                  className={`hover:bg-[var(--color-neutral)]/40 transition-colors text-[11px] group ${
+                    hasRowDiscrepancy
+                      ? r.isQtyKomplainMismatch
+                        ? 'bg-amber-500/5 dark:bg-amber-950/10 border-l-2 border-l-amber-500'
+                        : 'bg-rose-500/5 dark:bg-rose-950/10 border-l-2 border-l-rose-500'
+                      : ''
+                  }`}
+                >
+                  {/* 1. No - Sticky Left 0 */}
+                  <td className="sticky left-0 z-20 bg-[var(--color-surface)] group-hover:bg-[var(--color-neutral)]/20 px-2 py-1.5 text-center text-[var(--color-secondary)] font-mono tabular-nums border-r border-[var(--color-border)]">
+                    {idx + 1}
+                  </td>
+
+                  {/* 2. BC. - Sticky Left 40px (left-10) */}
+                  <td className="sticky left-10 z-20 bg-[var(--color-surface)] group-hover:bg-[var(--color-neutral)]/20 px-2 py-1.5 text-center border-r border-[var(--color-border)]">
+                    <span className="px-1 py-0.5 rounded-xs text-[10px] font-semibold border border-[var(--color-border)] bg-[var(--color-neutral)]/60 text-[var(--color-secondary)] font-mono">
+                      {r.branchCode}
+                    </span>
+                  </td>
+
+                  {/* 3. No. Invoice - Sticky Left 88px */}
+                  <td className="sticky left-[88px] z-20 bg-[var(--color-surface)] group-hover:bg-[var(--color-neutral)]/20 px-2 py-1.5 font-mono font-semibold text-[var(--color-primary)] tabular-nums whitespace-nowrap border-r border-[var(--color-border)] shadow-[4px_0_10px_-2px_rgba(0,0,0,0.25)]">
+                    {r.invoice}
+                  </td>
+
+                  {/* 4. Tgl. Inv */}
+                  <td className="px-2 py-1.5 text-[var(--color-secondary)] tabular-nums whitespace-nowrap font-mono">
+                    {r.dateStr ? formatDate(r.dateStr) : '—'}
+                  </td>
+
+                  {/* 5. Marking No */}
+                  <td className="px-2 py-1.5 font-bold text-[var(--color-primary)] whitespace-nowrap">
+                    {r.markingNo || r.marking || '—'}
+                  </td>
+
+                  {/* 6. Comodity */}
+                  <td
+                    className="px-2 py-1.5 text-[var(--color-secondary)] max-w-[140px] truncate"
+                    title={r.fdComodity || r.comodity}
+                  >
+                    {r.fdComodity || r.comodity || '—'}
+                  </td>
+
+                  {/* 7. Ket */}
+                  <td className="px-2 py-1.5 text-[var(--color-secondary)] max-w-[140px] truncate" title={r.fdDesc}>
+                    {r.fdDesc || '—'}
+                  </td>
+
+                  {/* 8, 9, 10. Curr, Value, Fc */}
+                  {showFinance && (
+                    <>
+                      <td className="px-2 py-1.5 text-center font-mono text-[var(--color-secondary)]">
+                        {r.currValue1 || '—'}
                       </td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[var(--color-primary)]">
+                        {r.value2 > 0 ? formatNumber(r.value2) : '0'}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[var(--color-primary)]">
+                        {r.fc > 0 ? formatNumber(r.fc) : '0'}
+                      </td>
+                    </>
+                  )}
 
-                      {/* 2. BC. */}
-                      <td className="px-2 py-1.5 text-center">
-                        <span className="px-1 py-0.5 rounded-xs text-[10px] font-semibold border border-[var(--color-border)] bg-[var(--color-neutral)]/60 text-[var(--color-secondary)] font-mono">
-                          {r.branchCode}
+                  {/* 11, 12. Berat, Berat SJ */}
+                  {showPhysical && (
+                    <>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[var(--color-primary)] font-medium">
+                        {formatDecimal(r.weightGdg, 2)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[var(--color-secondary)]">
+                        {formatDecimal(r.weightSJ, 2)}
+                      </td>
+                    </>
+                  )}
+
+                  {/* 13. Berat K */}
+                  {showComplaint && (
+                    <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                      {r.weightK > 0 ? (
+                        <span className="font-semibold text-amber-500">{formatDecimal(r.weightK, 2)}</span>
+                      ) : (
+                        <span className="text-[var(--color-secondary)]">—</span>
+                      )}
+                    </td>
+                  )}
+
+                  {/* 14. KG Bill */}
+                  {showFinance && (
+                    <td className="px-2 py-1.5 text-right font-mono tabular-nums font-semibold text-[var(--color-primary)]">
+                      {formatDecimal(r.kgBill, 2)}
+                    </td>
+                  )}
+
+                  {/* 15, 16, 17. Qty SJ, Qty Gdg, Qty PL */}
+                  {showPhysical && (
+                    <>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[var(--color-secondary)]">
+                        {formatNumber(r.qtySJ)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums font-medium text-[var(--color-primary)]">
+                        {formatNumber(r.qtyGdg)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        {r.isPlEmpty ? (
+                          <span
+                            className="inline-block px-1 py-0.5 rounded-xs font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                            title="Qty PL = 0 (Data fisik belum lengkap)"
+                          >
+                            0
+                          </span>
+                        ) : (
+                          formatNumber(r.qtyPL)
+                        )}
+                      </td>
+                    </>
+                  )}
+
+                  {/* 18. Qty K */}
+                  {showComplaint && (
+                    <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                      {r.qtyK > 0 ? (
+                        r.isQtyKomplainMismatch ? (
+                          <span
+                            className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/40"
+                            title={`Peringatan: Qty Komplain (${formatNumber(r.qtyK)}) berbeda dengan Qty Gudang (${formatNumber(r.qtyGdg)})`}
+                          >
+                            {formatNumber(r.qtyK)} ⚠️
+                          </span>
+                        ) : (
+                          <span className="font-semibold text-amber-500">{formatNumber(r.qtyK)}</span>
+                        )
+                      ) : (
+                        <span className="text-[var(--color-secondary)]">—</span>
+                      )}
+                    </td>
+                  )}
+
+                  {/* 19, 20. Tipe, Tax */}
+                  {showFinance && (
+                    <>
+                      <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                        <span className="px-1.5 py-0.5 rounded-xs text-[10px] font-medium bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-secondary)]">
+                          {r.typeComodityText || '—'}
                         </span>
                       </td>
-
-                      {/* 3. No. Invoice */}
-                      <td className="px-2 py-1.5 font-mono font-semibold text-[var(--color-primary)] tabular-nums whitespace-nowrap">
-                        {r.invoice}
+                      <td className="px-2 py-1.5 text-center whitespace-nowrap">
+                        {r.isTax ? (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded-xs text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                            title="Tax Return (YES)"
+                          >
+                            YES
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded-xs text-[10px] font-medium border border-dashed border-[var(--color-border)] text-[var(--color-secondary)]/60"
+                            title="Non Tax (NO)"
+                          >
+                            NO
+                          </span>
+                        )}
                       </td>
+                    </>
+                  )}
 
-                      {/* 4. Tgl. Inv */}
-                      <td className="px-2 py-1.5 text-[var(--color-secondary)] tabular-nums whitespace-nowrap">
-                        {r.dateStr ? formatDate(r.dateStr) : '—'}
+                  {/* 21, 22. M3 Pl, M3/Vfc */}
+                  {showPhysical && (
+                    <>
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        {r.isPlEmpty ? (
+                          <span
+                            className="inline-block px-1 py-0.5 rounded-xs font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                            title="Qty PL = 0"
+                          >
+                            {formatDecimal(r.m3PL, 4)}
+                          </span>
+                        ) : (
+                          <span className="text-[var(--color-secondary)]">
+                            {r.m3PL > 0 ? formatDecimal(r.m3PL, 4) : '—'}
+                          </span>
+                        )}
                       </td>
-
-                      {/* 5. Marking No */}
-                      <td className="px-2 py-1.5 font-bold text-[var(--color-primary)] whitespace-nowrap">
-                        {r.markingNo || r.marking || '—'}
+                      <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                        {r.isStatusNonStandard ? (
+                          <span
+                            className="inline-block px-1 py-0.5 rounded-xs font-semibold bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30"
+                            title={`Status transaksi: ${r.status}`}
+                          >
+                            {formatDecimal(m3Current, volDecimals)}
+                          </span>
+                        ) : (
+                          <span className="font-semibold text-[var(--color-primary)]">
+                            {formatDecimal(m3Current, volDecimals)}
+                          </span>
+                        )}
                       </td>
+                    </>
+                  )}
 
-                      {/* 6. Comodity */}
-                      <td className="px-2 py-1.5 text-[var(--color-secondary)] max-w-[140px] truncate" title={r.fdComodity || r.comodity}>
-                        {r.fdComodity || r.comodity || '—'}
-                      </td>
-
-                      {/* 7. Ket */}
-                      <td className="px-2 py-1.5 text-[var(--color-secondary)] max-w-[140px] truncate" title={r.fdDesc}>
-                        {r.fdDesc || '—'}
-                      </td>
-
-                      {/* 8, 9, 10. Curr, Value, Fc */}
-                      {showFinance && (
-                        <>
-                          <td className="px-2 py-1.5 text-center font-mono text-[var(--color-secondary)]">
-                            {r.currValue1 || '—'}
-                          </td>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[var(--color-primary)]">
-                            {r.value2 > 0 ? formatNumber(r.value2) : '0'}
-                          </td>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[var(--color-primary)]">
-                            {r.fc > 0 ? formatNumber(r.fc) : '0'}
-                          </td>
-                        </>
+                  {/* 23. M3 K / Vfc K */}
+                  {showComplaint && (
+                    <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                      {m3Komplain > 0 ? (
+                        <span className="font-semibold text-amber-500">{formatDecimal(m3Komplain, volDecimals)}</span>
+                      ) : (
+                        <span className="text-[var(--color-secondary)]">—</span>
                       )}
+                    </td>
+                  )}
 
-                      {/* 11, 12. Berat, Berat SJ */}
-                      {showPhysical && (
-                        <>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[var(--color-primary)]">
-                            {formatDecimal(r.weightGdg, 2)}
-                          </td>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[var(--color-secondary)]">
-                            {formatDecimal(r.weightSJ, 2)}
-                          </td>
-                        </>
+                  {/* 24. M3 Bill / Vfc Bill */}
+                  {showPhysical && (
+                    <td className="px-2 py-1.5 text-right font-mono tabular-nums">
+                      {r.isUnderbilledM3 ? (
+                        <span
+                          className="inline-block px-1 py-0.5 rounded-xs font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
+                          title="Peringatan: M³ Gudang > M³ Bill"
+                        >
+                          {formatDecimal(m3Billing, volDecimals)}
+                        </span>
+                      ) : (
+                        <span className="font-bold text-[var(--color-primary)]">
+                          {formatDecimal(m3Billing, volDecimals)}
+                        </span>
                       )}
-
-                      {/* 13. Berat K */}
-                      {showComplaint && (
-                        <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                          {r.weightK > 0 ? (
-                            <span className="font-semibold text-amber-500">{formatDecimal(r.weightK, 2)}</span>
-                          ) : (
-                            <span className="text-[var(--color-secondary)]">—</span>
-                          )}
-                        </td>
-                      )}
-
-                      {/* 14. KG Bill */}
-                      {showFinance && (
-                        <td className="px-2 py-1.5 text-right font-mono tabular-nums font-semibold text-[var(--color-primary)]">
-                          {formatDecimal(r.kgBill, 2)}
-                        </td>
-                      )}
-
-                      {/* 15, 16, 17. Qty SJ, Qty Gdg, Qty PL */}
-                      {showPhysical && (
-                        <>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums text-[var(--color-secondary)]">
-                            {formatNumber(r.qtySJ)}
-                          </td>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums font-medium text-[var(--color-primary)]">
-                            {formatNumber(r.qtyGdg)}
-                          </td>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                            {r.isPlEmpty ? (
-                              <span
-                                className="inline-block px-1 py-0.5 rounded-xs font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
-                                title="Qty PL = 0 (Data fisik belum lengkap)"
-                              >
-                                0
-                              </span>
-                            ) : (
-                              formatNumber(r.qtyPL)
-                            )}
-                          </td>
-                        </>
-                      )}
-
-                      {/* 18. Qty K */}
-                      {showComplaint && (
-                        <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                          {r.qtyK > 0 ? (
-                            r.isQtyKomplainMismatch ? (
-                              <span
-                                className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-xs font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/40"
-                                title={`Peringatan: Qty Komplain (${formatNumber(r.qtyK)}) berbeda dengan Qty Gudang (${formatNumber(r.qtyGdg)})`}
-                              >
-                                {formatNumber(r.qtyK)} ⚠️
-                              </span>
-                            ) : (
-                              <span className="font-semibold text-amber-500">{formatNumber(r.qtyK)}</span>
-                            )
-                          ) : (
-                            <span className="text-[var(--color-secondary)]">—</span>
-                          )}
-                        </td>
-                      )}
-
-                      {/* 19, 20. Tipe, Tax */}
-                      {showFinance && (
-                        <>
-                          <td className="px-2 py-1.5 text-center whitespace-nowrap">
-                            <span className="px-1.5 py-0.5 rounded-xs text-[10px] font-medium bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-secondary)]">
-                              {r.typeComodityText || '—'}
-                            </span>
-                          </td>
-                          <td className="px-2 py-1.5 text-center whitespace-nowrap">
-                            {r.isTax ? (
-                              <span
-                                className="inline-flex items-center px-1.5 py-0.5 rounded-xs text-[10px] font-bold bg-emerald-500/10 border border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                                title="Tax Return (YES)"
-                              >
-                                YES
-                              </span>
-                            ) : (
-                              <span
-                                className="inline-flex items-center px-1.5 py-0.5 rounded-xs text-[10px] font-medium border border-dashed border-[var(--color-border)] text-[var(--color-secondary)]/60"
-                                title="Non Tax (NO)"
-                              >
-                                NO
-                              </span>
-                            )}
-                          </td>
-                        </>
-                      )}
-
-                      {/* 21, 22. M3 Pl, M3/Vfc */}
-                      {showPhysical && (
-                        <>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                            {r.isPlEmpty ? (
-                              <span
-                                className="inline-block px-1 py-0.5 rounded-xs font-semibold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
-                                title="Qty PL = 0"
-                              >
-                                {formatDecimal(r.m3PL, 4)}
-                              </span>
-                            ) : (
-                              <span className="text-[var(--color-secondary)]">
-                                {r.m3PL > 0 ? formatDecimal(r.m3PL, 4) : '—'}
-                              </span>
-                            )}
-                          </td>
-                          <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                            {r.isStatusNonStandard ? (
-                              <span
-                                className="inline-block px-1 py-0.5 rounded-xs font-semibold bg-purple-500/15 text-purple-600 dark:text-purple-300 border border-purple-500/30"
-                                title={`Status transaksi: ${r.status}`}
-                              >
-                                {formatDecimal(m3Current, volDecimals)}
-                              </span>
-                            ) : (
-                              <span className="font-semibold text-[var(--color-primary)]">
-                                {formatDecimal(m3Current, volDecimals)}
-                              </span>
-                            )}
-                          </td>
-                        </>
-                      )}
-
-                      {/* 23. M3 K / Vfc K */}
-                      {showComplaint && (
-                        <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                          {m3Komplain > 0 ? (
-                            <span className="font-semibold text-amber-500">{formatDecimal(m3Komplain, volDecimals)}</span>
-                          ) : (
-                            <span className="text-[var(--color-secondary)]">—</span>
-                          )}
-                        </td>
-                      )}
-
-                      {/* 24. M3 Bill / Vfc Bill */}
-                      {showPhysical && (
-                        <td className="px-2 py-1.5 text-right font-mono tabular-nums">
-                          {r.isUnderbilledM3 ? (
-                            <span
-                              className="inline-block px-1 py-0.5 rounded-xs font-bold bg-rose-500/15 text-rose-600 dark:text-rose-400 border border-rose-500/30"
-                              title="Peringatan: M³ Gudang > M³ Bill"
-                            >
-                              {formatDecimal(m3Billing, volDecimals)}
-                            </span>
-                          ) : (
-                            <span className="font-bold text-[var(--color-primary)]">
-                              {formatDecimal(m3Billing, volDecimals)}
-                            </span>
-                          )}
-                        </td>
-                      )}
-                    </tr>
-                  )
-                })
+                    </td>
+                  )}
+                </tr>
+              )
+            })
           )}
         </tbody>
 
         {/* Sticky Footer - Exact 24 columns alignment with sums matching FoxPro Grid */}
         {rows.length > 0 && (
-          <tfoot className="sticky bottom-0 z-20 bg-[var(--color-surface)] border-t-2 border-[var(--color-border)] font-bold text-[11px] shadow-xs">
+          <tfoot className="sticky bottom-0 z-30 bg-[var(--color-surface)] border-t-2 border-[var(--color-border)] font-bold text-[11px] shadow-lg">
             <tr className="divide-x divide-[var(--color-border)]/50">
-              {/* 1. TOTAL label */}
-              <td className="py-2 px-2 text-center uppercase tracking-wider text-[var(--color-secondary)] font-bold font-mono">
+              {/* 1. TOTAL label - Sticky Left 0 */}
+              <td className="sticky left-0 z-40 bg-[var(--color-surface)] py-2 px-2 text-center uppercase tracking-wider text-[var(--color-secondary)] font-bold font-mono border-r border-[var(--color-border)]">
                 TOT
               </td>
-              {/* 2. BC */}
-              <td className="py-2 px-1 text-center text-[var(--color-secondary)] text-[10px]">
+              {/* 2. BC - Sticky Left 10 (40px) */}
+              <td className="sticky left-10 z-40 bg-[var(--color-surface)] py-2 px-1 text-center text-[var(--color-secondary)] text-[10px] border-r border-[var(--color-border)]">
                 {uniqueBranchCount} Cab
               </td>
-              {/* 3. Invoice count */}
-              <td className="py-2 px-2 text-left font-mono text-[var(--color-primary)] whitespace-nowrap">
-                {rows.length} Inv
+              {/* 3. Total Rows - Sticky Left 88px */}
+              <td className="sticky left-[88px] z-40 bg-[var(--color-surface)] py-2 px-2 font-mono tabular-nums text-[var(--color-primary)] whitespace-nowrap border-r border-[var(--color-border)] shadow-[4px_0_10px_-2px_rgba(0,0,0,0.25)]">
+                {rows.length} Data
               </td>
               {/* 4. Tgl */}
-              <td className="py-2 px-2 text-[var(--color-secondary)]">—</td>
+              <td className="py-2 px-2 text-[var(--color-secondary)] font-mono text-[10px]">—</td>
               {/* 5. Marking */}
-              <td className="py-2 px-2 text-[var(--color-secondary)]">—</td>
+              <td className="py-2 px-2 text-[var(--color-secondary)] font-mono text-[10px]">—</td>
               {/* 6. Comodity */}
-              <td className="py-2 px-2 text-[var(--color-secondary)]">—</td>
+              <td className="py-2 px-2 text-[var(--color-secondary)] font-mono text-[10px]">—</td>
               {/* 7. Ket */}
-              <td className="py-2 px-2 text-[var(--color-secondary)]">—</td>
+              <td className="py-2 px-2 text-[var(--color-secondary)] font-mono text-[10px]">—</td>
 
               {/* 8, 9, 10. Curr, Value, Fc */}
               {showFinance && (
@@ -557,7 +578,7 @@ export function CustMarkingDataTable({
               {/* 11, 12. Berat, Berat SJ */}
               {showPhysical && (
                 <>
-                  <td className="py-2 px-2 text-right font-mono tabular-nums text-[var(--color-primary)]">
+                  <td className="py-2 px-2 text-right font-mono tabular-nums text-[var(--color-primary)] font-bold">
                     {formatDecimal(rows.reduce((sum, r) => sum + (r.weightGdg || 0), 0), 2)}
                   </td>
                   <td className="py-2 px-2 text-right font-mono tabular-nums text-[var(--color-secondary)]">
@@ -568,14 +589,14 @@ export function CustMarkingDataTable({
 
               {/* 13. Berat K */}
               {showComplaint && (
-                <td className="py-2 px-2 text-right font-mono tabular-nums font-bold text-amber-500">
+                <td className="py-2 px-2 text-right font-mono tabular-nums text-amber-500 font-bold">
                   {formatDecimal(rows.reduce((sum, r) => sum + (r.weightK || 0), 0), 2)}
                 </td>
               )}
 
               {/* 14. KG Bill */}
               {showFinance && (
-                <td className="py-2 px-2 text-right font-mono tabular-nums text-[var(--color-primary)]">
+                <td className="py-2 px-2 text-right font-mono tabular-nums font-bold text-[var(--color-primary)]">
                   {formatDecimal(rows.reduce((sum, r) => sum + (r.kgBill || 0), 0), 2)}
                 </td>
               )}
@@ -586,10 +607,10 @@ export function CustMarkingDataTable({
                   <td className="py-2 px-2 text-right font-mono tabular-nums text-[var(--color-secondary)]">
                     {formatNumber(rows.reduce((sum, r) => sum + (r.qtySJ || 0), 0))}
                   </td>
-                  <td className="py-2 px-2 text-right font-mono tabular-nums text-[var(--color-primary)]">
+                  <td className="py-2 px-2 text-right font-mono tabular-nums font-bold text-[var(--color-primary)]">
                     {formatNumber(rows.reduce((sum, r) => sum + (r.qtyGdg || 0), 0))}
                   </td>
-                  <td className="py-2 px-2 text-right font-mono tabular-nums text-[var(--color-primary)]">
+                  <td className="py-2 px-2 text-right font-mono tabular-nums text-[var(--color-secondary)]">
                     {formatNumber(rows.reduce((sum, r) => sum + (r.qtyPL || 0), 0))}
                   </td>
                 </>

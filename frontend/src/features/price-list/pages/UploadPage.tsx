@@ -48,6 +48,14 @@ export function UploadPage() {
       setError('Format file harus .xlsx atau .xls')
       return
     }
+    if (f.size > 50 * 1024 * 1024) {
+      setError('Ukuran file melebihi batas maksimum 50MB')
+      return
+    }
+    if (f.size === 0) {
+      setError('File kosong (0 bytes), silakan pilih file Excel yang valid')
+      return
+    }
     setFile(f)
     setResult(null)
     setError(null)

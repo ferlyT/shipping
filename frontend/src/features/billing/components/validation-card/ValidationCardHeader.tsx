@@ -9,6 +9,7 @@ interface ValidationCardHeaderProps {
   listCode: string
   badgeVariant: BadgeVariant
   badgeText: string
+  badgeTitle?: string
   StatusIcon: React.ElementType
   refetch: () => void
   isFetching: boolean
@@ -20,6 +21,7 @@ export const ValidationCardHeader: React.FC<ValidationCardHeaderProps> = ({
   listCode,
   badgeVariant,
   badgeText,
+  badgeTitle,
   StatusIcon,
   refetch,
   isFetching,
@@ -47,7 +49,11 @@ export const ValidationCardHeader: React.FC<ValidationCardHeaderProps> = ({
       </div>
 
       <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-        <Badge variant={badgeVariant} className="flex items-center gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 font-semibold">
+        <Badge
+          variant={badgeVariant}
+          title={badgeTitle || badgeText}
+          className="flex items-center gap-1 text-[10px] sm:text-[11px] px-1.5 sm:px-2 py-0.5 font-semibold"
+        >
           <StatusIcon className="w-3.5 h-3.5" />
           <span className="truncate max-w-[120px] sm:max-w-none">{badgeText}</span>
         </Badge>

@@ -1,5 +1,6 @@
 import { type LucideIcon, Plane, Ship, TrendingUp, TrendingDown } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Skeleton } from '@/components/ui/Skeleton'
 
 export interface StatCardProps {
   icon: LucideIcon
@@ -81,7 +82,7 @@ export function StatCard({
       {/* Content & Action Row */}
       <div className="mt-3 flex items-end justify-between relative z-10 gap-2">
         {isLoading ? (
-          <div className="h-8 w-16 bg-[var(--color-border)] animate-pulse rounded" />
+          <Skeleton className="h-8 w-16" />
         ) : (
           <div className="flex flex-col gap-1.5">
             <div className="flex items-baseline gap-1">
@@ -269,7 +270,7 @@ export function StatCardGroup({
 
                   <div className="mt-1 sm:mt-1.5">
                     {item.isLoading ? (
-                      <div className="h-6 sm:h-7 w-12 sm:w-14 bg-[var(--color-border)] animate-pulse rounded" />
+                      <Skeleton className="h-6 sm:h-7 w-12 sm:w-14" />
                     ) : (
                       <div className="flex items-baseline gap-1.5 flex-wrap">
                         <h3 className={cn(

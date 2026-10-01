@@ -11,7 +11,8 @@ interface EditEffectiveDateModalProps {
   uploadId: number
   fileName?: string
   currentEffectiveDate: string
-  onSave: (newEffectiveDate: string) => Promise<void>
+  currentEndDate?: string | null
+  onSave: (newEffectiveDate: string, newEndDate?: string | null) => Promise<void>
 }
 
 export function EditEffectiveDateModal({
@@ -20,10 +21,13 @@ export function EditEffectiveDateModal({
   uploadId,
   fileName,
   currentEffectiveDate,
+  currentEndDate,
   onSave,
 }: EditEffectiveDateModalProps) {
   useModalEscape(isOpen, onClose)
   const [effectiveDate, setEffectiveDate] = useState('')
+  const [hasEndDate, setHasEndDate] = useState(false)
+  const [endDate, setEndDate] = useState('')
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [savedSuccess, setSavedSuccess] = useState(false)
@@ -35,10 +39,19 @@ export function EditEffectiveDateModal({
         ? new Date(currentEffectiveDate).toISOString().slice(0, 10)
         : new Date().toISOString().slice(0, 10)
       setEffectiveDate(dateStr)
+
+      if (currentEndDate) {
+        setHasEndDate(true)
+        setEndDate(new Date(currentEndDate).toISOString().slice(0, 10))
+      } else {
+        setHasEndDate(false)
+        setEndDate('')
+      }
+
       setError(null)
       setSavedSuccess(false)
     }
-  }, [isOpen, currentEffectiveDate])
+  }, [isOpen, currentEffectiveDate, currentEndDate])
 
   if (!isOpen || typeof document === 'undefined') return null
 
@@ -49,16 +62,23 @@ export function EditEffectiveDateModal({
       return
     }
 
+    if (hasEndDate && endDate) {
+      if (new Date(endDate) < new Date(effectiveDate)) {
+        setError('Tanggal berakhir tidak boleh lebih awal dari tanggal mulai berlaku.')
+        return
+      }
+    }
+
     try {
       setIsSaving(true)
       setError(null)
-      await onSave(effectiveDate)
+      await onSave(effectiveDate, hasEndDate && endDate ? endDate : null)
       setSavedSuccess(true)
       setTimeout(() => {
         onClose()
       }, 700)
     } catch (err: any) {
-      setError(err?.response?.data?.message || err?.message || 'Gagal memperbarui tanggal efektif.')
+      setError(err?.response?.data?.message || err?.message || 'Gagal memperbarui masa berlaku.')
     } finally {
       setIsSaving(false)
     }
@@ -108,7 +128,7 @@ export function EditEffectiveDateModal({
 
           <div>
             <label className="block text-xs font-semibold text-[var(--color-primary)] mb-1.5">
-              Tanggal Efektif Berlaku
+              Mulai Berlaku (Effective Date)
             </label>
             <div className="relative">
               <input
@@ -120,8 +140,45 @@ export function EditEffectiveDateModal({
               />
             </div>
             <p className="mt-1.5 text-[11px] text-[var(--color-secondary)]">
-              Tanggal saat ini: <strong className="text-[var(--color-primary)]">{formatDate(currentEffectiveDate)}</strong>
+              Mulai saat ini: <strong className="text-[var(--color-primary)]">{formatDate(currentEffectiveDate)}</strong>
             </p>
+          </div>
+
+          <div className="p-3 bg-[var(--color-neutral)]/40 rounded-xl border border-[var(--color-border)] space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-semibold text-[var(--color-primary)]">
+                Berlaku Sampai (End Date)
+              </label>
+              <label className="flex items-center gap-1.5 text-[11px] text-[var(--color-secondary)] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={!hasEndDate}
+                  onChange={(e) => {
+                    const checked = e.target.checked
+                    setHasEndDate(!checked)
+                    if (checked) setEndDate('')
+                  }}
+                  className="rounded border-[var(--color-border)] text-blue-600 focus:ring-0 cursor-pointer"
+                />
+                <span>Tanpa batas waktu (Selamanya)</span>
+              </label>
+            </div>
+
+            {hasEndDate && (
+              <div className="pt-1">
+                <input
+                  type="date"
+                  value={endDate}
+                  min={effectiveDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full px-3.5 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-xl text-xs text-[var(--color-primary)] focus:outline-hidden focus:border-[var(--color-tertiary)] transition-colors cursor-pointer"
+                  required={hasEndDate}
+                />
+                <p className="mt-1 text-[10.5px] text-[var(--color-secondary)]">
+                  Harga otomatis kedaluwarsa setelah tanggal ini dan tidak lagi digunakan pada validasi bill.
+                </p>
+              </div>
+            )}
           </div>
 
           {error && (

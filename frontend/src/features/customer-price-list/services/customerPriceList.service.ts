@@ -54,8 +54,8 @@ export const customerPriceListApi = {
     apiClient.get<{ data: CustomerPriceListDiff }>(`/customer-price-list/uploads/${id}/diff`),
 
   // PATCH /api/customer-price-list/uploads/:id/effective-date
-  updateEffectiveDate: (id: number, effectiveDate: string) =>
-    apiClient.patch<{ data: CustomerUploadHistory }>(`/customer-price-list/uploads/${id}/effective-date`, { effectiveDate }),
+  updateEffectiveDate: (id: number, effectiveDate?: string, endDate?: string | null) =>
+    apiClient.patch<{ data: CustomerUploadHistory }>(`/customer-price-list/uploads/${id}/effective-date`, { effectiveDate, endDate }),
 
   // DELETE /api/customer-price-list/uploads/:id
   deleteUpload: (id: number) =>
@@ -114,6 +114,10 @@ export const customerPriceListApi = {
   // PUT /api/customer-price-list/items/:id/deactivate
   deactivateSpecialPrice: (id: number) =>
     apiClient.put<{ data: import('../types').CustomerSpecialPriceItem }>(`/customer-price-list/items/${id}/deactivate`),
+
+  // PUT /api/customer-price-list/items/:id/end-date
+  setSpecialPriceEndDate: (id: number, endDate: string | null) =>
+    apiClient.put<{ data: import('../types').CustomerSpecialPriceItem }>(`/customer-price-list/items/${id}/end-date`, { endDate }),
 
   // DELETE /api/customer-price-list/items/:id
   deleteSpecialPrice: (id: number) =>

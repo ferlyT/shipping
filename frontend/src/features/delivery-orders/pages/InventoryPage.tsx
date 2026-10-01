@@ -272,8 +272,8 @@ export default function InventoryPage() {
           </div>
         </div>
 
-        {/* ── TABEL DATA INVENTORI GUDANG ── */}
-        <div className="overflow-x-auto">
+        {/* ── TABEL DATA INVENTORI GUDANG (DESKTOP) ── */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left text-xs">
             <thead className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)] bg-[var(--color-neutral)]/60 border-b border-[var(--color-border)] font-[var(--font-label)]">
               <tr>
@@ -531,6 +531,187 @@ export default function InventoryPage() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* ── KARTU TOUCH RESPONSIF INVENTORI GUDANG (MOBILE) ── */}
+        <div className="block md:hidden divide-y divide-[var(--color-border)] bg-[var(--color-surface)]">
+          {isLoadingInventory ? (
+            Array.from({ length: 4 }).map((_, idx) => (
+              <div key={idx} className="p-4 space-y-3">
+                <div className="flex justify-between items-center">
+                  <div className="h-4 w-28 rounded-md skeleton-shimmer" />
+                  <div className="h-5 w-20 rounded-full skeleton-shimmer" />
+                </div>
+                <div className="h-4 w-40 rounded skeleton-shimmer" />
+                <div className="h-16 w-full rounded-lg skeleton-shimmer" />
+                <div className="h-8 w-full rounded-lg skeleton-shimmer" />
+              </div>
+            ))
+          ) : inventoryItems.length === 0 ? (
+            <div className="py-12 px-4 text-center text-xs text-[var(--color-secondary)]">
+              <div className="flex flex-col items-center justify-center gap-2">
+                <Warehouse size={32} className="text-[var(--color-secondary)]/40" />
+                <p className="font-semibold text-sm text-[var(--color-primary)]">
+                  Tidak Ada Data Kargo di Gudang
+                </p>
+                <p className="text-[11px] max-w-sm">
+                  {debouncedSearch
+                    ? `Tidak ditemukan inventori dengan kata kunci "${debouncedSearch}". Coba ubah kata kunci pencarian.`
+                    : 'Seluruh kargo untuk filter ini telah terkirim atau belum ada manifest kargo masuk.'}
+                </p>
+              </div>
+            </div>
+          ) : (
+            inventoryItems.map((row, idx) => {
+              const sisa = Number(row.sisa || 0)
+              const total = Number(row.totalQty || 0)
+              const terkirim = Number(row.totalTerkirim || 0)
+              const isFullInStock = sisa > 0 && terkirim === 0
+              const isPartial = sisa > 0 && terkirim > 0
+              const hasSJ = terkirim > 0 || row.isSent === 1
+
+              return (
+                <div key={`${row.listCode}-${row.markingCode}-${idx}`} className="p-4 space-y-3 bg-[var(--color-surface)]">
+                  {/* Header: Marking & Status Gudang */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-bold text-[var(--color-primary)] font-mono text-sm">
+                          {row.markingCode?.trim() || '—'}
+                        </span>
+                        {row.branchCode && (
+                          <span className="px-1.5 py-0.2 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] font-semibold text-[10px] uppercase tracking-wider text-[var(--color-secondary)]">
+                            {row.branchCode}
+                          </span>
+                        )}
+                      </div>
+                      {row.branchName && (
+                        <p className="text-[11px] text-[var(--color-secondary)] mt-0.5">{row.branchName.trim()}</p>
+                      )}
+                    </div>
+
+                    {row.gudangStatus === 1 ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 shrink-0">
+                        <CheckCircle2 size={11} className="text-emerald-500" />
+                        <span>{t('delivery.inventory.statusGudangIn') || 'Di Gudang'}</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-semibold bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400 shrink-0">
+                        <Clock size={11} className="text-amber-500" />
+                        <span>{t('delivery.inventory.statusGudangPending') || 'Belum Konfirm'}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Customer & Komoditas */}
+                  <div className="space-y-1 text-xs">
+                    <div className="font-semibold text-[var(--color-primary)]">
+                      {displayCustName(row.customerName)}
+                    </div>
+                    <div className="flex items-center gap-2 text-[11px] text-[var(--color-secondary)] flex-wrap">
+                      {row.comodity && <span>{row.comodity.trim()}</span>}
+                      {row.typeComodityName && (
+                        <span className="px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-[var(--color-neutral)] border border-[var(--color-border)] uppercase">
+                          {row.typeComodityName.trim()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Resi & List Info + Muatan */}
+                  <div className="grid grid-cols-2 gap-2 p-2.5 rounded-lg bg-[var(--color-neutral)]/40 border border-[var(--color-border)] text-xs">
+                    <div>
+                      <span className="text-[10px] text-[var(--color-secondary)] block uppercase tracking-wider font-semibold">Resi / List</span>
+                      <span className="font-mono text-blue-600 dark:text-blue-400 font-bold block truncate">
+                        {row.resiNo?.trim() || '—'}
+                      </span>
+                      <span className="text-[10px] text-[var(--color-secondary)] font-mono">
+                        List: {row.listCode}
+                      </span>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] text-[var(--color-secondary)] block uppercase tracking-wider font-semibold">Berat & Volume</span>
+                      <span className="font-mono font-bold text-[var(--color-primary)] block">
+                        {formatWeight(row.totalWeight ?? 0)}
+                      </span>
+                      <span className="text-[10px] text-[var(--color-secondary)] font-mono">
+                        {formatDecimal(row.m3 ?? 0, 4)} m³
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Stok Gudang Progress Meter */}
+                  <div className="p-2.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] space-y-1.5">
+                    <div className="flex justify-between items-center text-xs">
+                      <span className="text-[10px] text-[var(--color-secondary)] font-semibold uppercase tracking-wider">Stok Gudang</span>
+                      <div className="flex items-center gap-1 font-mono font-bold">
+                        <span className={cn(sisa > 0 ? "text-amber-600 dark:text-amber-400 font-extrabold" : "text-[var(--color-secondary)]")}>
+                          {sisa}
+                        </span>
+                        <span className="text-[var(--color-secondary)] font-normal text-[11px]">
+                          / {total} {row.satuan?.trim() || 'Koli'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="w-full bg-[var(--color-neutral)] h-2 rounded-full overflow-hidden border border-[var(--color-border)]/60">
+                      <div
+                        className={cn(
+                          "h-full transition-all rounded-full",
+                          isFullInStock ? "bg-amber-500" : isPartial ? "bg-purple-500" : "bg-emerald-500"
+                        )}
+                        style={{ width: `${Math.min(100, total > 0 ? (sisa / total) * 100 : 0)}%` }}
+                      />
+                    </div>
+
+                    <div className="text-[10px] text-[var(--color-secondary)] flex justify-between">
+                      <span>
+                        {isFullInStock
+                          ? '100% di Gudang'
+                          : isPartial
+                            ? `Sisa ${sisa} ${row.satuan?.trim() || 'Koli'} (${terkirim} Kirim)`
+                            : `0 ${row.satuan?.trim() || 'Koli'} (Lengkap)`}
+                      </span>
+                      <span>
+                        {isFullInStock ? (
+                          <span className="text-amber-600 dark:text-amber-400 font-medium">Belum ada SJ</span>
+                        ) : isPartial ? (
+                          <span className="text-purple-600 dark:text-purple-400 font-medium">Kirim Sebagian</span>
+                        ) : (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-medium">Terkirim Semua</span>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex items-center gap-2 pt-1">
+                    {sisa > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenCreateModal(row)}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg bg-[var(--color-primary)] text-[var(--color-surface)] dark:text-[var(--color-primary)] dark:bg-[var(--color-surface)] dark:border dark:border-[var(--color-border)] hover:bg-[var(--color-tertiary)] dark:hover:border-[var(--color-tertiary)] transition-all cursor-pointer shadow-2xs"
+                      >
+                        <Plus size={13} />
+                        <span>{t('delivery.inventory.createSJ')}</span>
+                      </button>
+                    )}
+
+                    {hasSJ && (
+                      <Link
+                        to={`${ROUTES.DELIVERY_ORDERS_LIST}?listCode=${encodeURIComponent(row.listCode)}`}
+                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-primary)] hover:border-[var(--color-tertiary)] hover:text-[var(--color-tertiary)] transition-all shadow-2xs"
+                      >
+                        <ExternalLink size={13} className="text-[var(--color-tertiary)]" />
+                        <span>{t('delivery.inventory.openSJ')}</span>
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              )
+            })
+          )}
         </div>
 
         {/* Footer Panel: Pagination */}
