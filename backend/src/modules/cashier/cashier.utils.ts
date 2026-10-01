@@ -36,7 +36,7 @@ export async function generateMonthlyCashierId(
       const parts = rawId.split('-')
       if (parts.length >= 4) {
         // Format: RR-XXXXXX-MM-YYYY -> parts[1] adalah 6 digit sequence
-        const currentSeq = parseInt(parts[1], 10)
+        const currentSeq = parseInt(parts[1] || '0', 10)
         if (!isNaN(currentSeq) && currentSeq >= 1) {
           nextSeq = currentSeq + 1
         }

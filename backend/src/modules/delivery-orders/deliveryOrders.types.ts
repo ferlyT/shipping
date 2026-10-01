@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 /**
  * Delivery Orders Module Types
  */
@@ -109,15 +111,17 @@ export interface CustomerDestination {
   fdAktif: number
 }
 
-export interface CreateCustomerDestinationDto {
-  fdCustCode: string
-  fdContact?: string
-  fdHP?: string
-  fdTelp?: string
-  fdEmail?: string
-  fdAddr: string
-  fdCity?: string
-}
+export const CreateCustomerDestinationSchema = z.object({
+  fdCustCode: z.string().min(1, 'Kode customer wajib diisi'),
+  fdContact: z.string().optional(),
+  fdHP: z.string().optional(),
+  fdTelp: z.string().optional(),
+  fdEmail: z.string().optional(),
+  fdAddr: z.string().min(1, 'Alamat pengiriman wajib diisi'),
+  fdCity: z.string().optional(),
+})
+
+export type CreateCustomerDestinationDto = z.infer<typeof CreateCustomerDestinationSchema>
 
 export interface OrderDeliveryItem {
   fdTglKirim: string | null
@@ -425,20 +429,22 @@ export interface DeliveryMonitoringResponse {
   kpis: DeliveryMonitoringKPIs
 }
 
-export interface ConfirmDeliveryDto {
-  sjNos: string[]
-  fdSndDate: string // YYYY-MM-DD
-  fdCarID: string
-  fdSupir: string
-  fdTelpSupir?: string | null
-  expedition?: {
-    fdExpID: string
-    fdResiExp: string
-    fdCurrExp?: string
-    fdTotalExp?: number
-    fdPaid?: number
-  } | null
-}
+export const ConfirmDeliverySchema = z.object({
+  sjNos: z.array(z.string().min(1)).min(1, 'Pilih setidaknya 1 Surat Jalan untuk dikonfirmasi'),
+  fdSndDate: z.string().min(1, 'Tanggal Kirim / Konfirmasi wajib diisi'),
+  fdCarID: z.string().min(1, 'Plat Mobil wajib dipilih'),
+  fdSupir: z.string().min(1, 'Nama Supir wajib diisi'),
+  fdTelpSupir: z.string().nullable().optional(),
+  expedition: z.object({
+    fdExpID: z.string().min(1),
+    fdResiExp: z.string(),
+    fdCurrExp: z.string().optional(),
+    fdTotalExp: z.number().optional(),
+    fdPaid: z.number().optional(),
+  }).nullable().optional(),
+})
+
+export type ConfirmDeliveryDto = z.infer<typeof ConfirmDeliverySchema>
 
 export interface DeliveryConfirmBatchItem {
   batchDate: string

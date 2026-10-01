@@ -21,6 +21,8 @@ export const TIER_CONFIG: Record<CustomerTierKey, TierConfigItem> = {
   none:     { label: 'UNRANKED', min: 0,             max: 0,             nextTier: 'bronze', nextMin: 1 },
 }
 
+import { z } from 'zod'
+
 export interface CustomerQuery {
   page?: string
   limit?: string
@@ -37,6 +39,26 @@ export interface CustomerQuery {
   year?: string
   [key: string]: string | undefined
 }
+
+export const CustomerQuerySchema = z.object({
+  page: z.string().optional(),
+  limit: z.string().optional(),
+  search: z.string().optional(),
+  sortBy: z.string().optional(),
+  sortDir: z.enum(['asc', 'desc']).optional(),
+  status: z.string().optional(),
+  sales: z.string().optional(),
+  category: z.string().optional(),
+  group: z.string().optional(),
+  tier: z.string().optional(),
+  blockStatus: z.string().optional(),
+  broker: z.string().optional(),
+  year: z.string().optional(),
+}).catchall(z.string().optional())
+
+export const CustomerSuggestionsQuerySchema = z.object({
+  q: z.string().optional(),
+}).catchall(z.string().optional())
 
 export interface CustomerFinancialStat {
   year: number

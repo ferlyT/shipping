@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { authMiddleware } from '../../middleware/auth'
 import { successResponse, errorResponse } from '../../utils/response'
+import { validateBody } from '../../middleware/requestValidator'
 import {
   getInspectionReports,
   getInspectionReportById,
@@ -15,6 +16,11 @@ import {
   getBapPhotos,
   deleteBapPhoto,
 } from './inspectionPhotos.service'
+import {
+  CreateInspectionReportSchema,
+  UpdateInspectionReportSchema,
+  UploadBapPhotoSchema,
+} from './inspectionReports.types'
 
 export const inspectionReportsRoutes = new Hono()
 
@@ -75,12 +81,8 @@ inspectionReportsRoutes.get('/:id', async (c) => {
 })
 
 // POST / - Create report
-inspectionReportsRoutes.post('/', async (c) => {
-  const body = await c.req.json().catch(() => null)
-  if (!body) {
-    return errorResponse(c, 'Payload tidak valid', 400)
-  }
-
+inspectionReportsRoutes.post('/', validateBody(CreateInspectionReportSchema), async (c) => {
+  const body = c.req.valid('json')
   const user = c.get('user')
   const username = user?.username || user?.fullName || 'system'
 
@@ -93,16 +95,13 @@ inspectionReportsRoutes.post('/', async (c) => {
 })
 
 // PUT /:id - Update report
-inspectionReportsRoutes.put('/:id', async (c) => {
+inspectionReportsRoutes.put('/:id', validateBody(UpdateInspectionReportSchema), async (c) => {
   const id = Number(c.req.param('id'))
   if (isNaN(id)) {
     return errorResponse(c, 'ID tidak valid', 400)
   }
 
-  const body = await c.req.json().catch(() => null)
-  if (!body) {
-    return errorResponse(c, 'Payload tidak valid', 400)
-  }
+  const body = c.req.valid('json')
 
   try {
     const updated = await updateInspectionReport(id, body)
@@ -128,17 +127,13 @@ inspectionReportsRoutes.delete('/:id', async (c) => {
 })
 
 // POST /:id/photos - Upload photo
-inspectionReportsRoutes.post('/:id/photos', async (c) => {
+inspectionReportsRoutes.post('/:id/photos', validateBody(UploadBapPhotoSchema), async (c) => {
   const id = Number(c.req.param('id'))
   if (isNaN(id)) {
     return errorResponse(c, 'ID tidak valid', 400)
   }
 
-  const body = await c.req.json().catch(() => null)
-  if (!body || !body.photoBase64) {
-    return errorResponse(c, 'Data foto (photoBase64) wajib disertakan', 400)
-  }
-
+  const body = c.req.valid('json')
   const user = c.get('user')
   const username = user?.username || user?.fullName || 'system'
 

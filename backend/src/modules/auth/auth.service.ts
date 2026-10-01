@@ -43,7 +43,7 @@ export async function loginUser(input: LoginInput) {
   const fdEmpName = user.employee?.fdEmpName ? user.employee.fdEmpName.trim() : null
 
   const token = jwt.sign(
-    { userId: user.id, username: user.username, role: user.role, fdEmpCode, fdEmpName, permissions },
+    { userId: user.id, username: user.username, fullName: user.fullName, role: user.role, fdEmpCode, fdEmpName, permissions },
     ENV.JWT_SECRET,
     { expiresIn: ENV.JWT_EXPIRES_IN as any }
   )

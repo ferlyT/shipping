@@ -28,7 +28,9 @@ import {
   AddCashierRcvSchema,
   BatchAllocateInvoiceSchema,
   AttachTempReceiptSchema,
+  AllocateOverpaymentDepositSchema,
 } from './cashier.types'
+import { validateBody } from '../../middleware/requestValidator'
 
 const cashierRoutes = new Hono()
 
@@ -133,17 +135,14 @@ cashierRoutes.get('/:id', async (c) => {
 
 // ─── CREATE TRANSAKSI ─────────────────────────────────────────────
 
-// POST /api/cashier
-cashierRoutes.post('/', async (c) => {
-  try {
-    const body = await c.req.json()
-    const parsed = CreateCashierHeaderSchema.safeParse(body)
-    if (!parsed.success) {
-      return errorResponse(c, parsed.error.issues[0]?.message || 'Data tidak valid', 400)
-    }
+// ─── CREATE TRANSAKSI ─────────────────────────────────────────────
 
+// POST /api/cashier
+cashierRoutes.post('/', validateBody(CreateCashierHeaderSchema), async (c) => {
+  try {
+    const data = c.req.valid('json')
     const user = c.get('user')
-    const result = await createCashier(parsed.data, {
+    const result = await createCashier(data, {
       username: user.username,
       empCode: user.fdEmpCode || undefined,
     })
@@ -154,16 +153,11 @@ cashierRoutes.post('/', async (c) => {
 })
 
 // POST /api/cashier/temp
-cashierRoutes.post('/temp', async (c) => {
+cashierRoutes.post('/temp', validateBody(CreateTempCashierHeaderSchema), async (c) => {
   try {
-    const body = await c.req.json()
-    const parsed = CreateTempCashierHeaderSchema.safeParse(body)
-    if (!parsed.success) {
-      return errorResponse(c, parsed.error.issues[0]?.message || 'Data tidak valid', 400)
-    }
-
+    const data = c.req.valid('json')
     const user = c.get('user')
-    const result = await createTempCashier(parsed.data, {
+    const result = await createTempCashier(data, {
       username: user.username,
       empCode: user.fdEmpCode || undefined,
     })
@@ -174,20 +168,15 @@ cashierRoutes.post('/temp', async (c) => {
 })
 
 // POST /api/cashier/attach
-cashierRoutes.post('/attach', async (c) => {
+cashierRoutes.post('/attach', validateBody(AttachTempReceiptSchema), async (c) => {
   try {
-    const body = await c.req.json()
-    const parsed = AttachTempReceiptSchema.safeParse(body)
-    if (!parsed.success) {
-      return errorResponse(c, parsed.error.issues[0]?.message || 'Data tidak valid', 400)
-    }
-
+    const data = c.req.valid('json')
     const user = c.get('user')
     const result = await attachTempReceipt(
-      parsed.data.tempCashierId,
-      parsed.data.officialDate,
+      data.tempCashierId,
+      data.officialDate,
       { username: user.username, empCode: user.fdEmpCode || undefined },
-      parsed.data.descr
+      data.descr
     )
     return successResponse(c, result)
   } catch (err: any) {
@@ -198,16 +187,11 @@ cashierRoutes.post('/attach', async (c) => {
 // ─── UPDATE & DELETE HEADER ───────────────────────────────────────
 
 // PUT /api/cashier/:id
-cashierRoutes.put('/:id', async (c) => {
+cashierRoutes.put('/:id', validateBody(UpdateCashierHeaderSchema), async (c) => {
   try {
     const id = c.req.param('id')
-    const body = await c.req.json()
-    const parsed = UpdateCashierHeaderSchema.safeParse(body)
-    if (!parsed.success) {
-      return errorResponse(c, parsed.error.issues[0]?.message || 'Data tidak valid', 400)
-    }
-
-    const updated = await updateCashierHeader(id, parsed.data)
+    const data = c.req.valid('json')
+    const updated = await updateCashierHeader(id, data)
     return successResponse(c, updated)
   } catch (err: any) {
     return errorResponse(c, err.message || 'Gagal memperbarui header kasir', 400)
@@ -228,18 +212,13 @@ cashierRoutes.delete('/:id', async (c) => {
 // ─── SUB-ITEMS: RCV (UANG MASUK) ──────────────────────────────────
 
 // POST /api/cashier/:id/rcv
-cashierRoutes.post('/:id/rcv', async (c) => {
+cashierRoutes.post('/:id/rcv', validateBody(AddCashierRcvSchema), async (c) => {
   try {
     const id = c.req.param('id')
-    const body = await c.req.json()
-    const parsed = AddCashierRcvSchema.safeParse(body)
-    if (!parsed.success) {
-      return errorResponse(c, parsed.error.issues[0]?.message || 'Data tidak valid', 400)
-    }
-
+    const data = c.req.valid('json')
     const user = c.get('user' as any) as any
     const username = user?.username || 'SYSTEM'
-    const created = await addCashierRcv(id, parsed.data, username)
+    const created = await addCashierRcv(id, data, username)
     return successResponse(c, created, undefined, 201)
   } catch (err: any) {
     return errorResponse(c, err.message || 'Gagal menambahkan penerimaan uang', 400)
@@ -263,16 +242,11 @@ cashierRoutes.delete('/:id/rcv/:rcvId', async (c) => {
 // ─── SUB-ITEMS: DETAILS (ALOKASI INVOICE) ─────────────────────────
 
 // POST /api/cashier/:id/allocate
-cashierRoutes.post('/:id/allocate', async (c) => {
+cashierRoutes.post('/:id/allocate', validateBody(BatchAllocateInvoiceSchema), async (c) => {
   try {
     const id = c.req.param('id')
-    const body = await c.req.json()
-    const parsed = BatchAllocateInvoiceSchema.safeParse(body)
-    if (!parsed.success) {
-      return errorResponse(c, parsed.error.issues[0]?.message || 'Data tidak valid', 400)
-    }
-
-    const created = await batchAllocateInvoices(id, parsed.data)
+    const data = c.req.valid('json')
+    const created = await batchAllocateInvoices(id, data)
     return successResponse(c, created, undefined, 201)
   } catch (err: any) {
     return errorResponse(c, err.message || 'Gagal mengalokasikan faktur invoice', 400)
@@ -294,13 +268,13 @@ cashierRoutes.delete('/:id/details/:detailId', async (c) => {
 })
 
 // POST /api/cashier/:id/overpayment-deposit (Alihkan kelebihan bayar kasir ke saldo deposit)
-cashierRoutes.post('/:id/overpayment-deposit', async (c) => {
+cashierRoutes.post('/:id/overpayment-deposit', validateBody(AllocateOverpaymentDepositSchema), async (c) => {
   try {
     const id = c.req.param('id')
-    const body = await c.req.json().catch(() => ({}))
+    const { amount } = c.req.valid('json')
     const user = c.get('user' as any) as any
     const username = user?.username || 'SYSTEM'
-    const result = await allocateOverpaymentToDeposit(id, body.amount ? Number(body.amount) : undefined, username)
+    const result = await allocateOverpaymentToDeposit(id, amount, username)
     return successResponse(c, result, 'Kelebihan bayar kasir berhasil dialihkan ke saldo deposit pelanggan')
   } catch (err: any) {
     return errorResponse(c, err.message || 'Gagal mengalihkan kelebihan bayar ke deposit', 400)

@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 export interface CreateInspectionReportPayload {
   fdReportDate: string // ISO string
   fdListType?: number // 1 = Udara / Air, 2 = Laut / Sea
@@ -40,3 +42,32 @@ export interface LookupMarkingResult {
   fdTerima?: string
   fdListType?: number
 }
+
+export const CreateInspectionReportSchema = z.object({
+  fdReportDate: z.string().min(1, 'Tanggal laporan wajib diisi'),
+  fdListType: z.number().int().optional(),
+  fdListCode: z.string().optional(),
+  fdMarkingCode: z.string().optional(),
+  fdMarkingNo: z.string().optional(),
+  fdNamaCustomer: z.string().min(1, 'Nama customer wajib diisi'),
+  fdTerima: z.string().optional(),
+  fdKeterangan: z.string().optional(),
+  fdStatus: z.string().optional(),
+})
+
+export const UpdateInspectionReportSchema = z.object({
+  fdReportDate: z.string().optional(),
+  fdListType: z.number().int().optional(),
+  fdListCode: z.string().optional(),
+  fdMarkingCode: z.string().optional(),
+  fdMarkingNo: z.string().optional(),
+  fdNamaCustomer: z.string().optional(),
+  fdTerima: z.string().optional(),
+  fdKeterangan: z.string().optional(),
+  fdStatus: z.string().optional(),
+})
+
+export const UploadBapPhotoSchema = z.object({
+  photoBase64: z.string().min(1, 'Data foto (photoBase64) wajib disertakan'),
+  caption: z.string().optional(),
+})

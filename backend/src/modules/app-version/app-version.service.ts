@@ -2,6 +2,10 @@ import path from 'path'
 import fs from 'fs/promises'
 import { logger } from '../../config/logger'
 import type { AppVersionConfig, AppVersionResponse } from './app-version.types'
+import { formatFileSize } from './app-version.utils'
+
+export * from './app-version.types'
+export * from './app-version.utils'
 
 const DEFAULT_CONFIG: AppVersionConfig = {
   version: '1.0.1',
@@ -16,13 +20,6 @@ const DEFAULT_CONFIG: AppVersionConfig = {
     'Peningkatan stabilitas koneksi jaringan ERP',
   ],
   publishedAt: new Date().toISOString(),
-}
-
-function formatFileSize(bytes: number): string {
-  if (!bytes || bytes <= 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(1024))
-  return `${(bytes / Math.pow(1024, i)).toFixed(i > 1 ? 1 : 0)} ${units[i]}`
 }
 
 export class AppVersionService {

@@ -11,6 +11,12 @@ import {
   applyMappingsToNewUpload,
   getPriceListOptions,
 } from './commodity-mapping.service'
+import { validateBody } from '../../middleware/requestValidator'
+import {
+  CreateCommodityMappingSchema,
+  UpdateCommodityMappingSchema,
+  ApplyMappingsToUploadSchema,
+} from './commodity-mapping.types'
 
 const commodityMappingRoutes = new Hono()
 
@@ -67,12 +73,9 @@ commodityMappingRoutes.get('/:id', async (c) => {
 })
 
 // POST /api/commodity-mapping
-commodityMappingRoutes.post('/', async (c) => {
+commodityMappingRoutes.post('/', validateBody(CreateCommodityMappingSchema), async (c) => {
   try {
-    const body = await c.req.json()
-    if (!body.commodityName || !body.targetCommodity) {
-      return errorResponse(c, 'Nama komoditas dan tipe komoditi tujuan wajib diisi', 400)
-    }
+    const body = c.req.valid('json')
     const created = await createCommodityMapping(body)
     return successResponse(c, created, undefined)
   } catch (error: any) {
@@ -81,11 +84,11 @@ commodityMappingRoutes.post('/', async (c) => {
 })
 
 // PUT /api/commodity-mapping/:id
-commodityMappingRoutes.put('/:id', async (c) => {
+commodityMappingRoutes.put('/:id', validateBody(UpdateCommodityMappingSchema), async (c) => {
   try {
     const id = Number(c.req.param('id'))
     if (isNaN(id)) return errorResponse(c, 'ID tidak valid', 400)
-    const body = await c.req.json()
+    const body = c.req.valid('json')
     const updated = await updateCommodityMapping(id, body)
     return successResponse(c, updated, undefined)
   } catch (error: any) {
@@ -106,12 +109,9 @@ commodityMappingRoutes.delete('/:id', async (c) => {
 })
 
 // POST /api/commodity-mapping/apply-to-upload
-commodityMappingRoutes.post('/apply-to-upload', async (c) => {
+commodityMappingRoutes.post('/apply-to-upload', validateBody(ApplyMappingsToUploadSchema), async (c) => {
   try {
-    const body = await c.req.json()
-    if (!body.uploadId || !body.effectiveDate) {
-      return errorResponse(c, 'uploadId dan effectiveDate wajib diisi', 400)
-    }
+    const body = c.req.valid('json')
     const result = await applyMappingsToNewUpload(body)
     return successResponse(c, result)
   } catch (error: any) {

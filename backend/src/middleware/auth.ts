@@ -7,6 +7,7 @@ import { prisma } from '../config/database'
 export interface JwtPayload {
   userId: string
   username: string
+  fullName?: string | null
   role: string
   fdEmpCode?: string | null
   fdEmpName?: string | null

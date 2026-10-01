@@ -354,7 +354,7 @@ export async function lookupInspectionMarking(
       fdMarkingNo: s.fdMarkingNo?.trim() || '',
       fdCustName: s.fdCustName?.trim() || '',
       fdTerima: s.fdTerima?.trim() || undefined,
-      fdListType: s.fdListType,
+      fdListType: s.fdListType ?? undefined,
     }))
   } catch (error) {
     logger.error('Error looking up inspection marking:', error)

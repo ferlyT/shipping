@@ -290,25 +290,38 @@ export async function getType2ComparisonCheck(query: {
       ORDER BY bd.fdID
     `
 
-    // Ekstrak harga M3 dan KG dari detail billing
+    // Ekstrak harga M3 dan KG dari detail billing (abaikan item tambahan seperti Tax Return, Admin, dsb)
     let priceM3 = 0
     let priceKG = 0
     let totalBilledM3 = 0  // Total tagihan item M3
     let totalBilledKG = 0  // Total tagihan item KG
+    let totalBilledAuxiliary = 0 // Total tagihan item tambahan (tax return, admin, ekspedisi lokal, dsb)
     let totalBilled = 0    // Grand total tagihan
 
     for (const d of detailRows) {
       const lc = (d.fdListCode || '').trim().toUpperCase()
+      const itemName = (d.fdItemName || '').trim().toUpperCase()
       const price = Number(d.fdItemPrice || 0)
       const total = Number(d.fdTotal || 0)
       totalBilled += total
 
-      if (lc === 'M3') {
-        priceM3 = price
+      const isTaxReturn = itemName.includes('TAX RETURN') || itemName.includes('TAXRETURN')
+      const isAuxiliary = isTaxReturn || itemName.includes('ADMIN') || itemName.includes('SURCHARGE') || itemName.includes('PACKING') || itemName.includes('DISCOUNT')
+
+      if (isAuxiliary) {
+        totalBilledAuxiliary += total
+      } else if (lc === 'M3') {
+        if (priceM3 === 0 || price > 0) {
+          priceM3 = price
+        }
         totalBilledM3 += total
       } else if (lc === 'KG') {
-        priceKG = price
+        if (priceKG === 0 || price > 0) {
+          priceKG = price
+        }
         totalBilledKG += total
+      } else {
+        totalBilledAuxiliary += total
       }
     }
 
@@ -404,6 +417,15 @@ export async function getType2ComparisonCheck(query: {
     const gudangBerat = Number(gudangRows?.[0]?.fdJmlBeratGudang || 0)
     const totalBeratPerMarking = Number(m3CheckRes?.totalBeratPerMarking || 0)
     const totalJmlBeratSJ = Number(m3CheckRes?.totalJmlBeratSJ || 0)
+
+    // Ambil min charge dari profil harga (via m3CheckRes)
+    const minChargeM3 = Number(m3CheckRes?.minChargeM3 || 0)   // minimal volume M3 yang ditagih (misal 0.1)
+    const minChargeKg = Number(m3CheckRes?.minChargeKg || 0)   // minimal berat KG yang ditagih (misal 3 / 70)
+    // Hitung rasio: utamakan rasio dari profil harga jika tersedia (misal 700), fallback ke priceM3 / priceKG
+    const profileRasio = Number(m3CheckRes?.profileHarga?.rasio || 0)
+    const rasio = profileRasio > 0 ? profileRasio : ((priceM3 > 0 && priceKG > 0) ? (priceM3 / priceKG) : 0)
+    // minKgEquiv = ekuivalen KG dari minChargeM3 (misal 0.1 M3 × 700 = 70 KG)
+    const minKgEquiv = minChargeM3 > 0 && rasio > 0 ? Math.round(minChargeM3 * rasio * 100) / 100 : minChargeKg
 
     const deliveryMap = new Map<string, number>()
     let totalDeliverySJ = 0
@@ -508,8 +530,16 @@ export async function getType2ComparisonCheck(query: {
 
       const nilaiM3 = m3 * priceM3
       const nilaiKG = kg * priceKG
-      const winner = nilaiM3 >= nilaiKG ? 'M3' : 'KG'
-      const nilaiTagihan = winner === 'M3' ? nilaiM3 : nilaiKG
+
+      // Terapkan min charge: hitung nilai efektif menggunakan volume/berat minimal
+      // Aturan: pilih mana yang lebih besar antara (nilaiM3 vs minChargeM3*priceM3) dan (nilaiKG vs minKgEquiv*priceKG)
+      const nilaiMinChargeM3 = minChargeM3 > 0 && priceM3 > 0 ? minChargeM3 * priceM3 : 0
+      const nilaiMinChargeKg = minKgEquiv > 0 && priceKG > 0 ? minKgEquiv * priceKG : 0
+      const nilaiM3Efektif = nilaiMinChargeM3 > 0 ? Math.max(nilaiM3, nilaiMinChargeM3) : nilaiM3
+      const nilaiKGEfektif = nilaiMinChargeKg > 0 ? Math.max(nilaiKG, nilaiMinChargeKg) : nilaiKG
+
+      const winner = nilaiM3Efektif >= nilaiKGEfektif ? 'M3' : 'KG'
+      const nilaiTagihan = winner === 'M3' ? nilaiM3Efektif : nilaiKGEfektif
       const selisihM3vsKG = nilaiM3 - nilaiKG
 
       return {
@@ -532,11 +562,15 @@ export async function getType2ComparisonCheck(query: {
         priceKG,
         nilaiM3: Math.round(nilaiM3),
         nilaiKG: Math.round(nilaiKG),
+        nilaiM3Efektif: Math.round(nilaiM3Efektif),
+        nilaiKGEfektif: Math.round(nilaiKGEfektif),
         nilaiTagihan: Math.round(nilaiTagihan),
         winner,
         selisihM3vsKG: Math.round(selisihM3vsKG),
         selisihAbs: Math.abs(Math.round(selisihM3vsKG)),
         isM3Higher: nilaiM3 >= nilaiKG,
+        isM3EfektifHigher: nilaiM3Efektif >= nilaiKGEfektif,
+        minChargeApplied: (minChargeM3 > 0 && m3 < minChargeM3) || (minKgEquiv > 0 && kg < minKgEquiv),
       }
     })
 
@@ -545,8 +579,12 @@ export async function getType2ComparisonCheck(query: {
     const totalKG = items.reduce((s, i) => s + i.kg, 0)
     const totalNilaiM3 = items.reduce((s, i) => s + i.nilaiM3, 0)
     const totalNilaiKG = items.reduce((s, i) => s + i.nilaiKG, 0)
-    const overallWinner = totalNilaiM3 >= totalNilaiKG ? 'M3' : 'KG'
-    const totalNilaiTagihanIdeal = overallWinner === 'M3' ? totalNilaiM3 : totalNilaiKG
+    // Nilai ideal menggunakan efektif (sudah memperhitungkan min charge)
+    const totalNilaiM3Efektif = items.reduce((s, i) => s + i.nilaiM3Efektif, 0)
+    const totalNilaiKGEfektif = items.reduce((s, i) => s + i.nilaiKGEfektif, 0)
+    const overallWinner = totalNilaiM3Efektif >= totalNilaiKGEfektif ? 'M3' : 'KG'
+    const totalFreightIdeal = overallWinner === 'M3' ? totalNilaiM3Efektif : totalNilaiKGEfektif
+    const totalNilaiTagihanIdeal = totalFreightIdeal + totalBilledAuxiliary
     const selisihVsAktual = totalBilled - totalNilaiTagihanIdeal
 
     // 6. Tentukan status validasi
@@ -567,6 +605,12 @@ export async function getType2ComparisonCheck(query: {
       totalBilled,
       totalNilaiM3,
       totalNilaiKG,
+      totalNilaiM3Efektif,
+      totalNilaiKGEfektif,
+      totalFreightIdeal,
+      totalBilledAuxiliary,
+      minChargeM3,
+      minKgEquiv,
       overallWinner,
       validationStatus,
     })
@@ -584,7 +628,14 @@ export async function getType2ComparisonCheck(query: {
       isGabungan,
       totalNilaiM3,
       totalNilaiKG,
+      totalNilaiM3Efektif,
+      totalNilaiKGEfektif,
+      minChargeM3,
+      minKgEquiv,
+      minChargeApplied: items.some((i) => i.minChargeApplied),
       overallWinner,
+      totalFreightIdeal,
+      totalBilledAuxiliary,
       totalNilaiTagihanIdeal,
       totalBilled,
       selisihVsAktual,

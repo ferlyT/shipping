@@ -2183,7 +2183,7 @@ export async function getDeliveryConfirmBatchDetail(date: string, session: strin
   const cleanSession = session === 'Pagi' ? 'Pagi' : 'Sore'
 
   // 1. Dapatkan window waktu cetak dari tbDeliveryConfirm
-  const batchConfirms: any[] = await prisma.$queryRawUnsafe(`
+  const batchConfirms: any[] = await prisma.$queryRawUnsafe<any[]>(`
     WITH Confirms AS (
       SELECT 
         fdTglPrintReport,
@@ -2216,7 +2216,7 @@ export async function getDeliveryConfirmBatchDetail(date: string, session: strin
       const date1 = c.prevStrReport || `${cleanDate} 00:00:00`
       const date2 = c.strReport
       try {
-        const rows: any[] = await prisma.$queryRawUnsafe(
+        const rows: any[] = await prisma.$queryRawUnsafe<any[]>(
           `EXEC rpt_tbDelivery2023 ${c.fdListType}, '${date1}', '${date2}'`
         )
         if (Array.isArray(rows)) {
@@ -2230,7 +2230,7 @@ export async function getDeliveryConfirmBatchDetail(date: string, session: strin
     // Fallback jika tidak ada record di tbDeliveryConfirm
     const startHour = cleanSession === 'Pagi' ? '00:00:00' : '12:00:00'
     const endHour = cleanSession === 'Pagi' ? '12:00:00' : '23:59:59'
-    const fallbackRows: any[] = await prisma.$queryRawUnsafe(`
+    const fallbackRows: any[] = await prisma.$queryRawUnsafe<any[]>(`
       SELECT 
         d.fdSJNo,
         d.fdSJDate,

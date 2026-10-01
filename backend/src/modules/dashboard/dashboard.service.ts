@@ -2,8 +2,10 @@ import { prisma } from '../../config/database'
 import { logger } from '../../config/logger'
 import { getMarkingKPIs } from '../marking/marking-analytics.service'
 import type { DashboardStats, DashboardTrend } from './dashboard.types'
+import { calculateTrend } from './dashboard.utils'
 
 export * from './dashboard.types'
+export * from './dashboard.utils'
 
 /**
  * Helper to safely execute a Prisma query with automatic 1x retry on connection hiccup
@@ -276,21 +278,7 @@ export async function getDashboardStats(): Promise<DashboardStats> {
 
     const chartData = await Promise.all(chartPromises)
 
-    // Helper to calculate Month-over-Month growth
-    const calculateTrend = (thisMonth: number, lastMonth: number): DashboardTrend | null => {
-      if (lastMonth === 0) {
-        return thisMonth > 0
-          ? { type: 'up', value: '100%', label: 'vs bulan lalu' }
-          : null
-      }
-
-      const percentage = ((thisMonth - lastMonth) / lastMonth) * 100
-      return {
-        type: percentage >= 0 ? 'up' : 'down',
-        value: `${Math.abs(percentage).toFixed(1)}%`,
-        label: 'vs bulan lalu'
-      }
-    }
+    // Month-over-Month growth trends computed via calculateTrend utility
 
     const mappedRecentInvoices = (recentInvoices as any[]).map((r) => ({
       fdInvNo: r.fdInvNo?.trim() || '',

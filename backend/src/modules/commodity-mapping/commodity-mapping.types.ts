@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 /**
  * Commodity Mapping Module Types
  */
@@ -102,4 +104,47 @@ export interface PriceListOptionItem {
   scope: 'GLOBAL' | 'CUSTOMER'
   fdCustCode?: string | null
 }
+
+export const CreateCommodityMappingSchema = z.object({
+  commodityName: z.string().min(1, 'Nama komoditas wajib diisi'),
+  targetCommodity: z.string().min(1, 'Tipe komoditi tujuan wajib diisi'),
+  fdTypeComodity: z.number().nullable().optional(),
+  fdCustCode: z.string().nullable().optional(),
+  price: z.number().nullable().optional(),
+  branch: z.string().nullable().optional(),
+  startMarkingCode: z.string().nullable().optional(),
+  startAgentDate: z.string().nullable().optional(),
+  priceListUploadId: z.number().nullable().optional(),
+  effectiveDate: z.string().optional(),
+  endDate: z.string().nullable().optional(),
+  mode: z.string().nullable().optional(),
+  applyToNewUploads: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+})
+
+export const UpdateCommodityMappingSchema = z.object({
+  commodityName: z.string().optional(),
+  targetCommodity: z.string().optional(),
+  fdTypeComodity: z.number().nullable().optional(),
+  fdCustCode: z.string().nullable().optional(),
+  price: z.number().nullable().optional(),
+  branch: z.string().nullable().optional(),
+  startMarkingCode: z.string().nullable().optional(),
+  startAgentDate: z.string().nullable().optional(),
+  priceListUploadId: z.number().nullable().optional(),
+  effectiveDate: z.string().optional(),
+  endDate: z.string().nullable().optional(),
+  mode: z.string().nullable().optional(),
+  applyToNewUploads: z.boolean().optional(),
+  notes: z.string().nullable().optional(),
+  scopeChangeOption: z.enum(['specific_effective_date', 'all_active_future', 'retroactive']).optional(),
+})
+
+export const ApplyMappingsToUploadSchema = z.object({
+  uploadId: z.number().int().positive('uploadId wajib berupa angka bulat positif'),
+  isCustomerUpload: z.boolean().optional(),
+  fdCustCode: z.string().optional(),
+  effectiveDate: z.string().min(1, 'effectiveDate wajib diisi'),
+  selectedMappingIds: z.array(z.number()).optional(),
+})
 

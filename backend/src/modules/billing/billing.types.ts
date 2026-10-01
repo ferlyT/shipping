@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 /**
  * Billing Module Type Definitions
  */
@@ -112,6 +114,41 @@ export interface M3CheckResponse {
   }>
 }
 
+export interface PeriodBillingMetrics {
+  year: number
+  month: number
+  monthName: string
+  totalInvoices: number
+  totalTagihan: number
+  invoicesUdara: number
+  tagihanUdara: number
+  invoicesLaut: number
+  tagihanLaut: number
+  avgInvoiceValue: number
+  uniqueCustomers: number
+}
+
+export interface MetricComparison {
+  current: number
+  prev: number
+  momDiff: number
+  momPercent: number
+  lastYear: number
+  yoyDiff: number
+  yoyPercent: number
+}
+
+export interface BillingComparisons {
+  totalInvoices: MetricComparison
+  totalTagihan: MetricComparison
+  invoicesUdara: MetricComparison
+  tagihanUdara: MetricComparison
+  invoicesLaut: MetricComparison
+  tagihanLaut: MetricComparison
+  avgInvoiceValue: MetricComparison
+  uniqueCustomers: MetricComparison
+}
+
 export interface BillingKPIResult {
   totalInvoices: number
   totalAmountIDR: number
@@ -119,6 +156,10 @@ export interface BillingKPIResult {
   totalM3: number
   totalKG: number
   billedVsUnbilledRatio?: number
+  currentMonth?: PeriodBillingMetrics
+  prevMonth?: PeriodBillingMetrics
+  lastYearSameMonth?: PeriodBillingMetrics
+  comparisons?: BillingComparisons
   [key: string]: any
 }
 
@@ -152,5 +193,42 @@ export interface BillingDetailUpdateItem {
   fdSatuan?: string | null
   fdComodity?: string | null
   fdTypeComodity?: number | null
+}
+
+export const PairingByReceiptsSchema = z.object({
+  receiptNos: z.string().min(1, 'Daftar nomor resi tidak boleh kosong'),
+})
+
+export const PairingExportExcelSchema = z.object({
+  rows: z.array(z.record(z.string(), z.any())).min(1, 'Data baris tidak ditemukan untuk diekspor'),
+})
+
+export const BatchEntryListDetailsSchema = z.object({
+  listCodes: z.array(z.string()).optional(),
+  listCode: z.string().optional(),
+})
+
+export const IssueInvoiceSchema = z.object({
+  fdEmpId: z.string().optional(),
+})
+
+export const UpdateBillingDetailsSchema = z.object({
+  items: z.array(z.any()).min(1, 'Item billing wajib diisi'),
+  saveToPrev: z.boolean().optional(),
+})
+
+/**
+ * Timeline siklus kargo per invoice
+ * Urutan kronologis proses logistik: Agen → Loading → ETD → ETA → Gudang → SJ → Kirim → Serah
+ */
+export interface BillingTimeline {
+  fdTglAgent: string | null    // Diterima Agen (tbEntrylist.fdTglAgent)
+  fdLoadDate: string | null    // Loading ke kapal/pesawat (tbMarking.fdLoadDate)
+  fdETD: string | null         // Estimated Time of Departure (tbMarking.fdETD)
+  fdETA: string | null         // Estimated Time of Arrival (tbMarking.fdETA)
+  fdTgl_IN: string | null      // Masuk Gudang domestik (tbEntrylist.fdTgl_IN)
+  fdSjDate: string | null      // Surat Jalan diterbitkan (tbDelivery.fdSJDate)
+  fdSndDate: string | null     // Tanggal Kirim MAX per listCode (tbDelivery.fdSndDate)
+  fdGiveDate: string | null    // Diserahkan ke customer (tbDelivery.fdGiveDate)
 }
 

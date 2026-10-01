@@ -24,6 +24,11 @@ import {
   getDeliveryConfirmBatchDetail,
   getDeliveryEstimasiDetails,
 } from './deliveryOrders.service'
+import { validateBody } from '../../middleware/requestValidator'
+import {
+  CreateCustomerDestinationSchema,
+  ConfirmDeliverySchema,
+} from './deliveryOrders.types'
 import { successResponse, errorResponse } from '../../utils/response'
 
 const deliveryOrdersRoutes = new Hono()
@@ -91,10 +96,8 @@ deliveryOrdersRoutes.get('/customer-destinations/:custCode', async (c) => {
   return successResponse(c, destinations)
 })
 
-deliveryOrdersRoutes.post('/customer-destinations', async (c) => {
-  const body = await c.req.json().catch(() => null)
-  if (!body) return errorResponse(c, 'Data request tidak valid', 400)
-
+deliveryOrdersRoutes.post('/customer-destinations', validateBody(CreateCustomerDestinationSchema), async (c) => {
+  const body = c.req.valid('json')
   const user = c.get('user')
   try {
     const created = await createCustomerDestination(body, user)
@@ -157,10 +160,8 @@ deliveryOrdersRoutes.get('/estimasi-details', async (c) => {
   }
 })
 
-deliveryOrdersRoutes.post('/confirm-delivery', async (c) => {
-  const body = await c.req.json().catch(() => null)
-  if (!body) return errorResponse(c, 'Data request tidak valid', 400)
-
+deliveryOrdersRoutes.post('/confirm-delivery', validateBody(ConfirmDeliverySchema), async (c) => {
+  const body = c.req.valid('json')
   const user = c.get('user')
   try {
     const result = await confirmDelivery(body, user)

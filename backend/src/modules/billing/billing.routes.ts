@@ -18,16 +18,26 @@ import {
   getTransportValidationCheck,
   getType2ComparisonCheck,
   getBillingEmployees,
+  getBillingTimeline,
   issueInvoice,
   checkBillResiMarking,
   updateBillingDetails,
 } from './billing.service'
+
 import { getReportTemplate, saveReportTemplate } from './report-template.service'
 import {
   processPairingLocalCharge,
   processPairingByReceiptNos,
   generatePairingLocalChargeExcel,
 } from './pairing-local-charge.service'
+import {
+  PairingByReceiptsSchema,
+  PairingExportExcelSchema,
+  BatchEntryListDetailsSchema,
+  IssueInvoiceSchema,
+  UpdateBillingDetailsSchema,
+} from './billing.types'
+import { validateBody } from '../../middleware/requestValidator'
 import { successResponse, errorResponse } from '../../utils/response'
 
 const billingRoutes = new Hono()
@@ -57,14 +67,9 @@ billingRoutes.post('/pairing-local-charge', async (c) => {
   }
 })
 
-billingRoutes.post('/pairing-local-charge/by-receipts', async (c) => {
+billingRoutes.post('/pairing-local-charge/by-receipts', validateBody(PairingByReceiptsSchema), async (c) => {
   try {
-    const body = await c.req.json().catch(() => ({}))
-    const receiptNos = typeof body?.receiptNos === 'string' ? body.receiptNos : ''
-    if (!receiptNos.trim()) {
-      return errorResponse(c, 'Daftar nomor resi tidak boleh kosong', 400)
-    }
-
+    const { receiptNos } = c.req.valid('json')
     const result = await processPairingByReceiptNos(receiptNos)
     return successResponse(c, result)
   } catch (err: any) {
@@ -72,15 +77,10 @@ billingRoutes.post('/pairing-local-charge/by-receipts', async (c) => {
   }
 })
 
-billingRoutes.post('/pairing-local-charge/export-excel', async (c) => {
+billingRoutes.post('/pairing-local-charge/export-excel', validateBody(PairingExportExcelSchema), async (c) => {
   try {
-    const body = await c.req.json()
-    const rows = body?.rows
-    if (!rows || !Array.isArray(rows) || rows.length === 0) {
-      return errorResponse(c, 'Data baris tidak ditemukan untuk diekspor', 400)
-    }
-
-    const buffer = await generatePairingLocalChargeExcel(rows)
+    const { rows } = c.req.valid('json')
+    const buffer = await generatePairingLocalChargeExcel(rows as any)
     const fileName = `Pairing-Local-Charge-${new Date().toISOString().slice(0, 10)}.xlsx`
 
     return new Response(buffer, {
@@ -158,11 +158,11 @@ billingRoutes.get('/m3-cust-marking-details', async (c) => {
   return successResponse(c, result)
 })
 
-billingRoutes.post('/entry-list-details', async (c) => {
-  const body = await c.req.json().catch(() => ({}))
+billingRoutes.post('/entry-list-details', validateBody(BatchEntryListDetailsSchema), async (c) => {
+  const body = c.req.valid('json')
   const listCodes = Array.isArray(body.listCodes)
     ? body.listCodes
-    : typeof body.listCode === 'string'
+    : typeof body.listCode === 'string' && body.listCode
       ? [body.listCode]
       : []
   const result = await getBatchEntryListDetails(listCodes)
@@ -331,7 +331,19 @@ billingRoutes.get('/:id/resi-marking-check', async (c) => {
   }
 })
 
+billingRoutes.get('/:id/timeline', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const result = await getBillingTimeline(id)
+    if (!result) return errorResponse(c, 'Timeline tidak ditemukan', 404)
+    return successResponse(c, result)
+  } catch (err) {
+    return errorResponse(c, (err as Error).message, 500)
+  }
+})
+
 billingRoutes.get('/:id', async (c) => {
+
   const id = c.req.param('id')
   const billing = await getBillingById(id)
   if (!billing) return errorResponse(c, 'Billing tidak ditemukan', 404)
@@ -345,13 +357,13 @@ billingRoutes.get('/:id/details', async (c) => {
   return successResponse(c, billing.details)
 })
 
-billingRoutes.put('/:id/details', async (c) => {
+billingRoutes.put('/:id/details', validateBody(UpdateBillingDetailsSchema), async (c) => {
   try {
     const id = c.req.param('id')
-    const body = await c.req.json().catch(() => ({}))
+    const body = c.req.valid('json')
     const user = c.get('user')
     const saveToPrev = body?.saveToPrev !== undefined ? Boolean(body.saveToPrev) : true
-    const result = await updateBillingDetails(id, body?.items, user, saveToPrev)
+    const result = await updateBillingDetails(id, body.items, user, saveToPrev)
     return successResponse(c, result)
   } catch (err) {
     return errorResponse(c, (err as Error).message, 400)

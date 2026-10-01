@@ -20,8 +20,15 @@ import {
   deleteCustomerCommodityPriceItem,
   listCustomerCommodityPrices,
   getCustomerPriceListBranches,
+  setCustomerCommodityPriceEndDate,
 } from './customer-price-list.service'
-
+import { validateBody } from '../../middleware/requestValidator'
+import {
+  CreateCustomerCommodityPriceSchema,
+  UpdateCustomerCommodityPriceSchema,
+  SetEndDateSchema,
+  SetCustomerUploadMarkingsSchema,
+} from './customer-price-list.types'
 
 const customerPriceListRoutes = new Hono()
 
@@ -85,14 +92,11 @@ customerPriceListRoutes.get('/uploads/:id/markings', async (c) => {
 })
 
 // PUT /api/customer-price-list/uploads/:id/markings
-customerPriceListRoutes.put('/uploads/:id/markings', async (c) => {
+customerPriceListRoutes.put('/uploads/:id/markings', validateBody(SetCustomerUploadMarkingsSchema), async (c) => {
   const id = Number(c.req.param('id'))
   if (isNaN(id)) return errorResponse(c, 'ID upload tidak valid', 400)
-  const body = await c.req.json<{ markings: { markingCode: string; agentName?: string }[] }>()
-  if (!Array.isArray(body?.markings)) {
-    return errorResponse(c, 'Field markings harus berupa array', 400)
-  }
-  const result = await setCustomerUploadMarkings(id, body.markings)
+  const { markings } = c.req.valid('json')
+  const result = await setCustomerUploadMarkings(id, markings)
   return successResponse(c, result)
 })
 
@@ -154,17 +158,22 @@ customerPriceListRoutes.patch('/uploads/:id/effective-date', async (c) => {
   const id = Number(c.req.param('id'))
   if (isNaN(id)) return errorResponse(c, 'ID tidak valid', 400)
 
-  const body = await c.req.json<{ effectiveDate: string }>()
-  if (!body?.effectiveDate) {
-    return errorResponse(c, 'Field effectiveDate wajib diisi', 400)
+  const body = await c.req.json<{ effectiveDate?: string; endDate?: string | null }>()
+  if (!body?.effectiveDate && body?.endDate === undefined) {
+    return errorResponse(c, 'Field effectiveDate atau endDate wajib diisi', 400)
   }
 
-  const effectiveDate = new Date(body.effectiveDate)
-  if (isNaN(effectiveDate.getTime())) {
-    return errorResponse(c, 'Format tanggal tidak valid', 400)
+  const effectiveDate = body.effectiveDate ? new Date(body.effectiveDate) : undefined
+  if (effectiveDate && isNaN(effectiveDate.getTime())) {
+    return errorResponse(c, 'Format tanggal effectiveDate tidak valid', 400)
   }
 
-  const updated = await updateCustomerUploadEffectiveDate(id, effectiveDate)
+  const endDate = body.endDate !== undefined ? (body.endDate ? new Date(body.endDate) : null) : undefined
+  if (endDate && isNaN(endDate.getTime())) {
+    return errorResponse(c, 'Format tanggal endDate tidak valid', 400)
+  }
+
+  const updated = await updateCustomerUploadEffectiveDate(id, effectiveDate, endDate)
   if (!updated) return errorResponse(c, 'Upload customer price list tidak ditemukan', 404)
 
   return successResponse(c, updated)
@@ -205,6 +214,7 @@ customerPriceListRoutes.post('/:custCode/upload', async (c) => {
   const body = await c.req.parseBody()
   const file = body['file']
   const effectiveDateStr = body['effectiveDate'] as string
+  const endDateStr = body['endDate'] as string | undefined
 
   if (!file || !(file instanceof File)) {
     return errorResponse(c, 'File tidak ditemukan. Kirim sebagai multipart/form-data field "file"', 400)
@@ -221,6 +231,14 @@ customerPriceListRoutes.post('/:custCode/upload', async (c) => {
     return errorResponse(c, 'Format tanggal effectiveDate tidak valid (gunakan YYYY-MM-DD)', 400)
   }
 
+  let endDate: Date | null = null
+  if (endDateStr && endDateStr.trim()) {
+    endDate = new Date(endDateStr.trim())
+    if (isNaN(endDate.getTime())) {
+      return errorResponse(c, 'Format tanggal endDate tidak valid (gunakan YYYY-MM-DD)', 400)
+    }
+  }
+
   const arrayBuffer = await file.arrayBuffer()
   const buffer = Buffer.from(arrayBuffer)
 
@@ -231,6 +249,7 @@ customerPriceListRoutes.post('/:custCode/upload', async (c) => {
       file.name,
       effectiveDate,
       user.username,
+      endDate,
     )
     return c.json({ success: true, data: result }, 201)
   } catch (err: any) {
@@ -264,23 +283,9 @@ customerPriceListRoutes.get('/items', async (c) => {
 })
 
 // POST /api/customer-price-list/items
-customerPriceListRoutes.post('/items', async (c) => {
+customerPriceListRoutes.post('/items', validateBody(CreateCustomerCommodityPriceSchema), async (c) => {
   const user = c.get('user')
-  const body = await c.req.json<{
-    fdCustCode: string
-    category: string
-    mode: string
-    branch: string
-    price: number
-    effectiveDate: string
-    endDate?: string | null
-    notes?: string | null
-    aliases?: string[]
-  }>()
-
-  if (!body.fdCustCode || !body.category || !body.mode || !body.branch || !body.price || !body.effectiveDate) {
-    return errorResponse(c, 'Customer, kategori komoditi, moda, branch, harga, dan tanggal berlaku wajib diisi', 400)
-  }
+  const body = c.req.valid('json')
 
   const result = await createOrUpdateCustomerCommodityPrice({
     ...body,
@@ -291,21 +296,11 @@ customerPriceListRoutes.post('/items', async (c) => {
 })
 
 // PUT /api/customer-price-list/items/:id
-customerPriceListRoutes.put('/items/:id', async (c) => {
+customerPriceListRoutes.put('/items/:id', validateBody(UpdateCustomerCommodityPriceSchema), async (c) => {
   const id = Number(c.req.param('id'))
   if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
 
-  const body = await c.req.json<{
-    category?: string
-    mode?: string
-    branch?: string
-    price?: number
-    effectiveDate?: string
-    endDate?: string | null
-    notes?: string | null
-    aliases?: string[]
-  }>()
-
+  const body = c.req.valid('json')
   const result = await updateCustomerCommodityPriceItem(id, body)
   return successResponse(c, result)
 })
@@ -316,6 +311,16 @@ customerPriceListRoutes.put('/items/:id/deactivate', async (c) => {
   if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
 
   const result = await deactivateCustomerCommodityPriceItem(id)
+  return successResponse(c, result)
+})
+
+// PUT /api/customer-price-list/items/:id/end-date
+customerPriceListRoutes.put('/items/:id/end-date', validateBody(SetEndDateSchema), async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) return errorResponse(c, 'ID item tidak valid', 400)
+
+  const { endDate } = c.req.valid('json')
+  const result = await setCustomerCommodityPriceEndDate(id, endDate)
   return successResponse(c, result)
 })
 

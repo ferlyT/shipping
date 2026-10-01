@@ -47,10 +47,10 @@ export async function uploadBapPhoto(
   let ext = 'jpg'
   if (base64String.includes(';base64,')) {
     const parts = base64String.split(';base64,')
-    const mime = parts[0]
+    const mime = parts[0] || ''
     if (mime.includes('png')) ext = 'png'
     else if (mime.includes('webp')) ext = 'webp'
-    cleanBase64 = parts[1]
+    cleanBase64 = parts[1] || base64String
   }
 
   const buffer = Buffer.from(cleanBase64, 'base64')

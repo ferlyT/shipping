@@ -652,6 +652,70 @@ export async function getBillingEmployees() {
 }
 
 /**
+ * Timeline siklus kargo per invoice
+ * Mengambil 8 milestone kronologis: Diterima Agen → Loading → ETD → ETA → Masuk Gudang → SJ → Kirim → Diserahkan
+ * JOIN: tbEntrylist (fdListCode) → tbMarking (fdMarkingCode) → tbDelivery (fdListCode)
+ */
+export async function getBillingTimeline(invNo: string) {
+  const cleanInvNo = (invNo || '').trim()
+  if (!cleanInvNo) return null
+
+  // Resolve listCode dari invNo
+  const billRows = await prisma.$queryRaw<{ fdListCode: string }[]>`
+    SELECT TOP 1 RTRIM(b.fdListCode) AS fdListCode
+    FROM tbBilling b WITH (NOLOCK)
+    WHERE b.fdInvNo = ${cleanInvNo}
+  `
+  const listCode = billRows[0]?.fdListCode?.trim()
+  if (!listCode) return null
+
+  const rows = await prisma.$queryRaw<any[]>`
+    SELECT
+      CONVERT(VARCHAR(10), MIN(el.fdTglAgent), 120) AS fdTglAgent,
+      CONVERT(VARCHAR(10), MIN(el.fdTgl_IN), 120)   AS fdTgl_IN,
+      CONVERT(VARCHAR(10), m.fdLoadDate, 120)        AS fdLoadDate,
+      CONVERT(VARCHAR(10), m.fdETD, 120)             AS fdETD,
+      CONVERT(VARCHAR(10), m.fdETA, 120)             AS fdETA,
+      CONVERT(VARCHAR(10), MIN(d.fdSJDate), 120)     AS fdSjDate,
+      CONVERT(VARCHAR(10), MAX(d.fdSndDate), 120)    AS fdSndDate,
+      CONVERT(VARCHAR(10), MAX(d.fdGiveDate), 120)   AS fdGiveDate
+    FROM tbEntrylist el WITH (NOLOCK)
+    LEFT JOIN tbMarking m WITH (NOLOCK)
+      ON RTRIM(m.fdMarkingCode) = RTRIM(el.fdMarkingCode)
+    LEFT JOIN tbDelivery d WITH (NOLOCK)
+      ON RTRIM(d.fdListCode) = RTRIM(el.fdListCode)
+    WHERE RTRIM(el.fdListCode) = CAST(${listCode} AS CHAR(7))
+    GROUP BY m.fdLoadDate, m.fdETD, m.fdETA
+  `
+
+  if (!rows || rows.length === 0) {
+    return {
+      fdTglAgent: null,
+      fdLoadDate: null,
+      fdETD: null,
+      fdETA: null,
+      fdTgl_IN: null,
+      fdSjDate: null,
+      fdSndDate: null,
+      fdGiveDate: null,
+    }
+  }
+
+  const r = rows[0]
+  return {
+    fdTglAgent: r.fdTglAgent ? String(r.fdTglAgent).trim() : null,
+    fdLoadDate: r.fdLoadDate ? String(r.fdLoadDate).trim() : null,
+    fdETD:      r.fdETD      ? String(r.fdETD).trim()      : null,
+    fdETA:      r.fdETA      ? String(r.fdETA).trim()      : null,
+    fdTgl_IN:   r.fdTgl_IN   ? String(r.fdTgl_IN).trim()   : null,
+    fdSjDate:   r.fdSjDate   ? String(r.fdSjDate).trim()   : null,
+    fdSndDate:  r.fdSndDate  ? String(r.fdSndDate).trim()  : null,
+    fdGiveDate: r.fdGiveDate ? String(r.fdGiveDate).trim() : null,
+  }
+}
+
+
+/**
  * Memperbarui status invoice menjadi Issued (Terbit)
  * Menggunakan query resmi pada tbBilling, tbBillingPrev, dan tbBillingGiveEmp
  */

@@ -14,6 +14,7 @@ export async function ingestCustomerPriceListFile(
   fileName: string,
   effectiveDate: Date,
   uploadedBy?: string,
+  endDate?: Date | null,
 ) {
   const parsed = await parsePriceListWorkbook(buffer)
 
@@ -24,6 +25,7 @@ export async function ingestCustomerPriceListFile(
       uploadedBy: uploadedBy ?? null,
       priceDate: parsed.priceDate,
       effectiveDate,
+      endDate: endDate ?? null,
       status: parsed.status,
       warnings: JSON.stringify(parsed.warnings),
       rawSnapshot: JSON.stringify(parsed.rawSnapshot),
@@ -36,6 +38,8 @@ export async function ingestCustomerPriceListFile(
           transitTime: it.transitTime ?? null,
           category: it.category,
           price: new Prisma.Decimal(it.price),
+          effectiveDate,
+          endDate: endDate ?? null,
         })),
       },
     },
@@ -58,6 +62,7 @@ export async function ingestCustomerPriceListFile(
     fdCustCode,
     status: upload.status,
     effectiveDate: upload.effectiveDate,
+    endDate: upload.endDate,
     priceDate: upload.priceDate,
     itemCount: parsed.items.length,
     warnings: parsed.warnings,
@@ -112,6 +117,7 @@ export async function listCustomersWithPriceList(search?: string) {
       uploadedAt: true,
       priceDate: true,
       effectiveDate: true,
+      endDate: true,
       status: true,
       _count: { select: { items: true } },
     },
@@ -126,19 +132,31 @@ export async function listCustomersWithPriceList(search?: string) {
   })
   const custMap = new Map(customers.map((c) => [c.fdCustCode.trim(), c.fdCustName?.trim() ?? '-']))
 
-  return rows.map((r) => ({
-    ...r,
-    fdCustCode: r.fdCustCode.trim(),
-    custName: custMap.get(r.fdCustCode.trim()) ?? '-',
-    itemCount: r._count.items,
-  }))
+  const now = new Date()
+  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+  return rows.map((r) => {
+    const isExpired = Boolean(r.endDate && new Date(r.endDate) < now)
+    const isExpiringSoon = Boolean(r.endDate && !isExpired && new Date(r.endDate) <= sevenDaysFromNow)
+    return {
+      ...r,
+      fdCustCode: r.fdCustCode.trim(),
+      custName: custMap.get(r.fdCustCode.trim()) ?? '-',
+      itemCount: r._count.items,
+      isExpired,
+      isExpiringSoon,
+    }
+  })
 }
 
 /**
  * List upload history per customer dengan pagination.
  */
 export async function listCustomerUploads(fdCustCode: string, page = 1, pageSize = 20) {
-  const [rows, total] = await Promise.all([
+  const now = new Date()
+  const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+
+  const [rawRows, total] = await Promise.all([
     prisma.tbCustomerPriceListUpload.findMany({
       where: { fdCustCode },
       orderBy: { uploadedAt: 'desc' },
@@ -152,6 +170,7 @@ export async function listCustomerUploads(fdCustCode: string, page = 1, pageSize
         uploadedAt: true,
         priceDate: true,
         effectiveDate: true,
+        endDate: true,
         status: true,
         isSuperseded: true,
         _count: { select: { items: true } },
@@ -163,6 +182,17 @@ export async function listCustomerUploads(fdCustCode: string, page = 1, pageSize
     }),
     prisma.tbCustomerPriceListUpload.count({ where: { fdCustCode } }),
   ])
+
+  const rows = rawRows.map((r) => {
+    const isExpired = Boolean(r.endDate && new Date(r.endDate) < now)
+    const isExpiringSoon = Boolean(r.endDate && !isExpired && new Date(r.endDate) <= sevenDaysFromNow)
+    return {
+      ...r,
+      isExpired,
+      isExpiringSoon,
+    }
+  })
+
   return { rows, total, page, pageSize }
 }
 
@@ -170,22 +200,31 @@ export async function listCustomerUploads(fdCustCode: string, page = 1, pageSize
  * Ambil item price list aktif per customer (menggabungkan item dari seluruh upload aktif non-superseded).
  */
 export async function getActiveCustomerPriceList(fdCustCode: string) {
+  const now = new Date()
   const activeUploads = await prisma.tbCustomerPriceListUpload.findMany({
-    where: { fdCustCode, isSuperseded: false, status: { notIn: ['FAILED', 'DELETED'] } },
+    where: {
+      fdCustCode,
+      isSuperseded: false,
+      status: { notIn: ['FAILED', 'DELETED'] },
+      AND: [
+        { OR: [{ endDate: null }, { endDate: { gte: now } }] },
+      ],
+    },
     include: { markings: true },
     orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
   })
-  if (activeUploads.length === 0) return null
-
+  if (activeUploads.length === 0 || !activeUploads[0]) return null
   const latestUpload = activeUploads[0]
   const uploadIds = activeUploads.map((u) => u.id)
 
   const rawItems = await prisma.tbCustomerPriceListItem.findMany({
     where: {
       uploadId: { in: uploadIds },
-      endDate: null,
+      AND: [
+        { OR: [{ endDate: null }, { endDate: { gte: now } }] },
+      ],
     },
-    include: { upload: { select: { markings: true } } },
+    include: { upload: { select: { markings: true, endDate: true } } },
     orderBy: [{ effectiveDate: 'desc' }, { id: 'desc' }],
   })
 
@@ -216,6 +255,7 @@ export async function getActiveCustomerPriceList(fdCustCode: string) {
     uploadId: latestUpload.id,
     fdCustCode: latestUpload.fdCustCode,
     effectiveDate: latestUpload.effectiveDate,
+    endDate: latestUpload.endDate,
     priceDate: latestUpload.priceDate,
     uploadedAt: latestUpload.uploadedAt,
     fileName: latestUpload.fileName,
@@ -232,6 +272,8 @@ export async function getActiveCustomerPriceList(fdCustCode: string) {
       transitTime: it.transitTime,
       category: it.category,
       price: Number(it.price),
+      effectiveDate: it.effectiveDate,
+      endDate: it.endDate,
       markings: (it.upload?.markings || latestUpload.markings)?.map((m) => ({
         id: m.id,
         markingCode: m.markingCode,
@@ -415,22 +457,50 @@ export async function softDeleteCustomerUpload(id: number) {
   return updated
 }
 
-export async function updateCustomerUploadEffectiveDate(id: number, newEffectiveDate: Date) {
+export async function updateCustomerUploadEffectiveDate(
+  id: number,
+  newEffectiveDate?: Date,
+  newEndDate?: Date | null,
+) {
   const current = await prisma.tbCustomerPriceListUpload.findUnique({
     where: { id },
   })
   if (!current) return null
 
+  const data: Prisma.TbCustomerPriceListUploadUpdateInput = {}
+  if (newEffectiveDate !== undefined) {
+    data.effectiveDate = newEffectiveDate
+  }
+  if (newEndDate !== undefined) {
+    data.endDate = newEndDate
+  }
+
   const updated = await prisma.tbCustomerPriceListUpload.update({
     where: { id },
-    data: { effectiveDate: newEffectiveDate },
+    data,
   })
 
+  // Sinkronisasi tanggal ke seluruh item di upload ini
+  const itemData: Prisma.TbCustomerPriceListItemUpdateManyMutationInput = {}
+  if (newEffectiveDate !== undefined) {
+    itemData.effectiveDate = newEffectiveDate
+  }
+  if (newEndDate !== undefined) {
+    itemData.endDate = newEndDate
+  }
+  if (Object.keys(itemData).length > 0) {
+    await prisma.tbCustomerPriceListItem.updateMany({
+      where: { uploadId: id },
+      data: itemData,
+    })
+  }
+
   // Recalculate superseded status for uploads of this customer with the same effectiveDate
+  const effDateToCheck = newEffectiveDate ?? current.effectiveDate
   const allForDate = await prisma.tbCustomerPriceListUpload.findMany({
     where: {
       fdCustCode: current.fdCustCode,
-      effectiveDate: newEffectiveDate,
+      effectiveDate: effDateToCheck,
       status: { not: 'FAILED' },
     },
     orderBy: { uploadedAt: 'desc' },
@@ -556,6 +626,9 @@ export async function lookupCustomerPriceList(
           effectiveDate: { lte: targetDate },
           status: { notIn: ['FAILED', 'DELETED'] },
           isSuperseded: false,
+          AND: [
+            { OR: [{ endDate: null }, { endDate: { gte: targetDate } }] },
+          ],
         },
         include: { markings: true },
         orderBy: [
@@ -671,6 +744,7 @@ export async function lookupCustomerPriceList(
         uploadId: latestUpload.id,
         fileName: latestUpload.fileName,
         effectiveDate: latestUpload.effectiveDate,
+        endDate: latestUpload.endDate,
         priceDate: latestUpload.priceDate,
         uploadedAt: latestUpload.uploadedAt,
         markings: Array.from(uniqueMarkingsMap.values()).map((m: any) => ({
@@ -696,6 +770,8 @@ export async function lookupCustomerPriceList(
           transitTime: it.transitTime,
           category: it.category,
           price: Number(it.price),
+          effectiveDate: it.effectiveDate || latestUpload.effectiveDate,
+          endDate: it.endDate || latestUpload.endDate,
           aliases: combinedAliases,
           markings: (it.upload?.markings || latestUpload.markings)?.map((m: any) => ({
             id: m.id,
@@ -1161,6 +1237,7 @@ export async function listCustomerCommodityPrices(params: {
 
   const enrichedItems = items.map((it) => {
     const isExpired = (it.endDate && new Date(it.endDate) < now) || it.upload.isSuperseded
+    const isExpiringSoon = !isExpired && Boolean(it.endDate && (new Date(it.endDate).getTime() - now.getTime()) <= 7 * 24 * 60 * 60 * 1000)
     const matchedAliases = mappings
       .filter(
         (m) =>
@@ -1183,6 +1260,7 @@ export async function listCustomerCommodityPrices(params: {
       endDate: it.endDate,
       notes: it.notes,
       isExpired,
+      isExpiringSoon,
       aliases: matchedAliases,
       fileName: it.upload.fileName,
     }
@@ -1213,6 +1291,28 @@ export async function getCustomerPriceListBranches() {
       name: (r.fdBranchName || '').trim(),
     }))
     .filter((r) => r.code && r.code !== '--')
+}
+
+export async function setCustomerCommodityPriceEndDate(id: number, endDate: Date | string | null) {
+  const parsedDate = endDate ? new Date(endDate) : null
+  const item = await prisma.tbCustomerPriceListItem.update({
+    where: { id },
+    data: { endDate: parsedDate },
+  })
+
+  // Sinkronisasi ke tbCommodityMapping terkait jika ada
+  await prisma.tbCommodityMapping.updateMany({
+    where: {
+      fdCustCode: item.fdCustCode,
+      targetCommodity: item.category,
+      mode: item.mode,
+    },
+    data: {
+      endDate: parsedDate,
+    },
+  })
+
+  return item
 }
 
 

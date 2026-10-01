@@ -10,7 +10,7 @@ export interface BapWatermarkMetadata {
   timestamp?: Date
 }
 
-function escapeXml(unsafe: string): string {
+export function escapeXml(unsafe: string): string {
   return unsafe
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
@@ -19,7 +19,7 @@ function escapeXml(unsafe: string): string {
     .replace(/'/g, '&apos;')
 }
 
-function formatDateWIB(date: Date): string {
+export function formatDateWIB(date: Date): string {
   const d = new Date(date.getTime() + 7 * 60 * 60 * 1000)
   const pad = (n: number) => String(n).padStart(2, '0')
   const day = pad(d.getUTCDate())

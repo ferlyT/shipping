@@ -427,6 +427,7 @@ model TbCustomerPriceListUpload {
   uploadedAt    DateTime                          @default(now()) @db.DateTime2
   priceDate     DateTime?                         @db.DateTime2
   effectiveDate DateTime                          @db.DateTime2
+  endDate       DateTime?                         @db.DateTime2
   status        String                            @db.NVarChar(20)   // PARSED | PARTIAL | FAILED
   warnings      String?                           @db.NVarChar(Max)  // JSON string
   rawSnapshot   String?                           @db.NVarChar(Max)  // JSON string

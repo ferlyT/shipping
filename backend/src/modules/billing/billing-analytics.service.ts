@@ -255,6 +255,11 @@ export async function getBillingTrends(query?: Record<string, string | undefined
   return { daily, monthly }
 }
 
+const MONTH_NAMES = [
+  'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+  'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+]
+
 export async function getBillingKPIs(query: Record<string, string | undefined>) {
   const search = query.search?.trim()
   const where = search
@@ -268,99 +273,177 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
     : {}
 
   const now = new Date()
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1)
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-  const startOfPrevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+  const targetYear = query.year && !isNaN(Number(query.year)) ? Number(query.year) : now.getFullYear()
+  const targetMonth = query.month && !isNaN(Number(query.month)) ? Math.min(12, Math.max(1, Number(query.month))) : now.getMonth() + 1
+
+  // 1. Current Period (Bulan Berjalan / Target)
+  const currYear = targetYear
+  const currMonth = targetMonth
+  const startOfCurr = new Date(currYear, currMonth - 1, 1)
+  const endOfCurr = new Date(currYear, currMonth, 1)
+
+  // 2. Previous Month (Bulan Sebelumnya / MoM)
+  const prevYear = currMonth === 1 ? currYear - 1 : currYear
+  const prevMonth = currMonth === 1 ? 12 : currMonth - 1
+  const startOfPrev = new Date(prevYear, prevMonth - 1, 1)
+  const endOfPrev = new Date(prevYear, prevMonth, 1)
+
+  // 3. Same Month Last Year (Bulan yang Sama Tahun Lalu / YoY)
+  const lastYear = currYear - 1
+  const lastYearMonth = currMonth
+  const startOfLastYear = new Date(lastYear, lastYearMonth - 1, 1)
+  const endOfLastYear = new Date(lastYear, lastYearMonth, 1)
+
+  const fetchPeriodMetrics = async (start: Date, end: Date, yr: number, mo: number) => {
+    try {
+      const rows = await prisma.$queryRaw<any[]>`
+        SELECT 
+          COUNT(*) AS totalBill,
+          SUM(ISNULL(fdJumlah1, 0)) AS totalTagihan,
+          SUM(CASE WHEN fdListType = 1 THEN 1 ELSE 0 END) AS billUdara,
+          SUM(CASE WHEN fdListType = 1 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanUdara,
+          SUM(CASE WHEN fdListType = 2 THEN 1 ELSE 0 END) AS billLaut,
+          SUM(CASE WHEN fdListType = 2 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanLaut,
+          COUNT(DISTINCT fdCustCode) AS uniqueCust
+        FROM tbBilling WITH (NOLOCK)
+        WHERE fdInvDate >= ${start} AND fdInvDate < ${end}
+      `
+      const r = rows[0] || {}
+      const totalInvoices = Number(r.totalBill || 0)
+      const totalTagihan = Number(Number(r.totalTagihan || 0).toFixed(2))
+      return {
+        year: yr,
+        month: mo,
+        monthName: `${MONTH_NAMES[mo - 1]} ${yr}`,
+        totalInvoices,
+        totalTagihan,
+        invoicesUdara: Number(r.billUdara || 0),
+        tagihanUdara: Number(Number(r.tagihanUdara || 0).toFixed(2)),
+        invoicesLaut: Number(r.billLaut || 0),
+        tagihanLaut: Number(Number(r.tagihanLaut || 0).toFixed(2)),
+        avgInvoiceValue: totalInvoices > 0 ? Math.round(totalTagihan / totalInvoices) : 0,
+        uniqueCustomers: Number(r.uniqueCust || 0),
+      }
+    } catch {
+      return {
+        year: yr,
+        month: mo,
+        monthName: `${MONTH_NAMES[mo - 1]} ${yr}`,
+        totalInvoices: 0,
+        totalTagihan: 0,
+        invoicesUdara: 0,
+        tagihanUdara: 0,
+        invoicesLaut: 0,
+        tagihanLaut: 0,
+        avgInvoiceValue: 0,
+        uniqueCustomers: 0,
+      }
+    }
+  }
 
   const [
     totalInvoices,
     totalTagihanAgg,
-    invoicesBulanIni,
-    tagihanBulanIniAgg,
-    invoicesBulanLalu,
-    tagihanBulanLaluAgg,
-    monthlyBreakdownRows,
+    currentMetrics,
+    prevMetrics,
+    lastYearMetrics,
   ] = await Promise.all([
     prisma.tbBilling.count({ where }),
     prisma.tbBilling.aggregate({
       where,
       _sum: { fdJumlah1: true }
     }),
-    prisma.tbBilling.count({
-      where: {
-        ...where,
-        fdInvDate: { gte: startOfMonth, lt: endOfMonth }
-      }
-    }),
-    prisma.tbBilling.aggregate({
-      where: {
-        ...where,
-        fdInvDate: { gte: startOfMonth, lt: endOfMonth }
-      },
-      _sum: { fdJumlah1: true }
-    }),
-    prisma.tbBilling.count({
-      where: {
-        ...where,
-        fdInvDate: { gte: startOfPrevMonth, lt: startOfMonth }
-      }
-    }),
-    prisma.tbBilling.aggregate({
-      where: {
-        ...where,
-        fdInvDate: { gte: startOfPrevMonth, lt: startOfMonth }
-      },
-      _sum: { fdJumlah1: true }
-    }),
-    prisma.$queryRaw<any[]>`
-      SELECT
-        fdListType,
-        COUNT(*) AS totalInvoices,
-        SUM(ISNULL(fdJumlah1, 0)) AS totalTagihan
-      FROM tbBilling WITH (NOLOCK)
-      WHERE fdInvDate >= ${startOfMonth} AND fdInvDate < ${endOfMonth}
-      GROUP BY fdListType
-    `,
+    fetchPeriodMetrics(startOfCurr, endOfCurr, currYear, currMonth),
+    fetchPeriodMetrics(startOfPrev, endOfPrev, prevYear, prevMonth),
+    fetchPeriodMetrics(startOfLastYear, endOfLastYear, lastYear, lastYearMonth),
   ])
 
-  let udaraInvoicesMonth = 0
-  let udaraTagihanMonth = 0
-  let lautInvoicesMonth = 0
-  let lautTagihanMonth = 0
-
-  for (const r of monthlyBreakdownRows) {
-    const typeNum = Number(r.fdListType)
-    const cnt = Number(r.totalInvoices || 0)
-    const sum = Number(r.totalTagihan || 0)
-    if (typeNum === 1) {
-      udaraInvoicesMonth = cnt
-      udaraTagihanMonth = sum
-    } else if (typeNum === 2) {
-      lautInvoicesMonth = cnt
-      lautTagihanMonth = sum
+  const calcComp = (curr: number, prev: number, lastYr: number) => {
+    const momDiff = Number((curr - prev).toFixed(2))
+    const momPercent = prev > 0 ? Number((((curr - prev) / prev) * 100).toFixed(1)) : 0
+    const yoyDiff = Number((curr - lastYr).toFixed(2))
+    const yoyPercent = lastYr > 0 ? Number((((curr - lastYr) / lastYr) * 100).toFixed(1)) : 0
+    return {
+      current: curr,
+      prev,
+      momDiff,
+      momPercent,
+      lastYear: lastYr,
+      yoyDiff,
+      yoyPercent,
     }
   }
 
-  const tagihanBulanIni = Number(tagihanBulanIniAgg._sum.fdJumlah1 || 0)
-  const tagihanBulanLalu = Number(tagihanBulanLaluAgg._sum.fdJumlah1 || 0)
+  const comparisons = {
+    totalInvoices: calcComp(currentMetrics.totalInvoices, prevMetrics.totalInvoices, lastYearMetrics.totalInvoices),
+    totalTagihan: calcComp(currentMetrics.totalTagihan, prevMetrics.totalTagihan, lastYearMetrics.totalTagihan),
+    invoicesUdara: calcComp(currentMetrics.invoicesUdara, prevMetrics.invoicesUdara, lastYearMetrics.invoicesUdara),
+    tagihanUdara: calcComp(currentMetrics.tagihanUdara, prevMetrics.tagihanUdara, lastYearMetrics.tagihanUdara),
+    invoicesLaut: calcComp(currentMetrics.invoicesLaut, prevMetrics.invoicesLaut, lastYearMetrics.invoicesLaut),
+    tagihanLaut: calcComp(currentMetrics.tagihanLaut, prevMetrics.tagihanLaut, lastYearMetrics.tagihanLaut),
+    avgInvoiceValue: calcComp(currentMetrics.avgInvoiceValue, prevMetrics.avgInvoiceValue, lastYearMetrics.avgInvoiceValue),
+    uniqueCustomers: calcComp(currentMetrics.uniqueCustomers, prevMetrics.uniqueCustomers, lastYearMetrics.uniqueCustomers),
+  }
 
-  // Fetch Target Bill Hari Ini dari stored procedures (Udara = 1, Laut = 2)
-  const [uData, lData] = await Promise.all([
+  const invoicesBulanIni = currentMetrics.totalInvoices
+  const tagihanBulanIni = currentMetrics.totalTagihan
+  const invoicesBulanLalu = prevMetrics.totalInvoices
+  const tagihanBulanLalu = prevMetrics.totalTagihan
+
+  // Fetch Target Bill Hari Ini dari stored procedures (Udara = 1, Laut = 2) & Surat Jalan yang sudah terkirim (fdSent = 1) belum di-bill
+  const [uData, lData, sentDeliveryRows, entryListRows] = await Promise.all([
     prisma.$queryRaw<any[]>`exec get_data_billing_gsheet 1`,
     prisma.$queryRaw<any[]>`exec get_data_billing_gsheet 2`,
+    prisma.$queryRaw<any[]>`
+      SELECT DISTINCT RTRIM(d.fdListCode) AS fdListCode
+      FROM tbDelivery d WITH (NOLOCK)
+      INNER JOIN tbEntryList el WITH (NOLOCK) ON d.fdListCode = el.fdListCode
+      WHERE d.fdSent = 1
+        AND el.fdBillCreated = 0
+        AND el.fdFinish = 0
+        AND YEAR(d.fdSjDate) >= 2024
+        AND d.fdListCode NOT IN (
+          SELECT RTRIM(fdListCode) FROM tbBilling WITH (NOLOCK) 
+          WHERE fdListCode IS NOT NULL AND RTRIM(fdListCode) <> ''
+        )
+    `,
+    prisma.$queryRaw<any[]>`
+      SELECT 
+        RTRIM(el.fdListCode) AS fdListCode,
+        RTRIM(el.fdMarkingCode) AS markingCode,
+        RTRIM(el.fdMarkingNo) AS markingNo
+      FROM tbEntryList el WITH (NOLOCK)
+      INNER JOIN tbMarking m WITH (NOLOCK) ON el.fdMarkingCode = m.fdMarkingCode
+      WHERE el.fdBillCreated = 0 
+        AND el.fdFinish = 0 
+        AND el.fdListCode <> ''
+        AND YEAR(m.fdExitDate) > 2020
+    `,
   ])
+
+  const sentListCodeSet = new Set(sentDeliveryRows.map((r) => r.fdListCode?.trim()).filter(Boolean))
+  const entryMap = new Map<string, string>()
+  for (const e of entryListRows) {
+    const k = `${e.markingCode}|||${e.markingNo}`
+    entryMap.set(k, e.fdListCode)
+  }
 
   const isTarget = (r: any) => {
     const cust = String(r.Customer || '').toUpperCase().trim()
     if (cust.includes('MR.X') || cust.includes('MR X') || cust === 'NO NAME' || cust === 'NONAME') return false
 
+    const statusKirim = String(r.StatusKirim || '').toUpperCase().trim()
+    const mCode = String(r.Marking_code || '').trim()
+    const mNo = String(r.Marking_no || '').trim()
+    const listCode = entryMap.get(`${mCode}|||${mNo}`)
+    const isSent = statusKirim.includes('TERKIRIM') || statusKirim.includes('TERIMA SJ') || (listCode ? sentListCodeSet.has(listCode) : false)
+
     const typeStr = String(r.Type || '').toUpperCase().trim()
     const comodityStr = String(r.Comodity || '').toUpperCase().trim()
     const isFcl = typeStr.includes('FCL') || comodityStr.includes('FCL')
 
-    // Kargo FCL harus muncul tanpa melihat status gudang
-    if (!isFcl) {
-      const statusKirim = String(r.StatusKirim || '').toUpperCase().trim()
+    // Kargo FCL dan kargo dengan Surat Jalan terkirim harus muncul tanpa melihat status gudang
+    if (!isFcl && !isSent) {
       if (statusKirim.includes('BELUM DITERIMA GDG')) return false
     }
 
@@ -368,7 +451,7 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
     const isCodOrUrgent = st.includes('COD') || st.includes('URGENT')
     const isAgingGt7 = Number(r.hari || 0) > 7
 
-    return isCodOrUrgent || isAgingGt7 || isFcl
+    return isCodOrUrgent || isAgingGt7 || isFcl || isSent
   }
 
   const uTarget = uData.filter(isTarget)
@@ -395,19 +478,45 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
 
   let yatiTarget = 0
   let kikiTarget = 0
+  let uCodUrgent = 0
+  let uSjSent = 0
+  let uAgingGt7 = 0
+  let uFcl = 0
   for (const r of uTarget) {
     const m = r.Marking_code?.trim() || ''
     const pic = picMap.get(m) || 'kiki'
     if (pic === 'yati') yatiTarget++
     else kikiTarget++
+
+    const st = String(r.Status || '').toUpperCase().trim()
+    const isCodOrUrgent = st.includes('COD') || st.includes('URGENT')
+    const statusKirim = String(r.StatusKirim || '').toUpperCase().trim()
+    const mNo = String(r.Marking_no || '').trim()
+    const listCode = entryMap.get(`${m}|||${mNo}`)
+    const isSent = statusKirim.includes('TERKIRIM') || statusKirim.includes('TERIMA SJ') || (listCode ? sentListCodeSet.has(listCode) : false)
+    const isAging = Number(r.hari || 0) > 7
+    const typeStr = String(r.Type || '').toUpperCase().trim()
+    const comodityStr = String(r.Comodity || '').toUpperCase().trim()
+    const isFcl = typeStr.includes('FCL') || comodityStr.includes('FCL')
+
+    if (isSent) uSjSent++
+    if (isCodOrUrgent) uCodUrgent++
+    if (isAging) uAgingGt7++
+    if (isFcl) uFcl++
   }
 
   let tharaTarget = 0
   let ferlyTarget = 0
   let ricoTarget = 0
+  let lCodUrgent = 0
+  let lSjSent = 0
+  let lAgingGt7 = 0
+  let lFcl = 0
   for (const r of lTarget) {
     const branch = String(r.Branch || '').toUpperCase().trim()
     const typeStr = String(r.Type || '').toUpperCase().trim()
+    const comodityStr = String(r.Comodity || '').toUpperCase().trim()
+    const isFcl = typeStr.includes('FCL') || comodityStr.includes('FCL')
     if (typeStr.includes('FCL') || typeStr.includes('KONTAINER')) {
       ferlyTarget++
     } else if (branch === 'GUANGZHOU') {
@@ -415,6 +524,20 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
     } else {
       ricoTarget++
     }
+
+    const st = String(r.Status || '').toUpperCase().trim()
+    const isCodOrUrgent = st.includes('COD') || st.includes('URGENT')
+    const statusKirim = String(r.StatusKirim || '').toUpperCase().trim()
+    const mCode = String(r.Marking_code || '').trim()
+    const mNo = String(r.Marking_no || '').trim()
+    const listCode = entryMap.get(`${mCode}|||${mNo}`)
+    const isSent = statusKirim.includes('TERKIRIM') || statusKirim.includes('TERIMA SJ') || (listCode ? sentListCodeSet.has(listCode) : false)
+    const isAging = Number(r.hari || 0) > 7
+
+    if (isSent) lSjSent++
+    if (isCodOrUrgent) lCodUrgent++
+    if (isAging) lAgingGt7++
+    if (isFcl) lFcl++
   }
 
   return {
@@ -422,21 +545,37 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
     totalTagihan: totalTagihanAgg._sum.fdJumlah1 || 0,
     invoicesBulanIni,
     invoicesBulanIniBreakdown: {
-      udara: udaraInvoicesMonth,
-      laut: lautInvoicesMonth,
+      udara: currentMetrics.invoicesUdara,
+      laut: currentMetrics.invoicesLaut,
     },
     tagihanBulanIni,
     tagihanBulanIniBreakdown: {
-      udara: udaraTagihanMonth,
-      laut: lautTagihanMonth,
+      udara: currentMetrics.tagihanUdara,
+      laut: currentMetrics.tagihanLaut,
     },
+    currentMonth: currentMetrics,
+    prevMonth: prevMetrics,
+    lastYearSameMonth: lastYearMetrics,
+    comparisons,
     targetBillUdara: {
       total: uTarget.length,
       breakdown: { kiki: kikiTarget, yati: yatiTarget },
+      categories: {
+        sjSent: uSjSent,
+        codUrgent: uCodUrgent,
+        agingGt7: uAgingGt7,
+        fcl: uFcl,
+      },
     },
     targetBillLaut: {
       total: lTarget.length,
       breakdown: { thara: tharaTarget, rico: ricoTarget, ferly: ferlyTarget },
+      categories: {
+        sjSent: lSjSent,
+        codUrgent: lCodUrgent,
+        agingGt7: lAgingGt7,
+        fcl: lFcl,
+      },
     },
     trend: {
       invoicesBulanIni: calculateTrend(invoicesBulanIni, invoicesBulanLalu),
@@ -459,30 +598,73 @@ export async function getBillingTargetDetails(query: Record<string, string | und
   const typeParam = query.type?.trim().toLowerCase() || 'all'
   const picFilter = query.pic?.trim().toLowerCase() || 'all'
 
-  const isTarget = (r: any) => {
-    const cust = String(r.Customer || '').toUpperCase().trim()
-    if (cust.includes('MR.X') || cust.includes('MR X') || cust === 'NO NAME' || cust === 'NONAME') return false
-
-    const typeStr = String(r.Type || '').toUpperCase().trim()
-    const comodityStr = String(r.Comodity || '').toUpperCase().trim()
-    const isFcl = typeStr.includes('FCL') || comodityStr.includes('FCL')
-
-    // Kargo FCL harus muncul tanpa melihat status gudang
-    if (!isFcl) {
-      const statusKirim = String(r.StatusKirim || '').toUpperCase().trim()
-      if (statusKirim.includes('BELUM DITERIMA GDG')) return false
-    }
-
-    const st = String(r.Status || '').toUpperCase().trim()
-    const isCodOrUrgent = st.includes('COD') || st.includes('URGENT')
-    const isAgingGt7 = Number(r.hari || 0) > 7
-
-    return isCodOrUrgent || isAgingGt7 || isFcl
-  }
-
   const fetchItemsForType = async (mode: 'udara' | 'laut') => {
     const spNum = mode === 'laut' ? 2 : 1
-    const rawRows = await prisma.$queryRaw<any[]>`exec get_data_billing_and_data_m3 ${spNum}`
+    const [rawRows, sentDeliveryRows, entryListRows] = await Promise.all([
+      prisma.$queryRaw<any[]>`exec get_data_billing_and_data_m3 ${spNum}`,
+      prisma.$queryRaw<any[]>`
+        SELECT DISTINCT RTRIM(d.fdListCode) AS fdListCode
+        FROM tbDelivery d WITH (NOLOCK)
+        INNER JOIN tbEntryList el WITH (NOLOCK) ON d.fdListCode = el.fdListCode
+        WHERE d.fdSent = 1
+          AND el.fdBillCreated = 0
+          AND el.fdFinish = 0
+          AND d.fdListType = ${spNum}
+          AND YEAR(d.fdSjDate) >= 2024
+          AND d.fdListCode NOT IN (
+            SELECT RTRIM(fdListCode) FROM tbBilling WITH (NOLOCK) 
+            WHERE fdListCode IS NOT NULL AND RTRIM(fdListCode) <> ''
+          )
+      `,
+      prisma.$queryRaw<any[]>`
+        SELECT 
+          RTRIM(el.fdListCode) AS fdListCode,
+          RTRIM(el.fdMarkingCode) AS markingCode,
+          RTRIM(el.fdMarkingNo) AS markingNo,
+          RTRIM(el.fdCustCode) AS custCode
+        FROM tbEntryList el WITH (NOLOCK)
+        INNER JOIN tbMarking m WITH (NOLOCK) ON el.fdMarkingCode = m.fdMarkingCode
+        WHERE el.fdBillCreated = 0 
+          AND el.fdFinish = 0 
+          AND el.fdListType = ${spNum}
+          AND el.fdListCode <> ''
+          AND YEAR(m.fdExitDate) > 2020
+      `,
+    ])
+
+    const sentListCodeSet = new Set(sentDeliveryRows.map((r) => r.fdListCode?.trim()).filter(Boolean))
+    const entryItemMap = new Map<string, { listCode: string; custCode: string }>()
+    for (const e of entryListRows) {
+      const k = `${e.markingCode}|||${e.markingNo}`
+      entryItemMap.set(k, { listCode: e.fdListCode, custCode: e.custCode })
+    }
+
+    const isTarget = (r: any) => {
+      const cust = String(r.Customer || '').toUpperCase().trim()
+      if (cust.includes('MR.X') || cust.includes('MR X') || cust === 'NO NAME' || cust === 'NONAME') return false
+
+      const statusKirim = String(r.StatusKirim || '').toUpperCase().trim()
+      const mCode = String(r.Marking_code || '').trim()
+      const mNo = String(r.Marking_no || '').trim()
+      const listCode = entryItemMap.get(`${mCode}|||${mNo}`)?.listCode
+      const isSent = statusKirim.includes('TERKIRIM') || statusKirim.includes('TERIMA SJ') || (listCode ? sentListCodeSet.has(listCode) : false)
+
+      const typeStr = String(r.Type || '').toUpperCase().trim()
+      const comodityStr = String(r.Comodity || '').toUpperCase().trim()
+      const isFcl = typeStr.includes('FCL') || comodityStr.includes('FCL')
+
+      // Kargo FCL dan kargo dengan Surat Jalan terkirim harus muncul tanpa melihat status gudang
+      if (!isFcl && !isSent) {
+        if (statusKirim.includes('BELUM DITERIMA GDG')) return false
+      }
+
+      const st = String(r.Status || '').toUpperCase().trim()
+      const isCodOrUrgent = st.includes('COD') || st.includes('URGENT')
+      const isAgingGt7 = Number(r.hari || 0) > 7
+
+      return isCodOrUrgent || isAgingGt7 || isFcl || isSent
+    }
+
     const filtered = rawRows.filter(isTarget)
     const distinctMarkings = Array.from(new Set(filtered.map((r) => r.Marking_code?.trim()).filter(Boolean)))
 
@@ -578,33 +760,86 @@ export async function getBillingTargetDetails(query: Record<string, string | und
     const distinctCustomers = Array.from(
       new Set(filtered.map((r) => String(r.Customer ?? r.customer ?? '').trim()).filter(Boolean))
     )
+    const distinctCustCodes = Array.from(
+      new Set(
+        filtered.map((r) => {
+          const mCode = String(r.Marking_code ?? r.markingCode ?? '').trim()
+          const mNo = String(r.Marking_no ?? r.markingNo ?? '').trim()
+          const itemCust = entryItemMap.get(`${mCode}|||${mNo}`)?.custCode
+          return (itemCust || String(r.custCode ?? r.CustCode ?? r.fdCustCode ?? '')).trim()
+        }).filter(Boolean)
+      )
+    )
+
+    const custCodeToMasterMap = new Map<string, { fdCustCode: string; fdCustName: string | null; fdBillTo?: string | null }>()
+    const custNameToMasterMap = new Map<string, { fdCustCode: string; fdCustName: string | null; fdBillTo?: string | null }>()
     const custNameToCodeMap = new Map<string, string>()
-    if (distinctCustomers.length > 0) {
+
+    if (distinctCustomers.length > 0 || distinctCustCodes.length > 0) {
       try {
         const custRows = await prisma.tbCustomers.findMany({
-          where: { fdCustName: { in: distinctCustomers } },
-          select: { fdCustCode: true, fdCustName: true },
+          where: {
+            OR: [
+              ...(distinctCustomers.length > 0 ? [{ fdCustName: { in: distinctCustomers } }] : []),
+              ...(distinctCustCodes.length > 0 ? [{ fdCustCode: { in: distinctCustCodes } }] : []),
+            ],
+          },
+          select: { fdCustCode: true, fdCustName: true, fdBillTo: true },
         })
         for (const c of custRows) {
-          if (c.fdCustName && c.fdCustCode) {
-            custNameToCodeMap.set(c.fdCustName.trim().toUpperCase(), c.fdCustCode.trim())
+          if (c.fdCustCode) {
+            const trimmedCode = c.fdCustCode.trim()
+            custCodeToMasterMap.set(trimmedCode, c)
+            if (c.fdCustName) {
+              const trimmedName = c.fdCustName.trim().toUpperCase()
+              custNameToMasterMap.set(trimmedName, c)
+              custNameToCodeMap.set(trimmedName, trimmedCode)
+            }
           }
         }
       } catch (err) {
-        logger.error('Error querying custNameToCodeMap:', err)
+        logger.error('Error querying tbCustomers in getBillingTargetDetails:', err)
+      }
+    }
+
+    const markingConsigneeMap = new Map<string, string>()
+    if (distinctMarkings.length > 0) {
+      try {
+        const markingRows = await prisma.tbMarking.findMany({
+          where: { fdMarkingCode: { in: distinctMarkings } },
+          select: { fdMarkingCode: true, fdConsignee: true },
+        })
+        for (const m of markingRows) {
+          if (m.fdMarkingCode) {
+            markingConsigneeMap.set(m.fdMarkingCode.trim(), (m.fdConsignee || '').trim())
+          }
+        }
+      } catch (err) {
+        logger.error('Error querying markingConsigneeMap in getBillingTargetDetails:', err)
       }
     }
 
     const batchPriceInput = filtered.map((r) => {
-      const custName = String(r.Customer ?? r.customer ?? '').trim()
+      const rawCustName = String(r.Customer ?? r.customer ?? '').trim()
+      const mCode = (r.Marking_code ?? r.markingCode ?? '').trim()
+      const mNo = String(r.Marking_no ?? r.markingNo ?? '').trim()
+      const itemCustCode = entryItemMap.get(`${mCode}|||${mNo}`)?.custCode || ''
+      const rowCustCode = String(r.custCode ?? r.CustCode ?? r.fdCustCode ?? '').trim()
       const resolvedCustCode =
-        custNameToCodeMap.get(custName.toUpperCase()) ||
-        String(entryMap.get((r.Marking_code ?? '').trim())?.sampleCustCode || '').trim()
+        (itemCustCode ? custCodeToMasterMap.get(itemCustCode)?.fdCustCode?.trim() : undefined) ||
+        (rowCustCode ? custCodeToMasterMap.get(rowCustCode)?.fdCustCode?.trim() : undefined) ||
+        custNameToCodeMap.get(rawCustName.toUpperCase()) ||
+        itemCustCode ||
+        rowCustCode
+
+      const masterCust =
+        (resolvedCustCode ? custCodeToMasterMap.get(resolvedCustCode) : undefined) ||
+        custNameToMasterMap.get(rawCustName.toUpperCase())
 
       return {
-        markingCode: String(r.Marking_code ?? r.markingCode ?? '').trim(),
-        markingNo: String(r.Marking_no ?? r.markingNo ?? '').trim(),
-        customer: custName,
+        markingCode: mCode,
+        markingNo: mNo,
+        customer: masterCust?.fdCustName?.trim() || rawCustName,
         custCode: resolvedCustCode,
         branch: String(r.Branch ?? r.branch ?? '').trim(),
         sales: String(r.Sales ?? r.sales ?? '').trim(),
@@ -623,10 +858,27 @@ export async function getBillingTargetDetails(query: Record<string, string | und
       const typeStr = String(r.Type || '').toUpperCase().trim()
       const comodityStr = String(r.Comodity || '').toUpperCase().trim()
       const marking = (r.Marking_code ?? r.markingCode ?? '').trim()
-      const custName = String(r.Customer ?? r.customer ?? '').trim()
+      const markingNo = String(r.Marking_no ?? r.markingNo ?? '').trim()
+      const rawCustName = String(r.Customer ?? r.customer ?? '').trim()
+      const itemCustCode = entryItemMap.get(`${marking}|||${markingNo}`)?.custCode || ''
+      const rowCustCode = String(r.custCode ?? r.CustCode ?? r.fdCustCode ?? '').trim()
+
+      const masterByCode =
+        (itemCustCode ? custCodeToMasterMap.get(itemCustCode) : undefined) ||
+        (rowCustCode ? custCodeToMasterMap.get(rowCustCode) : undefined)
+      const masterByName = custNameToMasterMap.get(rawCustName.toUpperCase())
+      const masterCust = masterByCode || masterByName
+
+      // Single Source of Truth: tbCustomers.fdCustName
+      const officialCustName = masterCust?.fdCustName?.trim() || rawCustName
       const resolvedCustCode =
-        custNameToCodeMap.get(custName.toUpperCase()) ||
-        String(entryMap.get(marking)?.sampleCustCode || '').trim()
+        masterCust?.fdCustCode?.trim() ||
+        itemCustCode ||
+        rowCustCode ||
+        custNameToCodeMap.get(rawCustName.toUpperCase()) ||
+        ''
+      const officialBillTo = masterCust?.fdBillTo?.trim() || ''
+      const consignee = markingConsigneeMap.get(marking) || ''
 
       let pic = 'rico'
       if (mode === 'udara') {
@@ -649,7 +901,7 @@ export async function getBillingTargetDetails(query: Record<string, string | und
       const loadDate = loadDateMap.get(marking) || null
       const entryInfo = entryMap.get(marking) || null
       const custHarga = hargaMap.get(marking) || null
-      const custCode = resolvedCustCode || entryInfo?.sampleCustCode || ''
+      const custCode = resolvedCustCode || ''
 
       const pRes = priceCheckMap.get(String(idx)) || priceCheckMap.get(marking)
       const hargaDb = pRes?.dbPrice || 0
@@ -659,16 +911,23 @@ export async function getBillingTargetDetails(query: Record<string, string | und
       const matchedTier = pRes?.appliedTierLabel || 'Level 4: Tarif Umum'
       const isBroker = pRes?.isBroker ?? false
       const currentHarga = Number(r.Harga ?? r.harga ?? 0)
+      const rowListCode = entryItemMap.get(`${marking}|||${markingNo}`)?.listCode || ''
+      const statusKirim = (r.StatusKirim ?? r.statusKirim ?? '').trim()
+      const isSent = statusKirim.toUpperCase().includes('TERKIRIM') || statusKirim.toUpperCase().includes('TERIMA SJ') || (rowListCode ? sentListCodeSet.has(rowListCode) : false)
 
       return {
         ...r,
         hari: Number(r.hari || 0),
         pic,
-        customer: (r.Customer ?? r.customer ?? '').trim(),
+        listCode: rowListCode,
+        customer: officialCustName,
+        custCode,
+        billTo: officialBillTo,
+        consignee,
         branch: (r.Branch ?? r.branch ?? '').trim(),
         sales: (r.Sales ?? r.sales ?? '').trim(),
-        markingCode: (r.Marking_code ?? r.markingCode ?? '').trim(),
-        markingNo: (r.Marking_no ?? r.markingNo ?? '').trim(),
+        markingCode: marking,
+        markingNo: markingNo,
         status: (r.Status ?? r.status ?? '').trim(),
         jmlPack: Number(r.Jml_pack ?? r.jmlPack ?? 0),
         satuan: (r.Satuan ?? r.satuan ?? '').trim(),
@@ -680,7 +939,8 @@ export async function getBillingTargetDetails(query: Record<string, string | und
         comodity: (r.Comodity ?? r.comodity ?? '').trim(),
         tglAgen: r.Tgl_Agen ? new Date(r.Tgl_Agen).toISOString() : null,
         exitDate: r.ExitDate ? new Date(r.ExitDate).toISOString() : null,
-        statusKirim: (r.StatusKirim ?? r.statusKirim ?? '').trim(),
+        statusKirim,
+        isSjSent: Boolean(isSent),
         harga: currentHarga,
         updateBy: (r.UpdateBy ?? r.updateBy ?? '').trim(),
         updateDate: r.UpdateDate ? new Date(r.UpdateDate).toISOString() : null,
@@ -688,7 +948,6 @@ export async function getBillingTargetDetails(query: Record<string, string | und
         isPartial,
         countTerima,
         loadDate,
-        custCode,
         isBroker,
         isCommodityOverride: pRes?.isCommodityOverride ?? false,
         commodityOverrideDetail: pRes?.commodityOverrideDetail || '',
@@ -725,6 +984,33 @@ export async function getBillingTargetDetails(query: Record<string, string | und
   let finalItems = allTargetItems
   if (picFilter !== 'all') {
     finalItems = allTargetItems.filter((it) => it.pic.toLowerCase() === picFilter)
+  }
+
+  if (query.search?.trim()) {
+    const s = query.search.trim().toLowerCase()
+    const qTokens = s.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, ' ').split(/\s+/).filter(Boolean)
+    finalItems = finalItems.filter((it) => {
+      const pool = [
+        it.customer,
+        it.custCode,
+        it.billTo,
+        it.consignee,
+        it.markingCode,
+        it.markingNo,
+        it.listCode,
+        it.branch,
+        it.sales,
+        it.comodity,
+        it.type,
+        it.pic,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase()
+        .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, ' ')
+
+      return qTokens.every((token) => pool.includes(token))
+    })
   }
 
   return {

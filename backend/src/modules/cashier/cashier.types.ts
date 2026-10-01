@@ -59,9 +59,16 @@ export const AttachTempReceiptSchema = z.object({
 
 export type AttachTempReceiptDto = z.infer<typeof AttachTempReceiptSchema>
 
+export const AllocateOverpaymentDepositSchema = z.object({
+  amount: z.coerce.number().positive().optional(),
+})
+
+export type AllocateOverpaymentDepositDto = z.infer<typeof AllocateOverpaymentDepositSchema>
+
 // ─── QUERY PARAMS & TYPES ──────────────────────────────────────────
 
 export interface CashierQuery {
+  [key: string]: string | undefined
   page?: string
   limit?: string
   search?: string

@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
 import { authMiddleware, requirePermission } from '../../middleware/auth'
+import { validateQuery } from '../../middleware/requestValidator'
+import { CustomerQuerySchema, CustomerSuggestionsQuerySchema } from './customers.types'
 import { getCustomers, getCustomerById, getCustomerSuggestions } from './customers.service'
 import { successResponse, errorResponse } from '../../utils/response'
 
@@ -8,9 +10,9 @@ const customersRoutes = new Hono()
 // Semua route customers memerlukan autentikasi login (bisa diakses oleh semua role yang login)
 customersRoutes.use('/*', authMiddleware)
 
-customersRoutes.get('/', async (c) => {
+customersRoutes.get('/', validateQuery(CustomerQuerySchema), async (c) => {
   try {
-    const query = c.req.query()
+    const query = c.req.valid('query' as any) || c.req.query()
     const result = await getCustomers(query)
     return successResponse(c, result.data, result.meta)
   } catch (err) {
@@ -18,9 +20,10 @@ customersRoutes.get('/', async (c) => {
   }
 })
 
-customersRoutes.get('/suggestions', async (c) => {
+customersRoutes.get('/suggestions', validateQuery(CustomerSuggestionsQuerySchema), async (c) => {
   try {
-    const q = c.req.query('q') || ''
+    const query = c.req.valid('query' as any) || c.req.query()
+    const q = query.q || ''
     const suggestions = await getCustomerSuggestions(q)
     return successResponse(c, suggestions)
   } catch (err) {

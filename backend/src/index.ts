@@ -1,10 +1,13 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
+import { secureHeaders } from 'hono/secure-headers'
+import { bodyLimit } from 'hono/body-limit'
 import { logger as honoLogger } from 'hono/logger'
 import { rateLimiter } from 'hono-rate-limiter'
 import { ENV } from './config/env'
 import { logger } from './config/logger'
 import { createErrorHandler } from './middleware/errorHandler'
+import { errorResponse } from './utils/response'
 
 // Import semua routes
 import { authRoutes } from './modules/auth/auth.routes'
@@ -35,24 +38,44 @@ import { profileRoutes } from './modules/profile/profile.routes'
 
 const rootApp = new Hono()
 
+// Security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Referrer-Policy)
+rootApp.use('*', secureHeaders({
+  xFrameOptions: 'SAMEORIGIN',
+  xContentTypeOptions: 'nosniff',
+  xXssProtection: '1; mode=block',
+  referrerPolicy: 'strict-origin-when-cross-origin',
+}))
+
+// CORS configuration dengan verifikasi origin yang ketat
+const ALLOWED_ORIGIN_PATTERNS = [
+  /^https?:\/\/36\.93\.22\.142(?::\d+)?$/,
+  /^https?:\/\/([a-zA-Z0-9-]+\.)*sampai\.co$/,
+  /^https?:\/\/localhost(?::\d+)?$/,
+  /^https?:\/\/127\.0\.0\.1(?::\d+)?$/,
+  /^https?:\/\/192\.168\.1\.\d+(?::\d+)?$/,
+]
+
 rootApp.use('*', cors({
   origin: (origin) => {
-    if (!origin) return '*'
+    if (!origin) return ENV.IS_PRODUCTION ? 'https://app.sampai.co' : '*'
     if (!ENV.IS_PRODUCTION) return origin
-    if (
-      origin.includes('36.93.22.142') ||
-      origin.includes('sampai.co') ||
-      origin.includes('localhost') ||
-      origin.includes('127.0.0.1') ||
-      origin.includes('192.168.1.')
-    ) {
+    if (ALLOWED_ORIGIN_PATTERNS.some((pattern) => pattern.test(origin))) {
       return origin
     }
     return 'https://app.sampai.co'
   },
-  allowHeaders: ['Content-Type', 'Authorization'],
+  allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  exposeHeaders: ['X-Refreshed-Token'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  credentials: true,
 }))
+
+// Batas ukuran body request untuk mencegah DoS memory exhaustion
+rootApp.use('/api/*', bodyLimit({
+  maxSize: 50 * 1024 * 1024, // 50MB (mendukung upload foto BAP & file price list Excel)
+  onError: (c) => errorResponse(c, 'Ukuran payload melebihi batas maksimal yang diizinkan (50MB)', 413),
+}))
+
 rootApp.use('*', honoLogger())
 
 // Static file serving handler for uploads with dev/prod distinction
@@ -107,30 +130,27 @@ const serveUploadHandler = async (c: any) => {
   return c.text('Not found', 404)
 }
 
-// Support uploads at root, APP_BASE_PATH, /mshipping, /avatars, and /api/uploads
-rootApp.get('/uploads/*', serveUploadHandler)
-rootApp.get('/avatars/*', serveUploadHandler)
-rootApp.get(`${ENV.APP_BASE_PATH}/uploads/*`, serveUploadHandler)
-rootApp.get(`${ENV.APP_BASE_PATH}/avatars/*`, serveUploadHandler)
-rootApp.get('/mshipping/uploads/*', serveUploadHandler)
-rootApp.get('/mshipping/avatars/*', serveUploadHandler)
-rootApp.get('/api/uploads/*', serveUploadHandler)
-rootApp.get('/mshipping/api/uploads/*', serveUploadHandler)
+// Register static upload routes
+const UPLOAD_ROUTE_PATTERNS = [
+  '/uploads/*',
+  '/avatars/*',
+  `${ENV.APP_BASE_PATH}/uploads/*`,
+  `${ENV.APP_BASE_PATH}/avatars/*`,
+  '/mshipping/uploads/*',
+  '/mshipping/avatars/*',
+  '/api/uploads/*',
+  '/mshipping/api/uploads/*',
+]
+UPLOAD_ROUTE_PATTERNS.forEach((pattern) => rootApp.get(pattern, serveUploadHandler))
 
+const apiApp = new Hono()
 
-// API rate limiter
-rootApp.use('/api/*', rateLimiter({
+// API rate limiter — diterapkan secara seragam ke seluruh endpoint apiApp
+apiApp.use('*', rateLimiter({
   windowMs: 15 * 60 * 1000, // 15 menit
   limit: ENV.IS_PRODUCTION ? 1000 : 10000,
   keyGenerator: (c) => c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'local-dev',
 }))
-rootApp.use(`${ENV.APP_BASE_PATH}/api/*`, rateLimiter({
-  windowMs: 15 * 60 * 1000,
-  limit: ENV.IS_PRODUCTION ? 1000 : 10000,
-  keyGenerator: (c) => c.req.header('x-forwarded-for') ?? c.req.header('x-real-ip') ?? 'local-dev',
-}))
-
-const apiApp = new Hono()
 
 // Mount routes
 apiApp.route('/auth', authRoutes)
