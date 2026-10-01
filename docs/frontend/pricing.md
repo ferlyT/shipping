@@ -24,11 +24,21 @@ Dokumen ini merangkum 3 domain pengelolaan tarif pada M-Shipping: **Master Tarif
 
 ## 2. Modul Tarif Khusus Pelanggan (`src/features/customer-price-list/`)
 - **Direktori Customer Price List (`ListPage.tsx`)**:
-  - Antarmuka dual-tab: **Harga Komoditi Khusus Customer** dan **Daftar Upload File Excel**.
+  - Antarmuka dual-tab: **Harga Komoditi Khusus Customer** (`special_prices`) dan **Daftar Upload File Excel** (`master_uploads`).
+  - **Masa Berlaku Lengkap & Penanganan Expiration (`endDate`)**:
+    - Kolom Masa Berlaku menampilkan rentang: `[Mulai] s/d [Sampai]` atau `[Mulai] s/d Selamanya`.
+    - Badge status visual:
+      - **Aktif** (Hijau emerald outline).
+      - **Segera Berakhir** (Amber outline): menyala jika sisa masa berlaku $\le 7$ hari.
+      - **Kedaluwarsa** (Merah rose outline): menyala jika `endDate < TODAY`.
+    - Tab 2 (`master_uploads`): Tombol aksi cepat *"Masa Berlaku"* membuka modal interaktif `EditEffectiveDateModal` untuk mengubah rentang tanggal berlaku upload dan sinkronisasi ke seluruh item terkait.
   - **Pencarian Berdasarkan Nama Customer**:
     - Tab Harga Khusus: Toolbar pencarian mencari nama customer (`tbCustomers.fdCustName`), kode customer (`fdCustCode`), kategori komoditas, branch, dan alias komoditi. Dilengkapi `useDebounce(..., 300)` dan tombol hapus instan `[X]`.
     - Tab Master Uploads: Pencarian customer berdasarkan nama customer (`custName`), kode (`fdCustCode`), dan nama berkas Excel (`fileName`).
   - Penuh dukungan i18n bilingual (`id.json` & `en.json`).
+- **Modal Input & Pengaturan Masa Berlaku**:
+  - **Form Upload Excel (`UploadPage.tsx`)**: Dilengkapi field `Berlaku Sampai (End Date)` dengan opsi checkbox toggle *"Tanpa batas waktu (Selamanya)"*.
+  - **Modal Edit Masa Berlaku (`EditEffectiveDateModal.tsx`)**: Mendukung pengubahan `Berlaku Mulai` dan `Berlaku Sampai`, toggle *"Tanpa batas waktu"*, serta validasi wajib `endDate >= effectiveDate`.
 - **Modal Input Harga Komoditi Khusus (`CustomerCommodityPriceModal.tsx`)**:
   - **Pencarian Customer dari SSOT `tbCustomers`**: Terhubung langsung ke `customersApi.list` dengan status aktif (`fdDiscontinued <> 1`).
   - **Branch Asal dari Master `tbCabang`**: Mengambil daftar resmi cabang operasional dari endpoint `/api/customer-price-list/branches` (`{b.code} - {b.name}`).
@@ -36,7 +46,7 @@ Dokumen ini merangkum 3 domain pengelolaan tarif pada M-Shipping: **Master Tarif
   - Normalisasi petik FoxPro `displayCustName`.
   - Kartu pelanggan terpilih dengan badge kode monospaced dan tombol *"Ganti"*.
   - Multi-alias komoditi dan pengaturan tanggal berlaku (*Effective Date* s/d *End Date*).
-- **Visual Diff Pelanggan (`DiffPage.tsx`)**: Komparasi perubahan tarif kontrak khusus pelanggan bersangkutan.
+- **Visual Diff Pelanggan (`DiffPage.tsx`) & Histori (`HistoryPage.tsx`)**: Komparasi perubahan tarif kontrak khusus pelanggan bersangkutan dengan indikator rentang tanggal berlaku dan badge status.
 
 ---
 
