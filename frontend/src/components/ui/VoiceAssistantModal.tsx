@@ -50,7 +50,7 @@ interface SearchResultBilling {
 
 export function VoiceAssistantModal() {
   const navigate = useNavigate()
-  const { isOpen, closeAssistant, context } = useVoiceAssistantStore()
+  const { isOpen, closeAssistant, context, displayMode } = useVoiceAssistantStore()
 
   useModalEscape(isOpen, closeAssistant)
 
@@ -421,7 +421,7 @@ export function VoiceAssistantModal() {
     setTimeout(() => setCopiedIp(false), 2500)
   }
 
-  if (!isOpen) return null
+  if (!isOpen || displayMode === 'hud') return null
 
   // Warna aksen badge intent
   const getIntentBadge = (intent: VoiceIntent | null) => {

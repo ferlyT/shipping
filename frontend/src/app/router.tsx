@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet, useLocation } from 'rea
 import { useAuthStore } from '@/stores/authStore'
 import { ROUTES } from '@/lib/constants'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { PageSkeleton } from '@/components/ui/Skeleton'
 
 export function AdminGuard() {
   const { user } = useAuthStore()
@@ -143,7 +144,7 @@ const InspectionReportsPage = lazy(() => import('@/features/inspection').then(m 
 export function AppRouter() {
   return (
     <BrowserRouter>
-      <Suspense fallback={<div className="flex h-screen items-center justify-center">Loading…</div>}>
+      <Suspense fallback={<PageSkeleton />}>
         <Routes>
           <Route path={ROUTES.LOGIN} element={<LoginPage />} />
           <Route path={ROUTES.REGISTER} element={<RegisterPage />} />

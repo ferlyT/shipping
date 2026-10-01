@@ -83,3 +83,24 @@ Card.Footer = function CardFooter({ children, className }: { children: ReactNode
     </div>
   )
 }
+
+export const CardHeader = Card.Header
+export const CardBody = Card.Body
+export const CardContent = Card.Body
+export const CardFooter = Card.Footer
+
+export function CardTitle({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <h3 className={cn('font-semibold text-[var(--color-primary)] font-[var(--font-display)] text-sm sm:text-base tracking-tight leading-tight', className)}>
+      {children}
+    </h3>
+  )
+}
+
+export function CardDescription({ className, children }: { className?: string; children: ReactNode }) {
+  return (
+    <p className={cn('text-xs text-[var(--color-secondary)] mt-0.5', className)}>
+      {children}
+    </p>
+  )
+}

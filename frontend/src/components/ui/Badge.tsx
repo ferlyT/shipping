@@ -11,10 +11,10 @@ interface BadgeProps {
 
 const styles: Record<BadgeVariant, string> = {
   default: 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border-[var(--color-border)]',
-  success: 'bg-green-50 text-[var(--color-success)] border-green-200',
-  warning: 'bg-yellow-50 text-[var(--color-warning)] border-yellow-200',
-  danger:  'bg-red-50 text-[var(--color-danger)] border-red-200',
-  info:    'bg-blue-50 text-blue-700 border-blue-200',
+  success: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+  warning: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30',
+  danger:  'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30',
+  info:    'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30',
 }
 
 export function Badge({ variant = 'default', children, className, title }: BadgeProps) {

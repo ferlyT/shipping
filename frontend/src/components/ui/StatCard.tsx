@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Skeleton } from './Skeleton'
 
 export interface RatioBarItem {
   percentage: number
@@ -16,21 +17,25 @@ export interface StatTrend {
 }
 
 export interface StatCardProps {
-  title: string
-  value: ReactNode
+  title?: string
+  label?: string
+  value?: ReactNode
   subValue?: ReactNode
   icon?: ReactNode
-  trend?: StatTrend
+  trend?: StatTrend | null
   ratioBar?: RatioBarItem[]
   footer?: ReactNode
   action?: ReactNode
   className?: string
   compact?: boolean
+  isLoading?: boolean
+  accentColor?: string
   onClick?: () => void
 }
 
 export function StatCard({
   title,
+  label,
   value,
   subValue,
   icon,
@@ -40,15 +45,32 @@ export function StatCard({
   action,
   className,
   compact = false,
+  isLoading = false,
+  accentColor,
   onClick,
 }: StatCardProps) {
+  const displayTitle = title || label || ''
   const isClickable = Boolean(onClick)
+
+  if (isLoading) {
+    return (
+      <div className={cn('rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3 min-h-[110px]', className)}>
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-7 w-7 rounded-lg" />
+        </div>
+        <Skeleton className="h-7 w-32" />
+        <Skeleton className="h-3.5 w-20" />
+      </div>
+    )
+  }
 
   return (
     <div
       onClick={onClick}
       role={isClickable ? 'button' : undefined}
       tabIndex={isClickable ? 0 : undefined}
+      style={accentColor ? { borderLeftColor: accentColor, borderLeftWidth: '3px' } : undefined}
       className={cn(
         'rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xs transition-all font-[var(--font-body)]',
         compact ? 'p-3' : 'p-3.5 sm:p-4',
@@ -58,7 +80,7 @@ export function StatCard({
     >
       <div className="flex items-center justify-between gap-2 mb-2">
         <span className="text-[10.5px] uppercase tracking-wider font-semibold text-[var(--color-secondary)] truncate">
-          {title}
+          {displayTitle}
         </span>
         <div className="flex items-center gap-1.5 shrink-0">
           {action}

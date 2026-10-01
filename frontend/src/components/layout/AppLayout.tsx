@@ -7,6 +7,7 @@ import { useVoiceAssistantStore } from '@/stores/voiceAssistantStore'
 import { useVoiceAssistantPermission } from '@/hooks/useVoiceAssistantPermission'
 import { ToastContainer } from '@/components/ui/ToastContainer'
 import { VoiceAssistantModal } from '@/components/ui/VoiceAssistantModal'
+import { ErrorBoundary } from '@/components/ErrorBoundary'
 
 export function AppLayout() {
   const { isSidebarOpen, setSidebarOpen } = useUiStore()
@@ -41,7 +42,9 @@ export function AppLayout() {
         <Topbar onMenuClick={() => setSidebarOpen(true)} />
         
         <main className="flex-1 overflow-auto animate-fadeIn relative min-w-0">
-          <Outlet />
+          <ErrorBoundary>
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

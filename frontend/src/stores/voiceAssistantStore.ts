@@ -9,26 +9,54 @@ export interface VoiceAssistantContext {
   onCloseSummary?: () => void
   onTriggerIssue?: () => void
   onRefreshValidation?: () => void
+  onSwitchTab?: (tabKey: string) => void
+  onNavigateInvoice?: (target: string) => void
+  onOpenDrawer?: () => void
+  onPrintInvoice?: () => void
+  onOpenModal?: (modalName: 'summary' | 'issue' | 'resi' | 'history' | 'audit') => void
 }
+
+export type VoiceDisplayMode = 'modal' | 'hud'
+export type VoiceCommandStatus = 'idle' | 'listening' | 'evaluating' | 'executed' | 'unrecognized'
 
 interface VoiceAssistantState {
   isOpen: boolean
+  displayMode: VoiceDisplayMode
   context: VoiceAssistantContext | null
   suppressionCount: number
   isSuppressed: boolean
+  isListening: boolean
+  isMuted: boolean
+  transcript: string
+  interimTranscript: string
+  commandStatus: VoiceCommandStatus
+  commandFeedback: string
+
   suppressVoice: () => () => void
   openAssistant: () => void
   closeAssistant: () => void
   toggleAssistant: () => void
+  setDisplayMode: (mode: VoiceDisplayMode) => void
   registerContext: (ctx: VoiceAssistantContext) => void
   unregisterContext: () => void
+  setVoiceTelemetry: (data: Partial<Pick<VoiceAssistantState, 'isListening' | 'isMuted' | 'transcript' | 'interimTranscript'>>) => void
+  setCommandStatus: (status: VoiceCommandStatus, feedback?: string) => void
+  toggleVoiceMute: () => void
 }
 
-export const useVoiceAssistantStore = create<VoiceAssistantState>((set) => ({
+export const useVoiceAssistantStore = create<VoiceAssistantState>((set, get) => ({
   isOpen: false,
+  displayMode: 'modal',
   context: null,
   suppressionCount: 0,
   isSuppressed: false,
+  isListening: false,
+  isMuted: false,
+  transcript: '',
+  interimTranscript: '',
+  commandStatus: 'idle',
+  commandFeedback: '',
+
   suppressVoice: () => {
     set((state) => {
       const nextCount = state.suppressionCount + 1
@@ -41,15 +69,38 @@ export const useVoiceAssistantStore = create<VoiceAssistantState>((set) => ({
       })
     }
   },
+
   openAssistant: () => {
-    if (useVoiceAssistantStore.getState().isSuppressed) return
+    const { isSuppressed, displayMode } = get()
+    // Jika sedang dalam HUD mode, openAssistant men-toggle mute/unmute HUD
+    if (displayMode === 'hud') {
+      set({ isMuted: false })
+      return
+    }
+    if (isSuppressed) return
     set({ isOpen: true })
   },
+
   closeAssistant: () => set({ isOpen: false }),
+
   toggleAssistant: () => {
-    if (useVoiceAssistantStore.getState().isSuppressed) return
+    const { isSuppressed, displayMode, isMuted } = get()
+    if (displayMode === 'hud') {
+      set({ isMuted: !isMuted })
+      return
+    }
+    if (isSuppressed) return
     set((state) => ({ isOpen: !state.isOpen }))
   },
+
+  setDisplayMode: (mode) => set({ displayMode: mode }),
+
   registerContext: (ctx) => set({ context: ctx }),
   unregisterContext: () => set({ context: null }),
+
+  setVoiceTelemetry: (data) => set((state) => ({ ...state, ...data })),
+
+  setCommandStatus: (status, feedback = '') => set({ commandStatus: status, commandFeedback: feedback }),
+
+  toggleVoiceMute: () => set((state) => ({ isMuted: !state.isMuted })),
 }))

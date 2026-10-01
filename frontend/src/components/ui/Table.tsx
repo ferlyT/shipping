@@ -141,10 +141,76 @@ export function TableSkeleton<T>({ columns }: { columns: Column<T>[] | number })
   )
 }
 
-function EmptyTableState({ message }: { message?: string }) {
+export function EmptyTableState({ message }: { message?: string }) {
   return (
     <div className="flex flex-col items-center justify-center py-16 text-[var(--color-muted)]">
       <p className="text-sm">{message ?? 'No data available'}</p>
     </div>
   )
 }
+
+export function TableHeader({ className, children, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
+  return (
+    <thead className={cn('sticky top-0 z-20 shadow-[0_1px_0_0_var(--color-border)] bg-[var(--color-neutral)]', className)} {...props}>
+      {children}
+    </thead>
+  )
+}
+
+export function TableBody({ className, children, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
+  return (
+    <tbody className={cn('bg-[var(--color-surface)]', className)} {...props}>
+      {children}
+    </tbody>
+  )
+}
+
+export function TableFooter({ className, children, ...props }: React.HTMLAttributes<HTMLTableSectionElement>) {
+  return (
+    <tfoot className={cn('border-t border-[var(--color-border)] bg-[var(--color-neutral)]/50 font-medium', className)} {...props}>
+      {children}
+    </tfoot>
+  )
+}
+
+export function TableRow({ className, children, ...props }: React.HTMLAttributes<HTMLTableRowElement>) {
+  return (
+    <tr className={cn('border-b border-[var(--color-border)] transition-colors hover:bg-[var(--color-neutral)]/60 last:border-0', className)} {...props}>
+      {children}
+    </tr>
+  )
+}
+
+export function TableHead({ className, children, ...props }: React.ThHTMLAttributes<HTMLTableCellElement>) {
+  return (
+    <th className={cn('px-5 py-[14px] text-left font-medium text-[var(--color-secondary)] font-[var(--font-label)] text-[11px] tracking-[0.08em] uppercase whitespace-nowrap', className)} {...props}>
+      {children}
+    </th>
+  )
+}
+
+export function TableCell({ className, children, ...props }: React.TdHTMLAttributes<HTMLTableCellElement>) {
+  return (
+    <td className={cn('px-5 py-[18px] align-top text-[var(--color-primary)] text-[14px]', className)} {...props}>
+      {children}
+    </td>
+  )
+}
+
+export function TableCaption({ className, children, ...props }: React.HTMLAttributes<HTMLTableCaptionElement>) {
+  return (
+    <caption className={cn('mt-4 text-xs text-[var(--color-secondary)]', className)} {...props}>
+      {children}
+    </caption>
+  )
+}
+
+Table.Header = TableHeader
+Table.Body = TableBody
+Table.Footer = TableFooter
+Table.Row = TableRow
+Table.Head = TableHead
+Table.Cell = TableCell
+Table.Caption = TableCaption
+Table.Skeleton = TableSkeleton
+Table.Empty = EmptyTableState

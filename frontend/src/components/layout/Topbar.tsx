@@ -15,7 +15,7 @@ import { ThemeToggle } from './ThemeToggle'
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const { user, logout } = useAuthStore()
   const { lang, toggleLang } = useLangStore()
-  const { openAssistant } = useVoiceAssistantStore()
+  const { openAssistant, displayMode } = useVoiceAssistantStore()
   const canUseVoice = useVoiceAssistantPermission()
   const { t } = useTranslation()
   const [imgError, setImgError] = useState(false)
@@ -41,8 +41,8 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Global Voice Assistant Button - Otorisasi Role */}
-        {canUseVoice && (
+        {/* Global Voice Assistant Button - Otorisasi Role & Sembunyikan saat di HUD Mode */}
+        {canUseVoice && displayMode !== 'hud' && (
           <button
             type="button"
             onClick={openAssistant}
