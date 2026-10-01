@@ -1,3 +1,5 @@
+import { z } from 'zod'
+
 export interface PriceCheckParams {
   listCode?: string
   markingCode?: string
@@ -52,6 +54,9 @@ export interface UnifiedPriceCheckResult {
   commodityOverrideDetail?: string
   customerPriceList?: any
   masterPriceList?: any
+  customerEndDate?: string | null
+  isCustomerPriceExpired?: boolean
+  isCustomerPriceExpiringSoon?: boolean
   listCode?: string
   mode?: 'UDARA' | 'LAUT'
   customerTariffs?: any[]
@@ -77,3 +82,24 @@ export interface BatchPreloadedContext {
   markingInfoMap: Map<string, { branch: string | null; listType: number | null; loadDate: Date | null }>
   customerBrokerMap: Map<string, number>
 }
+
+export const EvaluatePriceCheckSchema = z.object({
+  listCode: z.string().optional(),
+  markingCode: z.string().optional(),
+  markingNo: z.string().optional(),
+  custCode: z.string().optional(),
+  customer: z.string().optional(),
+  branch: z.string().optional(),
+  mode: z.string().optional(),
+  type: z.string().optional(),
+  comodity: z.string().optional(),
+  sales: z.string().optional(),
+  harga: z.number().optional(),
+  targetDate: z.union([z.string(), z.date()]).optional(),
+})
+
+export const BatchEvaluatePriceCheckSchema = z.object({
+  items: z.array(EvaluatePriceCheckSchema).min(1, 'Daftar item untuk evaluasi tidak boleh kosong'),
+  mode: z.enum(['udara', 'laut']).optional().default('laut'),
+})
+

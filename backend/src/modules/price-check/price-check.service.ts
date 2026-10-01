@@ -700,6 +700,9 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
   let priceCS: number | null = null
   let priceMKT: number | null = null
   let effectiveDate: string | null = null
+  let customerEndDate: string | null = null
+  let isCustomerPriceExpired = false
+  let isCustomerPriceExpiringSoon = false
   let matchedCategory = targetCategoryToMatch
   let chosenMasterUpload: any = null
   let chosenCustUpload: any = null
@@ -791,6 +794,10 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
 
       // 7. End Date check (jika ada)
       if (m.endDate && new Date(m.endDate) < shipmentDate) {
+        if (m.fdCustCode) {
+          isCustomerPriceExpired = true
+          customerEndDate = new Date(m.endDate).toISOString()
+        }
         continue
       }
 
@@ -809,6 +816,24 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
       }
       break
     }
+  }
+
+  // Helper untuk melacak status kedaluwarsa customer
+  const checkCustomerExpiration = (u: any, it?: any) => {
+    const end = it?.endDate ? new Date(it.endDate) : (u?.endDate ? new Date(u.endDate) : null)
+    if (end) {
+      if (end < targetDate) {
+        isCustomerPriceExpired = true
+        customerEndDate = end.toISOString()
+        return false // sudah kedaluwarsa
+      }
+      const diffDays = (end.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24)
+      if (diffDays <= 7) {
+        isCustomerPriceExpiringSoon = true
+        customerEndDate = end.toISOString()
+      }
+    }
+    return true // masih aktif
   }
 
   // ── TIER 1: Harga Customer Commodity (Manual Entry / Mapping Spesifik Customer) ──
@@ -835,6 +860,10 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
       )
 
       if (matchedItem && Number(matchedItem.price) > 0 && (isManualEntry || isCustomerMapped)) {
+        const isActive = checkCustomerExpiration(u, matchedItem)
+        if (!isActive) {
+          continue // lewati item harga customer yang sudah expired
+        }
         dbPrice = Number(matchedItem.price)
         priceSource = 'CUSTOMER_COMMODITY'
         priceSourceLabel = 'Tier 1: Harga Komoditi Khusus Customer'
@@ -872,6 +901,10 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
                   return mMatch && bMatch
                 })
                 if (matchedItem && Number(matchedItem.price) > 0) {
+                  const isActive = checkCustomerExpiration(u, matchedItem)
+                  if (!isActive) {
+                    continue
+                  }
                   dbPrice = Number(matchedItem.price)
                   priceSource = 'CUSTOMER_MARKING'
                   priceSourceLabel = `Tier 2: Tarif Khusus Customer (Marking Override: ${m.markingCode})`
@@ -896,25 +929,32 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
 
   // ── TIER 3: Harga Customer Default (Default Upload) ──
   if (dbPrice === 0 && custCode && allCustUploads.length > 0) {
-    const custDefaultUpload = allCustUploads.find(
+    const custDefaultUploads = allCustUploads.filter(
       (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
     )
-    if (custDefaultUpload && custDefaultUpload.items) {
-      const matchedItem = matchCategoryInItems(custDefaultUpload.items, (it: any) => {
-        const mMatch = !it.mode || it.mode.toUpperCase().includes(modeStr.toUpperCase())
-        const bMatch = !it.branch || getNormalizedBranchCode(it.branch) === targetBranchCode
-        return mMatch && bMatch
-      })
-      if (matchedItem && Number(matchedItem.price) > 0) {
-        dbPrice = Number(matchedItem.price)
-        priceSource = 'CUSTOMER_DEFAULT'
-        priceSourceLabel = 'Tier 3: Tarif Khusus Customer (Default Upload)'
-        appliedTier = 'TIER_3_CUSTOMER_DEFAULT'
-        appliedTierLabel = 'Tier 3: Customer Default'
-        matchedWith = 'CUSTOMER'
-        effectiveDate = custDefaultUpload.effectiveDate ? new Date(custDefaultUpload.effectiveDate).toISOString() : null
-        matchedCategory = matchedItem.category
-        chosenCustUpload = custDefaultUpload
+    for (const custDefaultUpload of custDefaultUploads) {
+      if (custDefaultUpload && custDefaultUpload.items) {
+        const matchedItem = matchCategoryInItems(custDefaultUpload.items, (it: any) => {
+          const mMatch = !it.mode || it.mode.toUpperCase().includes(modeStr.toUpperCase())
+          const bMatch = !it.branch || getNormalizedBranchCode(it.branch) === targetBranchCode
+          return mMatch && bMatch
+        })
+        if (matchedItem && Number(matchedItem.price) > 0) {
+          const isActive = checkCustomerExpiration(custDefaultUpload, matchedItem)
+          if (!isActive) {
+            continue
+          }
+          dbPrice = Number(matchedItem.price)
+          priceSource = 'CUSTOMER_DEFAULT'
+          priceSourceLabel = 'Tier 3: Tarif Khusus Customer (Default Upload)'
+          appliedTier = 'TIER_3_CUSTOMER_DEFAULT'
+          appliedTierLabel = 'Tier 3: Customer Default'
+          matchedWith = 'CUSTOMER'
+          effectiveDate = custDefaultUpload.effectiveDate ? new Date(custDefaultUpload.effectiveDate).toISOString() : null
+          matchedCategory = matchedItem.category
+          chosenCustUpload = custDefaultUpload
+          break
+        }
       }
     }
   }
@@ -1171,9 +1211,11 @@ export async function evaluatePriceCheck(params: PriceCheckParams): Promise<Unif
     markingCode: markingCode || entryInfo?.markingCode || '',
     customer: customerName || entryInfo?.custName || '',
     custCode: custCode || entryInfo?.custCode || '',
-    tglAgen: entryInfo?.tglAgent ? new Date(entryInfo.tglAgent).toISOString() : null,
-    customerPriceList: chosenCustUpload ? { uploadId: chosenCustUpload.id, fileName: chosenCustUpload.fileName, effectiveDate: chosenCustUpload.effectiveDate, items: chosenCustUpload.items } : null,
+    customerPriceList: chosenCustUpload ? { uploadId: chosenCustUpload.id, fileName: chosenCustUpload.fileName, effectiveDate: chosenCustUpload.effectiveDate, endDate: chosenCustUpload.endDate, items: chosenCustUpload.items } : null,
     masterPriceList: chosenMasterUpload ? { uploadId: chosenMasterUpload.id, fileName: chosenMasterUpload.fileName, effectiveDate: chosenMasterUpload.effectiveDate, items: chosenMasterUpload.items } : null,
+    customerEndDate,
+    isCustomerPriceExpired,
+    isCustomerPriceExpiringSoon,
     customerTariffs: [],
     matchedTariff: null,
     profileTariff,
@@ -1348,6 +1390,26 @@ export async function evaluateBatchPriceCheck(
     let matchedMarkingCode: string | undefined = undefined
     let priceCS: number | null = null
     let priceMKT: number | null = null
+    let customerEndDate: string | null = null
+    let isCustomerPriceExpired = false
+    let isCustomerPriceExpiringSoon = false
+
+    const checkBatchCustExpiration = (u: any, item?: any) => {
+      const end = item?.endDate ? new Date(item.endDate) : (u?.endDate ? new Date(u.endDate) : null)
+      if (end) {
+        if (end < targetDate) {
+          isCustomerPriceExpired = true
+          customerEndDate = end.toISOString()
+          return false
+        }
+        const diffDays = (end.getTime() - targetDate.getTime()) / (1000 * 60 * 60 * 24)
+        if (diffDays <= 7) {
+          isCustomerPriceExpiringSoon = true
+          customerEndDate = end.toISOString()
+        }
+      }
+      return true
+    }
 
     // ── TIER 1: Harga Customer Commodity (Manual Entry / Mapping Spesifik Customer) ──
     if (custCode && cUploads.length > 0) {
@@ -1373,6 +1435,10 @@ export async function evaluateBatchPriceCheck(
         )
 
         if (matchedItem && Number(matchedItem.price) > 0 && (isManualEntry || isCustomerMapped)) {
+          const isActive = checkBatchCustExpiration(u, matchedItem)
+          if (!isActive) {
+            continue
+          }
           dbPrice = Number(matchedItem.price)
           actualMatchedCategory = matchedItem.category || ''
           priceSource = 'CUSTOMER_COMMODITY'
@@ -1400,6 +1466,10 @@ export async function evaluateBatchPriceCheck(
                 return mMatch && bMatch
               })
               if (matchedItem && Number(matchedItem.price) > 0) {
+                const isActive = checkBatchCustExpiration(u, matchedItem)
+                if (!isActive) {
+                  continue
+                }
                 dbPrice = Number(matchedItem.price)
                 actualMatchedCategory = matchedItem.category || ''
                 priceSource = 'CUSTOMER_MARKING'
@@ -1420,23 +1490,30 @@ export async function evaluateBatchPriceCheck(
 
     // ── TIER 3: Harga Customer Default (Default Upload) ──
     if (dbPrice === 0 && custCode && cUploads.length > 0) {
-      const custDefaultUpload = cUploads.find(
+      const custDefaultUploads = cUploads.filter(
         (u) => u.fdCustCode?.trim().toUpperCase() === custCode.toUpperCase() && new Date(u.effectiveDate) <= targetDate
       )
-      if (custDefaultUpload?.items) {
-        const matchedItem = matchCategoryInItems(custDefaultUpload.items, (item: any) => {
-          const mMatch = !item.mode || item.mode.toUpperCase().includes(modeStr.toUpperCase())
-          const bMatch = !item.branch || getNormalizedBranchCode(item.branch) === targetBranchCode
-          return mMatch && bMatch
-        })
-        if (matchedItem && Number(matchedItem.price) > 0) {
-          dbPrice = Number(matchedItem.price)
-          actualMatchedCategory = matchedItem.category || ''
-          priceSource = 'CUSTOMER_DEFAULT'
-          priceSourceLabel = 'Tier 3: Tarif Khusus Customer (Default Upload)'
-          appliedTier = 'TIER_3_CUSTOMER_DEFAULT'
-          appliedTierLabel = 'Tier 3: Customer Default'
-          matchedWith = 'CUSTOMER'
+      for (const custDefaultUpload of custDefaultUploads) {
+        if (custDefaultUpload?.items) {
+          const matchedItem = matchCategoryInItems(custDefaultUpload.items, (item: any) => {
+            const mMatch = !item.mode || item.mode.toUpperCase().includes(modeStr.toUpperCase())
+            const bMatch = !item.branch || getNormalizedBranchCode(item.branch) === targetBranchCode
+            return mMatch && bMatch
+          })
+          if (matchedItem && Number(matchedItem.price) > 0) {
+            const isActive = checkBatchCustExpiration(custDefaultUpload, matchedItem)
+            if (!isActive) {
+              continue
+            }
+            dbPrice = Number(matchedItem.price)
+            actualMatchedCategory = matchedItem.category || ''
+            priceSource = 'CUSTOMER_DEFAULT'
+            priceSourceLabel = 'Tier 3: Tarif Khusus Customer (Default Upload)'
+            appliedTier = 'TIER_3_CUSTOMER_DEFAULT'
+            appliedTierLabel = 'Tier 3: Customer Default'
+            matchedWith = 'CUSTOMER'
+            break
+          }
         }
       }
     }
@@ -1658,6 +1735,9 @@ export async function evaluateBatchPriceCheck(
       priceCS,
       priceMKT,
       effectiveDate: null,
+      customerEndDate,
+      isCustomerPriceExpired,
+      isCustomerPriceExpiringSoon,
       matchedCategory: actualMatchedCategory || targetCategory,
       resolvedCommodity: actualMatchedCategory || targetCategory,
       isUndercharge,

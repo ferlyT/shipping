@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
-import { zValidator } from '@hono/zod-validator'
 import { authMiddleware } from '../../middleware/auth'
 import { successResponse, errorResponse } from '../../utils/response'
+import { validateBody } from '../../middleware/requestValidator'
 import { updateProfileSchema, changePasswordSchema } from './profile.schema'
 import { getProfile, updateProfile, changePassword, uploadAvatar, uploadAvatarBase64 } from './profile.service'
 
@@ -22,7 +22,7 @@ profileRoutes.get('/', async (c) => {
 })
 
 // 2. Perbarui profil (nama lengkap, avatarUrl)
-profileRoutes.put('/', zValidator('json', updateProfileSchema), async (c) => {
+profileRoutes.put('/', validateBody(updateProfileSchema), async (c) => {
   try {
     const userPayload = c.get('user')
     const data = c.req.valid('json')
@@ -44,8 +44,8 @@ const handleChangePassword = async (c: any) => {
     return errorResponse(c, (err as Error).message, 400)
   }
 }
-profileRoutes.put('/password', zValidator('json', changePasswordSchema), handleChangePassword)
-profileRoutes.put('/change-password', zValidator('json', changePasswordSchema), handleChangePassword)
+profileRoutes.put('/password', validateBody(changePasswordSchema), handleChangePassword)
+profileRoutes.put('/change-password', validateBody(changePasswordSchema), handleChangePassword)
 
 // 4. Unggah foto profil avatar (multipart/form-data atau json base64)
 profileRoutes.post('/avatar', async (c) => {

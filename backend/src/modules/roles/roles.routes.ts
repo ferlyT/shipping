@@ -2,71 +2,65 @@ import { Hono } from 'hono'
 import { rolesService } from './roles.service'
 import { authMiddleware, isAdmin } from '../../middleware/auth'
 import { successResponse, errorResponse } from '../../utils/response'
+import { validateBody } from '../../middleware/requestValidator'
+import { UpdateRolePermissionsSchema, isValidRoleName } from './roles.types'
 
 const rolesRoutes = new Hono()
 
 // Hanya admin yang bisa mengelola role permissions
 rolesRoutes.use('/*', authMiddleware, isAdmin)
 
-// Validasi ringan: role hanya boleh huruf/angka/underscore/dash, cegah nama role aneh-aneh
-// (query sudah aman dari injection lewat $queryRaw, ini tambahan sanity-check di level input)
-const ROLE_NAME_PATTERN = /^[a-zA-Z0-9_-]{1,50}$/
-
-function isValidRoleName(role: string) {
-  return ROLE_NAME_PATTERN.test(role)
-}
-
 rolesRoutes.get('/', async (c) => {
-  const data = await rolesService.getAllRoles()
-  return successResponse(c, data)
+  try {
+    const data = await rolesService.getAllRoles()
+    return successResponse(c, data)
+  } catch (err: any) {
+    return errorResponse(c, err.message || 'Gagal mengambil data peran', 500)
+  }
 })
 
 rolesRoutes.get('/:role', async (c) => {
   const role = c.req.param('role')
   if (!isValidRoleName(role)) {
-    return errorResponse(c, 'Invalid role name', 400)
+    return errorResponse(c, 'Nama peran tidak valid', 400)
   }
-  const data = await rolesService.getRolePermissions(role)
-  return successResponse(c, data)
+  try {
+    const data = await rolesService.getRolePermissions(role)
+    return successResponse(c, data)
+  } catch (err: any) {
+    return errorResponse(c, err.message || 'Gagal mengambil izin peran', 500)
+  }
 })
 
-rolesRoutes.put('/:role', async (c) => {
+rolesRoutes.put('/:role', validateBody(UpdateRolePermissionsSchema), async (c) => {
   const role = c.req.param('role')
   if (!isValidRoleName(role)) {
-    return errorResponse(c, 'Invalid role name', 400)
+    return errorResponse(c, 'Nama peran tidak valid', 400)
   }
 
-  const body = await c.req.json().catch(() => null) // Expects: { permissions: { path: string, canView: boolean }[] }
-  if (!body || !Array.isArray(body.permissions)) {
-    return errorResponse(c, 'Body must include a "permissions" array', 400)
+  const { permissions } = c.req.valid('json')
+  try {
+    const data = await rolesService.updateRolePermissions(role, permissions)
+    return successResponse(c, data)
+  } catch (err: any) {
+    return errorResponse(c, err.message || 'Gagal memperbarui izin peran', 500)
   }
-
-  const invalidEntry = body.permissions.find(
-    (p: any) => typeof p?.path !== 'string' || typeof p?.canView !== 'boolean'
-  )
-  if (invalidEntry) {
-    return errorResponse(c, 'Each permission must have { path: string, canView: boolean }', 400)
-  }
-
-  const data = await rolesService.updateRolePermissions(role, body.permissions)
-  return successResponse(c, data)
 })
 
 rolesRoutes.post('/:role', async (c) => {
-  // Add a new custom role, duplicating viewer access initially
   const role = c.req.param('role')
   if (!isValidRoleName(role)) {
-    return errorResponse(c, 'Invalid role name', 400)
+    return errorResponse(c, 'Nama peran tidak valid', 400)
   }
 
   try {
     const data = await rolesService.createRole(role)
-    return successResponse(c, data)
+    return successResponse(c, data, undefined, 201)
   } catch (err: any) {
     if (err?.message === 'Role already exists') {
       return errorResponse(c, err.message, 409)
     }
-    throw err
+    return errorResponse(c, err.message || 'Gagal membuat peran', 500)
   }
 })
 

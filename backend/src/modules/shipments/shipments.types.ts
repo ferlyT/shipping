@@ -1,6 +1,23 @@
 /**
  * Shipments Module Type Definitions
  */
+import { z } from 'zod'
+
+export const ShipmentsQuerySchema = z.object({
+  page: z.string().optional(),
+  limit: z.string().optional(),
+  skip: z.string().optional(),
+  take: z.string().optional(),
+  search: z.string().optional(),
+  branch: z.string().optional(),
+  status: z.string().optional(),
+  dateFrom: z.string().optional(),
+  dateTo: z.string().optional(),
+}).catchall(z.string().optional())
+
+export const ShipmentSuggestionsQuerySchema = z.object({
+  q: z.string().optional(),
+}).catchall(z.string().optional())
 
 export interface MarkingDates {
   fdLoadDate: Date | null

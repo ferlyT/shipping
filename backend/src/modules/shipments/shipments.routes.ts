@@ -1,5 +1,7 @@
 import { Hono } from 'hono'
 import { authMiddleware, requirePermission } from '../../middleware/auth'
+import { validateQuery } from '../../middleware/requestValidator'
+import { ShipmentsQuerySchema, ShipmentSuggestionsQuerySchema } from './shipments.types'
 import {
   getShipments, getShipmentById, getShipmentDimensions, getShipmentsKPIs, getShipmentBranches,
   getDimensionsGudang, getDimensionsPackingList, getDimensionsKomplain,
@@ -12,14 +14,15 @@ const shipmentsRoutes = new Hono()
 // Semua route shipments memerlukan auth dan permission
 shipmentsRoutes.use('/*', authMiddleware, requirePermission('/mshipping/shipments'))
 
-shipmentsRoutes.get('/', async (c) => {
-  const query = c.req.query()
+shipmentsRoutes.get('/', validateQuery(ShipmentsQuerySchema), async (c) => {
+  const query = c.req.valid('query' as any) || c.req.query()
   const result = await getShipments(query)
   return successResponse(c, result.data, result.meta)
 })
 
-shipmentsRoutes.get('/suggestions', async (c) => {
-  const q = c.req.query('q') || ''
+shipmentsRoutes.get('/suggestions', validateQuery(ShipmentSuggestionsQuerySchema), async (c) => {
+  const query = c.req.valid('query' as any) || c.req.query()
+  const q = query.q || ''
   const suggestions = await getShipmentSuggestions(q)
   return successResponse(c, suggestions)
 })

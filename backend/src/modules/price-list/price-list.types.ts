@@ -82,3 +82,44 @@ export interface PriceLookupResponse {
   appliedRule?: PriceLookupRule
   priceValidation: any
 }
+
+import { z } from 'zod'
+
+export function calculatePriceDelta(
+  currentPrice: number,
+  previousPrice?: number | null
+): { delta: number | null; deltaPct: number | null } {
+  if (previousPrice === undefined || previousPrice === null) {
+    return { delta: null, deltaPct: null }
+  }
+  const delta = currentPrice - previousPrice
+  const deltaPct = previousPrice !== 0 ? Number(((delta / previousPrice) * 100).toFixed(2)) : null
+  return { delta, deltaPct }
+}
+
+export const UpdateEffectiveDateSchema = z.object({
+  effectiveDate: z.string().min(1, 'Field effectiveDate wajib diisi').refine(
+    (val) => !isNaN(new Date(val).getTime()),
+    { message: 'Format tanggal tidak valid' }
+  ),
+})
+
+export const SetUploadMarkingsSchema = z.object({
+  markings: z.array(
+    z.object({
+      markingCode: z.string().min(1, 'Kode marking wajib diisi'),
+      agentName: z.string().nullable().optional(),
+      mode: z.string().nullable().optional(),
+    })
+  ).min(1, 'Daftar marking tidak boleh kosong'),
+})
+
+export const PriceLookupQuerySchema = z.object({
+  date: z.string().optional(),
+  sheetType: z.string().optional(),
+  mode: z.string().optional(),
+  branch: z.string().optional(),
+  category: z.string().optional(),
+  markingCode: z.string().optional(),
+})
+

@@ -2,6 +2,7 @@ import { prisma } from '../../config/database'
 import { Prisma } from '@prisma/client'
 import { parsePriceListWorkbook } from './price-list.parser'
 import { normalizeMode } from './price-list-lookup.service'
+import { calculatePriceDelta } from './price-list.types'
 
 // Re-export types and lookup subservice
 export * from './price-list.types'
@@ -118,6 +119,7 @@ export async function getUploadDiff(id: number) {
   const diff = current.items.map((it) => {
     const prevPrice = prevMap.get(key(it))
     const currPrice = Number(it.price)
+    const deltaInfo = calculatePriceDelta(currPrice, prevPrice)
     return {
       id: it.id,
       sheetType: it.sheetType,
@@ -126,8 +128,8 @@ export async function getUploadDiff(id: number) {
       category: it.category,
       currentPrice: currPrice,
       previousPrice: prevPrice ?? null,
-      delta: prevPrice !== undefined ? currPrice - prevPrice : null,
-      deltaPct: prevPrice ? ((currPrice - prevPrice) / prevPrice) * 100 : null,
+      delta: deltaInfo.delta,
+      deltaPct: deltaInfo.deltaPct,
       markings: current.markings?.map((m) => ({
         id: m.id,
         markingCode: m.markingCode,
@@ -322,7 +324,7 @@ export async function getUploadMarkings(uploadId: number) {
 
 export async function setUploadMarkings(
   uploadId: number,
-  markings: { markingCode: string; agentName?: string; mode?: string }[],
+  markings: { markingCode: string; agentName?: string | null; mode?: string | null }[],
 ) {
   return prisma.$transaction(async (tx) => {
     await tx.tbPriceListUploadMarking.deleteMany({

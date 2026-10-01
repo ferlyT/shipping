@@ -169,13 +169,16 @@ export async function findCustomerMarkingOverrideUpload(
   const shipmentInfo = await getMarkingInfo(markingCode)
   const shipmentDate = shipmentInfo?.loadDate || filters?.targetDate || new Date()
 
-  // 1. Ambil upload customer terbaru yang sudah berlaku pada shipmentDate
+  // 1. Ambil upload customer terbaru yang sudah berlaku pada shipmentDate (dan belum kedaluwarsa)
   const latestCustUpload = await prisma.tbCustomerPriceListUpload.findFirst({
     where: {
       fdCustCode: cleanCust,
       status: { not: 'FAILED' },
       isSuperseded: false,
       effectiveDate: { lte: shipmentDate },
+      AND: [
+        { OR: [{ endDate: null }, { endDate: { gte: shipmentDate } }] },
+      ],
     },
     orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],
   })
@@ -193,6 +196,9 @@ export async function findCustomerMarkingOverrideUpload(
         lte: shipmentDate,
         gte: latestCustUpload.effectiveDate,
       },
+      AND: [
+        { OR: [{ endDate: null }, { endDate: { gte: shipmentDate } }] },
+      ],
     },
     include: { markings: true },
     orderBy: [{ effectiveDate: 'desc' }, { uploadedAt: 'desc' }],

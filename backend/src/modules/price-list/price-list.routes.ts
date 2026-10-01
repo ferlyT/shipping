@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { authMiddleware, requirePermission } from '../../middleware/auth'
 import { successResponse, errorResponse } from '../../utils/response'
+import { validateBody } from '../../middleware/requestValidator'
+import { UpdateEffectiveDateSchema, SetUploadMarkingsSchema } from './price-list.types'
 import {
   ingestPriceListFile,
   listUploads,
@@ -63,20 +65,12 @@ priceListRoutes.get('/uploads/:id/diff', async (c) => {
 })
 
 // PATCH /api/price-list/uploads/:id/effective-date
-priceListRoutes.patch('/uploads/:id/effective-date', async (c) => {
+priceListRoutes.patch('/uploads/:id/effective-date', validateBody(UpdateEffectiveDateSchema), async (c) => {
   const id = Number(c.req.param('id'))
   if (isNaN(id)) return errorResponse(c, 'ID tidak valid', 400)
 
-  const body = await c.req.json<{ effectiveDate: string }>()
-  if (!body?.effectiveDate) {
-    return errorResponse(c, 'Field effectiveDate wajib diisi', 400)
-  }
-
-  const effectiveDate = new Date(body.effectiveDate)
-  if (isNaN(effectiveDate.getTime())) {
-    return errorResponse(c, 'Format tanggal tidak valid', 400)
-  }
-
+  const { effectiveDate: effectiveDateStr } = c.req.valid('json')
+  const effectiveDate = new Date(effectiveDateStr)
   const updated = await updateUploadEffectiveDate(id, effectiveDate)
   if (!updated) return errorResponse(c, 'Upload tidak ditemukan', 404)
 
@@ -129,15 +123,12 @@ priceListRoutes.get('/uploads/:id/markings', async (c) => {
   return successResponse(c, markings)
 })
 
-// PUT /api/price-list/uploads/:id/markings (body: { markings: [{ markingCode: string, agentName?: string }] })
-priceListRoutes.put('/uploads/:id/markings', async (c) => {
+// PUT /api/price-list/uploads/:id/markings
+priceListRoutes.put('/uploads/:id/markings', validateBody(SetUploadMarkingsSchema), async (c) => {
   const id = Number(c.req.param('id'))
   if (isNaN(id)) return errorResponse(c, 'ID upload tidak valid', 400)
-  const body = await c.req.json<{ markings: { markingCode: string; agentName?: string }[] }>()
-  if (!Array.isArray(body?.markings)) {
-    return errorResponse(c, 'Field markings harus berupa array', 400)
-  }
-  const result = await setUploadMarkings(id, body.markings)
+  const { markings } = c.req.valid('json')
+  const result = await setUploadMarkings(id, markings)
   return successResponse(c, result)
 })
 
