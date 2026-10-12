@@ -9,4 +9,5 @@ export { priceCheckApi } from './priceCheck'
 export { m3CheckApi } from './m3Check'
 export { cashierApi } from './cashier'
 export { inspectionApi } from '@/features/inspection/services/inspection.service'
+export { dataRevisionsApi } from '@/features/data-revisions/services/data-revisions.service'
 

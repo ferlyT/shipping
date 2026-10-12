@@ -19,8 +19,8 @@ export function PermissionGuard() {
   const { user } = useAuthStore()
   const { pathname } = useLocation()
 
-  // Always allow admin to pass, or check strictly
-  if (user?.role === 'admin') {
+  // Always allow admin and superadmin to pass, or check strictly
+  if (user?.role === 'admin' || user?.role === 'superadmin') {
     return <Outlet />
   }
 
@@ -54,6 +54,7 @@ export function PermissionGuard() {
     if ((p.startsWith('/mshipping/logistics/shipment-batches') || p.startsWith('/mshipping/shipment-batches')) && pathname.startsWith('/mshipping/logistics/shipment-batches')) return true
     if ((p.startsWith('/mshipping/logistics/delivery-orders') || p.startsWith('/mshipping/delivery-orders')) && pathname.startsWith('/mshipping/logistics/delivery-orders')) return true
     if ((p.startsWith('/mshipping/logistics/inspection-reports') || p.startsWith('/mshipping/inspection-reports')) && pathname.startsWith('/mshipping/logistics/inspection-reports')) return true
+    if ((p.startsWith('/mshipping/logistics/data-revisions') || p.startsWith('/mshipping/data-revisions')) && pathname.startsWith('/mshipping/logistics/data-revisions')) return true
     return false
   })
 
@@ -76,7 +77,7 @@ export function DefaultRouteRedirect() {
     return <Navigate to={ROUTES.LOGIN} replace />
   }
 
-  if (user.role === 'admin') {
+  if (user.role === 'admin' || user.role === 'superadmin') {
     return <Navigate to={ROUTES.DASHBOARD} replace />
   }
 
@@ -122,6 +123,8 @@ const BillingValidationDetailPage = lazy(() => import('@/features/billing').then
 const BillingPrintPage = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingPrintPage })))
 const BillingReportDesignerPage = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingReportDesignerPage })))
 const BillingPairingLocalChargePage = lazy(() => import('@/features/billing').then(m => ({ default: m.BillingPairingLocalChargePage })))
+const OmsetVolumeReportPage = lazy(() => import('@/features/billing').then(m => ({ default: m.OmsetVolumeReportPage })))
+const CargoVolumeReportPage = lazy(() => import('@/features/billing').then(m => ({ default: m.CargoVolumeReportPage })))
 const PriceListDashboardPage = lazy(() => import('@/features/price-list').then(m => ({ default: m.PriceListDashboardPage })))
 const PriceListLookupPage    = lazy(() => import('@/features/price-list').then(m => ({ default: m.PriceListLookupPage })))
 const PriceListUploadPage    = lazy(() => import('@/features/price-list').then(m => ({ default: m.PriceListUploadPage })))
@@ -140,6 +143,9 @@ const UserManagementPage = lazy(() => import('@/features/user-management').then(
 const RoleManagementPage = lazy(() => import('@/features/user-management').then(m => ({ default: m.RoleManagementPage })))
 const AccountPage        = lazy(() => import('@/features/profile').then(m => ({ default: m.AccountPage })))
 const InspectionReportsPage = lazy(() => import('@/features/inspection').then(m => ({ default: m.InspectionReportsPage })))
+const DataRevisionsListPage = lazy(() => import('@/features/data-revisions').then(m => ({ default: m.DataRevisionsListPage })))
+const DataRevisionFormPage = lazy(() => import('@/features/data-revisions').then(m => ({ default: m.DataRevisionFormPage })))
+const DataRevisionPrintPage = lazy(() => import('@/features/data-revisions').then(m => ({ default: m.DataRevisionPrintPage })))
 
 export function AppRouter() {
   return (
@@ -166,6 +172,9 @@ export function AppRouter() {
                 <Route path={ROUTES.DELIVERY_ORDERS_MONITORING} element={<DeliveryOrdersMonitoringPage />} />
                 <Route path={ROUTES.DELIVERY_DETAIL(':id')} element={<DeliveryOrdersDetailPage />} />
                 <Route path={ROUTES.INSPECTION_REPORTS} element={<InspectionReportsPage />} />
+                <Route path={ROUTES.DATA_REVISIONS} element={<DataRevisionsListPage />} />
+                <Route path={ROUTES.DATA_REVISION_NEW} element={<DataRevisionFormPage />} />
+                <Route path={ROUTES.DATA_REVISION_EDIT(':id')} element={<DataRevisionFormPage />} />
                 <Route path={ROUTES.BILLING}           element={<BillingDashboardPage />} />
                 <Route path={ROUTES.BILLING_TARGET}    element={<BillingTargetPage />} />
                 <Route path={ROUTES.BILLING_LIST}      element={<BillingPage />} />
@@ -195,6 +204,10 @@ export function AppRouter() {
 
                 {/* Customer Wallet & Saldo Deposit */}
                 <Route path={ROUTES.WALLET} element={<WalletListPage />} />
+
+                {/* Finance Reports */}
+                <Route path={ROUTES.REPORT_OMSET_VOLUME} element={<OmsetVolumeReportPage />} />
+                <Route path={ROUTES.REPORT_CARGO_VOLUME} element={<CargoVolumeReportPage />} />
               </Route>
               
               {/* Admin Only Routes */}
@@ -207,6 +220,7 @@ export function AppRouter() {
             {/* Print routes — di luar AppLayout agar tidak ada sidebar/navbar */}
             <Route path={ROUTES.BILLING_PRINT(':id')} element={<BillingPrintPage />} />
             <Route path={ROUTES.DELIVERY_PRINT(':id')} element={<DeliveryOrderPrintPage />} />
+            <Route path={ROUTES.DATA_REVISION_PRINT(':id')} element={<DataRevisionPrintPage />} />
           </Route>
           {/* Catch all */}
           <Route path="*" element={<DefaultRouteRedirect />} />

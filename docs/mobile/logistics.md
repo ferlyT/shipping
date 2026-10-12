@@ -12,8 +12,13 @@ Pusat manajemen operasional lapangan yang mengintegrasikan pelacakan resi pengir
 
 ---
 
-## 2. Pencarian Universal, Integrasi Barcode Scanner & Infinite Scroll
-- Search bar dilengkapi tombol kamera pemindai barcode/QR (`BarcodeScannerModal.tsx`).
+## 2. Pencarian Universal, Integrasi Barcode & Container Scanner, serta Infinite Scroll
+- **Barcode & QR Scanner**: Search bar dilengkapi tombol barcode (`ScanLine`) untuk membuka `BarcodeScannerModal.tsx` memindai resi kargo dan surat jalan.
+- **Container Number Scanner (Kamera & Galeri)**: Search bar pada tab Resi & Batch Marking dilengkapi tombol kamera (`Camera`) untuk membuka `ContainerScannerModal.tsx`:
+  - Viewfinder khusus dengan guideline rectangular overlay proporsional plat nomor kontainer.
+  - Tombol Shutter jepret foto langsung (`expo-camera`) dan tombol pilih dari galeri (`expo-image-picker`).
+  - Backend OCR pipeline (`sharp` enhancement + `tesseract.js` + parser cerdas ISO 6346 & kontainer domestik).
+  - Dialog review / edit cepat nomor kontainer dengan badge status validasi ISO 6346 dan selektor kandidat alternatif.
 - Hasil scan otomatis mengisi kolom pencarian dan memfilter data list secara live.
 - **Infinite Scroll**: Keempat sub-tab menerapkan infinite scroll berbasis `useInfiniteQuery` (TanStack React Query v5) dengan batch 20 item (`limit: 20`, `onEndReachedThreshold: 0.4`).
 
@@ -34,12 +39,23 @@ Pusat manajemen operasional lapangan yang mengintegrasikan pelacakan resi pengir
 - Filter moda: `Semua`, `Udara`, `Laut`.
 - Menampilkan kode batch marking (`fdMarkingCode`), cabang gudang (`fdBranch`), keterangan (`fdKet`), dan hirarki tanggal (`Exit` $\to$ `ETA` $\to$ `ETD` $\to$ `Load`).
 - **Nomor Muatan Cerdas**: Menampilkan nomor AWB jika moda Udara (`listType = 1`) dan nomor Kontainer jika Laut (`listType = 2`).
+- **Input & Update Exit Date Gudang (`BatchExitDateModal`)**:
+  - Tombol aksi cepat `[ + Exit ]` / `[ Exit ]` langsung di baris batch dan kartu status Exit Gudang di dalam Manifest Sheet.
+  - **Proteksi Role**: Dibatasi via `canManageBatchExitDate(user)` (khusus role Admin, Operasional, Logistik, Superadmin; role viewer hanya read-only).
+  - **Preset Cepat & Kalender Mini**: Pilihan 1-klik (`Hari Ini`, `Kemarin`, `-2 Hari`) dan kalender interaktif native. Default tanggal terisi **hari ini**.
+  - **Validasi Kronologis & Guard**:
+    - Exit Date tidak boleh lebih awal dari Tanggal Muat / Loading Date (`fdLoadDate`) atau ETD (`fdETD`).
+    - *Back Date*: Menampilkan callout amber penegas bahwa tanggal mundur dari hari ini.
+    - *Future Date*: **Maksimal 3 hari ke depan** (`<= today + 3 hari`). Lebih dari itu ditolak oleh sistem; pengisian 1-3 hari ke depan memicu dialog konfirmasi penegasan khusus sebelum disimpan.
+  - **Opsi Hapus Exit Date**: Tombol `[ Hapus Exit Date ]` untuk mereset status jika terjadi kesalahan input fisik.
 - **Modal Manifest Batch**:
   - Menampilkan seluruh resi muatan fisik dalam batch (`/api/marking/:id/manifest`).
   - 4-Metric Grid (Total Koli, Total Berat, Total Volume, Customer & Resi).
   - Badge status finansial master `tbCustomers.fdBlocked` (`OK`, `COD`, `WARNING`, `BLOCKED`, `URGENT`).
   - Override otomatis badge merah **`BLOCKED`** jika ada kargo yang diblokir finance (`tbEntryList_Bloked_Finance`).
   - Pencarian real-time item manifest (*client-side instant filtering*).
+  - **Link ke Modal Rincian Muatan (`ShipmentDetailSheet`)**: Mengetuk kartu kargo atau tombol `[ Detail ]` membuka rincian lengkap muatan (4 tab: Ringkasan, Dimensi Gudang/PL/Komplain, Timeline, Invoice) in-place di atas manifest.
+  - **Aksi Cepat Buat BAP (`+ BAP`)**: Tersedia di setiap baris kargo manifest dan modal rincian muatan untuk autofill instan ke `InspectionFormSheet`.
 
 ---
 
@@ -73,6 +89,22 @@ Pusat manajemen operasional lapangan yang mengintegrasikan pelacakan resi pengir
   - Memfokuskan kursor ke textarea keterangan, memicu dictation suara bawaan keyboard Android/iOS secara alami (Gboard/Samsung Voice Typing) tanpa risiko native crash.
   - Menyediakan banner panduan interaktif dan chip template frasa cepat pemeriksaan kargo (`+ Kondisi baik & tersegel`, `+ Kardus basah / lembab`, `+ Kemasan sobek / rusak`, `+ Isi kurang / tidak sesuai`, `+ Lakban ulang / repack`, `+ Barang pecah / penyok`).
   - **Keyboard Handling & Dropdown Stability**: Mengeliminasi glitch dropdown hilang saat di-scroll dengan menghapus drag dismissal pada parent ScrollView, serta dynamic keyboard height padding + auto-scroll ke bawah saat textarea keterangan aktif agar tidak tertutup keyboard virtual.
+- **Fitur 3: Voice Memo / Catatan Suara BAP (Maksimal 90 Detik)**:
+  - 1 catatan suara utama per laporan BAP yang disimpan pada kolom `fdAudioUrl` dan `fdAudioDuration` (`tbInspectionReport`).
+  - Perekaman audio via `expo-av` dengan visualizer status REC pulse merah, durasi berjalan `00:00 / 01:30`, auto-stop tepat di 90 detik, haptic tactile vibration, dan konversi base64 via `expo-file-system`.
+  - Perekaman dapat dilakukan langsung saat mengisi formulir (`InspectionFormSheet.tsx`) atau ditambahkan belakangan dari modal detail (`InspectionDetailSheet.tsx`).
+  - Pemutar audio bawaan (`VoiceMemoPlayer.tsx`) dengan Play/Pause, scrubber progress bar interaktif, counter waktu sisa/berjalan, dan opsi penghapusan audio memo.
+  - Indikator badge merah `[ 🎙️ {duration}s ]` pada daftar kartu item BAP (`InspectionListItem.tsx`).
+- **Fitur 4: Anotasi Visual Foto Kerusakan BAP**:
+  - Modal canvas interaktif fullscreen (`PhotoAnnotationModal.tsx`) yang muncul otomatis setelah pengambilan foto kargo rusak dari kamera.
+  - Berbasis `react-native-svg` dan `PanResponder` tanpa ketergantungan library binary native eksternal.
+  - **3 Tool Penandaan**:
+    - `Pen`: Goresan bebas (freehand path) untuk melingkari atau mencoret kerusakan.
+    - `Circle`: Lingkaran elips target kerusakan dengan kalkulasi bounding-box live.
+    - `Arrow`: Panah penunjuk arah kerusakan dengan marker arrowhead dinamis.
+  - **Palet Warna Kontras**: Merah Bahaya (`#EF4444`), Oranye/Kuning Peringatan (`#F59E0B`), dan Hijau Informasi (`#10B981`).
+  - **Aksi Cepat**: Undo langkah terakhir, Clear seluruh anotasi, dan Skip (lewati anotasi tanpa mencoret foto).
+  - **Lossless Server Compositing**: Anotasi SVG dikirimkan bersama base64 foto ke backend (`POST /api/inspection-reports/:id/photos`). Server menggunakan library `sharp` untuk menggabungkan layer anotasi vektor SVG secara presisi ke atas resolusi asli foto kamera sebelum menambahkan banner watermark metadata BAP di bagian bawah.
 
 ---
 
@@ -90,12 +122,15 @@ Pusat manajemen operasional lapangan yang mengintegrasikan pelacakan resi pengir
 | `/api/marking/:id/manifest` | `GET` | Path `:id` | Seluruh resi muatan manifest dalam batch |
 | `/api/delivery-orders` | `GET` | `limit=20`, `search` | Daftar surat jalan armada pengantaran |
 | `/api/delivery-orders/suggestions` | `GET` | `q` | Saran autocomplete nomor SJ, customer, supir |
-| `/api/inspection-reports` | `GET` | `page`, `limit`, `search`, `status` | Daftar BAP paginated + `photoCount` |
+| `/api/inspection-reports` | `GET` | `page`, `limit`, `search`, `status` | Daftar BAP paginated + `photoCount`, `fdAudioUrl`, `fdAudioDuration` |
 | `/api/inspection-reports/lookup` | `GET` | `search`, `page`, `limit` | Autocomplete data kargo dari `vwShipment` |
-| `/api/inspection-reports/:id` | `GET` | Path `:id` | Detail BAP lengkap dengan array `photos` |
+| `/api/inspection-reports/:id` | `GET` | Path `:id` | Detail BAP lengkap dengan array `photos`, `fdAudioUrl`, `fdAudioDuration` |
 | `/api/inspection-reports` | `POST` | Body JSON | Buat BAP baru dengan auto-counter bulanan |
 | `/api/inspection-reports/:id` | `PUT` | Path `:id`, Body JSON | Edit data BAP dan ubah status Draft/Selesai |
 | `/api/inspection-reports/:id` | `DELETE` | Path `:id` | Soft-delete BAP |
-| `/api/inspection-reports/:id/photos` | `POST` | Path `:id`, Body `{ photoBase64, caption? }` | Unggah foto BAP ke server |
+| `/api/inspection-reports/:id/photos` | `POST` | Path `:id`, Body `{ photoBase64, caption?, annotationsSvg? }` | Unggah foto BAP ber-watermark & composite anotasi SVG |
 | `/api/inspection-reports/:id/photos` | `GET` | Path `:id` | Daftar foto pemeriksaan BAP |
 | `/api/inspection-reports/:id/photos/:photoId` | `DELETE` | Path `:id`, `:photoId` | Hapus foto dari server dan database |
+| `/api/inspection-reports/:id/voice-memo` | `POST` | Path `:id`, Body `{ audioBase64, duration }` | Unggah rekaman suara BAP (maks 90 detik, .m4a) |
+| `/api/inspection-reports/:id/voice-memo` | `DELETE` | Path `:id` | Hapus rekaman suara BAP dari server & database |
+

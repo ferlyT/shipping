@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
-import { ChevronRight, SlidersHorizontal, Plane, Ship, ShieldCheck, LayoutGrid, User, ScrollText, RotateCcw, Search, AlertTriangle, Tag, Mic } from 'lucide-react'
+import { ChevronRight, SlidersHorizontal, Plane, Ship, ShieldCheck, LayoutGrid, User, ScrollText, RotateCcw, Search, AlertTriangle, Tag } from 'lucide-react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { billingApi } from '../services/billing.service'
 import { CustomerHargaModal } from '../components/CustomerHargaModal'
@@ -20,8 +20,6 @@ import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
 import { useToastStore } from '@/stores/toastStore'
-import { useVoiceAssistantStore } from '@/stores/voiceAssistantStore'
-import { useVoiceAssistantPermission } from '@/hooks/useVoiceAssistantPermission'
 import type { Billing } from '../types/billing.types'
 import { getAgingDays } from '../utils/billing.utils'
 
@@ -104,8 +102,6 @@ export function ValidationListPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { addToast } = useToastStore()
-  const { openAssistant } = useVoiceAssistantStore()
-  const canUseVoice = useVoiceAssistantPermission()
 
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 400)
@@ -169,7 +165,45 @@ export function ValidationListPage() {
     })
   }, [billingsData])
 
-  // 2. Extract available Author / Created By pills
+  // 2. Aggregate KPI Metrics from Active Draft Billings
+  const kpiStats = useMemo(() => {
+    let totalDraftAmount = 0
+    let criticalAgingCount = 0
+    let seaCount = 0
+    let seaAmount = 0
+    let airCount = 0
+    let airAmount = 0
+
+    activeDraftBillings.forEach((b: Billing) => {
+      const amt = Number(b.fdJumlah2 || 0) > 0 ? Number(b.fdJumlah2) : Number(b.fdJumlah1 || 0)
+      totalDraftAmount += amt
+
+      const days = getAgingDays(b.fdInvDate)
+      if (days > 14) {
+        criticalAgingCount++
+      }
+
+      if (Number(b.fdListType) === 2) {
+        seaCount++
+        seaAmount += amt
+      } else if (Number(b.fdListType) === 1) {
+        airCount++
+        airAmount += amt
+      }
+    })
+
+    return {
+      totalDraftAmount,
+      totalCount: activeDraftBillings.length,
+      criticalAgingCount,
+      seaCount,
+      seaAmount,
+      airCount,
+      airAmount,
+    }
+  }, [activeDraftBillings])
+
+  // 3. Extract available Author / Created By pills
   const availableAuthors = useMemo(() => {
     const map = new Map<string, number>()
     activeDraftBillings.forEach((b: Billing) => {
@@ -296,18 +330,24 @@ export function ValidationListPage() {
       render: (row: Billing) => {
         const bType = getBillType(row)
         const bCfg = BILL_TYPE_CONFIGS[bType]
+        const isSea = Number(row.fdListType) === 2
         return (
           <div className="py-0.5 space-y-1">
             <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-semibold text-[var(--color-primary)] font-[var(--font-body)] leading-snug">
+              <span className="font-semibold text-[var(--color-primary)] font-mono text-xs leading-snug">
                 {row.fdInvNo}
               </span>
               <span className={`text-[9px] px-1.5 py-0 font-bold rounded border ${bCfg.badgeClasses}`}>
                 {bCfg.shortLabel}
               </span>
             </div>
-            <div className="text-[11px] text-[var(--color-secondary)] font-normal">
-              {formatDate(row.fdInvDate)}
+            <div className="text-[11px] text-[var(--color-secondary)] font-normal flex items-center gap-1.5 flex-wrap">
+              <span>{formatDate(row.fdInvDate)}</span>
+              <span>•</span>
+              <span className={`inline-flex items-center gap-1 font-medium ${isSea ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                {isSea ? <Ship className="w-3 h-3 shrink-0" /> : <Plane className="w-3 h-3 shrink-0" />}
+                <span>{isSea ? 'Laut' : 'Udara'}</span>
+              </span>
             </div>
           </div>
         )
@@ -493,28 +533,101 @@ export function ValidationListPage() {
               <ScrollText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
               <span>{t('nav.billingList') || 'Daftar Tagihan'}</span>
             </Button>
-            {canUseVoice && (
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={() => openAssistant()}
-                className="flex items-center gap-1.5 cursor-pointer border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20"
-                title="Asisten Suara: Buka Faktur, Cari Invoice (Alt+V)"
-              >
-                <Mic className="w-3.5 h-3.5 text-sky-500 animate-pulse" />
-                <span>Asisten Suara</span>
-                <kbd className="hidden md:inline-block text-[9px] px-1 py-0.2 rounded bg-sky-500/20 text-sky-500 font-mono">Alt+V</kbd>
-              </Button>
-            )}
           </div>
         }
       />
 
+      {/* KPI Metric Summary Row (Redesign Upgrade) */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {/* Total Nilai Draft */}
+        <div className="p-3 sm:p-4 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col justify-between shadow-xs">
+          <div className="flex items-center justify-between text-xs text-[var(--color-secondary)]">
+            <span className="font-[var(--font-label)] uppercase tracking-wider font-semibold text-[10.5px]">Total Draft Tagihan</span>
+            <span className="w-2 h-2 rounded-full bg-[var(--color-tertiary)]" />
+          </div>
+          <div className="mt-2">
+            <div className="text-base sm:text-lg font-bold tracking-tight text-[var(--color-primary)] tabular-nums">
+              {formatWithCurrency(kpiStats.totalDraftAmount, 'Rp.')}
+            </div>
+            <div className="text-[11px] text-[var(--color-secondary)] mt-0.5">
+              {kpiStats.totalCount} faktur draft aktif
+            </div>
+          </div>
+        </div>
+
+        {/* Aging Kritis (> 14 Hari) */}
+        <div
+          onClick={() => {}}
+          className="p-3 sm:p-4 rounded-[var(--radius-lg)] border border-rose-500/40 bg-transparent flex flex-col justify-between shadow-xs"
+        >
+          <div className="flex items-center justify-between text-xs text-rose-500 dark:text-rose-400">
+            <span className="font-[var(--font-label)] uppercase tracking-wider font-semibold text-[10.5px]">Aging Kritis (&gt;14 Hari)</span>
+            <AlertTriangle className="w-3.5 h-3.5 text-rose-500 dark:text-rose-400 shrink-0" />
+          </div>
+          <div className="mt-2">
+            <div className="text-base sm:text-lg font-bold tracking-tight text-rose-500 dark:text-rose-400 tabular-nums">
+              {kpiStats.criticalAgingCount} Faktur
+            </div>
+            <div className="text-[11px] text-rose-500/80 dark:text-rose-400/80 mt-0.5">
+              Prioritas validasi antrean
+            </div>
+          </div>
+        </div>
+
+        {/* Moda Laut (Sea) */}
+        <div
+          onClick={() => setListTypeFilter(listTypeFilter === 2 ? 'all' : 2)}
+          className={`p-3 sm:p-4 rounded-[var(--radius-lg)] border transition-all cursor-pointer flex flex-col justify-between shadow-xs ${
+            listTypeFilter === 2
+              ? 'border-blue-500 ring-1 ring-blue-500/30 bg-blue-500/5'
+              : 'border-blue-500/40 bg-transparent hover:border-blue-500'
+          }`}
+          title="Klik untuk filter khusus Moda Laut"
+        >
+          <div className="flex items-center justify-between text-xs text-blue-600 dark:text-blue-400">
+            <span className="font-[var(--font-label)] uppercase tracking-wider font-semibold text-[10.5px]">Moda Laut (Sea)</span>
+            <Ship className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
+          </div>
+          <div className="mt-2">
+            <div className="text-base sm:text-lg font-bold tracking-tight text-blue-600 dark:text-blue-400 tabular-nums">
+              {kpiStats.seaCount} Faktur
+            </div>
+            <div className="text-[11px] text-blue-600/80 dark:text-blue-400/80 mt-0.5 truncate">
+              {formatWithCurrency(kpiStats.seaAmount, 'Rp.')}
+            </div>
+          </div>
+        </div>
+
+        {/* Moda Udara (Air) */}
+        <div
+          onClick={() => setListTypeFilter(listTypeFilter === 1 ? 'all' : 1)}
+          className={`p-3 sm:p-4 rounded-[var(--radius-lg)] border transition-all cursor-pointer flex flex-col justify-between shadow-xs ${
+            listTypeFilter === 1
+              ? 'border-amber-500 ring-1 ring-amber-500/30 bg-amber-500/5'
+              : 'border-amber-500/40 bg-transparent hover:border-amber-500'
+          }`}
+          title="Klik untuk filter khusus Moda Udara"
+        >
+          <div className="flex items-center justify-between text-xs text-amber-600 dark:text-amber-400">
+            <span className="font-[var(--font-label)] uppercase tracking-wider font-semibold text-[10.5px]">Moda Udara (Air)</span>
+            <Plane className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0" />
+          </div>
+          <div className="mt-2">
+            <div className="text-base sm:text-lg font-bold tracking-tight text-amber-600 dark:text-amber-400 tabular-nums">
+              {kpiStats.airCount} Faktur
+            </div>
+            <div className="text-[11px] text-amber-600/80 dark:text-amber-400/80 mt-0.5 truncate">
+              {formatWithCurrency(kpiStats.airAmount, 'Rp.')}
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div className="flex flex-col gap-3">
         {/* Desktop / tablet toolbar */}
         <div className="hidden sm:flex sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <div className="w-80">
+          <div className="flex items-center gap-2.5 flex-1 max-w-lg">
+            <div className="flex-1 w-full">
               <SearchBar
                 value={search}
                 onChange={(val) => {
@@ -524,7 +637,7 @@ export function ValidationListPage() {
               />
             </div>
             {debouncedSearch && (
-              <span className="text-xs text-[var(--color-secondary)] whitespace-nowrap">
+              <span className="text-xs text-[var(--color-secondary)] whitespace-nowrap shrink-0">
                 {filteredBillings.length} {t('billing.found')}
               </span>
             )}
@@ -824,8 +937,13 @@ export function ValidationListPage() {
                           {bCfg.shortLabel}
                         </span>
                       </div>
-                      <div className="flex items-center gap-1.5 mt-0.5">
+                      <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                         <span className="text-[11px] text-[var(--color-secondary)]">{formatDate(b.fdInvDate)}</span>
+                        <span>•</span>
+                        <span className={`inline-flex items-center gap-1 text-[11px] font-medium ${Number(b.fdListType) === 2 ? 'text-blue-600 dark:text-blue-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                          {Number(b.fdListType) === 2 ? <Ship className="w-3 h-3 shrink-0" /> : <Plane className="w-3 h-3 shrink-0" />}
+                          <span>{Number(b.fdListType) === 2 ? 'Laut' : 'Udara'}</span>
+                        </span>
                         <AgingBadge hari={getAgingDays(b.fdInvDate)} />
                       </div>
                     </div>

@@ -1,4 +1,4 @@
-import sharp from 'sharp'
+import sharp, { type OverlayOptions } from 'sharp'
 import { logger } from '../../config/logger'
 
 export interface BapWatermarkMetadata {
@@ -40,7 +40,8 @@ export function formatDateWIB(date: Date): string {
  */
 export async function applyBapWatermark(
   imageBuffer: Buffer,
-  metadata: BapWatermarkMetadata
+  metadata: BapWatermarkMetadata,
+  annotationsSvg?: string
 ): Promise<Buffer> {
   try {
     // Auto-rotate based on EXIF and resize to max 1600x1600 (aspect ratio preserved)
@@ -140,15 +141,39 @@ export async function applyBapWatermark(
     `
 
     const topPosition = height - bannerHeight
+    const compositeList: OverlayOptions[] = []
+
+    // If annotations SVG is provided, render it onto the photo
+    if (annotationsSvg && annotationsSvg.trim()) {
+      try {
+        let svgStr = annotationsSvg.trim()
+        // If SVG doesn't have width/height or needs viewBox adjustment to full image width/height
+        if (!svgStr.includes(`width="${width}"`)) {
+          svgStr = svgStr.replace(/<svg\b([^>]*)>/i, (match, attrs) => {
+            // Remove existing width and height if any
+            const cleanedAttrs = attrs.replace(/\b(width|height)="[^"]*"/gi, '')
+            return `<svg width="${width}" height="${height}" ${cleanedAttrs}>`
+          })
+        }
+        compositeList.push({
+          input: Buffer.from(svgStr),
+          top: 0,
+          left: 0,
+        })
+      } catch (annErr) {
+        logger.warn('Failed to process annotations SVG overlay:', annErr)
+      }
+    }
+
+    // Composite metadata watermark banner at the bottom
+    compositeList.push({
+      input: Buffer.from(svgOverlay),
+      top: topPosition,
+      left: 0,
+    })
 
     const watermarked = await rotatedImg
-      .composite([
-        {
-          input: Buffer.from(svgOverlay),
-          top: topPosition,
-          left: 0,
-        },
-      ])
+      .composite(compositeList)
       .jpeg({ quality: 80, mozjpeg: true })
       .toBuffer()
 

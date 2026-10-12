@@ -19,7 +19,7 @@ Dokumentasi spesifikasi endpoint, logika pencarian manifest kargo, optimasi kuer
 | Method | Endpoint | Permission | Keterangan |
 |---|---|---|---|
 | `GET` | `/api/shipments` | `/mshipping/shipments` | Mengambil daftar kargo ber-pagination dengan filter moda, tanggal, cabang, dan status |
-| `GET` | `/api/shipments/:id` | `/mshipping/shipments` | Mengambil detail kargo berdasarkan ID / `fdListCode` |
+| `GET` | `/api/shipments/:id` | `/mshipping/shipments` | Mengambil detail kargo berdasarkan ID / `fdListCode`, lengkap dengan audit trail (`fdEmp1` Created By, `fdCreatedDate` Timestamp, `fdEmp2` Updated By, `fdUpdate` Timestamp), invoice, dan status blocked |
 | `GET` | `/api/shipments/suggestions` | `/mshipping/shipments` | Autocomplete instan pencarian kargo (ter-cache di memori) |
 | `GET` | `/api/shipments/branches` | `/mshipping/shipments` | Mengambil daftar cabang aktif beserta ringkasan jumlah kargo |
 

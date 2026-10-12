@@ -159,25 +159,31 @@ export function RolePermissionMatrix({
                           </div>
                         </label>
 
-                        <label
-                          className={`flex items-center gap-2 cursor-pointer text-xs font-medium shrink-0 px-2.5 py-1 rounded-md border transition-all ${
-                            isDefault
-                              ? 'bg-amber-50 text-amber-800 border-amber-300 font-bold'
-                              : isChecked
-                              ? 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border-[var(--color-border)] hover:bg-gray-200'
-                              : 'opacity-40 cursor-not-allowed border-transparent'
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name={`defaultRoute-${selectedRole}`}
-                            checked={isDefault}
-                            onChange={() => setDefaultPath(item.path)}
-                            disabled={!isChecked}
-                            className="w-3.5 h-3.5 accent-[var(--color-tertiary)] cursor-pointer"
-                          />
-                          <span>{isDefault ? t('roles.defaultPage') : t('roles.setDefault')}</span>
-                        </label>
+                        {item.isPage !== false ? (
+                          <label
+                            className={`flex items-center gap-2 cursor-pointer text-xs font-medium shrink-0 px-2.5 py-1 rounded-md border transition-all ${
+                              isDefault
+                                ? 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30 font-bold'
+                                : isChecked
+                                ? 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border-[var(--color-border)] hover:opacity-80'
+                                : 'opacity-40 cursor-not-allowed border-transparent'
+                            }`}
+                          >
+                            <input
+                              type="radio"
+                              name={`defaultRoute-${selectedRole}`}
+                              checked={isDefault}
+                              onChange={() => setDefaultPath(item.path)}
+                              disabled={!isChecked}
+                              className="w-3.5 h-3.5 accent-[var(--color-tertiary)] cursor-pointer"
+                            />
+                            <span>{isDefault ? t('roles.defaultPage') : t('roles.setDefault')}</span>
+                          </label>
+                        ) : (
+                          <div className="shrink-0 px-2 py-0.5 rounded text-[11px] font-medium text-[var(--color-secondary)]/60 bg-[var(--color-neutral)] border border-[var(--color-border)]/50">
+                            Aksi / Sub-Izin
+                          </div>
+                        )}
                       </div>
                     )
                   })}

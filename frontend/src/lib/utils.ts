@@ -295,3 +295,30 @@ export async function copyToClipboard(text: string): Promise<boolean> {
     return false
   }
 }
+
+/**
+ * Mengubah karakter '^' warisan database menjadi tanda petik tunggal "'"
+ */
+export function replaceDbCaret(str: string | null | undefined): string {
+  if (!str) return ''
+  return str.replace(/\^/g, "'")
+}
+
+/**
+ * Membersihkan objek/array/string data secara rekursif dari karakter '^' warisan database
+ */
+export function cleanDbData<T = any>(obj: T): T {
+  if (typeof obj === 'string') return replaceDbCaret(obj) as unknown as T
+  if (Array.isArray(obj)) return obj.map((item) => cleanDbData(item)) as unknown as T
+  if (obj !== null && typeof obj === 'object') {
+    const cleaned: any = {}
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        cleaned[key] = cleanDbData((obj as any)[key])
+      }
+    }
+    return cleaned as T
+  }
+  return obj
+}
+

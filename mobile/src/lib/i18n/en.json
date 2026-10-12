@@ -758,5 +758,17 @@
   "profile.logout": "Sign Out (Logout)",
   "profile.logoutConfirmTitle": "Logout Confirmation",
   "profile.logoutConfirmDesc": "Are you sure you want to sign out?",
-  "profile.logoutConfirmBtn": "Logout"
+  "profile.logoutConfirmBtn": "Logout",
+  "overview.tabExit": "Logistics Exit",
+  "overview.tabBilling": "Billing Ops",
+  "overview.currentMonthBadge": "Current Month",
+  "overview.pastAuditBadge": "Past Audit",
+  "overview.thisMonth": "This Month",
+  "overview.targetAirTitle": "AIR BILL TARGET",
+  "overview.targetSeaTitle": "SEA BILL TARGET",
+  "overview.invoicesIssuedTitle": "INVOICES ISSUED",
+  "overview.batchExitComparisonTitle": "Batch Exit vs Bills Created",
+  "overview.batchExitToday": "Batch Exit Today",
+  "overview.targetBillMonth": "Target Bill This Month",
+  "overview.dashboardOverview": "DASHBOARD OVERVIEW"
 }

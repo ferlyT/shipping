@@ -48,6 +48,7 @@ export interface BillingValidationCardProps {
   custCode?: string | null
   onOpenSummaryModal?: () => void
   onOpenAuditModal?: () => void
+  onOpenCustomerHargaModal?: () => void
   activeTab?: ValidationCardTab | null
   onTabChange?: (tab: ValidationCardTab) => void
 }

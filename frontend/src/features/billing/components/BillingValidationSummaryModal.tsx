@@ -65,7 +65,7 @@ export function BillingValidationSummaryModal({
   const hasAutoSelectedRef = useRef<string | null>(null)
   const queryClient = useQueryClient()
 
-  const { suppressVoice } = useVoiceAssistantStore()
+  const { suppressVoice, isMuted, toggleVoiceMute } = useVoiceAssistantStore()
   const canUseVoice = useVoiceAssistantPermission()
 
   // Supresi asisten suara global selama modal validasi & audit ini terbuka
@@ -100,11 +100,11 @@ export function BillingValidationSummaryModal({
     continuous: true,
     interimResults: true,
     onEnd: () => {
-      // Auto re-arm standby jika modal masih terbuka dan tidak dimatikan manual
-      if (isOpenRef.current && !isManuallyStoppedRef.current) {
+      // Auto re-arm standby jika modal masih terbuka, tidak dimatikan manual, dan TIDAK MUTED TERPUSAT
+      if (isOpenRef.current && !isManuallyStoppedRef.current && !useVoiceAssistantStore.getState().isMuted) {
         if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
         rearmTimerRef.current = setTimeout(() => {
-          if (isOpenRef.current && !isManuallyStoppedRef.current) {
+          if (isOpenRef.current && !isManuallyStoppedRef.current && !useVoiceAssistantStore.getState().isMuted) {
             startVoiceListening()
           }
         }, 200)
@@ -112,12 +112,14 @@ export function BillingValidationSummaryModal({
     },
   })
 
-  // Standby otomatis mendengarkan seketika saat modal dibuka
+  // Standby otomatis mendengarkan seketika saat modal dibuka HANYA JIKA !isMuted
   useEffect(() => {
-    if (isOpen && isVoiceSupported) {
+    if (isOpen && isVoiceSupported && !isMuted) {
       isManuallyStoppedRef.current = false
       const timer = setTimeout(() => {
-        startVoiceListening()
+        if (isOpenRef.current && !isManuallyStoppedRef.current && !useVoiceAssistantStore.getState().isMuted) {
+          startVoiceListening()
+        }
       }, 150)
       return () => {
         clearTimeout(timer)
@@ -137,10 +139,12 @@ export function BillingValidationSummaryModal({
       stopVoiceListening()
       resetTranscript()
     }
-  }, [isOpen, isVoiceSupported, startVoiceListening, stopVoiceListening, resetTranscript])
+  }, [isOpen, isVoiceSupported, isMuted, startVoiceListening, stopVoiceListening, resetTranscript])
 
-  const handleToggleVoice = () => {
-    if (isVoiceListening) {
+  // KONTROL TERPUSAT: Bereaksi seketika terhadap perubahan isMuted (dari Floating HUD atau Alt+V) saat modal terbuka
+  useEffect(() => {
+    if (!isOpen) return
+    if (isMuted) {
       isManuallyStoppedRef.current = true
       if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
       if (voiceCommandTimerRef.current) {
@@ -149,14 +153,17 @@ export function BillingValidationSummaryModal({
       }
       stopVoiceListening()
       resetTranscript()
-    } else {
+    } else if (isVoiceSupported && isOpenRef.current) {
       isManuallyStoppedRef.current = false
-      resetTranscript()
       startVoiceListening()
     }
+  }, [isMuted, isOpen, isVoiceSupported, startVoiceListening, stopVoiceListening, resetTranscript])
+
+  const handleToggleVoice = () => {
+    toggleVoiceMute() // Sinkronkan ke Master Control terpusat!
   }
 
-  // Shortcut Alt+V di dalam modal untuk toggle mic lokal
+  // Shortcut Alt+V di dalam modal untuk toggle mic lokal (tersinkronisasi ke store)
   useEffect(() => {
     if (!isOpen || !canUseVoice) return
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -164,12 +171,12 @@ export function BillingValidationSummaryModal({
       if (isAltV) {
         e.preventDefault()
         e.stopPropagation()
-        handleToggleVoice()
+        toggleVoiceMute() // Sinkronkan ke Master Control terpusat!
       }
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isOpen, canUseVoice, isVoiceListening, startVoiceListening, stopVoiceListening, resetTranscript])
+  }, [isOpen, canUseVoice, toggleVoiceMute])
 
 
 
@@ -563,7 +570,7 @@ export function BillingValidationSummaryModal({
   ])
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="3xl" className="h-[85vh] max-h-[85vh] flex flex-col" zIndex="z-[100]">
+    <Modal isOpen={isOpen} onClose={onClose} size="3xl" className="h-[85vh] max-h-[85vh] flex flex-col max-w-[1400px] w-full" zIndex="z-[100]">
       <ValidationSummaryHeader
         billingData={billingData}
         customerName={resolvedCustName}

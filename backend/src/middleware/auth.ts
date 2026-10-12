@@ -39,7 +39,7 @@ export const authMiddleware = createMiddleware(async (c, next) => {
 
 export const isAdmin = createMiddleware(async (c, next) => {
   const user = c.get('user')
-  if (user?.role !== 'admin') {
+  if (user?.role !== 'admin' && user?.role !== 'superadmin') {
     return errorResponse(c, 'Akses ditolak: Hanya admin yang dapat melakukan aksi ini', 403)
   }
   await next()
@@ -52,8 +52,8 @@ export const requirePermission = (requiredPath: string | string[]) => createMidd
     return errorResponse(c, 'Token tidak ditemukan', 401)
   }
   
-  // Admin bypass
-  if (user.role === 'admin') {
+  // Admin & Superadmin bypass
+  if (user.role === 'admin' || user.role === 'superadmin') {
     await next()
     return
   }

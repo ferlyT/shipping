@@ -21,6 +21,7 @@ import {
   ShieldAlert,
   MapPin,
   Printer,
+  Paperclip,
 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useQuery } from '@tanstack/react-query'
@@ -42,11 +43,14 @@ import {
   formatNumber,
   formatDecimal,
   displayCustName,
+  copyToClipboard,
 } from '@/lib/utils'
 import { statusConfig } from '@/features/master/utils/master.utils'
 import { canViewConsignee } from '@/lib/permissions'
 import { formatQtyDecimal, isVfcItem, isMktCustomer } from '../utils/finance.utils'
 import { printInvoicePdf, shareInvoicePdf } from '../utils/billing-pdf.utils'
+import { BillingAttachmentSheet } from './BillingAttachmentSheet'
+import { useBillingAttachments } from '../hooks/useBillingAttachments'
 
 interface InvoiceDetailSheetProps {
   selectedInvoice: any | null
@@ -67,10 +71,12 @@ export function InvoiceDetailSheet({
   const [isCopiedMarking, setIsCopiedMarking] = useState(false)
   const [isPrinting, setIsPrinting] = useState(false)
   const [isSharing, setIsSharing] = useState(false)
+  const [isAttachmentSheetVisible, setIsAttachmentSheetVisible] = useState(false)
   const { guardedAction } = useBiometricGuard()
   const userCanViewConsignee = canViewConsignee(user)
 
   const invNo = (selectedInvoice?.fdInvNo || '').trim()
+  const { data: attachments = [] } = useBillingAttachments(invNo, Boolean(selectedInvoice))
 
   // Fetch full billing detail (tbBilling + tbBillingDetail + cashier + employee + customer)
   const { data: detailData, isLoading } = useQuery({
@@ -113,7 +119,26 @@ export function InvoiceDetailSheet({
   const custStatus = statusConfig[blockedCode as keyof typeof statusConfig] || statusConfig[0]
   const isMkt = isMktCustomer(invoice?.customer, invoice?.customer?.fdSalesNM)
 
-  const handleCopyMarkingInfo = () => {
+  const [isCopiedInv, setIsCopiedInv] = useState(false)
+
+  const handleCopyInvoiceNo = async () => {
+    const targetInvNo = (invoice?.fdInvNo || invNo || '').trim()
+    if (!targetInvNo) return
+    await copyToClipboard(targetInvNo)
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    setIsCopiedInv(true)
+    showToast(`No. Invoice ${targetInvNo} berhasil disalin`, 'success')
+    onCopyInvoiceNo?.(targetInvNo)
+    setTimeout(() => setIsCopiedInv(false), 2000)
+  }
+
+  const handleCopyMarkingInfo = async () => {
+    const markingCode = invoice?.fdMarkingCode?.trim() || '—'
+    const markingNo = invoice?.fdMarkingNo?.trim() || '—'
+    const resiList = invoice?.resiSummary?.resiList?.join(', ') || ''
+    const textToCopy = `Customer: ${custName}\nMarking Code: ${markingCode}\nMarking No: ${markingNo}${resiList ? `\nResi: ${resiList}` : ''}`
+
+    await copyToClipboard(textToCopy)
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     setIsCopiedMarking(true)
     showToast('Data marking & resi disalin', 'info')
@@ -169,9 +194,25 @@ export function InvoiceDetailSheet({
           {/* Sheet Header */}
           <View style={[styles.header, { borderBottomColor: colors.border }]}>
             <View style={{ flex: 1, paddingRight: 10 }}>
-              <Text style={[styles.title, { color: colors.primary }]}>
-                {t('finance.invoice', 'Invoice:')} {invoice?.fdInvNo || '—'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.title, { color: colors.primary }]}>
+                  {t('finance.invoice', 'Invoice:')} {invoice?.fdInvNo || '—'}
+                </Text>
+                {invoice?.fdInvNo && (
+                  <TouchableOpacity
+                    onPress={handleCopyInvoiceNo}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={[styles.miniHeaderCopyBtn, { borderColor: colors.border }]}
+                    accessibilityLabel="Salin No. Invoice"
+                  >
+                    {isCopiedInv ? (
+                      <Check size={13} color={colors.success} />
+                    ) : (
+                      <Copy size={13} color={colors.secondary} />
+                    )}
+                  </TouchableOpacity>
+                )}
+              </View>
               <Text
                 style={[styles.subtitle, { color: colors.secondary }]}
                 numberOfLines={1}
@@ -410,6 +451,15 @@ export function InvoiceDetailSheet({
                       </Text>
                     ) : null}
 
+                    {userCanViewConsignee && (invoice?.fdConsignee || invoice?.consignee) ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                        <Badge label="CONSIGNEE" variant="info" />
+                        <Text style={{ fontSize: 11.5, fontWeight: '700', color: colors.primary }} numberOfLines={1}>
+                          {(invoice.fdConsignee || invoice.consignee).trim()}
+                        </Text>
+                      </View>
+                    ) : null}
+
                     {/* Nomor Resi */}
                     <View style={styles.resiContainer}>
                       <Text style={[styles.infoLabel, { color: colors.secondary }]}>
@@ -590,10 +640,17 @@ export function InvoiceDetailSheet({
                     />
                   </View>
                   <Button
-                    title={t('finance.copyInvoiceNo', 'Salin Nomor Invoice')}
+                    title={`Lampiran Dokumen ${attachments.length > 0 ? `(${attachments.length})` : ''}`}
+                    variant="outline"
+                    icon={<Paperclip size={15} color={colors.tertiary} />}
+                    onPress={() => setIsAttachmentSheetVisible(true)}
+                    style={{ width: '100%' }}
+                  />
+                  <Button
+                    title={isCopiedInv ? 'Nomor Invoice Tersalin!' : t('finance.copyInvoiceNo', 'Salin Nomor Invoice')}
                     variant="secondary"
-                    icon={<Copy size={15} color={colors.primary} />}
-                    onPress={() => onCopyInvoiceNo(invoice?.fdInvNo)}
+                    icon={isCopiedInv ? <Check size={15} color={colors.success} /> : <Copy size={15} color={colors.primary} />}
+                    onPress={handleCopyInvoiceNo}
                     style={{ width: '100%' }}
                   />
                 </View>
@@ -602,6 +659,14 @@ export function InvoiceDetailSheet({
           </ScrollView>
         </View>
       </View>
+
+      {/* Sheet Lampiran Invoice */}
+      <BillingAttachmentSheet
+        invNo={invNo}
+        visible={isAttachmentSheetVisible}
+        onClose={() => setIsAttachmentSheetVisible(false)}
+        custName={custName}
+      />
     </Modal>
   )
 }
@@ -639,6 +704,11 @@ const styles = StyleSheet.create({
   closeBtn: {
     padding: 6,
     borderRadius: 8,
+    borderWidth: 1,
+  },
+  miniHeaderCopyBtn: {
+    padding: 4,
+    borderRadius: 6,
     borderWidth: 1,
   },
   scrollContent: {

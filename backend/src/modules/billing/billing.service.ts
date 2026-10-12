@@ -3,13 +3,17 @@ import { logger } from '../../config/logger'
 import { Prisma } from '@prisma/client'
 import { buildPagination, parsePagination } from '../../utils/pagination'
 import { safeRunRaw } from './billing-validation.service'
-import { suggestionCache } from '../../utils/cache'
+import { suggestionCache, SuggestionCache } from '../../utils/cache'
+
+// In-memory cache for repeated billing searches (<1ms)
+const billingSearchCache = new SuggestionCache(25_000, 500)
 
 // Re-export domain modules for full backwards compatibility
 export * from './billing.types'
 export * from './billing-category.matcher'
 export * from './billing-analytics.service'
 export * from './billing-validation.service'
+export * from './billing-batch-exit.service'
 
 /**
  * Core Billing Queries & CRUD
@@ -28,142 +32,256 @@ export async function getBillings(query: Record<string, string | undefined>) {
   const isNoPagination =
     query.noPagination === 'true' || query.all === 'true' || query.limit === 'all' || query.limit === '0'
 
-  // ── Step 1: Resolve search → expand ke customer/marking codes (paralel) ──
-  let custCodesFromSearch: string[]    = []
-  let markingCodesFromSearch: string[] = []
-
-  if (custCode) {
-    // Jika custCode spesifik diberikan dari pilihan saran customer, kunci langsung ke kode tersebut
-    custCodesFromSearch = [custCode]
-  } else if (search) {
-    const [matchingCustomers, matchingMarkings] = await Promise.all([
-      prisma.tbCustomers.findMany({
-        where: {
-          OR: [
-            { fdCustName: { contains: search } },
-            { fdCustCode: { contains: search } },
-            { fdBillTo:   { contains: search } },
-          ],
-        },
-        select: { fdCustCode: true },
-        take: 500,
-      }),
-      prisma.tbMarking.findMany({
-        where: { fdConsignee: { contains: search } },
-        select: { fdMarkingCode: true },
-        take: 500,
-      }),
-    ])
-    custCodesFromSearch    = matchingCustomers.map((c) => c.fdCustCode.trim())
-    markingCodesFromSearch = matchingMarkings.map((m)  => m.fdMarkingCode.trim())
+  // Cache check for rapid repeated queries / pagination
+  const cacheKey = search
+    ? `billings:search:${search.toLowerCase()}:${custCode || ''}:${statusFilter || ''}:${hasAmount}:${draftOnly}:${minYear}:${page}:${limit}`
+    : null
+  if (cacheKey) {
+    const cached = billingSearchCache.get<any>(cacheKey)
+    if (cached) return cached
   }
 
-  // ── Step 2: Build Prisma WHERE (index-friendly via parameterized query) ──
-  const whereConditions: Prisma.TbBillingWhereInput[] = []
-
-  if (custCode) {
-    whereConditions.push({ fdCustCode: custCode })
-  } else if (search) {
-    whereConditions.push({
-      OR: [
-        { fdInvNo:       { contains: search } },
-        { fdDescr:       { contains: search } },
-        { fdCustCode:    { contains: search } },
-        { fdEmpCode:     { contains: search } },
-        { fdMarkingCode: { contains: search } },
-        { fdMarkingNo:   { contains: search } },
-        { fdListCode:    { contains: search } },
-        ...(custCodesFromSearch.length    > 0 ? [{ fdCustCode:    { in: custCodesFromSearch    } }] : []),
-        ...(markingCodesFromSearch.length > 0 ? [{ fdMarkingCode: { in: markingCodesFromSearch } }] : []),
-      ],
-    })
-  }
-
-  if (hasAmount) {
-    whereConditions.push({ OR: [{ fdJumlah1: { gt: 0 } }, { fdJumlah2: { gt: 0 } }] })
-  }
-
-  if (draftOnly) {
-    whereConditions.push({
-      AND: [
-        { OR: [{ fdGive: null }, { fdGive: { not: 1 } }] },
-        { OR: [{ fdGive2: null }, { fdGive2: { not: 1 } }] },
-        { fdCekDate: null },
-        { fdInvDate: { gte: new Date(`${minYear}-01-01T00:00:00.000Z`) } },
-        { NOT: { totals: { some: { OR: [{ fdSLunas: 1 }, { fdBayar: { gt: 0 } }] } } } },
-      ],
-    })
-  } else if (statusFilter === 'lunas' || statusFilter === 'collected') {
-    whereConditions.push({
-      AND: [
-        { fdGive: 1 },
-        { OR: [{ fdGive2: 1 }, { totals: { some: { fdSLunas: 1 } } }] },
-        { fdInvDate: { gte: new Date(`${minYear}-01-01T00:00:00.000Z`) } },
-      ],
-    })
-  } else if (statusFilter === 'partial') {
-    whereConditions.push({
-      AND: [
-        { fdGive: 1 },
-        { totals: { some: { fdBayar: { gt: 0 } } } },
-        { OR: [{ fdGive2: null }, { fdGive2: { not: 1 } }] },
-        { fdInvDate: { gte: new Date(`${minYear}-01-01T00:00:00.000Z`) } },
-      ],
-    })
-  } else if (statusFilter === 'issued') {
-    whereConditions.push({
-      AND: [
-        { fdGive: 1 },
-        { fdInvDate: { gte: new Date(`${minYear}-01-01T00:00:00.000Z`) } },
-      ],
-    })
-  } else if (query.minYear) {
-    whereConditions.push({ fdInvDate: { gte: new Date(`${minYear}-01-01T00:00:00.000Z`) } })
-  }
-
-  const prismaWhere: Prisma.TbBillingWhereInput = whereConditions.length > 0 ? { AND: whereConditions } : {}
-
-  // ── Step 3: Query utama (filter) + count paralel — Prisma generates index-friendly SQL ──
+  let data: any[] = []
+  let total = 0
   const isNoPaginationFinal = isNoPagination
 
-  const [data, total] = await Promise.all([
-    prisma.tbBilling.findMany({
-      where: prismaWhere,
-      ...(isNoPaginationFinal ? {} : { skip, take }),
-      orderBy: { fdInvDate: 'desc' },
-      select: {
-        fdInvNo:       true,
-        fdInvDate:     true,
-        fdListType:    true,
-        fdCustCode:    true,
-        fdMarkingCode: true,
-        fdMarkingNo:   true,
-        fdDescr:       true,
-        fdGive:        true,
-        fdGive2:       true,
-        fdCekDate:     true,
-        fdJumlah1:     true,
-        fdJumlah2:     true,
-        fdTypeBilling: true,
-        fdEmpCode:     true,
-        customer: { select: { fdCustName: true, fdBlocked: true, fdBillTo: true } },
-      },
-    }),
-    prisma.tbBilling.count({ where: prismaWhere }),
-  ])
+  let fastSearchFailed = false
 
-  // ── Step 5: Enrichment paralel — employee + totals + konsignee dalam 1 raw SQL ──
-  //   Dikerjakan setelah main query karena kita sudah tahu fdInvNo-nya → IN clause sargable
-  let empMap       = new Map<string, string>()
-  let totalsMap    = new Map<string, { totalJumlah: number; totalBayar: number; hasSLunas: boolean }>()
-  let consigneeMap = new Map<string, string>()
+  // ── High Performance Fast Path: Jika ada search teks bebas, gunakan CTE Candidate Query ──
+  // Menghindari 1.000 parameter OR Prisma dan full-table-scan 735.000 baris (turun dari 18s ke <1s)
+  if (search && !custCode) {
+    try {
+      const cleanSearch = search.replace(/'/g, "''")
+      const contains = `%${cleanSearch}%`
+      const prefix = `${cleanSearch}%`
+
+      let statusFilterSql = ''
+      if (draftOnly) {
+        statusFilterSql = `
+          AND ISNULL(b.fdGive, 0) <> 1
+          AND ISNULL(b.fdGive2, 0) <> 1
+          AND b.fdCekDate IS NULL
+          AND b.fdInvDate >= '${minYear}-01-01'
+          AND NOT EXISTS (
+            SELECT 1 FROM tbBillingTotal bt WITH (NOLOCK)
+            WHERE bt.fdInvNo = b.fdInvNo AND (ISNULL(bt.fdSLunas, 0) = 1 OR ISNULL(bt.fdBayar, 0) > 0)
+          )
+        `
+      } else if (statusFilter === 'lunas' || statusFilter === 'collected') {
+        statusFilterSql = `
+          AND b.fdGive = 1
+          AND (b.fdGive2 = 1 OR EXISTS (
+            SELECT 1 FROM tbBillingTotal bt WITH (NOLOCK)
+            WHERE bt.fdInvNo = b.fdInvNo AND bt.fdSLunas = 1
+          ))
+          AND b.fdInvDate >= '${minYear}-01-01'
+        `
+      } else if (statusFilter === 'partial') {
+        statusFilterSql = `
+          AND b.fdGive = 1
+          AND EXISTS (
+            SELECT 1 FROM tbBillingTotal bt WITH (NOLOCK)
+            WHERE bt.fdInvNo = b.fdInvNo AND ISNULL(bt.fdBayar, 0) > 0
+          )
+          AND ISNULL(b.fdGive2, 0) <> 1
+          AND b.fdInvDate >= '${minYear}-01-01'
+        `
+      } else if (statusFilter === 'issued') {
+        statusFilterSql = `
+          AND b.fdGive = 1
+          AND b.fdInvDate >= '${minYear}-01-01'
+        `
+      } else if (query.minYear) {
+        statusFilterSql = `AND b.fdInvDate >= '${minYear}-01-01'`
+      }
+
+      if (hasAmount) {
+        statusFilterSql += ` AND (ISNULL(b.fdJumlah1, 0) > 0 OR ISNULL(b.fdJumlah2, 0) > 0)`
+      }
+
+      // T-SQL: ORDER BY di dalam CTE dilarang kecuali disertai TOP atau OFFSET
+      const pagingSql = isNoPaginationFinal
+        ? ''
+        : `ORDER BY fdInvDate DESC OFFSET ${skip} ROWS FETCH NEXT ${take} ROWS ONLY`
+
+      const [dataRows, countRow] = await Promise.all([
+        prisma.$queryRawUnsafe<any[]>(`
+          WITH Candidates AS (
+            SELECT fdInvNo, fdInvDate FROM tbBilling WITH (NOLOCK) WHERE fdInvNo LIKE '${contains}'
+            UNION
+            SELECT fdInvNo, fdInvDate FROM tbBilling WITH (NOLOCK) WHERE fdMarkingCode LIKE '${contains}'
+            UNION
+            SELECT fdInvNo, fdInvDate FROM tbBilling WITH (NOLOCK) WHERE fdMarkingNo LIKE '${contains}'
+            UNION
+            SELECT b.fdInvNo, b.fdInvDate
+            FROM tbBilling b WITH (NOLOCK)
+            INNER JOIN tbCustomers c WITH (NOLOCK) ON b.fdCustCode = c.fdCustCode
+            WHERE c.fdCustName LIKE '${contains}' OR c.fdCustCode LIKE '${prefix}' OR c.fdBillTo LIKE '${contains}'
+          ),
+          FilteredCandidates AS (
+            SELECT c.fdInvNo, c.fdInvDate
+            FROM Candidates c
+            INNER JOIN tbBilling b WITH (NOLOCK) ON c.fdInvNo = b.fdInvNo
+            WHERE 1=1 ${statusFilterSql}
+          ),
+          PagedCandidates AS (
+            SELECT fdInvNo
+            FROM FilteredCandidates
+            ${pagingSql}
+          )
+          SELECT
+            b.fdInvNo, b.fdInvDate, b.fdListType, b.fdCustCode, b.fdMarkingCode,
+            b.fdMarkingNo, b.fdDescr, b.fdGive, b.fdGive2, b.fdCekDate,
+            b.fdJumlah1, b.fdJumlah2, b.fdTypeBilling, b.fdEmpCode,
+            cust.fdCustName, cust.fdBlocked, cust.fdBillTo
+          FROM PagedCandidates pc
+          INNER JOIN tbBilling b WITH (NOLOCK) ON pc.fdInvNo = b.fdInvNo
+          LEFT JOIN tbCustomers cust WITH (NOLOCK) ON b.fdCustCode = cust.fdCustCode
+          ORDER BY b.fdInvDate DESC
+        `),
+        prisma.$queryRawUnsafe<any[]>(`
+          WITH Candidates AS (
+            SELECT fdInvNo, fdInvDate FROM tbBilling WITH (NOLOCK) WHERE fdInvNo LIKE '${contains}'
+            UNION
+            SELECT fdInvNo, fdInvDate FROM tbBilling WITH (NOLOCK) WHERE fdMarkingCode LIKE '${contains}'
+            UNION
+            SELECT fdInvNo, fdInvDate FROM tbBilling WITH (NOLOCK) WHERE fdMarkingNo LIKE '${contains}'
+            UNION
+            SELECT b.fdInvNo, b.fdInvDate
+            FROM tbBilling b WITH (NOLOCK)
+            INNER JOIN tbCustomers c WITH (NOLOCK) ON b.fdCustCode = c.fdCustCode
+            WHERE c.fdCustName LIKE '${contains}' OR c.fdCustCode LIKE '${prefix}' OR c.fdBillTo LIKE '${contains}'
+          )
+          SELECT COUNT_BIG(1) AS total
+          FROM Candidates c
+          INNER JOIN tbBilling b WITH (NOLOCK) ON c.fdInvNo = b.fdInvNo
+          WHERE 1=1 ${statusFilterSql}
+        `),
+      ])
+
+      data = dataRows.map((r) => ({
+        fdInvNo: (r.fdInvNo || '').trim(),
+        fdInvDate: r.fdInvDate,
+        fdListType: r.fdListType,
+        fdCustCode: (r.fdCustCode || '').trim(),
+        fdMarkingCode: r.fdMarkingCode ? r.fdMarkingCode.trim() : null,
+        fdMarkingNo: r.fdMarkingNo ? r.fdMarkingNo.trim() : null,
+        fdDescr: r.fdDescr ? r.fdDescr.trim() : null,
+        fdGive: r.fdGive,
+        fdGive2: r.fdGive2,
+        fdCekDate: r.fdCekDate,
+        fdJumlah1: r.fdJumlah1,
+        fdJumlah2: r.fdJumlah2,
+        fdTypeBilling: r.fdTypeBilling,
+        fdEmpCode: r.fdEmpCode ? r.fdEmpCode.trim() : null,
+        customer: r.fdCustCode
+          ? {
+              fdCustName: r.fdCustName ? r.fdCustName.trim() : null,
+              fdBlocked: r.fdBlocked,
+              fdBillTo: r.fdBillTo ? r.fdBillTo.trim() : null,
+            }
+          : null,
+      }))
+      total = Number(countRow[0]?.total || 0)
+    } catch (searchErr) {
+      fastSearchFailed = true
+      logger.warn(`Fast candidate search gagal, fallback ke standar: ${searchErr}`)
+    }
+  }
+
+  // Fallback / Standar: Jika data masih kosong dan bukan hasil pencarian CTE kosong yang valid
+  if (fastSearchFailed || (data.length === 0 && total === 0 && (!search || custCode))) {
+    const whereConditions: Prisma.TbBillingWhereInput[] = []
+
+    if (custCode) {
+      whereConditions.push({ fdCustCode: custCode })
+    }
+
+    if (hasAmount) {
+      whereConditions.push({ OR: [{ fdJumlah1: { gt: 0 } }, { fdJumlah2: { gt: 0 } }] })
+    }
+
+    if (draftOnly) {
+      whereConditions.push({
+        AND: [
+          { OR: [{ fdGive: null }, { fdGive: { not: 1 } }] },
+          { OR: [{ fdGive2: null }, { fdGive2: { not: 1 } }] },
+          { fdCekDate: null },
+          { fdInvDate: { gte: new Date(`${minYear}-01-01T00:00:00.000Z`) } },
+          { NOT: { totals: { some: { OR: [{ fdSLunas: 1 }, { fdBayar: { gt: 0 } }] } } } },
+        ],
+      })
+    } else if (statusFilter === 'lunas' || statusFilter === 'collected') {
+      whereConditions.push({
+        AND: [
+          { fdGive: 1 },
+          { OR: [{ fdGive2: 1 }, { totals: { some: { fdSLunas: 1 } } }] },
+          { fdInvDate: { gte: new Date(`${minYear}-01-01T00:00:00.000Z`) } },
+        ],
+      })
+    } else if (statusFilter === 'partial') {
+      whereConditions.push({
+        AND: [
+          { fdGive: 1 },
+          { totals: { some: { fdBayar: { gt: 0 } } } },
+          { OR: [{ fdGive2: null }, { fdGive2: { not: 1 } }] },
+          { fdInvDate: { gte: new Date(`${minYear}-01-01T00:00:00.000Z`) } },
+        ],
+      })
+    } else if (statusFilter === 'issued') {
+      whereConditions.push({
+        AND: [
+          { fdGive: 1 },
+          { fdInvDate: { gte: new Date(`${minYear}-01-01T00:00:00.000Z`) } },
+        ],
+      })
+    } else if (query.minYear) {
+      whereConditions.push({ fdInvDate: { gte: new Date(`${minYear}-01-01T00:00:00.000Z`) } })
+    }
+
+    const prismaWhere: Prisma.TbBillingWhereInput = whereConditions.length > 0 ? { AND: whereConditions } : {}
+
+    const [prismaData, prismaTotal] = await Promise.all([
+      prisma.tbBilling.findMany({
+        where: prismaWhere,
+        ...(isNoPaginationFinal ? {} : { skip, take }),
+        orderBy: { fdInvDate: 'desc' },
+        select: {
+          fdInvNo:       true,
+          fdInvDate:     true,
+          fdListType:    true,
+          fdCustCode:    true,
+          fdMarkingCode: true,
+          fdMarkingNo:   true,
+          fdDescr:       true,
+          fdGive:        true,
+          fdGive2:       true,
+          fdCekDate:     true,
+          fdJumlah1:     true,
+          fdJumlah2:     true,
+          fdTypeBilling: true,
+          fdEmpCode:     true,
+          customer: { select: { fdCustName: true, fdBlocked: true, fdBillTo: true } },
+        },
+      }),
+      prisma.tbBilling.count({ where: prismaWhere }),
+    ])
+
+    data = prismaData
+    total = prismaTotal
+  }
+
+  let empMap          = new Map<string, string>()
+  let totalsMap       = new Map<string, { totalJumlah: number; totalBayar: number; hasSLunas: boolean }>()
+  let consigneeMap    = new Map<string, string>()
+  let attachmentMap   = new Map<string, number>()
 
   if (data.length > 0) {
     // Kumpulkan kode unik
     const invNos      = [...new Set(data.map(d => d.fdInvNo.trim()))]
     const empCodes    = [...new Set(data.map(d => d.fdEmpCode?.trim()).filter(Boolean))] as string[]
     const markingCodes = [...new Set(
-      data.flatMap(d => d.fdMarkingCode ? d.fdMarkingCode.split(';').map(c => c.trim()).filter(Boolean) : [])
+      data.flatMap((d: any) => d.fdMarkingCode ? d.fdMarkingCode.split(';').map((c: string) => c.trim()).filter(Boolean) : [])
     )]
 
     // Helper untuk query batching yang aman
@@ -226,8 +344,29 @@ export async function getBillings(query: Record<string, string | undefined>) {
       return results
     }
 
-    // Jalankan 3 enrichment query secara paralel
-    const [employees, totalsRows, markingRows] = await Promise.all([
+    const fetchAttachmentCounts = async () => {
+      if (invNos.length === 0) return []
+      const chunkSize = 1000
+      const results: { fdInvNo: string; count: number }[] = []
+      for (let i = 0; i < invNos.length; i += chunkSize) {
+        const chunk = invNos.slice(i, i + chunkSize)
+        try {
+          const chunkRows = await prisma.$queryRawUnsafe<any[]>(`
+            SELECT RTRIM(fdInvNo) AS fdInvNo, COUNT(fdId) AS count
+            FROM tbBillingAttachment WITH (NOLOCK)
+            WHERE fdInvNo IN (${chunk.map((v) => `'${v.replace(/'/g, "''")}'`).join(',')})
+            GROUP BY RTRIM(fdInvNo)
+          `)
+          results.push(...chunkRows)
+        } catch (err) {
+          logger.warn(`Gagal fetch attachment counts batch: ${err}`)
+        }
+      }
+      return results
+    }
+
+    // Jalankan 4 enrichment query secara paralel
+    const [employees, totalsRows, markingRows, attachmentRows] = await Promise.all([
       // 1. Employee names
       empCodes.length > 0
         ? prisma.tbEmployees.findMany({
@@ -241,6 +380,9 @@ export async function getBillings(query: Record<string, string | undefined>) {
 
       // 3. Konsignee
       fetchMarkings(),
+
+      // 4. Lampiran berkas
+      fetchAttachmentCounts(),
     ])
 
     // Build maps
@@ -255,6 +397,11 @@ export async function getBillings(query: Record<string, string | undefined>) {
     markingRows.forEach((m: any) => {
       if (m.fdConsignee?.trim()) {
         consigneeMap.set(m.fdMarkingCode.trim(), m.fdConsignee.trim())
+      }
+    })
+    attachmentRows.forEach((a: any) => {
+      if (a.fdInvNo) {
+        attachmentMap.set(a.fdInvNo.trim(), Number(a.count ?? 0))
       }
     })
   }
@@ -293,8 +440,8 @@ export async function getBillings(query: Record<string, string | undefined>) {
 
     let fdConsignee: string | null = null
     if (d.fdMarkingCode) {
-      const codes = d.fdMarkingCode.split(';').map((c) => c.trim()).filter(Boolean)
-      const consignees = codes.map((c) => consigneeMap.get(c)).filter(Boolean)
+      const codes = d.fdMarkingCode.split(';').map((c: string) => c.trim()).filter(Boolean)
+      const consignees = codes.map((c: string) => consigneeMap.get(c)).filter(Boolean)
       if (consignees.length > 0) fdConsignee = [...new Set(consignees)].join(', ')
     }
 
@@ -307,11 +454,17 @@ export async function getBillings(query: Record<string, string | undefined>) {
       sisaBayar: Math.max(0, totalJumlah - totalBayar),
       paymentStatus,
       fdConsignee,
+      attachmentCount: attachmentMap.get(invNoTrimmed) ?? 0,
       employee: fdEmpCode ? { fdEmpName: empMap.get(fdEmpCode.trim()) || null } : null,
     }
   })
 
-  return { data: mappedData, meta: meta(total) }
+  const result = { data: mappedData, meta: meta(total) }
+  if (cacheKey) {
+    billingSearchCache.set(cacheKey, result, 25_000)
+  }
+
+  return result
 }
 
 export async function getBillingById(id: string) {
@@ -392,7 +545,8 @@ export async function getBillingById(id: string) {
     emp,
     giveEmpRow,
     salesRow,
-    resiRows
+    resiRows,
+    attachmentCountRow
   ] = await Promise.all([
     safeRunRaw(async () => {
       return prisma.$queryRaw<any[]>`
@@ -487,7 +641,13 @@ export async function getBillingById(id: string) {
           AND el.fdTerima IS NOT NULL
           AND el.fdTerima NOT IN ('', '-', '.', 'SIN', 'SIN/AIR')
       `
-    }, 'get_billing_resi_summary')
+    }, 'get_billing_resi_summary'),
+
+    safeRunRaw(async () => {
+      return prisma.tbBillingAttachment.count({
+        where: { fdInvNo: targetInvNo },
+      })
+    }, 'get_billing_attachment_count')
   ])
 
   // Fallback resolvedListCode dari details jika header fdListCode kosong
@@ -634,6 +794,7 @@ export async function getBillingById(id: string) {
     cashierDate,
     totalPaid,
     cashierDetails,
+    attachmentCount: typeof attachmentCountRow === 'number' ? attachmentCountRow : 0,
   }
 }
 
@@ -672,13 +833,20 @@ export async function getBillingTimeline(invNo: string) {
   const rows = await prisma.$queryRaw<any[]>`
     SELECT
       CONVERT(VARCHAR(10), MIN(el.fdTglAgent), 120) AS fdTglAgent,
-      CONVERT(VARCHAR(10), MIN(el.fdTgl_IN), 120)   AS fdTgl_IN,
+      CONVERT(VARCHAR(10), MIN(
+        CASE
+          WHEN el.fdTgl_IN IS NOT NULL AND el.fdTgl_IN > '1900-01-01' THEN el.fdTgl_IN
+          WHEN m.fdExitDate IS NOT NULL AND m.fdExitDate > '1900-01-01' THEN m.fdExitDate
+          ELSE NULL
+        END
+      ), 120)                                        AS fdTgl_IN,
       CONVERT(VARCHAR(10), m.fdLoadDate, 120)        AS fdLoadDate,
       CONVERT(VARCHAR(10), m.fdETD, 120)             AS fdETD,
       CONVERT(VARCHAR(10), m.fdETA, 120)             AS fdETA,
       CONVERT(VARCHAR(10), MIN(d.fdSJDate), 120)     AS fdSjDate,
       CONVERT(VARCHAR(10), MAX(d.fdSndDate), 120)    AS fdSndDate,
-      CONVERT(VARCHAR(10), MAX(d.fdGiveDate), 120)   AS fdGiveDate
+      CONVERT(VARCHAR(10), MAX(d.fdGiveDate), 120)   AS fdGiveDate,
+      MAX(RTRIM(m.fdGudang))                          AS fdGudang
     FROM tbEntrylist el WITH (NOLOCK)
     LEFT JOIN tbMarking m WITH (NOLOCK)
       ON RTRIM(m.fdMarkingCode) = RTRIM(el.fdMarkingCode)
@@ -695,6 +863,7 @@ export async function getBillingTimeline(invNo: string) {
       fdETD: null,
       fdETA: null,
       fdTgl_IN: null,
+      fdGudang: null,
       fdSjDate: null,
       fdSndDate: null,
       fdGiveDate: null,
@@ -708,6 +877,7 @@ export async function getBillingTimeline(invNo: string) {
     fdETD:      r.fdETD      ? String(r.fdETD).trim()      : null,
     fdETA:      r.fdETA      ? String(r.fdETA).trim()      : null,
     fdTgl_IN:   r.fdTgl_IN   ? String(r.fdTgl_IN).trim()   : null,
+    fdGudang:   r.fdGudang   ? String(r.fdGudang).trim()   : null,
     fdSjDate:   r.fdSjDate   ? String(r.fdSjDate).trim()   : null,
     fdSndDate:  r.fdSndDate  ? String(r.fdSndDate).trim()  : null,
     fdGiveDate: r.fdGiveDate ? String(r.fdGiveDate).trim() : null,

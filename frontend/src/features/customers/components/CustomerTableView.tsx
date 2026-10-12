@@ -11,9 +11,10 @@ import type { Customer } from '../types/customers.types'
 
 interface CustomerTableViewProps {
   customers: Customer[]
-  page: number
-  limit: number
+  page?: number
+  limit?: number
   sortField: string
+
   sortDir: 'asc' | 'desc'
   onSort: (field: string) => void
   onSelectCustomer: (customer: Customer) => void
@@ -110,8 +111,10 @@ export function CustomerTableView({
       key: 'no',
       header: 'No.',
       className: 'w-12 text-center text-[var(--color-secondary)] text-xs',
-      render: (_: unknown, index: number) => (page - 1) * limit + index + 1
+      render: (_: unknown, index: number) =>
+        page !== undefined && limit !== undefined ? (page - 1) * limit + index + 1 : index + 1
     },
+
     {
       key: 'fdCustName',
       header: canViewTier ? 'Customer Name & Tier' : 'Customer Name',

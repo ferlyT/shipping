@@ -28,6 +28,13 @@ Manajemen piutang dan tagihan pelanggan, antrean audit validasi (M³ vs KG), kal
     - **Bagikan PDF (`Sharing.shareAsync`)**: Dilindungi verifikasi biometrik sebelum berkas dibagikan ke WhatsApp/Email/Drive.
     - **Format PDF A5 Landscape**: Spesifikasi $210\,\text{mm} \times 148\,\text{mm}$ identik 100% dengan cetak web (header boks, tabel 4 kolom, terbilang otomatis Bahasa Indonesia via `terbilang.ts`, watermark `"COPY"`).
     - **Salin Nomor Invoice**: Menyalin ke clipboard dengan haptic feedback.
+    - **Lampiran Dokumen Faktur (`BillingAttachmentSheet.tsx`)**:
+      - Tombol aksi `[Lampiran Dokumen (X)]` pada sheet detail invoice.
+      - Grid berkas foto bukti bayar dan dokumen PDF (hingga 10 berkas).
+      - Kamera terintegrasi native (`expo-camera`) untuk memotret bukti fisik langsung.
+      - Pratinjau layar penuh (gambar zoomable & dokumen PDF viewer/share).
+      - Berbagi dokumen via `expo-sharing` (`Sharing.shareAsync`).
+      - Terproteksi peran izin akses `canManageBillingAttachments(user)`.
 
 ---
 

@@ -270,10 +270,29 @@ export async function getShipmentById(id: string) {
     `getShipmentInvoice for ${cleanId}`
   )
 
-  const [marking, deliveries, billingRecord] = await Promise.all([
+  // Query audit trail (created by, created date, update by, update date)
+  const auditPromise = safeQuery(
+    async () => {
+      const rows = await prisma.$queryRaw<any[]>`
+        SELECT 
+          RTRIM(fdEmp1) AS fdEmp1,
+          ISNULL(fdCreatedDate, fdListDate) AS fdCreatedDate,
+          RTRIM(fdEmp2) AS fdEmp2,
+          fdUpdate
+        FROM tbEntryList WITH (NOLOCK)
+        WHERE RTRIM(fdListCode) = ${cleanId} OR fdListCode = ${cleanId}
+      `
+      return rows[0] || null
+    },
+    null,
+    `getShipmentAudit for ${cleanId}`
+  )
+
+  const [marking, deliveries, billingRecord, auditInfo] = await Promise.all([
     markingPromise,
     deliveryPromise,
     billingPromise,
+    auditPromise,
   ])
 
   const delivery: DeliveryInfo = {
@@ -377,6 +396,14 @@ export async function getShipmentById(id: string) {
 
   return {
     ...shipment,
+    fdEmp1: auditInfo?.fdEmp1 ? String(auditInfo.fdEmp1).trim() : null,
+    fdCreatedDate: auditInfo?.fdCreatedDate || null,
+    fdEmp2: auditInfo?.fdEmp2 ? String(auditInfo.fdEmp2).trim() : null,
+    fdUpdate: auditInfo?.fdUpdate || null,
+    createdBy: auditInfo?.fdEmp1 ? String(auditInfo.fdEmp1).trim() : null,
+    createdAt: auditInfo?.fdCreatedDate || null,
+    updatedBy: auditInfo?.fdEmp2 ? String(auditInfo.fdEmp2).trim() : null,
+    updatedAt: auditInfo?.fdUpdate || null,
     shipmentStatus: resolveShipmentStatus(
       marking, 
       delivery, 

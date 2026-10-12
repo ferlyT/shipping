@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, Users, Package, Layers, Truck, FileText,
   ChevronLeft, ChevronDown, UserCog, Shield, BarChart2, Target, Search, Upload, History,
-  Activity, PieChart, LineChart, ListOrdered, Table, ScrollText, ClipboardCheck, Tags, Landmark, FileSearch, FileUp, BookOpen, Tag, FileSpreadsheet, Receipt, Wallet, Ruler, Warehouse, Clock
+  Activity, PieChart, LineChart, ListOrdered, Table, ScrollText, ClipboardCheck, Tags, Landmark, FileSearch, FileUp, BookOpen, Tag, FileSpreadsheet, Receipt, Wallet, Ruler, Warehouse, Clock, FileEdit, BarChart3
 } from 'lucide-react'
 import { useUiStore } from '@/stores/uiStore'
 import { useAuthStore } from '@/stores/authStore'
@@ -15,16 +15,17 @@ type LeafItem = {
   label: string
   path: string
   icon: typeof LayoutDashboard
-  permissionPath?: string
+  permissionPath?: string | string[]
 }
 
-type NavItem =
-  | LeafItem
-  | {
-      label: string
-      icon: typeof LayoutDashboard
-      children: LeafItem[]
-    }
+type NavGroupItem = {
+  id: string
+  label: string
+  icon: typeof LayoutDashboard
+  children: LeafItem[]
+}
+
+type NavItem = LeafItem | NavGroupItem
 
 interface ModuleGroup {
   module: string
@@ -33,10 +34,16 @@ interface ModuleGroup {
   items: NavItem[]
 }
 
-const toPermissionPath = (item: LeafItem) => item.permissionPath ?? item.path
-
 const hasPermission = (permissions: string[] | undefined, path: string) =>
   path === ROUTES.PROFILE || !permissions || permissions.includes('/*') || permissions.includes(path)
+
+const isItemAllowed = (permissions: string[] | undefined, item: LeafItem) => {
+  const target = item.permissionPath ?? item.path
+  if (Array.isArray(target)) {
+    return target.some((p) => hasPermission(permissions, p))
+  }
+  return hasPermission(permissions, target)
+}
 
 const getERPNavModules = (t: (key: string) => string, role?: string, permissions?: string[]): ModuleGroup[] => {
   const allModules: ModuleGroup[] = [
@@ -54,6 +61,7 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
       accentColor: '#F59E0B',
       items: [
         {
+          id: 'shipment',
           label: t('nav.shipment'),
           icon: Package,
           children: [
@@ -62,6 +70,7 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           ],
         },
         {
+          id: 'batchMarking',
           label: t('nav.batchMarking'),
           icon: Layers,
           children: [
@@ -76,6 +85,7 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           ],
         },
         {
+          id: 'deliveryOrder',
           label: t('nav.deliveryOrder'),
           icon: Truck,
           children: [
@@ -100,6 +110,11 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           path: ROUTES.INSPECTION_REPORTS,
           icon: ClipboardCheck,
         },
+        {
+          label: t('nav.dataRevisions'),
+          path: ROUTES.DATA_REVISIONS,
+          icon: FileEdit,
+        },
       ],
     },
     {
@@ -108,10 +123,16 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
       accentColor: '#10B981',
       items: [
         {
+          id: 'billing',
           label: t('nav.billing'),
           icon: FileText,
           children: [
-            { label: t('nav.billingDashboard'), path: ROUTES.BILLING, icon: LineChart },
+            {
+              label: t('nav.billingDashboard'),
+              path: ROUTES.BILLING,
+              icon: LineChart,
+              permissionPath: [ROUTES.BILLING_OPERATIONAL, ROUTES.BILLING_FINANCE, ROUTES.BILLING],
+            },
             { label: t('nav.targetBill'), path: ROUTES.BILLING_TARGET, icon: Target },
             { label: t('nav.billingList'), path: ROUTES.BILLING_LIST, icon: ScrollText },
             { label: t('nav.validationList'), path: ROUTES.BILLING_VALIDATION_LIST, icon: ClipboardCheck },
@@ -129,6 +150,16 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           icon: Wallet,
         },
         {
+          id: 'reports',
+          label: t('nav.reports'),
+          icon: BarChart3,
+          children: [
+            { label: t('nav.reportOmsetVolume'), path: ROUTES.REPORT_OMSET_VOLUME, icon: LineChart },
+            { label: t('nav.reportCargoVolume'), path: ROUTES.REPORT_CARGO_VOLUME, icon: Layers },
+          ],
+        },
+        {
+          id: 'priceList',
           label: t('nav.priceList'),
           icon: Tags,
           children: [
@@ -139,6 +170,7 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           ],
         },
         {
+          id: 'customerPriceList',
           label: t('nav.customerPriceList'),
           icon: Landmark,
           children: [
@@ -184,12 +216,12 @@ const getERPNavModules = (t: (key: string) => string, role?: string, permissions
           .map((item) => {
             if ('children' in item) {
               const allowedChildren = item.children.filter((child) =>
-                hasPermission(permissions, toPermissionPath(child))
+                isItemAllowed(permissions, child)
               )
               if (allowedChildren.length === 0) return null
               return { ...item, children: allowedChildren }
             }
-            return hasPermission(permissions, toPermissionPath(item)) ? item : null
+            return isItemAllowed(permissions, item) ? item : null
           })
           .filter((item): item is NavItem => item !== null)
 
@@ -215,20 +247,23 @@ export function Sidebar({ isOpen, onClose }: SidebarProps = {}) {
   const { t } = useTranslation()
   const location = useLocation()
 
-  // Track expanded groups per module-item combination
+  // Track expanded groups per module-item combination (default true agar semua menu tampil)
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({
-    'logistics-nav.shipment': true,
-    'logistics-nav.batchMarking': true,
-    'logistics-nav.deliveryOrder': true,
-    'finance-nav.billing': true,
-    'finance-nav.priceList': true,
-    'finance-nav.customerPriceList': true,
+    'logistics-shipment': true,
+    'logistics-batchMarking': true,
+    'logistics-deliveryOrder': true,
+    'finance-billing': true,
+    'finance-priceList': true,
+    'finance-customerPriceList': true,
   })
 
   const navModules = getERPNavModules(t, user?.role, user?.permissions)
 
   const toggleGroup = (key: string) => {
-    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }))
+    setOpenGroups((prev) => ({
+      ...prev,
+      [key]: prev[key] !== undefined ? !prev[key] : false,
+    }))
   }
 
   const isChildActive = (item: NavItem): boolean => {
@@ -243,8 +278,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps = {}) {
       {/* Backdrop for mobile */}
       {isSidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden transition-opacity"
-          onClick={() => setSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-black/60 lg:hidden transition-opacity backdrop-blur-xs"
+          onClick={handleClose}
           aria-hidden="true"
         />
       )}
@@ -252,22 +287,22 @@ export function Sidebar({ isOpen, onClose }: SidebarProps = {}) {
       {/* Sidebar container */}
       <aside
         className={cn(
-          'fixed top-0 left-0 z-50 h-screen w-64 flex flex-col',
-          'bg-[var(--color-surface)] border-r border-[var(--color-border)]',
+          'fixed inset-y-0 left-0 z-50 h-[100dvh] max-h-[100dvh] w-72 max-w-[85vw] flex flex-col',
+          'bg-[var(--color-surface)] border-r border-[var(--color-border)] shadow-2xl lg:shadow-none',
           'transition-all duration-300 ease-in-out shrink-0 overflow-hidden',
           isSidebarOpen
-            ? 'translate-x-0 lg:static lg:translate-x-0 lg:w-64'
+            ? 'translate-x-0 lg:static lg:translate-x-0 lg:w-64 lg:h-screen lg:max-h-screen'
             : '-translate-x-full lg:w-0 lg:-translate-x-full lg:border-r-0'
         )}
       >
         {/* Brand header */}
-        <div className="flex items-center justify-between h-16 px-6 border-b border-[var(--color-border)] shrink-0">
+        <div className="flex items-center justify-between h-16 px-5 sm:px-6 border-b border-[var(--color-border)] shrink-0">
           <Link
             to={ROUTES.DASHBOARD}
             className="flex items-center gap-3 font-semibold text-lg text-[var(--color-primary)] truncate"
             onClick={() => {
               if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                setSidebarOpen(false)
+                handleClose()
               }
             }}
           >
@@ -279,15 +314,15 @@ export function Sidebar({ isOpen, onClose }: SidebarProps = {}) {
           <button
             onClick={handleClose}
             className="p-1.5 rounded-lg text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-colors cursor-pointer shrink-0"
-            aria-label="Sembunyikan sidebar"
-            title="Sembunyikan Sidebar"
+            aria-label={t('common.close')}
+            title="Tutup Sidebar"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Scrollable Navigation */}
-        <div className="flex-1 overflow-y-auto py-4 px-3 space-y-6">
+        {/* Scrollable Navigation: min-h-0 dan pb-28 menjamin seluruh menu bawah dapat diakses pada mobile */}
+        <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain py-4 px-3 space-y-6 pb-28 touch-pan-y [webkit-overflow-scrolling:touch]">
           {navModules.map((mod) => (
             <div key={mod.module} className="space-y-1">
               {/* Module Header Pill */}
@@ -304,8 +339,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps = {}) {
               {/* Module Items */}
               {mod.items.map((item) => {
                 if ('children' in item) {
-                  const groupKey = `${mod.module}-${item.label}`
-                  const isOpen = openGroups[groupKey] ?? isChildActive(item)
+                  const groupKey = 'id' in item && item.id ? `${mod.module}-${item.id}` : `${mod.module}-${item.label}`
+                  const isOpen = openGroups[groupKey] ?? true
                   const hasActiveChild = isChildActive(item)
                   const Icon = item.icon
 
@@ -347,7 +382,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps = {}) {
                                 to={child.path}
                                 onClick={() => {
                                   if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                                    setSidebarOpen(false)
+                                    handleClose()
                                   }
                                 }}
                                 className={cn(
@@ -378,7 +413,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps = {}) {
                     to={item.path}
                     onClick={() => {
                       if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-                        setSidebarOpen(false)
+                        handleClose()
                       }
                     }}
                     className={cn(

@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { Pagination } from '@/components/ui/Pagination'
+import { useQuery } from '@tanstack/react-query'
+import { ArrowUp } from 'lucide-react'
 import { PageHeader } from '@/components/ui/PageHeader'
 import { EmptyState } from '@/components/ui/EmptyState'
+import { Pagination } from '@/components/ui/Pagination'
 import { usePagination } from '@/hooks/usePagination'
 import { useDebounce } from '@/hooks/useDebounce'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -20,6 +21,8 @@ import {
   CustomerMobileCard,
   CustomerDetailModal,
 } from '../components'
+
+const BATCH_SIZE = 30
 
 export default function CustomersPage() {
   const { t } = useTranslation()
@@ -42,21 +45,27 @@ export default function CustomersPage() {
   // Use immediateSearch if triggered by Enter/suggestion, else debouncedSearch
   const activeSearch = immediateSearch !== null ? immediateSearch : debouncedSearch
 
+  // Standard ERP Pagination
+  const { page, limit, goToPage, reset: resetPagination } = usePagination(BATCH_SIZE)
+  const [jumpPage, setJumpPage] = useState('')
+
   const [viewMode, setViewMode] = useState<'table' | 'grid' | 'shortlist'>(() => {
     if (typeof window !== 'undefined') {
       return window.innerWidth < 640 ? 'shortlist' : 'table'
     }
     return 'table'
   })
-  const { page, limit, setLimit, goToPage } = usePagination(15)
 
   const [sortField, setSortField] = useState('fdCustName')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
   const [selectedRow, setSelectedRow] = useState<Customer | null>(null)
+  const [showScrollTop, setShowScrollTop] = useState(false)
+
+  const tableContainerRef = useRef<HTMLDivElement>(null)
 
   const handleStatusChange = (status: 'active' | 'discontinued' | 'all') => {
     setStatusFilter(status)
-    goToPage(1)
+    resetPagination()
     setSearchParams((prev) => {
       status === 'active' ? prev.delete('status') : prev.set('status', status)
       return prev
@@ -65,7 +74,7 @@ export default function CustomersPage() {
 
   const handleSalesChange = (sales: string) => {
     setActiveSales(sales)
-    goToPage(1)
+    resetPagination()
     setSearchParams((prev) => {
       sales === 'all' ? prev.delete('sales') : prev.set('sales', sales)
       return prev
@@ -74,7 +83,7 @@ export default function CustomersPage() {
 
   const handleGroupChange = (group: CustomerGroupKey) => {
     setActiveGroup(group)
-    goToPage(1)
+    resetPagination()
     setSearchParams((prev) => {
       group === 'all' ? prev.delete('group') : prev.set('group', group)
       return prev
@@ -84,17 +93,14 @@ export default function CustomersPage() {
   const handleSearchChange = (value: string) => {
     setSearch(value)
     setImmediateSearch(null)
+    resetPagination()
   }
 
   const handleSearchSubmit = (value: string) => {
     setSearch(value)
     setImmediateSearch(value)
+    resetPagination()
   }
-
-  // Reset page to 1 when search query changes
-  useEffect(() => {
-    goToPage(1)
-  }, [activeSearch])
 
   // Sync search state to URL search parameters with change guard
   useEffect(() => {
@@ -113,9 +119,37 @@ export default function CustomersPage() {
     }
   }, [activeSearch])
 
-  const { data, isLoading, isFetching } = useQuery({
+  // Track scroll position across main container and window for scroll-to-top button
+  useEffect(() => {
+    const mainEl = document.querySelector('main')
+    const handleScroll = () => {
+      const top = mainEl?.scrollTop || window.scrollY || 0
+      setShowScrollTop(top > 400)
+    }
+    mainEl?.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => {
+      mainEl?.removeEventListener('scroll', handleScroll)
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [])
+
+  const scrollToTop = () => {
+    const mainEl = document.querySelector('main')
+    if (mainEl) {
+      mainEl.scrollTo({ top: 0, behavior: 'smooth' })
+    }
+    tableContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  // Standard Paginated Query for Customers List
+  const {
+    data: resData,
+    isLoading,
+    isFetching,
+  } = useQuery({
     queryKey: ['customers', page, limit, activeSearch, sortField, sortDir, statusFilter, activeSales, activeGroup],
-    placeholderData: keepPreviousData,
     queryFn: async () => {
       const res = await customersApi.list({
         page,
@@ -130,13 +164,15 @@ export default function CustomersPage() {
       return res.data as {
         data: Customer[]
         meta: {
+          page: number
+          limit: number
           total: number
           totalPages: number
           groupCounts?: CustomerGroupCounts
           salesList?: CustomerSalesItem[]
         }
       }
-    }
+    },
   })
 
   // Customer Detail Query for full data (including addresses)
@@ -151,10 +187,11 @@ export default function CustomersPage() {
   })
 
   const selectedCustomer = detailData?.data || selectedRow
-  const customersList = data?.data || []
-  const total = data?.meta?.total || 0
-  const totalPages = data?.meta?.totalPages || 0
-  const groupCounts: CustomerGroupCounts = data?.meta?.groupCounts || {
+  const customersList = resData?.data || []
+  const meta = resData?.meta
+  const total = meta?.total || 0
+  const totalPages = meta?.totalPages || 0
+  const groupCounts: CustomerGroupCounts = meta?.groupCounts || {
     all: total,
     broker: 0,
     direct: 0,
@@ -165,9 +202,9 @@ export default function CustomersPage() {
     ok: 0,
     no_status: 0,
   }
-  const salesList: CustomerSalesItem[] = data?.meta?.salesList || []
+  const salesList: CustomerSalesItem[] = meta?.salesList || []
 
-  const isInitialLoading = isLoading && !data
+  const isInitialLoading = isLoading && !resData
   const isRefreshing = isFetching && !isInitialLoading
 
   const hasActiveFilters = Boolean(
@@ -183,7 +220,6 @@ export default function CustomersPage() {
     setActiveGroup('all')
     setSearch('')
     setImmediateSearch('')
-    goToPage(1)
     setSearchParams({})
   }
 
@@ -230,12 +266,15 @@ export default function CustomersPage() {
       />
 
       {/* 3. Main Data Card Container */}
-      <div className="flex-1 flex flex-col bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-xs overflow-hidden min-h-0 relative z-10">
+      <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-xs overflow-hidden relative z-10">
 
         {/* Data Content: Loading Skeleton vs Empty State vs Table vs Grid vs Shortlist */}
-        <div className={cn("flex-1 overflow-auto min-h-0 bg-[var(--color-surface)] transition-opacity", isRefreshing && "opacity-60")}>
+        <div
+          ref={tableContainerRef}
+          className={cn("bg-[var(--color-surface)] transition-opacity", isRefreshing && "opacity-60")}
+        >
           {isInitialLoading ? (
-            <CustomerTableSkeleton rows={limit} />
+            <CustomerTableSkeleton rows={15} />
           ) : customersList.length === 0 ? (
             <div className="p-12 text-center">
               <EmptyState
@@ -259,89 +298,80 @@ export default function CustomersPage() {
                 }
               />
             </div>
-          ) : viewMode === 'table' ? (
-            <CustomerTableView
-              customers={customersList}
-              page={page}
-              limit={limit}
-              sortField={sortField}
-              sortDir={sortDir}
-              onSort={handleSort}
-              onSelectCustomer={setSelectedRow}
-              canViewTier={canViewTier}
-            />
-          ) : viewMode === 'grid' ? (
-            <CustomerGridView
-              customers={customersList}
-              onSelectCustomer={setSelectedRow}
-              canViewTier={canViewTier}
-            />
           ) : (
-            /* Shortlist / Compact View */
-            <div className="divide-y divide-[var(--color-border)]">
-              {customersList.map((cust) => (
-                <CustomerMobileCard
-                  key={cust.fdCustCode}
-                  cust={cust}
-                  onClick={() => setSelectedRow(cust)}
+            <>
+              {viewMode === 'table' ? (
+                <CustomerTableView
+                  customers={customersList}
+                  page={page}
+                  limit={limit}
+                  sortField={sortField}
+                  sortDir={sortDir}
+                  onSort={handleSort}
+                  onSelectCustomer={setSelectedRow}
                   canViewTier={canViewTier}
                 />
-              ))}
-            </div>
+              ) : viewMode === 'grid' ? (
+                <CustomerGridView
+                  customers={customersList}
+                  onSelectCustomer={setSelectedRow}
+                  canViewTier={canViewTier}
+                />
+              ) : (
+                /* Shortlist / Compact View */
+                <div className="divide-y divide-[var(--color-border)]">
+                  {customersList.map((cust) => (
+                    <CustomerMobileCard
+                      key={cust.fdCustCode}
+                      cust={cust}
+                      onClick={() => setSelectedRow(cust)}
+                      canViewTier={canViewTier}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
 
-        {/* 4. Bottom Pagination Footer */}
-        {totalPages > 0 && (
-          <div className="border-t border-[var(--color-border)] px-4 py-3 bg-[var(--color-surface)] shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3">
+        {/* 4. Bottom Pagination & ERP Jump Bar */}
+        {!isLoading && totalPages > 0 && (
+          <div className="shrink-0 flex items-center justify-between gap-3 px-4 sm:px-5 py-2.5 bg-[var(--color-surface)] border-t border-[var(--color-border)]">
             <Pagination
               page={page}
-              totalPages={totalPages}
-              onPageChange={goToPage}
               limit={limit}
               total={total}
+              totalPages={totalPages}
+              onPageChange={(p) => {
+                goToPage(p)
+                scrollToTop()
+              }}
             />
-
-            <div className="flex items-center gap-3 text-xs text-[var(--color-secondary)] shrink-0">
-              <div className="flex items-center gap-1.5">
-                <span>Baris per hal:</span>
-                <select
-                  value={limit}
-                  onChange={(e) => {
-                    setLimit(Number(e.target.value))
-                    goToPage(1)
-                  }}
-                  className="px-2 py-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-primary)] font-semibold outline-none cursor-pointer"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                  <option value={100}>100</option>
-                </select>
-              </div>
-
-              <div className="flex items-center gap-1">
-                <span>Loncat:</span>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2 text-xs text-[var(--color-secondary)] font-medium shrink-0">
+                <span className="hidden sm:inline">Loncat ke</span>
                 <input
                   type="number"
                   min={1}
                   max={totalPages}
+                  value={jumpPage}
                   placeholder={String(page)}
+                  onChange={(e) => setJumpPage(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      const val = parseInt((e.target as HTMLInputElement).value, 10)
-                      if (!isNaN(val) && val >= 1 && val <= totalPages) {
-                        goToPage(val)
-                        ;(e.target as HTMLInputElement).value = ''
-                      }
-                    }
+                    if (e.key !== 'Enter') return
+                    const target = Math.min(Math.max(1, Number(jumpPage) || 1), totalPages)
+                    goToPage(target)
+                    setJumpPage('')
+                    scrollToTop()
                   }}
-                  className="w-12 px-1.5 py-1 text-center rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-primary)] outline-none"
+                  className="w-14 text-center bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-2 py-1 text-xs text-[var(--color-primary)] font-semibold focus:outline-none focus:border-[var(--color-primary)] focus:ring-1 focus:ring-[var(--color-primary)]/30 transition-all"
                 />
+                <span className="tabular-nums">/ {totalPages.toLocaleString('id-ID')}</span>
               </div>
-            </div>
+            )}
           </div>
         )}
+
       </div>
 
       {/* 5. Customer Detail Modal Popup with Slide/Swipe Gesture */}
@@ -351,6 +381,17 @@ export default function CustomersPage() {
         onClose={() => setSelectedRow(null)}
         canViewTier={canViewTier}
       />
+
+      {/* Floating Scroll to Top Button */}
+      {showScrollTop && (
+        <button
+          onClick={scrollToTop}
+          className="fixed bottom-6 right-6 z-40 p-3 rounded-full shadow-lg bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-primary)] hover:bg-[var(--color-neutral)] transition-all cursor-pointer flex items-center justify-center animate-fadeIn"
+          title="Kembali ke atas"
+        >
+          <ArrowUp className="w-5 h-5" />
+        </button>
+      )}
     </div>
   )
-}
+}

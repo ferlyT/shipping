@@ -20,6 +20,72 @@ const PIC_KEYS = ['thara', 'yati', 'kiki', 'ferly', 'rico'] as const
 
 export async function getBillingByEmployeeDaily(query?: Record<string, string | undefined>) {
   const customDays = query?.days ? parseInt(query.days, 10) : 7
+
+  // Jika customDays >= 360 (1 tahun / 365 hari), lakukan agregasi per bulan (12 bulan) agar grafik rapi dan performa optimal
+  if (customDays >= 360) {
+    const months = getLastNMonths(12)
+    const startDate = months[0]!.start
+    const endDate = months[months.length - 1]!.end
+
+    const rows = await prisma.tbBilling.findMany({
+      where: { fdInvDate: { gte: startDate, lte: endDate } },
+      select: { fdInvDate: true, fdEmpCode: true, fdJumlah1: true },
+    })
+
+    // Tentukan top 5 karyawan berdasarkan total bill dalam 1 tahun ini
+    const totalPerEmp = new Map<string, number>()
+    for (const row of rows) {
+      const code = row.fdEmpCode?.trim() || '-'
+      totalPerEmp.set(code, (totalPerEmp.get(code) || 0) + 1)
+    }
+    const topCodes = [...totalPerEmp.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([code]) => code)
+
+    const employees = await prisma.tbEmployees.findMany({
+      where: { fdEmpCode: { in: topCodes.filter((c) => c !== '-') } },
+      select: { fdEmpCode: true, fdEmpName: true },
+    })
+    const nameMap = new Map(employees.map((e) => [e.fdEmpCode.trim(), e.fdEmpName.trim()]))
+    const empLabel = (code: string) => (code === '-' ? 'Tanpa Nama' : nameMap.get(code) || code)
+
+    const hasOthers = [...totalPerEmp.keys()].some((code) => !topCodes.includes(code))
+    const seriesKeys = hasOthers ? [...topCodes, '__others__'] : topCodes
+
+    const counts = months.map(() => new Map<string, number>())
+    const sums = months.map(() => new Map<string, number>())
+    for (const row of rows) {
+      const code = row.fdEmpCode?.trim() || '-'
+      const mIdx = months.findIndex((m) => row.fdInvDate >= m.start && row.fdInvDate <= m.end)
+      if (mIdx === -1) continue
+      const seriesKey = topCodes.includes(code) ? code : '__others__'
+      counts[mIdx]!.set(seriesKey, (counts[mIdx]!.get(seriesKey) || 0) + 1)
+      sums[mIdx]!.set(seriesKey, (sums[mIdx]!.get(seriesKey) || 0) + Number(row.fdJumlah1 || 0))
+    }
+
+    const data = months.map((m, idx) => {
+      const y = m.start.getFullYear()
+      const mon = String(m.start.getMonth() + 1).padStart(2, '0')
+      const point: Record<string, string | number> = {
+        date: `${y}-${mon}`, // YYYY-MM
+        label: m.label,
+      }
+      for (const key of seriesKeys) {
+        point[key] = counts[idx]!.get(key) || 0
+        point[`${key}__value`] = sums[idx]!.get(key) || 0
+      }
+      return point
+    })
+
+    const series = seriesKeys.map((key) => ({
+      key,
+      name: key === '__others__' ? 'Lainnya' : empLabel(key),
+    }))
+
+    return { data, series }
+  }
+
   const days = getLastNDays(customDays)
 
   const rows = await prisma.tbBilling.findMany({
@@ -27,7 +93,7 @@ export async function getBillingByEmployeeDaily(query?: Record<string, string | 
     select: { fdInvDate: true, fdEmpCode: true, fdJumlah1: true },
   })
 
-  // Tentukan top 5 karyawan berdasarkan total bill dalam 7 hari ini
+  // Tentukan top 5 karyawan berdasarkan total bill dalam periode hari ini
   const totalPerEmp = new Map<string, number>()
   for (const row of rows) {
     const code = row.fdEmpCode?.trim() || '-'
@@ -294,23 +360,129 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
   const startOfLastYear = new Date(lastYear, lastYearMonth - 1, 1)
   const endOfLastYear = new Date(lastYear, lastYearMonth, 1)
 
+  const BRANCH_NAME_MAP: Record<string, string> = {
+    GZ: 'Guangzhou',
+    SG: 'Singapore',
+    HK: 'Hong Kong',
+    YW: 'Yiwu',
+    SH: 'Shanghai',
+    SZ: 'Shenzhen',
+    LM: 'Legal Mandiri',
+    LG: 'Legal',
+    EX: 'Export',
+    IM: 'Import Lain-lain',
+    KR: 'South Korea',
+    TH: 'Thailand',
+    BT: 'Batam',
+    MY: 'Malaysia',
+    TW: 'Taiwan',
+    XM: 'Xiamen',
+    DG: 'Dongguan',
+    CP: 'Cost of Part',
+    IN: 'Indonesia',
+    LAIN: 'Lainnya',
+  }
+
+  const BRANCH_PRIORITY: Record<string, number> = {
+    GZ: 1,
+    SG: 2,
+    HK: 3,
+    YW: 4,
+    SH: 5,
+    SZ: 6,
+    LM: 7,
+    LG: 8,
+    EX: 9,
+    KR: 10,
+    TH: 11,
+  }
+
   const fetchPeriodMetrics = async (start: Date, end: Date, yr: number, mo: number) => {
     try {
-      const rows = await prisma.$queryRaw<any[]>`
-        SELECT 
-          COUNT(*) AS totalBill,
-          SUM(ISNULL(fdJumlah1, 0)) AS totalTagihan,
-          SUM(CASE WHEN fdListType = 1 THEN 1 ELSE 0 END) AS billUdara,
-          SUM(CASE WHEN fdListType = 1 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanUdara,
-          SUM(CASE WHEN fdListType = 2 THEN 1 ELSE 0 END) AS billLaut,
-          SUM(CASE WHEN fdListType = 2 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanLaut,
-          COUNT(DISTINCT fdCustCode) AS uniqueCust
-        FROM tbBilling WITH (NOLOCK)
-        WHERE fdInvDate >= ${start} AND fdInvDate < ${end}
-      `
-      const r = rows[0] || {}
+      const [summaryRows, branchRows] = await Promise.all([
+        prisma.$queryRaw<any[]>`
+          SELECT 
+            COUNT(*) AS totalBill,
+            SUM(ISNULL(fdJumlah1, 0)) AS totalTagihan,
+            SUM(CASE WHEN fdListType = 1 THEN 1 ELSE 0 END) AS billUdara,
+            SUM(CASE WHEN fdListType = 1 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanUdara,
+            SUM(CASE WHEN fdListType = 2 THEN 1 ELSE 0 END) AS billLaut,
+            SUM(CASE WHEN fdListType = 2 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanLaut,
+            COUNT(DISTINCT fdCustCode) AS uniqueCust
+          FROM tbBilling WITH (NOLOCK)
+          WHERE fdInvDate >= ${start} AND fdInvDate < ${end}
+        `,
+        prisma.$queryRaw<any[]>`
+          SELECT 
+            CASE 
+              WHEN RTRIM(fdBranchCode) IN ('--', 'SG', '-') THEN 'SG'
+              WHEN RTRIM(fdBranchCode) IS NULL OR RTRIM(fdBranchCode) = '' THEN 
+                CASE 
+                  WHEN fdInvNo LIKE '--S%' OR fdInvNo LIKE '--A%' OR fdInvNo LIKE 'SGS%' OR fdInvNo LIKE 'SGA%' OR fdInvNo LIKE 'SG-%' THEN 'SG'
+                  WHEN fdInvNo LIKE 'GZS%' OR fdInvNo LIKE 'GZA%' OR fdInvNo LIKE 'GZ-%' THEN 'GZ'
+                  WHEN fdInvNo LIKE 'HKS%' OR fdInvNo LIKE 'HKA%' OR fdInvNo LIKE 'HK-%' THEN 'HK'
+                  WHEN fdInvNo LIKE 'YWS%' OR fdInvNo LIKE 'YWA%' OR fdInvNo LIKE 'YW-%' THEN 'YW'
+                  WHEN fdInvNo LIKE 'SHS%' OR fdInvNo LIKE 'SHA%' OR fdInvNo LIKE 'SH-%' THEN 'SH'
+                  WHEN fdInvNo LIKE 'SZS%' OR fdInvNo LIKE 'SZA%' OR fdInvNo LIKE 'SZ-%' THEN 'SZ'
+                  WHEN fdInvNo LIKE 'KRS%' OR fdInvNo LIKE 'KRA%' OR fdInvNo LIKE 'KR-%' THEN 'KR'
+                  WHEN fdInvNo LIKE 'BKS%' OR fdInvNo LIKE 'BKA%' OR fdInvNo LIKE 'THS%' OR fdInvNo LIKE 'THA%' THEN 'TH'
+                  ELSE 'LAIN'
+                END
+              ELSE RTRIM(fdBranchCode)
+            END AS branchCode,
+            COUNT(*) AS totalBill,
+            SUM(ISNULL(fdJumlah1, 0)) AS totalTagihan,
+            SUM(CASE WHEN fdListType = 1 THEN 1 ELSE 0 END) AS billUdara,
+            SUM(CASE WHEN fdListType = 1 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanUdara,
+            SUM(CASE WHEN fdListType = 2 THEN 1 ELSE 0 END) AS billLaut,
+            SUM(CASE WHEN fdListType = 2 THEN ISNULL(fdJumlah1, 0) ELSE 0 END) AS tagihanLaut,
+            COUNT(DISTINCT fdCustCode) AS uniqueCust
+          FROM tbBilling WITH (NOLOCK)
+          WHERE fdInvDate >= ${start} AND fdInvDate < ${end}
+          GROUP BY 
+            CASE 
+              WHEN RTRIM(fdBranchCode) IN ('--', 'SG', '-') THEN 'SG'
+              WHEN RTRIM(fdBranchCode) IS NULL OR RTRIM(fdBranchCode) = '' THEN 
+                CASE 
+                  WHEN fdInvNo LIKE '--S%' OR fdInvNo LIKE '--A%' OR fdInvNo LIKE 'SGS%' OR fdInvNo LIKE 'SGA%' OR fdInvNo LIKE 'SG-%' THEN 'SG'
+                  WHEN fdInvNo LIKE 'GZS%' OR fdInvNo LIKE 'GZA%' OR fdInvNo LIKE 'GZ-%' THEN 'GZ'
+                  WHEN fdInvNo LIKE 'HKS%' OR fdInvNo LIKE 'HKA%' OR fdInvNo LIKE 'HK-%' THEN 'HK'
+                  WHEN fdInvNo LIKE 'YWS%' OR fdInvNo LIKE 'YWA%' OR fdInvNo LIKE 'YW-%' THEN 'YW'
+                  WHEN fdInvNo LIKE 'SHS%' OR fdInvNo LIKE 'SHA%' OR fdInvNo LIKE 'SH-%' THEN 'SH'
+                  WHEN fdInvNo LIKE 'SZS%' OR fdInvNo LIKE 'SZA%' OR fdInvNo LIKE 'SZ-%' THEN 'SZ'
+                  WHEN fdInvNo LIKE 'KRS%' OR fdInvNo LIKE 'KRA%' OR fdInvNo LIKE 'KR-%' THEN 'KR'
+                  WHEN fdInvNo LIKE 'BKS%' OR fdInvNo LIKE 'BKA%' OR fdInvNo LIKE 'THS%' OR fdInvNo LIKE 'THA%' THEN 'TH'
+                  ELSE 'LAIN'
+                END
+              ELSE RTRIM(fdBranchCode)
+            END
+          ORDER BY totalTagihan DESC
+        `,
+      ])
+
+      const r = summaryRows[0] || {}
       const totalInvoices = Number(r.totalBill || 0)
       const totalTagihan = Number(Number(r.totalTagihan || 0).toFixed(2))
+
+      const branches = (branchRows || []).map((br: any) => {
+        const code = String(br.branchCode || 'LAIN').trim().toUpperCase()
+        const bTagihan = Number(Number(br.totalTagihan || 0).toFixed(2))
+        const bInvoices = Number(br.totalBill || 0)
+        return {
+          branchCode: code,
+          branchName: BRANCH_NAME_MAP[code] || code,
+          totalInvoices: bInvoices,
+          totalTagihan: bTagihan,
+          invoicesUdara: Number(br.billUdara || 0),
+          tagihanUdara: Number(Number(br.tagihanUdara || 0).toFixed(2)),
+          invoicesLaut: Number(br.billLaut || 0),
+          tagihanLaut: Number(Number(br.tagihanLaut || 0).toFixed(2)),
+          avgInvoiceValue: bInvoices > 0 ? Math.round(bTagihan / bInvoices) : 0,
+          uniqueCustomers: Number(br.uniqueCust || 0),
+          shareOfTotal: totalTagihan > 0 ? Number(((bTagihan / totalTagihan) * 100).toFixed(1)) : 0,
+        }
+      })
+
       return {
         year: yr,
         month: mo,
@@ -323,6 +495,7 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
         tagihanLaut: Number(Number(r.tagihanLaut || 0).toFixed(2)),
         avgInvoiceValue: totalInvoices > 0 ? Math.round(totalTagihan / totalInvoices) : 0,
         uniqueCustomers: Number(r.uniqueCust || 0),
+        branches,
       }
     } catch {
       return {
@@ -337,6 +510,7 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
         tagihanLaut: 0,
         avgInvoiceValue: 0,
         uniqueCustomers: 0,
+        branches: [],
       }
     }
   }
@@ -374,6 +548,84 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
     }
   }
 
+  // Komparasi per Cabang (MoM & YoY)
+  const currBranchMap = new Map((currentMetrics.branches || []).map((b) => [b.branchCode, b]))
+  const prevBranchMap = new Map((prevMetrics.branches || []).map((b) => [b.branchCode, b]))
+  const lastYearBranchMap = new Map((lastYearMetrics.branches || []).map((b) => [b.branchCode, b]))
+
+  const allBranchCodes = Array.from(new Set([
+    ...currBranchMap.keys(),
+    ...prevBranchMap.keys(),
+    ...lastYearBranchMap.keys(),
+  ]))
+
+  const byBranch = allBranchCodes.map((code) => {
+    const curr = currBranchMap.get(code) || {
+      branchCode: code,
+      branchName: BRANCH_NAME_MAP[code] || code,
+      totalInvoices: 0,
+      totalTagihan: 0,
+      invoicesUdara: 0,
+      tagihanUdara: 0,
+      invoicesLaut: 0,
+      tagihanLaut: 0,
+      avgInvoiceValue: 0,
+      uniqueCustomers: 0,
+      shareOfTotal: 0,
+    }
+    const prev = prevBranchMap.get(code)
+    const lastYear = lastYearBranchMap.get(code)
+
+    const momTagihanDiff = Number((curr.totalTagihan - (prev?.totalTagihan || 0)).toFixed(2))
+    const momTagihanPercent = (prev?.totalTagihan || 0) > 0
+      ? Number((((curr.totalTagihan - prev!.totalTagihan) / prev!.totalTagihan) * 100).toFixed(1))
+      : (curr.totalTagihan > 0 ? 100 : 0)
+
+    const yoyTagihanDiff = Number((curr.totalTagihan - (lastYear?.totalTagihan || 0)).toFixed(2))
+    const yoyTagihanPercent = (lastYear?.totalTagihan || 0) > 0
+      ? Number((((curr.totalTagihan - lastYear!.totalTagihan) / lastYear!.totalTagihan) * 100).toFixed(1))
+      : (curr.totalTagihan > 0 ? 100 : 0)
+
+    const momInvoicesDiff = curr.totalInvoices - (prev?.totalInvoices || 0)
+    const momInvoicesPercent = (prev?.totalInvoices || 0) > 0
+      ? Number((((curr.totalInvoices - prev!.totalInvoices) / prev!.totalInvoices) * 100).toFixed(1))
+      : (curr.totalInvoices > 0 ? 100 : 0)
+
+    const yoyInvoicesDiff = curr.totalInvoices - (lastYear?.totalInvoices || 0)
+    const yoyInvoicesPercent = (lastYear?.totalInvoices || 0) > 0
+      ? Number((((curr.totalInvoices - lastYear!.totalInvoices) / lastYear!.totalInvoices) * 100).toFixed(1))
+      : (curr.totalInvoices > 0 ? 100 : 0)
+
+    const shareOfTotal = currentMetrics.totalTagihan > 0
+      ? Number(((curr.totalTagihan / currentMetrics.totalTagihan) * 100).toFixed(1))
+      : 0
+
+    return {
+      branchCode: code,
+      branchName: BRANCH_NAME_MAP[code] || code,
+      current: curr,
+      prev,
+      lastYear,
+      momTagihanDiff,
+      momTagihanPercent,
+      yoyTagihanDiff,
+      yoyTagihanPercent,
+      momInvoicesDiff,
+      momInvoicesPercent,
+      yoyInvoicesDiff,
+      yoyInvoicesPercent,
+      shareOfTotal,
+    }
+  })
+
+  // Urutkan cabang berdasarkan prioritas utama & omzet tagihan
+  byBranch.sort((a, b) => {
+    const pA = BRANCH_PRIORITY[a.branchCode] || 99
+    const pB = BRANCH_PRIORITY[b.branchCode] || 99
+    if (pA !== pB) return pA - pB
+    return b.current.totalTagihan - a.current.totalTagihan
+  })
+
   const comparisons = {
     totalInvoices: calcComp(currentMetrics.totalInvoices, prevMetrics.totalInvoices, lastYearMetrics.totalInvoices),
     totalTagihan: calcComp(currentMetrics.totalTagihan, prevMetrics.totalTagihan, lastYearMetrics.totalTagihan),
@@ -383,6 +635,7 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
     tagihanLaut: calcComp(currentMetrics.tagihanLaut, prevMetrics.tagihanLaut, lastYearMetrics.tagihanLaut),
     avgInvoiceValue: calcComp(currentMetrics.avgInvoiceValue, prevMetrics.avgInvoiceValue, lastYearMetrics.avgInvoiceValue),
     uniqueCustomers: calcComp(currentMetrics.uniqueCustomers, prevMetrics.uniqueCustomers, lastYearMetrics.uniqueCustomers),
+    byBranch,
   }
 
   const invoicesBulanIni = currentMetrics.totalInvoices
@@ -390,8 +643,8 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
   const invoicesBulanLalu = prevMetrics.totalInvoices
   const tagihanBulanLalu = prevMetrics.totalTagihan
 
-  // Fetch Target Bill Hari Ini dari stored procedures (Udara = 1, Laut = 2) & Surat Jalan yang sudah terkirim (fdSent = 1) belum di-bill
-  const [uData, lData, sentDeliveryRows, entryListRows] = await Promise.all([
+  // Fetch Target Bill Hari Ini dari stored procedures (Udara = 1, Laut = 2) & Surat Jalan yang sudah terkirim (fdSent = 1) belum di-bill & Unissued Bills
+  const [uData, lData, sentDeliveryRows, entryListRows, unissuedRows] = await Promise.all([
     prisma.$queryRaw<any[]>`exec get_data_billing_gsheet 1`,
     prisma.$queryRaw<any[]>`exec get_data_billing_gsheet 2`,
     prisma.$queryRaw<any[]>`
@@ -418,6 +671,29 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
         AND el.fdFinish = 0 
         AND el.fdListCode <> ''
         AND YEAR(m.fdExitDate) > 2020
+    `,
+    prisma.$queryRaw<any[]>`
+      SELECT
+        COUNT(*) AS totalCount,
+        ISNULL(SUM(CAST(b.fdJumlah1 AS float)), 0) AS totalNominal,
+        SUM(CASE WHEN ISNULL(b.fdListType, 1) = 1 THEN 1 ELSE 0 END) AS countUdara,
+        ISNULL(SUM(CASE WHEN ISNULL(b.fdListType, 1) = 1 THEN CAST(b.fdJumlah1 AS float) ELSE 0 END), 0) AS nominalUdara,
+        SUM(CASE WHEN ISNULL(b.fdListType, 1) <> 1 THEN 1 ELSE 0 END) AS countLaut,
+        ISNULL(SUM(CASE WHEN ISNULL(b.fdListType, 1) <> 1 THEN CAST(b.fdJumlah1 AS float) ELSE 0 END), 0) AS nominalLaut,
+        SUM(CASE WHEN DATEDIFF(day, b.fdInvDate, GETDATE()) <= 7 THEN 1 ELSE 0 END) AS countLe7,
+        ISNULL(SUM(CASE WHEN DATEDIFF(day, b.fdInvDate, GETDATE()) <= 7 THEN CAST(b.fdJumlah1 AS float) ELSE 0 END), 0) AS nominalLe7,
+        SUM(CASE WHEN DATEDIFF(day, b.fdInvDate, GETDATE()) BETWEEN 8 AND 14 THEN 1 ELSE 0 END) AS count8to14,
+        ISNULL(SUM(CASE WHEN DATEDIFF(day, b.fdInvDate, GETDATE()) BETWEEN 8 AND 14 THEN CAST(b.fdJumlah1 AS float) ELSE 0 END), 0) AS nominal8to14,
+        SUM(CASE WHEN DATEDIFF(day, b.fdInvDate, GETDATE()) BETWEEN 15 AND 30 THEN 1 ELSE 0 END) AS count15to30,
+        ISNULL(SUM(CASE WHEN DATEDIFF(day, b.fdInvDate, GETDATE()) BETWEEN 15 AND 30 THEN CAST(b.fdJumlah1 AS float) ELSE 0 END), 0) AS nominal15to30,
+        SUM(CASE WHEN DATEDIFF(day, b.fdInvDate, GETDATE()) > 30 THEN 1 ELSE 0 END) AS countGt30,
+        ISNULL(SUM(CASE WHEN DATEDIFF(day, b.fdInvDate, GETDATE()) > 30 THEN CAST(b.fdJumlah1 AS float) ELSE 0 END), 0) AS nominalGt30
+      FROM tbBilling b WITH (NOLOCK)
+      LEFT JOIN tbBillingTotal bt WITH (NOLOCK) ON b.fdInvNo = bt.fdInvNo
+      WHERE ISNULL(bt.fdJumlah, 0) > 0 
+        AND ISNULL(b.fdJumlah1, 0) > 0 
+        AND ISNULL(b.fdGive, 0) <> 1
+        AND YEAR(b.fdInvDate) > 2024
     `,
   ])
 
@@ -577,6 +853,23 @@ export async function getBillingKPIs(query: Record<string, string | undefined>) 
         fcl: lFcl,
       },
     },
+    unissuedBills: (() => {
+      const uRow = unissuedRows[0] || {}
+      return {
+        totalCount: Number(uRow.totalCount || 0),
+        totalNominal: Number(Number(uRow.totalNominal || 0).toFixed(2)),
+        countUdara: Number(uRow.countUdara || 0),
+        nominalUdara: Number(Number(uRow.nominalUdara || 0).toFixed(2)),
+        countLaut: Number(uRow.countLaut || 0),
+        nominalLaut: Number(Number(uRow.nominalLaut || 0).toFixed(2)),
+        aging: {
+          le7: { count: Number(uRow.countLe7 || 0), nominal: Number(Number(uRow.nominalLe7 || 0).toFixed(2)) },
+          d8to14: { count: Number(uRow.count8to14 || 0), nominal: Number(Number(uRow.nominal8to14 || 0).toFixed(2)) },
+          d15to30: { count: Number(uRow.count15to30 || 0), nominal: Number(Number(uRow.nominal15to30 || 0).toFixed(2)) },
+          gt30: { count: Number(uRow.countGt30 || 0), nominal: Number(Number(uRow.nominalGt30 || 0).toFixed(2)) },
+        },
+      }
+    })(),
     trend: {
       invoicesBulanIni: calculateTrend(invoicesBulanIni, invoicesBulanLalu),
       tagihanBulanIni: calculateTrend(tagihanBulanIni, tagihanBulanLalu),
@@ -1026,14 +1319,15 @@ export async function getSjVsBillComparison(query?: Record<string, string | unde
   const endDate = days[days.length - 1]!.end
 
   // Query 1: SJ diterima (berdasarkan fdKembali)
-  const sjRows = await prisma.$queryRaw<{ day: Date; pic: string; total: number }[]>`
+  const sjRows = await prisma.$queryRaw<{ day: Date; pic: string; total: number; totalListCodes: number }[]>`
     SELECT
       t.day,
       t.pic,
       CASE
         WHEN t.pic = 'ferly' THEN COUNT(DISTINCT t.markingCode)
         ELSE COUNT(*)
-      END AS total
+      END AS total,
+      COUNT(DISTINCT t.listCode) AS totalListCodes
     FROM (
       SELECT
         CAST(d.fdKembali AS DATE) AS day,
@@ -1045,6 +1339,7 @@ export async function getSjVsBillComparison(query?: Record<string, string | unde
           WHEN ISNULL(el.fdListType, d.fdListType) = 2 THEN 'rico'
         END AS pic,
         d.fdSJNo AS sjNo,
+        d.fdListCode AS listCode,
         el.fdMarkingCode AS markingCode
       FROM tbDelivery d WITH (NOLOCK)
       LEFT JOIN tbEntryList el WITH (NOLOCK) ON el.fdListCode = d.fdListCode
@@ -1058,14 +1353,15 @@ export async function getSjVsBillComparison(query?: Record<string, string | unde
   `
 
   // Query 2: Bill dibuat (berdasarkan fdInvDate)
-  const billRows = await prisma.$queryRaw<{ day: Date; pic: string; total: number }[]>`
+  const billRows = await prisma.$queryRaw<{ day: Date; pic: string; total: number; totalListCodes: number }[]>`
     SELECT
       t.day,
       t.pic,
       CASE
         WHEN t.pic = 'ferly' THEN COUNT(DISTINCT t.markingCode)
         ELSE COUNT(*)
-      END AS total
+      END AS total,
+      COUNT(DISTINCT t.listCode) AS totalListCodes
     FROM (
       SELECT
         CAST(b.fdInvDate AS DATE) AS day,
@@ -1077,6 +1373,7 @@ export async function getSjVsBillComparison(query?: Record<string, string | unde
           WHEN ISNULL(el.fdListType, b.fdListType) = 2 THEN 'rico'
         END AS pic,
         b.fdInvNo AS invNo,
+        b.fdListCode AS listCode,
         ISNULL(b.fdMarkingCode, el.fdMarkingCode) AS markingCode
       FROM tbBilling b WITH (NOLOCK)
       LEFT JOIN tbEntryList el WITH (NOLOCK) ON el.fdListCode = b.fdListCode
@@ -1090,28 +1387,33 @@ export async function getSjVsBillComparison(query?: Record<string, string | unde
 
   // Build lookup maps
   const sjMap = new Map<string, number>()
+  const sjListMap = new Map<string, number>()
   for (const row of sjRows) {
     if (!row.pic) continue
     const key = `${new Date(row.day).toISOString().slice(0, 10)}|${row.pic}`
     sjMap.set(key, Number(row.total))
+    sjListMap.set(key, Number(row.totalListCodes || row.total))
   }
 
   const billMap = new Map<string, number>()
+  const billListMap = new Map<string, number>()
   for (const row of billRows) {
     if (!row.pic) continue
     const key = `${new Date(row.day).toISOString().slice(0, 10)}|${row.pic}`
     billMap.set(key, Number(row.total))
+    billListMap.set(key, Number(row.totalListCodes || row.total))
   }
 
   // Query 3: Belum Bill (berdasarkan fdKembali, tapi b.fdInvNo IS NULL)
-  const unbilledRows = await prisma.$queryRaw<{ day: Date; pic: string; total: number }[]>`
+  const unbilledRows = await prisma.$queryRaw<{ day: Date; pic: string; total: number; totalListCodes: number }[]>`
     SELECT
       t.day,
       t.pic,
       CASE
         WHEN t.pic = 'ferly' THEN COUNT(DISTINCT t.markingCode)
         ELSE COUNT(*)
-      END AS total
+      END AS total,
+      COUNT(DISTINCT t.listCode) AS totalListCodes
     FROM (
       SELECT
         CAST(d.fdKembali AS DATE) AS day,
@@ -1123,6 +1425,7 @@ export async function getSjVsBillComparison(query?: Record<string, string | unde
           WHEN ISNULL(el.fdListType, d.fdListType) = 2 THEN 'rico'
         END AS pic,
         d.fdSJNo AS sjNo,
+        d.fdListCode AS listCode,
         el.fdMarkingCode AS markingCode
       FROM tbDelivery d WITH (NOLOCK)
       LEFT JOIN tbEntryList el WITH (NOLOCK) ON el.fdListCode = d.fdListCode
@@ -1137,18 +1440,23 @@ export async function getSjVsBillComparison(query?: Record<string, string | unde
   `
 
   const unbilledMap = new Map<string, number>()
+  const unbilledListMap = new Map<string, number>()
   for (const row of unbilledRows) {
     if (!row.pic) continue
     const key = `${new Date(row.day).toISOString().slice(0, 10)}|${row.pic}`
     unbilledMap.set(key, Number(row.total))
+    unbilledListMap.set(key, Number(row.totalListCodes || row.total))
   }
 
   return days.map((d) => {
     const point: Record<string, string | number> = { date: d.date, label: d.label }
     for (const pic of PIC_KEYS) {
       point[`sj_${pic}`] = sjMap.get(`${d.date}|${pic}`) || 0
+      point[`sj_list_${pic}`] = sjListMap.get(`${d.date}|${pic}`) || 0
       point[`bill_${pic}`] = billMap.get(`${d.date}|${pic}`) || 0
+      point[`bill_list_${pic}`] = billListMap.get(`${d.date}|${pic}`) || 0
       point[`unbilled_${pic}`] = unbilledMap.get(`${d.date}|${pic}`) || 0
+      point[`unbilled_list_${pic}`] = unbilledListMap.get(`${d.date}|${pic}`) || 0
     }
     return point
   })
@@ -1175,6 +1483,7 @@ export async function getSjVsBillDetails(query: Record<string, string | undefine
         t.fdMarkingCode,
         t.fdBranchName,
         t.fdDescr,
+        t.fdListType,
         t.pic
       FROM (
         SELECT
@@ -1188,6 +1497,7 @@ export async function getSjVsBillDetails(query: Record<string, string | undefine
           el.fdMarkingCode,
           cb.fdBranchName,
           d.fdDescr,
+          ISNULL(el.fdListType, d.fdListType) AS fdListType,
           CASE
             WHEN ISNULL(el.fdListType, d.fdListType) = 1 AND (RTRIM(b.fdEmpCode) = 'Y001' OR RTRIM(el.fdEmp1) = 'Y001') THEN 'yati'
             WHEN ISNULL(el.fdListType, d.fdListType) = 1 THEN 'kiki'
@@ -1222,6 +1532,7 @@ export async function getSjVsBillDetails(query: Record<string, string | undefine
       branchName: r.fdBranchName?.trim() || '',
       descr: r.fdDescr?.trim() || '',
       pic: r.pic,
+      listType: Number(r.fdListType) === 1 ? 'Udara' : 'Laut',
     }))
   } else {
     const rows = await prisma.$queryRaw<any[]>`
@@ -1280,3 +1591,148 @@ export async function getSjVsBillDetails(query: Record<string, string | undefine
     }))
   }
 }
+
+/**
+ * Mengambil daftar dan agregasi rincian unissued bills (fdJumlah > 0 AND fdJumlah1 > 0 AND fdGive <> 1) lengkap dengan aging
+ */
+export async function getUnissuedBillsDetails(query?: Record<string, string | undefined>) {
+  const search = query?.search?.trim() || ''
+  const mode = query?.mode?.trim().toLowerCase() || 'all' // 'all' | '1' | '2' | 'udara' | 'laut'
+  const aging = query?.aging?.trim().toLowerCase() || 'all' // 'all' | 'le7' | '8to14' | '15to30' | 'gt30'
+  const startDate = query?.startDate?.trim() || ''
+  const endDate = query?.endDate?.trim() || ''
+
+  const rows = await prisma.$queryRaw<any[]>`
+    SELECT
+      RTRIM(b.fdInvNo) AS invNo,
+      b.fdInvDate AS invDate,
+      RTRIM(b.fdCustCode) AS custCode,
+      ISNULL(RTRIM(c.fdCustName), RTRIM(b.fdCustCode)) AS custName,
+      ISNULL(b.fdListType, 1) AS listType,
+      RTRIM(b.fdMarkingCode) AS markingCode,
+      RTRIM(b.fdMarkingNo) AS markingNo,
+      ISNULL(b.fdJumlah1, 0) AS jumlah1,
+      ISNULL(bt.fdJumlah, 0) AS jumlahTotal,
+      RTRIM(b.fdEmpCode) AS empCode,
+      ISNULL(RTRIM(e.fdEmpName), RTRIM(b.fdEmpCode)) AS empName,
+      RTRIM(b.fdBranchCode) AS branchCode,
+      DATEDIFF(day, b.fdInvDate, GETDATE()) AS agingDays
+    FROM tbBilling b WITH (NOLOCK)
+    LEFT JOIN tbBillingTotal bt WITH (NOLOCK) ON b.fdInvNo = bt.fdInvNo
+    LEFT JOIN tbCustomers c WITH (NOLOCK) ON b.fdCustCode = c.fdCustCode
+    LEFT JOIN tbEmployees e WITH (NOLOCK) ON b.fdEmpCode = e.fdEmpCode
+    WHERE ISNULL(bt.fdJumlah, 0) > 0 
+      AND ISNULL(b.fdJumlah1, 0) > 0 
+      AND ISNULL(b.fdGive, 0) <> 1
+      AND YEAR(b.fdInvDate) > 2024
+    ORDER BY b.fdInvDate ASC, b.fdInvNo ASC
+  `
+
+  const mapped = rows.map((r) => {
+    const agingDays = Number(r.agingDays || 0)
+    let agingGroup: 'le7' | '8to14' | '15to30' | 'gt30' = 'le7'
+    if (agingDays <= 7) agingGroup = 'le7'
+    else if (agingDays <= 14) agingGroup = '8to14'
+    else if (agingDays <= 30) agingGroup = '15to30'
+    else agingGroup = 'gt30'
+
+    const listType = Number(r.listType || 1)
+    const modeName: 'udara' | 'laut' = listType === 1 ? 'udara' : 'laut'
+
+    return {
+      invNo: String(r.invNo || ''),
+      invDate: r.invDate ? new Date(r.invDate).toISOString() : null,
+      custCode: String(r.custCode || ''),
+      custName: String(r.custName || ''),
+      listType,
+      mode: modeName,
+      markingCode: String(r.markingCode || ''),
+      markingNo: String(r.markingNo || ''),
+      jumlah1: Number(Number(r.jumlah1 || 0).toFixed(2)),
+      jumlahTotal: Number(Number(r.jumlahTotal || 0).toFixed(2)),
+      empCode: String(r.empCode || ''),
+      empName: String(r.empName || ''),
+      branchCode: String(r.branchCode || ''),
+      agingDays,
+      agingGroup,
+    }
+  })
+
+  const summary = {
+    totalCount: mapped.length,
+    totalNominal: Number(mapped.reduce((acc, it) => acc + it.jumlah1, 0).toFixed(2)),
+    countUdara: mapped.filter((it) => it.mode === 'udara').length,
+    nominalUdara: Number(mapped.filter((it) => it.mode === 'udara').reduce((acc, it) => acc + it.jumlah1, 0).toFixed(2)),
+    countLaut: mapped.filter((it) => it.mode === 'laut').length,
+    nominalLaut: Number(mapped.filter((it) => it.mode === 'laut').reduce((acc, it) => acc + it.jumlah1, 0).toFixed(2)),
+    aging: {
+      le7: {
+        count: mapped.filter((it) => it.agingGroup === 'le7').length,
+        nominal: Number(mapped.filter((it) => it.agingGroup === 'le7').reduce((acc, it) => acc + it.jumlah1, 0).toFixed(2)),
+      },
+      d8to14: {
+        count: mapped.filter((it) => it.agingGroup === '8to14').length,
+        nominal: Number(mapped.filter((it) => it.agingGroup === '8to14').reduce((acc, it) => acc + it.jumlah1, 0).toFixed(2)),
+      },
+      d15to30: {
+        count: mapped.filter((it) => it.agingGroup === '15to30').length,
+        nominal: Number(mapped.filter((it) => it.agingGroup === '15to30').reduce((acc, it) => acc + it.jumlah1, 0).toFixed(2)),
+      },
+      gt30: {
+        count: mapped.filter((it) => it.agingGroup === 'gt30').length,
+        nominal: Number(mapped.filter((it) => it.agingGroup === 'gt30').reduce((acc, it) => acc + it.jumlah1, 0).toFixed(2)),
+      },
+    },
+  }
+
+  let filtered = mapped
+  if (search) {
+    const s = search.toLowerCase()
+    filtered = filtered.filter(
+      (it) =>
+        it.invNo.toLowerCase().includes(s) ||
+        it.custCode.toLowerCase().includes(s) ||
+        it.custName.toLowerCase().includes(s) ||
+        it.markingCode.toLowerCase().includes(s) ||
+        it.markingNo.toLowerCase().includes(s) ||
+        it.empName.toLowerCase().includes(s)
+    )
+  }
+
+  if (mode !== 'all') {
+    if (mode === 'udara' || mode === '1') {
+      filtered = filtered.filter((it) => it.mode === 'udara')
+    } else if (mode === 'laut' || mode === '2') {
+      filtered = filtered.filter((it) => it.mode === 'laut')
+    }
+  }
+
+  if (aging !== 'all') {
+    if (aging === 'le7' || aging === '<=7') {
+      filtered = filtered.filter((it) => it.agingGroup === 'le7')
+    } else if (aging === '8to14' || aging === '8-14') {
+      filtered = filtered.filter((it) => it.agingGroup === '8to14')
+    } else if (aging === '15to30' || aging === '15-30') {
+      filtered = filtered.filter((it) => it.agingGroup === '15to30')
+    } else if (aging === 'gt30' || aging === '>30') {
+      filtered = filtered.filter((it) => it.agingGroup === 'gt30')
+    }
+  }
+
+  if (startDate) {
+    const start = new Date(startDate).getTime()
+    filtered = filtered.filter((it) => it.invDate && new Date(it.invDate).getTime() >= start)
+  }
+  if (endDate) {
+    const end = new Date(endDate).getTime()
+    filtered = filtered.filter((it) => it.invDate && new Date(it.invDate).getTime() <= end)
+  }
+
+  return {
+    summary,
+    filteredCount: filtered.length,
+    filteredNominal: Number(filtered.reduce((acc, it) => acc + it.jumlah1, 0).toFixed(2)),
+    items: filtered,
+  }
+}
+

@@ -25,6 +25,11 @@ export function CustomXAxisTick({ x = 0, y = 0, payload }: ChartTickProps) {
     const dateObj = new Date(Number(yStr), Number(mStr) - 1, Number(dStr))
     line1 = dateObj.toLocaleDateString(lang === 'en' ? 'en-GB' : 'id-ID', { day: '2-digit', month: 'short' })
     line2 = dateObj.toLocaleDateString(lang === 'en' ? 'en-US' : 'id-ID', { weekday: 'short' })
+  } else if (typeof payload?.value === 'string' && /^\d{4}-\d{2}$/.test(payload.value)) {
+    const [yStr, mStr] = payload.value.split('-')
+    const dateObj = new Date(Number(yStr), Number(mStr) - 1, 1)
+    line1 = dateObj.toLocaleDateString(lang === 'en' ? 'en-GB' : 'id-ID', { month: 'short' })
+    line2 = yStr!
   } else {
     const val = payload?.value || ''
     const parenMatch = val.match(/(.+?)\s*\((.+?)\)/)

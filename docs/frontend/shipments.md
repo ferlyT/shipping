@@ -28,9 +28,9 @@ Modul ini mengelola pencarian, pelacakan, analitik distribusi komoditas, serta i
   - **Auto-Sync Scope**: Memilih saran customer otomatis menyetel `searchField` ke `'customer'`, marking ke `'marking'`, dan resi ke `'resi'`.
 - **Modal Rincian Dimensi Fisik & Logistik (`ShipmentDetailModal.tsx`)**:
   - Dialog responsif dengan tinggi statis (`h-[88vh] sm:h-[82vh]`) dan bodi scrollable.
-  - **Tab Ringkasan (`ShipmentInfoTab.tsx`)**: 3 KPI (Koli, Berat kg, Volume m³), identitas resi terima, tracking lokal, marking & no, tanggal agent, komoditas, dan catatan operasional.
+  - **Tab Ringkasan (`ShipmentInfoTab.tsx`)**: 3 KPI (Koli, Berat kg, Volume m³), identitas resi terima, tracking lokal, marking & no, tanggal agent, komoditas, catatan operasional, dan **Riwayat Pembuatan & Pembaruan (Audit Trail)** menampilkan Dibuat Oleh (`fdEmp1` & timestamp `fdCreatedDate`) serta Terakhir Diperbarui (`fdEmp2` & timestamp `fdUpdate`) dengan format standar WIB.
   - **Tab Dimensi (`ShipmentDimensionsTab.tsx`)**: Komparasi dimensi fisik 3 sumber: **Gudang**, **Packing List**, dan **Komplain Customer** ($P \times L \times T$, Qty, M³).
-  - **Tab Timeline (`ShipmentTimelineTab.tsx`)**: Pelacak visual alur status (*Waiting Loading*, *ETD*, *ETA*, *Warehouse*, *Delivery*, *Delivered*, *Canceled*), dan **Status Blocked Finance** jika memiliki `fdBlocked = 1` pada `tbEntryList_Bloked_Finance` (lengkap dengan nama pemblokir & alasan).
+  - **Tab Timeline (`ShipmentTimelineTab.tsx`)**: Pelacak visual alur status (*Entri Data Resi* dengan tanggal input & PIC, *Waiting Loading*, *ETD*, *ETA*, *Warehouse*, *Delivery*, *Delivered*, *Canceled*), dan **Status Blocked Finance** jika memiliki `fdBlocked = 1` pada `tbEntryList_Bloked_Finance` (lengkap dengan nama pemblokir & alasan).
   - **Tab Invoice (`ShipmentInvoiceTab.tsx`)**: Aktif dinamis jika invoice terkait telah terbit/lunas:
     - Header info faktur, status tagihan (`BillingStatusTag`), tanggal invoice/terbit, penerima tagihan (`fdBillTo`) & nama customer resmi.
     - 3 KPI Finansial: Total Tagihan, Sudah Dibayar, Sisa Tagihan.

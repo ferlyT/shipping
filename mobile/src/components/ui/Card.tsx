@@ -16,13 +16,8 @@ export const Card: React.FC<CardProps> = ({ children, style, onPress, elevated =
     backgroundColor: elevated ? colors.surfaceElevated : colors.surface,
     borderColor: colors.cardBorder,
     borderWidth: 1,
-    borderRadius: 14,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 2,
+    borderRadius: 12,
+    padding: 13,
   }
 
   if (onPress) {

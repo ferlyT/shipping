@@ -1,5 +1,5 @@
 import React from 'react'
-import { ShieldCheck, RefreshCw } from 'lucide-react'
+import { ShieldCheck } from 'lucide-react'
 import { Badge, type BadgeVariant } from '@/components/ui/Badge'
 import { useTranslation } from '@/hooks/useTranslation'
 
@@ -11,8 +11,8 @@ interface ValidationCardHeaderProps {
   badgeText: string
   badgeTitle?: string
   StatusIcon: React.ElementType
-  refetch: () => void
-  isFetching: boolean
+  refetch?: () => void
+  isFetching?: boolean
 }
 
 export const ValidationCardHeader: React.FC<ValidationCardHeaderProps> = ({
@@ -23,8 +23,6 @@ export const ValidationCardHeader: React.FC<ValidationCardHeaderProps> = ({
   badgeText,
   badgeTitle,
   StatusIcon,
-  refetch,
-  isFetching,
 }) => {
   const { t } = useTranslation()
 
@@ -57,14 +55,6 @@ export const ValidationCardHeader: React.FC<ValidationCardHeaderProps> = ({
           <StatusIcon className="w-3.5 h-3.5" />
           <span className="truncate max-w-[120px] sm:max-w-none">{badgeText}</span>
         </Badge>
-        <button
-          onClick={() => refetch()}
-          disabled={isFetching}
-          className="p-1 text-[var(--color-secondary)] hover:text-[var(--color-primary)] transition-colors cursor-pointer"
-          title={t('common.refresh')}
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isFetching ? 'animate-spin' : ''}`} />
-        </button>
       </div>
     </div>
   )

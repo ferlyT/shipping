@@ -113,10 +113,13 @@ View `qr_OrderDelivey` menyimpan permintaan operasional khusus dari Customer Ser
     - `@fdDate1`: Waktu batas awal (timestamp cetak batch sebelumnya, format `YYYY-MM-DD HH:mm:ss`).
     - `@fdDate2`: Waktu batas akhir (timestamp cetak batch saat ini, format `YYYY-MM-DD HH:mm:ss`).
   - Menghasilkan daftar Surat Jalan terkonfirmasi (`d.fdKembali BETWEEN @date1 AND @date2`) lengkap dengan join `tbCustomers` (SSOT nama pelanggan), `tbEntryList` (marking & kubikasi), dan `tbCabang` (nama cabang pengirim).
-- **Enrichment Informasi Armada**:
-  - Backend memperkaya data keluaran SP dengan query sekunder ke `tbDelivery` untuk mengambil `fdSupir`, `fdTelpSupir`, `fdSatuan`, dan `fdEstimasi`.
+- **Enrichment Informasi Armada & Status Penagihan (`tbBilling`)**:
+  - Backend memperkaya data keluaran SP/tabel dengan query sekunder ke `tbDelivery` dan `OUTER APPLY` ke `tbBilling` berdasarkan kesamaan `fdListCode` (`RTRIM(tb.fdListCode) = RTRIM(d.fdListCode)`):
+    - Armada & supir: `fdSupir`, `fdTelpSupir`, `fdSatuan`, `fdAddr`, `fdCity`, `fdEstimasi`, `fdKembali`.
+    - Finansial/Penagihan: `isBilled` (`1`/`0`), `invNos` (string faktur terbit digabung via `STRING_AGG`), `invDates` (tanggal faktur `YYYY-MM-DD`), dan `billCount`.
+    - Agregasi `billingRecap`: `billedSjCount`, `unbilledSjCount`, `totalListCodes`, `billedListCodeCount`, `unbilledListCodeCount`, `billedPack`, `billedWeight`, `unbilledPack`, `unbilledWeight`.
 - **Penggunaan di Frontend**:
-  - Melayani endpoint `GET /api/delivery-orders/confirm-batch-detail?date=YYYY-MM-DD&session=Pagi|Sore` untuk modal `DeliveryBatchDetailModal.tsx` saat user mengklik cardlet sesi batch atau tombol batch pada tabel Log Harian Monitoring Delivery Orders.
+  - Melayani endpoint `GET /api/delivery-orders/confirm-batch-detail?date=YYYY-MM-DD&session=Pagi|Sore` untuk modal `DeliveryBatchDetailModal.tsx` saat user mengklik cardlet sesi batch atau tombol batch pada tabel Log Harian Monitoring Delivery Orders, lengkap dengan badge indikator penagihan dan filter interaktif Sudah/Belum Bill.
 
 ---
 

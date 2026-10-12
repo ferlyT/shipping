@@ -1,10 +1,10 @@
 import React from 'react'
 import { View, Text } from 'react-native'
-import { Package, Weight, Box, Hash, Barcode, Tag, Calendar, Truck, FileText } from 'lucide-react-native'
+import { Package, Weight, Box, Hash, Barcode, Tag, Calendar, Truck, FileText, Clock, UserCheck, History } from 'lucide-react-native'
 import { Card } from '@/components/ui/Card'
 import { Badge } from '@/components/ui/Badge'
 import { useThemeStore } from '@/theme/themeStore'
-import { formatNumber, formatDecimal, formatDate, cleanFoxProString } from '@/lib/utils'
+import { formatNumber, formatDecimal, formatDate, formatDateTime, cleanFoxProString } from '@/lib/utils'
 
 interface ShipmentInfoTabProps {
   activeShipment: any
@@ -150,6 +150,73 @@ export function ShipmentInfoTab({ activeShipment }: ShipmentInfoTabProps) {
           <Text style={{ fontSize: 12, color: colors.secondary, lineHeight: 18 }}>
             {activeShipment.fdDesc}
           </Text>
+        </Card>
+      )}
+
+      {/* Riwayat Pembuatan & Pembaruan (Audit Trail) */}
+      {(activeShipment?.fdEmp1 || activeShipment?.fdCreatedDate || activeShipment?.fdEmp2 || activeShipment?.fdUpdate) && (
+        <Card style={{ padding: 12, gap: 10 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Clock size={13} color={colors.primary} />
+            <Text style={{ fontSize: 11, fontWeight: '700', color: colors.secondary, textTransform: 'uppercase' }}>
+              Riwayat Pembuatan & Pembaruan
+            </Text>
+          </View>
+          <View style={{ gap: 8 }}>
+            {/* Created By & Date */}
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 10,
+              padding: 8, borderRadius: 8,
+              backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+              borderWidth: 1, borderColor: colors.border,
+            }}>
+              <View style={{
+                width: 28, height: 28, borderRadius: 6,
+                backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <UserCheck size={14} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.secondary, textTransform: 'uppercase' }}>
+                  Dibuat Oleh (Created By)
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary, marginTop: 1 }}>
+                  {activeShipment?.fdEmp1?.trim() || '—'}
+                </Text>
+                <Text style={{ fontSize: 11, color: colors.secondary, marginTop: 1, fontVariant: ['tabular-nums'] }}>
+                  {formatDateTime(activeShipment?.fdCreatedDate)}
+                </Text>
+              </View>
+            </View>
+
+            {/* Updated By & Date */}
+            <View style={{
+              flexDirection: 'row', alignItems: 'center', gap: 10,
+              padding: 8, borderRadius: 8,
+              backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.02)',
+              borderWidth: 1, borderColor: colors.border,
+            }}>
+              <View style={{
+                width: 28, height: 28, borderRadius: 6,
+                backgroundColor: 'rgba(14, 165, 233, 0.1)',
+                alignItems: 'center', justifyContent: 'center',
+              }}>
+                <History size={14} color="#0EA5E9" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: colors.secondary, textTransform: 'uppercase' }}>
+                  Terakhir Diperbarui (Updated)
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: colors.primary, marginTop: 1 }}>
+                  {activeShipment?.fdEmp2?.trim() || '—'}
+                </Text>
+                <Text style={{ fontSize: 11, color: colors.secondary, marginTop: 1, fontVariant: ['tabular-nums'] }}>
+                  {formatDateTime(activeShipment?.fdUpdate)}
+                </Text>
+              </View>
+            </View>
+          </View>
         </Card>
       )}
     </View>

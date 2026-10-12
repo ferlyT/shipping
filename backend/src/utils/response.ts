@@ -5,33 +5,53 @@ export interface PaginatedMeta {
   limit?: number
   total: number
   totalPages: number
+  [key: string]: any
 }
 
-function deepTrim(obj: any): any {
-  if (typeof obj === 'string') return obj.trim()
-  if (Array.isArray(obj)) return obj.map(deepTrim)
+/**
+ * Mengubah karakter '^' warisan database menjadi tanda petik tunggal "'"
+ */
+export function replaceDbCaret(str: string): string {
+  if (typeof str !== 'string') return str
+  return str.replace(/\^/g, "'")
+}
+
+/**
+ * Membersihkan data secara rekursif:
+ * - String: trim spasi dan ubah '^' menjadi "'"
+ * - BigInt: konversi ke Number
+ * - Array & Object: proses secara rekursif
+ */
+export function cleanDbData<T = any>(obj: T): T {
+  if (typeof obj === 'string') return replaceDbCaret(obj.trim()) as unknown as T
+  if (typeof obj === 'bigint') return Number(obj) as unknown as T
+  if (Array.isArray(obj)) return obj.map((item) => cleanDbData(item)) as unknown as T
   if (obj !== null && typeof obj === 'object') {
     // Handle objects with toJSON (like Date or Prisma Decimal)
-    let plainObj = obj
-    if (typeof obj.toJSON === 'function') {
-      plainObj = obj.toJSON()
+    let plainObj: any = obj
+    if (typeof plainObj.toJSON === 'function') {
+      plainObj = plainObj.toJSON()
     }
     
     // If it became a primitive after toJSON
     if (typeof plainObj !== 'object' || plainObj === null) {
-      return deepTrim(plainObj)
+      return cleanDbData(plainObj)
     }
 
     const trimmed: any = {}
     for (const key in plainObj) {
       if (Object.prototype.hasOwnProperty.call(plainObj, key)) {
-        trimmed[key] = deepTrim(plainObj[key])
+        trimmed[key] = cleanDbData(plainObj[key])
       }
     }
-    return trimmed
+    return trimmed as T
   }
   return obj
 }
+
+// Alias untuk backward compatibility
+export const deepTrim = cleanDbData
+
 
 // Gunakan ini untuk semua response sukses
 export function successResponse<T>(

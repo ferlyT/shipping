@@ -3,6 +3,7 @@ import {
   ComposedChart,
   Area,
   Line,
+  Bar,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -27,6 +28,9 @@ interface TrendChartProps {
   modeFilter?: TrendModeFilter
   showYoY?: boolean
   isMonthly?: boolean
+  chartHeight?: number
+  showQuantityBar?: boolean
+  hideSummaryBanner?: boolean
 }
 
 export function TrendChart({
@@ -38,6 +42,9 @@ export function TrendChart({
   modeFilter = 'all',
   showYoY = true,
   isMonthly = false,
+  chartHeight,
+  showQuantityBar = false,
+  hideSummaryBanner = false,
 }: TrendChartProps) {
   const { t } = useTranslation()
 
@@ -186,96 +193,109 @@ export function TrendChart({
   return (
     <div className="w-full space-y-3.5">
       {/* Mini Summary Banner: Per-Moda Split & YoY Overview */}
-      <div className="flex flex-wrap items-center gap-2 text-xs font-[var(--font-label)]">
-        {(modeFilter === 'all' || modeFilter === 'udara') && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-sky-500/30 bg-sky-500/5 text-sky-700 dark:text-sky-300">
-            <span className="w-2 h-2 rounded-full bg-sky-500 shrink-0" />
-            <span className="font-semibold">✈️ {t('common.air')}:</span>
-            <span className="font-bold tabular-nums">
-              {isCount ? `${formatNumber(totals.billUdara)} Bill` : formatCompactRupiah(totals.tagihanUdara)}
-            </span>
-            {modeFilter === 'all' && (
-              <span className="text-[10px] text-sky-600/80 dark:text-sky-400/80">
-                ({isCount ? `${totals.uPct}%` : `${totals.uValPct}%`})
+      {!hideSummaryBanner && (
+        <div className="flex flex-wrap items-center gap-2 text-xs font-[var(--font-label)]">
+          {(modeFilter === 'all' || modeFilter === 'udara') && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-sky-500/30 bg-sky-500/5 text-sky-700 dark:text-sky-300">
+              <span className="w-2 h-2 rounded-full bg-sky-500 shrink-0" />
+              <span className="font-semibold">✈️ {t('common.air')}:</span>
+              <span className="font-bold tabular-nums">
+                {isCount ? `${formatNumber(totals.billUdara)} Bill` : formatCompactRupiah(totals.tagihanUdara)}
               </span>
-            )}
-            {totals.hasYoYData && (
-              <span
-                className={cn(
-                  "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums whitespace-nowrap",
-                  totals.yoyUdaraGrowthPct > 0
-                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                    : totals.yoyUdaraGrowthPct < 0
-                    ? "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400"
-                    : "bg-slate-500/15 border-slate-500/30 text-slate-500"
-                )}
-                title={`YoY Udara (12 Bln vs Tahun Lalu): ${totals.yoyUdaraGrowthPct > 0 ? '+' : ''}${totals.yoyUdaraGrowthPct}% (${totals.yoyUdaraDiff > 0 ? '+' : ''}${isCount ? formatNumber(totals.yoyUdaraDiff) + ' Bill' : formatCompactRupiah(totals.yoyUdaraDiff)})`}
-              >
-                YoY (12 Bln) {totals.yoyUdaraGrowthPct > 0 ? `▲ +${totals.yoyUdaraGrowthPct}%` : totals.yoyUdaraGrowthPct < 0 ? `▼ ${totals.yoyUdaraGrowthPct}%` : `→ 0%`}
-              </span>
-            )}
-          </div>
-        )}
+              {modeFilter === 'all' && (
+                <span className="text-[10px] text-sky-600/80 dark:text-sky-400/80">
+                  ({isCount ? `${totals.uPct}%` : `${totals.uValPct}%`})
+                </span>
+              )}
+              {totals.hasYoYData && (
+                <span
+                  className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums whitespace-nowrap",
+                    totals.yoyUdaraGrowthPct > 0
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                      : totals.yoyUdaraGrowthPct < 0
+                      ? "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400"
+                      : "bg-slate-500/15 border-slate-500/30 text-slate-500"
+                  )}
+                  title={`YoY Udara (12 Bln vs Tahun Lalu): ${totals.yoyUdaraGrowthPct > 0 ? '+' : ''}${totals.yoyUdaraGrowthPct}% (${totals.yoyUdaraDiff > 0 ? '+' : ''}${isCount ? formatNumber(totals.yoyUdaraDiff) + ' Bill' : formatCompactRupiah(totals.yoyUdaraDiff)})`}
+                >
+                  YoY (12 Bln) {totals.yoyUdaraGrowthPct > 0 ? `▲ +${totals.yoyUdaraGrowthPct}%` : totals.yoyUdaraGrowthPct < 0 ? `▼ ${totals.yoyUdaraGrowthPct}%` : `→ 0%`}
+                </span>
+              )}
+            </div>
+          )}
 
-        {(modeFilter === 'all' || modeFilter === 'laut') && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
-            <span className="font-semibold">🚢 {t('common.sea')}:</span>
-            <span className="font-bold tabular-nums">
-              {isCount ? `${formatNumber(totals.billLaut)} Bill` : formatCompactRupiah(totals.tagihanLaut)}
-            </span>
-            {modeFilter === 'all' && (
-              <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80">
-                ({isCount ? `${totals.lPct}%` : `${totals.lValPct}%`})
+          {(modeFilter === 'all' || modeFilter === 'laut') && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-emerald-500/30 bg-emerald-500/5 text-emerald-700 dark:text-emerald-300">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+              <span className="font-semibold">🚢 {t('common.sea')}:</span>
+              <span className="font-bold tabular-nums">
+                {isCount ? `${formatNumber(totals.billLaut)} Bill` : formatCompactRupiah(totals.tagihanLaut)}
               </span>
-            )}
-            {totals.hasYoYData && (
-              <span
-                className={cn(
-                  "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums whitespace-nowrap",
-                  totals.yoyLautGrowthPct > 0
-                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                    : totals.yoyLautGrowthPct < 0
-                    ? "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400"
-                    : "bg-slate-500/15 border-slate-500/30 text-slate-500"
-                )}
-                title={`YoY Laut (12 Bln vs Tahun Lalu): ${totals.yoyLautGrowthPct > 0 ? '+' : ''}${totals.yoyLautGrowthPct}% (${totals.yoyLautDiff > 0 ? '+' : ''}${isCount ? formatNumber(totals.yoyLautDiff) + ' Bill' : formatCompactRupiah(totals.yoyLautDiff)})`}
-              >
-                YoY (12 Bln) {totals.yoyLautGrowthPct > 0 ? `▲ +${totals.yoyLautGrowthPct}%` : totals.yoyLautGrowthPct < 0 ? `▼ ${totals.yoyLautGrowthPct}%` : `→ 0%`}
-              </span>
-            )}
-          </div>
-        )}
+              {modeFilter === 'all' && (
+                <span className="text-[10px] text-emerald-600/80 dark:text-emerald-400/80">
+                  ({isCount ? `${totals.lPct}%` : `${totals.lValPct}%`})
+                </span>
+              )}
+              {totals.hasYoYData && (
+                <span
+                  className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums whitespace-nowrap",
+                    totals.yoyLautGrowthPct > 0
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                      : totals.yoyLautGrowthPct < 0
+                      ? "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400"
+                      : "bg-slate-500/15 border-slate-500/30 text-slate-500"
+                  )}
+                  title={`YoY Laut (12 Bln vs Tahun Lalu): ${totals.yoyLautGrowthPct > 0 ? '+' : ''}${totals.yoyLautGrowthPct}% (${totals.yoyLautDiff > 0 ? '+' : ''}${isCount ? formatNumber(totals.yoyLautDiff) + ' Bill' : formatCompactRupiah(totals.yoyLautDiff)})`}
+                >
+                  YoY (12 Bln) {totals.yoyLautGrowthPct > 0 ? `▲ +${totals.yoyLautGrowthPct}%` : totals.yoyLautGrowthPct < 0 ? `▼ ${totals.yoyLautGrowthPct}%` : `→ 0%`}
+                </span>
+              )}
+            </div>
+          )}
 
-        {modeFilter === 'all' && (
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-neutral)] text-[var(--color-primary)] ml-auto">
-            <span className="text-[var(--color-secondary)] font-medium">{t('billing.trend.total')}:</span>
-            <span className="font-bold tabular-nums">
-              {isCount ? `${formatNumber(totals.totalBill)} Bill` : formatCurrency(totals.totalTagihan)}
-            </span>
-            {totals.hasYoYData && (
-              <span
-                className={cn(
-                  "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums whitespace-nowrap",
-                  totals.yoyGrowthPct > 0
-                    ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
-                    : totals.yoyGrowthPct < 0
-                    ? "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400"
-                    : "bg-slate-500/15 border-slate-500/30 text-slate-500"
-                )}
-                title={`Total YoY (12 Bln vs Tahun Lalu): ${totals.yoyGrowthPct > 0 ? '+' : ''}${totals.yoyGrowthPct}% (${totals.yoyDiff > 0 ? '+' : ''}${isCount ? formatNumber(totals.yoyDiff) + ' Bill' : formatCompactRupiah(totals.yoyDiff)})`}
-              >
-                YoY (12 Bln) {totals.yoyGrowthPct > 0 ? `▲ +${totals.yoyGrowthPct}%` : totals.yoyGrowthPct < 0 ? `▼ ${totals.yoyGrowthPct}%` : `→ 0%`}
+          {modeFilter === 'all' && (
+            <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-neutral)] text-[var(--color-primary)] ml-auto">
+              <span className="text-[var(--color-secondary)] font-medium">{t('billing.trend.total')}:</span>
+              <span className="font-bold tabular-nums">
+                {isCount ? `${formatNumber(totals.totalBill)} Bill` : formatCurrency(totals.totalTagihan)}
               </span>
-            )}
-          </div>
-        )}
-      </div>
+              {totals.hasYoYData && (
+                <span
+                  className={cn(
+                    "text-[10px] font-bold px-1.5 py-0.5 rounded border ml-0.5 tabular-nums whitespace-nowrap",
+                    totals.yoyGrowthPct > 0
+                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-600 dark:text-emerald-400"
+                      : totals.yoyGrowthPct < 0
+                      ? "bg-rose-500/15 border-rose-500/30 text-rose-600 dark:text-rose-400"
+                      : "bg-slate-500/15 border-slate-500/30 text-slate-500"
+                  )}
+                  title={`Total YoY (12 Bln vs Tahun Lalu): ${totals.yoyGrowthPct > 0 ? '+' : ''}${totals.yoyGrowthPct}% (${totals.yoyDiff > 0 ? '+' : ''}${isCount ? formatNumber(totals.yoyDiff) + ' Bill' : formatCompactRupiah(totals.yoyDiff)})`}
+                >
+                  YoY (12 Bln) {totals.yoyGrowthPct > 0 ? `▲ +${totals.yoyGrowthPct}%` : totals.yoyGrowthPct < 0 ? `▼ ${totals.yoyGrowthPct}%` : `→ 0%`}
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Chart Canvas */}
-      <div className="h-[260px] sm:h-[320px] w-full">
+      <div
+        className={cn("w-full", chartHeight ? undefined : "h-[260px] sm:h-[320px]")}
+        style={chartHeight ? { height: chartHeight } : undefined}
+      >
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data} margin={{ top: 8, right: isMobile ? 8 : 20, left: 0, bottom: 5 }}>
+          <ComposedChart
+            data={data}
+            margin={{
+              top: 8,
+              right: isMobile ? 8 : (showQuantityBar ? 16 : 20),
+              left: 0,
+              bottom: 24,
+            }}
+          >
             <defs>
               {/* Udara Sky Blue Area Gradient */}
               <linearGradient id="trendAreaUdaraFill" x1="0" y1="0" x2="0" y2="1">
@@ -309,6 +329,19 @@ export function TrendChart({
               tickFormatter={(val) => (metric === 'count' ? formatNumber(val) : formatCompactRupiah(val))}
               allowDecimals={metric === 'value'}
             />
+            {showQuantityBar && (
+              <YAxis
+                yAxisId="qtyAxis"
+                orientation="right"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fontSize: isMobile ? 9 : 10, fill: '#64748b', fontFamily: 'var(--font-label)' }}
+                width={isMobile ? 38 : 50}
+                tickMargin={6}
+                tickFormatter={(val) => formatNumber(val)}
+                allowDecimals={false}
+              />
+            )}
 
             {/* Custom Multi-Theme Tooltip */}
             <Tooltip
@@ -548,10 +581,29 @@ export function TrendChart({
 
             <Legend
               iconType="circle"
-              wrapperStyle={{ fontSize: '12px', paddingTop: '10px', fontFamily: 'var(--font-label)', letterSpacing: '0.02em' }}
+              wrapperStyle={{
+                fontSize: isMobile ? '10px' : '11px',
+                paddingTop: '6px',
+                paddingBottom: '2px',
+                fontFamily: 'var(--font-label)',
+                letterSpacing: '0.02em',
+                lineHeight: '16px',
+              }}
             />
 
-            {/* COUNT MODE (JUMLAH BILL) */}
+            {/* Background Quantity Bar if enabled */}
+            {showQuantityBar && (
+              <Bar
+                yAxisId="qtyAxis"
+                name={`📦 ${t('billing.trend.totalBillQuantity')}`}
+                dataKey="totalBill"
+                fill="#94a3b8"
+                opacity={0.32}
+                barSize={isMobile ? 14 : 20}
+                radius={[4, 4, 0, 0]}
+              />
+            )}
+
             {isCount ? (
               modeFilter === 'all' ? (
                 <>

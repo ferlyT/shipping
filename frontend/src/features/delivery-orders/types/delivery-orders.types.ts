@@ -582,6 +582,10 @@ export interface DeliveryEstimasiDetailItem {
   statusLabel: 'PENDING_OVERDUE' | 'PENDING_TOLERANCE' | 'SENT_ONTIME' | 'SENT_LATE' | string
   fdTerima: string | null
   fdDescr: string | null
+  isBilled?: boolean
+  invNos?: string | null
+  invDates?: string | null
+  billCount?: number
 }
 
 export interface DeliveryEstimasiDetailResponse {
@@ -593,6 +597,17 @@ export interface DeliveryEstimasiDetailResponse {
   sentCount: number
   totalPack: number
   totalWeight: number
+  billingRecap?: {
+    billedSjCount: number
+    unbilledSjCount: number
+    totalListCodes: number
+    billedListCodeCount: number
+    unbilledListCodeCount: number
+    billedPack: number
+    billedWeight: number
+    unbilledPack: number
+    unbilledWeight: number
+  }
   items: DeliveryEstimasiDetailItem[]
 }
 
@@ -623,6 +638,10 @@ export interface DeliveryBatchOrderItem {
   branchCode: string
   branchName: string
   batchTime?: string
+  isBilled?: boolean
+  invNos?: string | null
+  invDates?: string | null
+  billCount?: number
 }
 
 export interface DeliveryBatchDetailResponse {
@@ -638,7 +657,19 @@ export interface DeliveryBatchDetailResponse {
   packLaut: number
   weightUdara: number
   weightLaut: number
+  billingRecap?: {
+    billedSjCount: number
+    unbilledSjCount: number
+    totalListCodes: number
+    billedListCodeCount: number
+    unbilledListCodeCount: number
+    billedPack: number
+    billedWeight: number
+    unbilledPack: number
+    unbilledWeight: number
+  }
   items: DeliveryBatchOrderItem[]
 }
+
 
 

@@ -156,3 +156,35 @@ export interface CustMarkingAggregates {
     m3: number
   }>
 }
+
+export interface InvoiceGroup {
+  invoice: string
+  dateStr: string
+  date: number
+  branchCode: string
+  isInvoiceUtama: boolean
+  isBillGabungan: boolean
+  isBillTambahan: boolean
+  totalItems: number
+  totalQtyGdg: number
+  totalQtySJ: number
+  totalQtyPL: number
+  totalQtyK: number
+  totalWeightGdg: number
+  totalWeightSJ: number
+  totalWeightK: number
+  totalKgBill: number
+  totalM3PL: number
+  totalM3Gdg: number
+  totalM3K: number
+  totalM3Bill: number
+  totalVfcGdg: number
+  totalVfcK: number
+  totalVfcBill: number
+  totalValue2: number
+  totalFc: number
+  hasSelisih: boolean
+  hasKomplain: boolean
+  isQtyKomplainMismatch: boolean
+  rows: NormalizedMarkingRow[]
+}

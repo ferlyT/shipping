@@ -21,7 +21,8 @@ export async function uploadBapPhoto(
   reportId: number,
   base64String: string,
   caption: string | undefined,
-  uploadedBy: string
+  uploadedBy: string,
+  annotationsSvg?: string
 ) {
   const report = await prisma.tbInspectionReport.findFirst({
     where: { fdId: reportId, fdDeletedAt: null },
@@ -58,15 +59,19 @@ export async function uploadBapPhoto(
     throw new Error('Ukuran foto melebihi batas 5 MB')
   }
 
-  // Apply burned-in metadata watermark onto photo
-  const watermarkedBuffer = await applyBapWatermark(buffer, {
-    markingCode: report.fdMarkingCode,
-    markingNo: report.fdMarkingNo,
-    custName: report.fdNamaCustomer,
-    terima: report.fdTerima,
-    reportNumber: report.fdReportNumber,
-    timestamp: new Date(),
-  })
+  // Apply burned-in metadata watermark onto photo (and composited visual annotations if provided)
+  const watermarkedBuffer = await applyBapWatermark(
+    buffer,
+    {
+      markingCode: report.fdMarkingCode,
+      markingNo: report.fdMarkingNo,
+      custName: report.fdNamaCustomer,
+      terima: report.fdTerima,
+      reportNumber: report.fdReportNumber,
+      timestamp: new Date(),
+    },
+    annotationsSvg
+  )
 
   const folderName = report.fdReportNumber.replace(/[^a-zA-Z0-9_-]/g, '_')
   const reportDir = path.join(UPLOAD_DIR, folderName)

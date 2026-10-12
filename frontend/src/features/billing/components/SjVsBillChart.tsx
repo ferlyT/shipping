@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { ROUTES } from '@/lib/constants'
+import { cn, formatNumber } from '@/lib/utils'
 import type { SjVsBillPoint } from '../types/billing.types'
 import { CustomXAxisTick } from './ChartTick'
 import { useTranslation } from '@/hooks/useTranslation'
@@ -11,9 +12,17 @@ interface SjVsBillChartProps {
   isMobile: boolean
   activeSjPic: string
   setActiveSjPic: (key: string) => void
+  embedded?: boolean
 }
 
-export function SjVsBillChart({ data, isLoading, isMobile, activeSjPic, setActiveSjPic }: SjVsBillChartProps) {
+export function SjVsBillChart({
+  data,
+  isLoading,
+  isMobile,
+  activeSjPic,
+  setActiveSjPic,
+  embedded = false,
+}: SjVsBillChartProps) {
   const navigate = useNavigate()
   const { t } = useTranslation()
 
@@ -41,9 +50,32 @@ export function SjVsBillChart({ data, isLoading, isMobile, activeSjPic, setActiv
   const isYatiKiki = activeSjPic === 'yati_kiki'
   const isAll = activeSjPic === 'all'
 
-  const totalSj = data.reduce((sum, row) => sum + (Number(row.sj) || 0), 0)
-  const totalBill = data.reduce((sum, row) => sum + (Number(row.bill) || 0), 0)
-  const totalUnbilled = Math.max(0, totalSj - totalBill)
+  const totalSj = data.reduce((sum, row) => {
+    const val = isAll
+      ? (row.sj_all ?? row.sj)
+      : isYatiKiki
+      ? row.sj_yatiKiki
+      : row[`sj_${activeSjPic}`]
+    return sum + (Number(val) || 0)
+  }, 0)
+
+  const totalBill = data.reduce((sum, row) => {
+    const val = isAll
+      ? (row.bill_all ?? row.bill)
+      : isYatiKiki
+      ? row.bill_yatiKiki
+      : row[`bill_${activeSjPic}`]
+    return sum + (Number(val) || 0)
+  }, 0)
+
+  const totalUnbilled = data.reduce((sum, row) => {
+    const val = isAll
+      ? (row.unbilled_all ?? row.unbilled)
+      : isYatiKiki
+      ? row.unbilled_yatiKiki
+      : row[`unbilled_${activeSjPic}`]
+    return sum + (Number(val) || 0)
+  }, 0)
 
   const gap = totalSj - totalBill
 
@@ -57,133 +89,240 @@ export function SjVsBillChart({ data, isLoading, isMobile, activeSjPic, setActiv
     }
   }
 
-  return (
-    <div>
-      {/* PIC Selector */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none shrink-0 mb-4 sm:mb-6">
-        {SJ_PIC_OPTIONS.map((opt) => (
+  const content = (
+    <div className="space-y-3">
+      {/* Header Info & Controls */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-2.5 border-b border-[var(--color-border)] gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* PIC Selector Pills */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-0.5 scrollbar-none shrink-0">
+            {SJ_PIC_OPTIONS.map((opt) => (
+              <button
+                key={opt.key}
+                type="button"
+                onClick={() => setActiveSjPic(opt.key)}
+                className={cn(
+                  "px-2.5 py-1 text-[11px] font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer",
+                  activeSjPic === opt.key
+                    ? "bg-[var(--color-primary)] text-[var(--color-surface)] shadow-2xs"
+                    : "bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] hover:bg-[var(--color-surface)] hover:text-[var(--color-primary)]"
+                )}
+              >
+                {opt.name}
+              </button>
+            ))}
+          </div>
+
+          <span className="text-[10px] text-[var(--color-secondary)] bg-[var(--color-neutral)] px-1.5 py-0.5 rounded border border-[var(--color-border)] font-medium">
+            {selectedPic.roleDesc}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-2 text-xs font-[var(--font-label)] flex-wrap">
+          <div className="text-[11px] text-[var(--color-secondary)] font-mono flex items-center gap-2">
+            <span>📄 {t('billing.sjReceived')}: <strong className="text-sky-600 dark:text-sky-400">{formatNumber(totalSj)}</strong></span>
+            <span className="text-[var(--color-border)]">•</span>
+            <span>🧾 {t('billing.billCreated')}: <strong className="text-rose-600 dark:text-rose-400">{formatNumber(totalBill)}</strong></span>
+          </div>
+
           <button
-            key={opt.key}
-            onClick={() => setActiveSjPic(opt.key)}
-            className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-all cursor-pointer ${
-              activeSjPic === opt.key
-                ? 'bg-[#1A1C1E] text-white shadow-xs'
-                : 'bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)] hover:bg-gray-200 hover:text-[var(--color-primary)]'
-            }`}
+            type="button"
+            onClick={handleNavigateTarget}
+            title={t('billing.viewTargetBillFull')}
+            className={cn(
+              "px-2 py-0.5 text-[11px] font-bold rounded-md whitespace-nowrap cursor-pointer hover:opacity-85 transition-opacity",
+              gap > 0
+                ? "bg-amber-500/10 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                : gap < 0
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+                : "bg-[var(--color-neutral)] text-[var(--color-secondary)] border border-[var(--color-border)]"
+            )}
           >
-            {opt.name}
+            {gap > 0 ? `+${formatNumber(gap)} ${t('billing.unbilled')}` : gap < 0 ? `${formatNumber(gap)} ${t('billing.surplusBill')}` : t('nav.targetBill')}
           </button>
-        ))}
+        </div>
       </div>
 
-      <div className="p-4 sm:p-6 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-xs flex flex-col justify-between">
-        {/* Chart Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-[var(--color-border)] gap-3">
-          <div className="flex items-center gap-2.5">
-            <h3 className="font-semibold text-base sm:text-lg text-[var(--color-primary)] font-[var(--font-display)]">
-              {selectedPic.name}
-            </h3>
-            <span className="text-xs text-[var(--color-secondary)] bg-[var(--color-neutral)] px-2 py-0.5 rounded border border-[var(--color-border)]">
-              {selectedPic.roleDesc}
-            </span>
-          </div>
+      {/* Legend Ringkas & Kontras */}
+      <div className="flex items-center gap-4 text-xs font-semibold flex-wrap">
+        <span className="inline-flex items-center gap-1.5 text-sky-600 dark:text-sky-400">
+          <span className="w-3.5 h-1 bg-sky-500 rounded-full inline-block" />
+          <span>📄 {t('billing.sjReceived')}</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-rose-600 dark:text-rose-400">
+          <span className="w-3.5 h-1 border-t-2 border-dashed border-rose-500 inline-block" />
+          <span>🧾 {t('billing.billCreated')}</span>
+        </span>
+        <span className="inline-flex items-center gap-1.5 text-amber-600 dark:text-amber-400">
+          <span className="w-3.5 h-1 bg-amber-500 rounded-full inline-block" />
+          <span className="font-bold">⏳ +{formatNumber(totalUnbilled)} {t('billing.unbilled')}</span>
+        </span>
+      </div>
 
-          <div className="flex items-center gap-3 text-xs font-[var(--font-label)] flex-wrap">
-            <div className="text-xs text-[var(--color-secondary)]">
-              <span className="font-semibold">{t('billing.sjReceived')}: <span className="font-bold text-[#1a365d]">{totalSj.toLocaleString('en-US')}</span></span>
-              <span className="text-[var(--color-border)] mx-2">|</span>
-              <span className="font-semibold">{t('billing.billCreated')}: <span className="font-bold text-[#9b2c2c]">{totalBill.toLocaleString('en-US')}</span></span>
-            </div>
-
-            <button
-              onClick={handleNavigateTarget}
-              title={t('billing.viewTargetBillFull')}
-              className={`px-3 py-1 text-xs font-bold rounded-md whitespace-nowrap cursor-pointer hover:opacity-85 transition-opacity ${
-                gap > 0
-                  ? 'bg-amber-50 text-amber-700 border border-amber-200/80 hover:bg-amber-100'
-                  : gap < 0
-                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80 hover:bg-emerald-100'
-                  : 'bg-gray-50 text-gray-600 border border-gray-200 hover:bg-gray-100'
-              }`}
-            >
-              {gap > 0 ? `+${gap} ${t('billing.unbilled')}` : gap < 0 ? `${gap} ${t('billing.surplusBill')}` : t('nav.targetBill')}
-            </button>
-          </div>
-        </div>
-
-        {/* Legend */}
-        <div className="flex items-center gap-4 text-xs font-semibold mb-3">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-4 h-0.5 bg-[#1a365d] rounded-full inline-block" />
-            <span className="text-[#1a365d]">{t('billing.sjReceived')}</span>
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-4 h-0.5 border-t-2 border-dashed border-[#9b2c2c] inline-block" />
-            <span className="text-[#9b2c2c]">{t('billing.billCreated')}</span>
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="w-4 h-0.5 bg-[#1F6E5C] rounded-full inline-block" />
-            <span className="font-bold text-amber-700">+{totalUnbilled.toLocaleString('en-US')} {t('billing.unbilled')}</span>
-          </span>
-        </div>
-
-        {/* Chart */}
-        <div className="h-[260px] sm:h-[320px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={data} margin={{ top: 10, right: isMobile ? 12 : 24, left: 10, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="3 6" vertical={false} stroke="var(--color-border)" opacity={0.6} />
-              <XAxis
-                dataKey={(row: any) => row.date || row.label}
-                axisLine={false}
-                tickLine={false}
-                tick={<CustomXAxisTick />}
-                interval={isMobile ? 'preserveStartEnd' : 'equidistantPreserveStart'}
-                dy={5}
-                height={40}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tick={{ fontSize: isMobile ? 10 : 11, fill: 'var(--color-secondary)', fontFamily: 'var(--font-label)' }}
-                width={isMobile ? 36 : 46}
-                tickMargin={6}
-                allowDecimals={false}
-              />
-              <Tooltip
-                cursor={{ stroke: 'var(--color-border)', strokeWidth: 1 }}
-                contentStyle={{
-                  borderRadius: '8px',
-                  border: '1px solid var(--color-border)',
-                  boxShadow: '0 8px 16px -4px rgba(26,28,30,0.12)',
-                  fontFamily: 'var(--font-body)',
-                  fontSize: '12px',
-                }}
-                labelStyle={{ fontWeight: 600, color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}
-              />
-              {isAll ? (
-                <>
-                  <Line name={`${t('billing.sjReceived')} (Total)`} type="monotone" dataKey="sj_all" stroke="#2A5C8A" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 1.5, stroke: '#FFFFFF', fill: '#2A5C8A' }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} isAnimationActive={false} />
-                  <Line name={`${t('billing.billCreated')} (Total)`} type="monotone" dataKey="bill_all" stroke="#B8422E" strokeWidth={2.5} strokeDasharray="5 5" dot={{ r: 3, strokeWidth: 1.5, stroke: '#FFFFFF', fill: '#B8422E' }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} isAnimationActive={false} />
-                  <Line name={`${t('billing.unbilled')} (Total)`} type="monotone" dataKey="unbilled_all" stroke="#1F6E5C" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 1.5, stroke: '#FFFFFF', fill: '#1F6E5C' }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} isAnimationActive={false} />
-                </>
-              ) : isYatiKiki ? (
-                <>
-                  <Line name={`${t('billing.sjReceived')} (Total)`} type="monotone" dataKey="sj_yatiKiki" stroke="#2A5C8A" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 1.5, stroke: '#FFFFFF', fill: '#2A5C8A' }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} isAnimationActive={false} />
-                  <Line name={`Yati - ${t('billing.billCreated')}`} type="monotone" dataKey="bill_yati" stroke="#B8422E" strokeWidth={2.5} strokeDasharray="5 5" dot={{ r: 3, strokeWidth: 1.5, stroke: '#FFFFFF', fill: '#B8422E' }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} isAnimationActive={false} />
-                  <Line name={`Kiki - ${t('billing.billCreated')}`} type="monotone" dataKey="bill_kiki" stroke="#C99A2E" strokeWidth={2.5} strokeDasharray="4 4" dot={{ r: 3, strokeWidth: 1.5, stroke: '#FFFFFF', fill: '#C99A2E' }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} isAnimationActive={false} />
-                  <Line name={`${t('billing.unbilled')} (Yati & Kiki)`} type="monotone" dataKey="unbilled_yatiKiki" stroke="#1F6E5C" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 1.5, stroke: '#FFFFFF', fill: '#1F6E5C' }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} isAnimationActive={false} />
-                </>
-              ) : (
-                <>
-                  <Line name={t('billing.sjReceived')} type="monotone" dataKey={`sj_${activeSjPic}`} stroke="#2A5C8A" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 1.5, stroke: '#FFFFFF', fill: '#2A5C8A' }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} isAnimationActive={false} />
-                  <Line name={t('billing.billCreated')} type="monotone" dataKey={`bill_${activeSjPic}`} stroke="#B8422E" strokeWidth={2.5} strokeDasharray="5 5" dot={{ r: 3, strokeWidth: 1.5, stroke: '#FFFFFF', fill: '#B8422E' }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} isAnimationActive={false} />
-                  <Line name={t('billing.unbilled')} type="monotone" dataKey={`unbilled_${activeSjPic}`} stroke="#1F6E5C" strokeWidth={2.5} dot={{ r: 3, strokeWidth: 1.5, stroke: '#FFFFFF', fill: '#1F6E5C' }} activeDot={{ r: 5, strokeWidth: 2, stroke: '#FFFFFF' }} isAnimationActive={false} />
-                </>
-              )}
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
+      {/* Chart Canvas */}
+      <div className="h-[260px] sm:h-[320px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 10, right: isMobile ? 12 : 24, left: 0, bottom: 20 }}>
+            <CartesianGrid strokeDasharray="3 6" vertical={false} stroke="var(--color-border)" opacity={0.6} />
+            <XAxis
+              dataKey={(row: any) => row.date || row.label}
+              axisLine={false}
+              tickLine={false}
+              tick={<CustomXAxisTick />}
+              interval={isMobile ? 'preserveStartEnd' : 'equidistantPreserveStart'}
+              dy={5}
+              height={40}
+            />
+            <YAxis
+              axisLine={false}
+              tickLine={false}
+              tick={{ fontSize: isMobile ? 10 : 11, fill: 'var(--color-secondary)', fontFamily: 'var(--font-label)' }}
+              width={isMobile ? 36 : 46}
+              tickMargin={6}
+              allowDecimals={false}
+              tickFormatter={(val) => formatNumber(val)}
+            />
+            <Tooltip
+              cursor={{ stroke: 'var(--color-border)', strokeWidth: 1.5, strokeDasharray: '4 4' }}
+              contentStyle={{
+                borderRadius: '10px',
+                border: '1px solid var(--color-border)',
+                boxShadow: '0 8px 16px -4px rgba(26,28,30,0.18)',
+                fontFamily: 'var(--font-body)',
+                fontSize: '12px',
+                backgroundColor: 'var(--color-surface)',
+                color: 'var(--color-primary)',
+              }}
+              labelStyle={{ fontWeight: 600, color: 'var(--color-primary)', fontFamily: 'var(--font-display)' }}
+            />
+            {isAll ? (
+              <>
+                <Line
+                  name={`📄 ${t('billing.sjReceived')} (Total)`}
+                  type="monotone"
+                  dataKey="sj_all"
+                  stroke="#0284c7"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, strokeWidth: 1.5, stroke: 'var(--color-surface)', fill: '#0284c7' }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  name={`🧾 ${t('billing.billCreated')} (Total)`}
+                  type="monotone"
+                  dataKey="bill_all"
+                  stroke="#e11d48"
+                  strokeWidth={2.5}
+                  strokeDasharray="5 4"
+                  dot={{ r: 3, strokeWidth: 1.5, stroke: 'var(--color-surface)', fill: '#e11d48' }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  name={`⏳ ${t('billing.unbilled')} (Total)`}
+                  type="monotone"
+                  dataKey="unbilled_all"
+                  stroke="#d97706"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, strokeWidth: 1.5, stroke: 'var(--color-surface)', fill: '#d97706' }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+                  isAnimationActive={false}
+                />
+              </>
+            ) : isYatiKiki ? (
+              <>
+                <Line
+                  name={`📄 ${t('billing.sjReceived')} (Total)`}
+                  type="monotone"
+                  dataKey="sj_yatiKiki"
+                  stroke="#0284c7"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, strokeWidth: 1.5, stroke: 'var(--color-surface)', fill: '#0284c7' }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  name={`🧾 Yati - ${t('billing.billCreated')}`}
+                  type="monotone"
+                  dataKey="bill_yati"
+                  stroke="#e11d48"
+                  strokeWidth={2.5}
+                  strokeDasharray="5 4"
+                  dot={{ r: 3, strokeWidth: 1.5, stroke: 'var(--color-surface)', fill: '#e11d48' }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  name={`🧾 Kiki - ${t('billing.billCreated')}`}
+                  type="monotone"
+                  dataKey="bill_kiki"
+                  stroke="#d97706"
+                  strokeWidth={2.5}
+                  strokeDasharray="4 4"
+                  dot={{ r: 3, strokeWidth: 1.5, stroke: 'var(--color-surface)', fill: '#d97706' }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  name={`⏳ ${t('billing.unbilled')} (Yati & Kiki)`}
+                  type="monotone"
+                  dataKey="unbilled_yatiKiki"
+                  stroke="#059669"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, strokeWidth: 1.5, stroke: 'var(--color-surface)', fill: '#059669' }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+                  isAnimationActive={false}
+                />
+              </>
+            ) : (
+              <>
+                <Line
+                  name={`📄 ${t('billing.sjReceived')}`}
+                  type="monotone"
+                  dataKey={`sj_${activeSjPic}`}
+                  stroke="#0284c7"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, strokeWidth: 1.5, stroke: 'var(--color-surface)', fill: '#0284c7' }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  name={`🧾 ${t('billing.billCreated')}`}
+                  type="monotone"
+                  dataKey={`bill_${activeSjPic}`}
+                  stroke="#e11d48"
+                  strokeWidth={2.5}
+                  strokeDasharray="5 4"
+                  dot={{ r: 3, strokeWidth: 1.5, stroke: 'var(--color-surface)', fill: '#e11d48' }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+                  isAnimationActive={false}
+                />
+                <Line
+                  name={`⏳ ${t('billing.unbilled')}`}
+                  type="monotone"
+                  dataKey={`unbilled_${activeSjPic}`}
+                  stroke="#d97706"
+                  strokeWidth={2.5}
+                  dot={{ r: 3, strokeWidth: 1.5, stroke: 'var(--color-surface)', fill: '#d97706' }}
+                  activeDot={{ r: 5, strokeWidth: 2, stroke: 'var(--color-surface)' }}
+                  isAnimationActive={false}
+                />
+              </>
+            )}
+          </LineChart>
+        </ResponsiveContainer>
       </div>
     </div>
   )
+
+  if (embedded) {
+    return content
+  }
+
+  return (
+    <div className="p-3 sm:p-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] shadow-2xs">
+      {content}
+    </div>
+  )
 }
+

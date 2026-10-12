@@ -9,6 +9,7 @@ import {
   findCustomerMarkingOverrideUpload,
   isMarkingGreaterOrEqual,
 } from './marking-matcher'
+import { normalizeBranchCode } from '../m3-check/m3-check.service'
 import type { PriceLookupResponse } from './price-list.types'
 
 export { normalizeMode, isMarkingGreaterOrEqual }
@@ -355,17 +356,28 @@ export async function lookupPriceByEntry(listCode: string): Promise<PriceLookupR
   if (fdListType === 1) expectedMode = 'BY AIR'
   else if (fdListType === 2) expectedMode = 'BY SEA'
 
-  let expectedBranch: string | null = null
-  const branchName = entry.fdBranchName ? String(entry.fdBranchName).trim() : ''
-  const branchCode = entry.fdBranchCode ? String(entry.fdBranchCode).trim() : ''
-  const bCombined = `${branchName} ${branchCode}`.toUpperCase()
+  // Acuan Master Price List: gunakan fdBranchCode dari tbBilling (-- dan SG adalah SG)
+  const billingRow = await safeRunRaw<any[]>(
+    () => prisma.$queryRaw<any[]>`
+      SELECT TOP 1 RTRIM(fdBranchCode) as fdBranchCode
+      FROM tbBilling WITH (NOLOCK)
+      WHERE fdListCode = CAST(${cleanListCode} AS CHAR(7))
+         OR fdInvNo = CAST(${cleanListCode} AS CHAR(20))
+      ORDER BY fdInvDate DESC
+    `,
+    'lookupPriceByEntry_fetchBilling',
+  )
 
-  if (bCombined.includes('GZ') || bCombined.includes('GUANGZHOU')) expectedBranch = 'GZ'
-  else if (bCombined.includes('HK') || bCombined.includes('HONGKONG')) expectedBranch = 'HK'
-  else if (bCombined.includes('SG') || bCombined.includes('SINGAPORE')) expectedBranch = 'SG'
-  else if (bCombined.includes('SH') || bCombined.includes('SHANGHAI')) expectedBranch = 'SH'
-  else if (bCombined.includes('YW') || bCombined.includes('YIWU')) expectedBranch = 'YW'
-  else if (branchCode) expectedBranch = branchCode.toUpperCase()
+  let expectedBranch: string | null = null
+  if (billingRow && billingRow.length > 0 && billingRow[0].fdBranchCode) {
+    expectedBranch = normalizeBranchCode(billingRow[0].fdBranchCode)
+  }
+
+  if (!expectedBranch) {
+    const branchName = entry.fdBranchName ? String(entry.fdBranchName).trim() : ''
+    const branchCode = entry.fdBranchCode ? String(entry.fdBranchCode).trim() : ''
+    expectedBranch = normalizeBranchCode(branchCode) || normalizeBranchCode(branchName) || null
+  }
 
   // 2. Fetch all commodity types from tbTypeComodity
   const comodityRows = await safeRunRaw<any[]>(

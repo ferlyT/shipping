@@ -36,6 +36,7 @@ export async function getMarkings(query: Record<string, string | undefined>) {
     const where: any = {}
 
     if (search) {
+      const cleanSearch = search.replace(/[^A-Za-z0-9]/g, '').trim()
       where.OR = [
         { fdMarkingCode: { contains: search } },
         { fdBLNo: { contains: search } },
@@ -46,6 +47,13 @@ export async function getMarkings(query: Record<string, string | undefined>) {
         { fdBranchCode: { contains: search } },
         { fdWilayah: { contains: search } },
       ]
+      if (cleanSearch && cleanSearch !== search) {
+        where.OR.push(
+          { fdMarkingCode: { contains: cleanSearch } },
+          { fdContNo: { contains: cleanSearch } },
+          { fdBLNo: { contains: cleanSearch } },
+        )
+      }
     }
 
     if (listType !== undefined && listType !== '' && listType !== 'ALL') {
@@ -924,7 +932,6 @@ export async function getMarkingBatchAllDimensions(markingCode: string) {
       komplain: komplainRows || [],
     }
   } catch (error) {
-    logger.error(`Error in getMarkingBatchAllDimensions for marking ${markingCode}:`, error)
     return {
       markingCode: cleanCode,
       gudang: [],
@@ -933,5 +940,81 @@ export async function getMarkingBatchAllDimensions(markingCode: string) {
     }
   }
 }
+
+/**
+ * Update Exit Date pada tbMarking
+ * - Validasi batch ada di database
+ * - Validasi tanggal kronologis: newExitDate >= fdLoadDate & newExitDate >= fdETD
+ * - Validasi future date: maksimal 3 hari ke depan dari hari ini
+ * - Update fdExitDate, fdUpdate = NOW(), fdUpdateBy = user
+ */
+export async function updateMarkingExitDate(
+  markingCode: string,
+  payload: { exitDate: string; notes?: string },
+  user: { username?: string; fullName?: string | null; role?: string }
+) {
+  const cleanCode = markingCode.trim()
+  const exitDateObj = new Date(payload.exitDate)
+  if (isNaN(exitDateObj.getTime())) {
+    throw new Error('Format tanggal exit tidak valid')
+  }
+
+  const marking = await prisma.tbMarking.findUnique({
+    where: { fdMarkingCode: cleanCode },
+  })
+
+  if (!marking) {
+    throw new Error(`Data batch marking "${cleanCode}" tidak ditemukan`)
+  }
+
+  // 1. Validasi Batas Kronologis (Back Date guard)
+  if (marking.fdLoadDate) {
+    const loadDate = new Date(marking.fdLoadDate)
+    loadDate.setHours(0, 0, 0, 0)
+    const checkExit = new Date(exitDateObj)
+    checkExit.setHours(0, 0, 0, 0)
+    if (checkExit < loadDate) {
+      const loadDateFormatted = loadDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+      throw new Error(`Tanggal exit tidak boleh lebih awal dari tanggal muat (${loadDateFormatted})`)
+    }
+  }
+
+  if (marking.fdETD) {
+    const etdDate = new Date(marking.fdETD)
+    etdDate.setHours(0, 0, 0, 0)
+    const checkExit = new Date(exitDateObj)
+    checkExit.setHours(0, 0, 0, 0)
+    if (checkExit < etdDate) {
+      const etdDateFormatted = etdDate.toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' })
+      throw new Error(`Tanggal exit tidak boleh lebih awal dari tanggal keberangkatan / ETD (${etdDateFormatted})`)
+    }
+  }
+
+  // 2. Validasi Future Date (Maksimal 3 hari ke depan)
+  const now = new Date()
+  const maxFutureDate = new Date(now)
+  maxFutureDate.setDate(maxFutureDate.getDate() + 3)
+  maxFutureDate.setHours(23, 59, 59, 999)
+
+  if (exitDateObj > maxFutureDate) {
+    throw new Error('Tanggal exit tidak boleh lebih dari 3 hari ke depan dari hari ini')
+  }
+
+  // 3. Update Database
+  const updatedBy = (user.username || user.fullName || 'MOBILE').trim().slice(0, 30)
+  const updated = await prisma.tbMarking.update({
+    where: { fdMarkingCode: cleanCode },
+    data: {
+      fdExitDate: exitDateObj,
+      fdUpdate: new Date(),
+      fdUpdateBy: updatedBy,
+    },
+  })
+
+  logger.info(`[Marking] Exit date updated for ${cleanCode} to ${exitDateObj.toISOString()} by ${updatedBy}`)
+
+  return updated
+}
+
 
 

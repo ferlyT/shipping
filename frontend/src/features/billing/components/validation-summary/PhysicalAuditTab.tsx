@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import {
   AlertTriangle,
   Check,
@@ -35,6 +35,18 @@ export interface PhysicalAuditTabProps {
   custCode?: string | null
   custName?: string | null
   onSelectInvoice?: (invNo: string) => void
+}
+
+function extractMarkingGroup(markingNo?: string | null): string {
+  if (!markingNo) return '(Tanpa Marking)'
+  const trimmed = markingNo.trim()
+  if (!trimmed) return '(Tanpa Marking)'
+  const colonIdx = trimmed.indexOf(':')
+  if (colonIdx !== -1) {
+    const prefix = trimmed.slice(0, colonIdx).trim()
+    return prefix || '(Tanpa Marking)'
+  }
+  return trimmed
 }
 
 export function PhysicalAuditTab({
@@ -92,6 +104,95 @@ export function PhysicalAuditTab({
   const resolvedMarkingCode = markingCode || res?.customer?.fdMarkingCode || res?.markingDetails?.[0]?.fdMarkingNo || ''
   const effectiveCustCode = custCode || res?.customer?.fdCustCode || ''
   const effectiveCustName = custName || res?.customer?.fdCustName || ''
+
+  // Grouping fdMarkingNo berdasarkan string sebelum karakter ":"
+  const markingGroups = useMemo(() => {
+    const breakdown = res?.relatedBillsSummary?.listCodeBreakdown || []
+    if (breakdown.length === 0) return []
+
+    const groupMap = new Map<string, typeof breakdown>()
+    for (const item of breakdown) {
+      const grp = extractMarkingGroup(item.fdMarkingNo)
+      if (!groupMap.has(grp)) {
+        groupMap.set(grp, [])
+      }
+      groupMap.get(grp)!.push(item)
+    }
+
+    const result: Array<{
+      groupName: string
+      items: typeof breakdown
+      subtotalM3Gudang: number
+      subtotalBerat: number
+      subtotalQty: number
+      subtotalBilledM3: number
+      allHaveBill: boolean
+      hasMissingBill: boolean
+    }> = []
+
+    for (const [groupName, items] of groupMap.entries()) {
+      const subtotalM3Gudang = items.reduce((acc, x) => acc + (x.m3Gudang || 0), 0)
+      const subtotalBerat = items.reduce((acc, x) => acc + (x.berat || 0), 0)
+      const subtotalQty = items.reduce((acc, x) => acc + (x.qty || 0), 0)
+      const subtotalBilledM3 = items.reduce((acc, x) => acc + (x.billedM3 || 0), 0)
+      const hasMissingBill = items.some((x) => !x.hasBill)
+      const allHaveBill = !hasMissingBill && items.length > 0
+
+      result.push({
+        groupName,
+        items,
+        subtotalM3Gudang,
+        subtotalBerat,
+        subtotalQty,
+        subtotalBilledM3,
+        allHaveBill,
+        hasMissingBill,
+      })
+    }
+
+    return result
+  }, [res?.relatedBillsSummary?.listCodeBreakdown])
+
+  const fallbackMarkingGroups = useMemo(() => {
+    const invoices = res?.relatedBillsSummary?.relatedInvoices || []
+    if (invoices.length === 0) return []
+
+    const groupMap = new Map<string, typeof invoices>()
+    for (const inv of invoices) {
+      const grp = extractMarkingGroup(inv.markingNo)
+      if (!groupMap.has(grp)) {
+        groupMap.set(grp, [])
+      }
+      groupMap.get(grp)!.push(inv)
+    }
+
+    const result: Array<{
+      groupName: string
+      items: typeof invoices
+      subtotalM3Gudang: number
+      subtotalBerat: number
+      subtotalQty: number
+      subtotalBilledM3: number
+    }> = []
+
+    for (const [groupName, items] of groupMap.entries()) {
+      const subtotalM3Gudang = items.reduce((acc, x) => acc + (x.m3Gudang || 0), 0)
+      const subtotalBerat = items.reduce((acc, x) => acc + (x.berat || 0), 0)
+      const subtotalQty = items.reduce((acc, x) => acc + (x.qty || 0), 0)
+      const subtotalBilledM3 = items.reduce((acc, x) => acc + (x.billedM3 || 0), 0)
+
+      result.push({
+        groupName,
+        items,
+        subtotalM3Gudang,
+        subtotalBerat,
+        subtotalQty,
+        subtotalBilledM3,
+      })
+    }
+
+    return result
+  }, [res?.relatedBillsSummary?.relatedInvoices])
 
   // Helper normalisasi min charge M3 (0.1) untuk pencocokan nilai kubikasi laut
   const normM3 = (v: number) => (v > 0 && v < 0.1 ? 0.1 : v)
@@ -238,6 +339,11 @@ export function PhysicalAuditTab({
               <span className="text-[10.5px] px-2.5 py-0.5 rounded-full bg-sky-500/15 text-sky-700 dark:text-sky-300 font-semibold border border-sky-500/30">
                 {res.relatedBillsSummary.isParent ? 'Invoice Induk' : `Invoice Pecahan (${res.relatedBillsSummary.childLetter || 'Anak'})`}
               </span>
+              {markingGroups.length > 0 && (
+                <span className="text-[10.5px] px-2.5 py-0.5 rounded-full bg-indigo-500/15 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-500/30">
+                  {markingGroups.length} Grup Marking
+                </span>
+              )}
             </div>
           </div>
 
@@ -248,6 +354,7 @@ export function PhysicalAuditTab({
                 <tr className="bg-[var(--color-surface-hover)] border-b border-[var(--color-border)] text-[10px] font-semibold text-[var(--color-secondary)] uppercase tracking-wider">
                   <th className="py-2 px-2.5">No. Invoice</th>
                   <th className="py-2 px-2">Posisi</th>
+                  <th className="py-2 px-2 font-mono">fdMarkingNo</th>
                   <th className="py-2 px-2 font-mono">fdListCode</th>
                   <th className="py-2 px-2 text-right">M³ Fisik</th>
                   <th className="py-2 px-2 text-right">Berat (kg)</th>
@@ -257,136 +364,224 @@ export function PhysicalAuditTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[var(--color-border)]">
-                {(res.relatedBillsSummary.listCodeBreakdown || []).length > 0 ? (
-                  res.relatedBillsSummary.listCodeBreakdown!.map((item) => {
-                    const isCur = item.isCurrent || (item.invNo && (invNo || '').replace(/^[\x00-\x1F]+/, '').trim() === item.invNo.replace(/^[\x00-\x1F]+/, '').trim())
-                    return (
-                      <tr
-                        key={item.listCode}
-                        className={`transition-colors ${
-                          isCur
-                            ? 'bg-sky-500/10 dark:bg-sky-950/40 font-semibold'
-                            : !item.hasBill
-                              ? 'bg-rose-500/5 dark:bg-rose-950/20'
-                              : 'hover:bg-[var(--color-surface-hover)]'
-                        }`}
-                      >
-                        <td className="py-1.5 px-2.5 font-mono">
-                          <div className="flex items-center gap-1.5">
-                            {item.invNo ? (
-                              onSelectInvoice ? (
-                                <button
-                                  type="button"
-                                  onClick={() => onSelectInvoice(item.invNo!)}
-                                  className="text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1 cursor-pointer font-medium"
-                                  title={`Buka invoice ${item.invNo}`}
-                                >
-                                  <span>{item.invNo}</span>
-                                  <ExternalLink className="w-2.5 h-2.5 opacity-60" />
-                                </button>
-                              ) : (
-                                <span>{item.invNo}</span>
-                              )
-                            ) : (
-                              <span className="text-[var(--color-secondary)] italic">—</span>
-                            )}
-                            {isCur && (
-                              <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30">
-                                Saat Ini
+                {markingGroups.length > 0 ? (
+                  markingGroups.map((grp) => (
+                    <Fragment key={grp.groupName}>
+                      {/* Sub-header Pemisah Grup Prefix Marking */}
+                      <tr className="bg-sky-500/10 dark:bg-sky-950/50 border-t-2 border-b border-sky-500/30 text-[10.5px] font-semibold">
+                        <td colSpan={4} className="py-1.5 px-2.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[12px]">📦</span>
+                            <span className="font-mono font-bold text-sky-900 dark:text-sky-200">
+                              {grp.groupName}
+                            </span>
+                            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-800 dark:text-sky-300 font-mono font-bold">
+                              {grp.items.length} ListCode
+                            </span>
+                            {grp.hasMissingBill && (
+                              <span className="text-[8.5px] px-1.5 py-0.2 rounded-full bg-rose-500/20 text-rose-700 dark:text-rose-300 font-bold border border-rose-500/30 animate-pulse">
+                                Missing Bill
                               </span>
                             )}
                           </div>
                         </td>
-                        <td className="py-1.5 px-2">
-                          {item.isParent ? (
-                            <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-700 dark:text-sky-300 font-semibold border border-sky-500/20">
-                              Induk
-                            </span>
-                          ) : item.childLetter ? (
-                            <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-500/20">
-                              Pecahan {item.childLetter}
-                            </span>
-                          ) : (
-                            <span className="text-[var(--color-secondary)] text-[10px]">—</span>
-                          )}
+                        <td className="py-1.5 px-2 text-right tabular-nums text-emerald-800 dark:text-emerald-300 font-bold">
+                          {formatDecimal(grp.subtotalM3Gudang, 4)} m³
                         </td>
-                        <td className="py-1.5 px-2 font-mono tabular-nums text-[var(--color-primary)]">
-                          {item.listCode}
+                        <td className="py-1.5 px-2 text-right tabular-nums text-[var(--color-primary)] font-bold">
+                          {formatDecimal(grp.subtotalBerat, 2)} kg
                         </td>
-                        <td className="py-1.5 px-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">
-                          {formatDecimal(item.m3Gudang, 4)} m³
+                        <td className="py-1.5 px-2 text-right tabular-nums text-[var(--color-primary)] font-bold">
+                          {formatNumber(grp.subtotalQty)}
                         </td>
-                        <td className="py-1.5 px-2 text-right tabular-nums">
-                          {formatDecimal(item.berat, 2)} kg
-                        </td>
-                        <td className="py-1.5 px-2 text-right tabular-nums">
-                          {formatNumber(item.qty)}
-                        </td>
-                        <td className="py-1.5 px-2 text-right tabular-nums">
-                          {item.billedM3 > 0 ? (
-                            <span className="text-sky-700 dark:text-sky-300 font-semibold">
-                              {formatDecimal(item.billedM3, 4)} m³
-                            </span>
-                          ) : item.firstItemName ? (
-                            <span className="text-[10px] text-[var(--color-secondary)] truncate max-w-[130px] inline-block" title={item.firstItemName}>
-                              {item.firstItemName}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-[var(--color-secondary)] italic">Digabung</span>
-                          )}
+                        <td className="py-1.5 px-2 text-right tabular-nums text-sky-800 dark:text-sky-300 font-bold">
+                          {grp.subtotalBilledM3 > 0 ? `${formatDecimal(grp.subtotalBilledM3, 4)} m³` : '—'}
                         </td>
                         <td className="py-1.5 px-2.5 text-center">
-                          {item.hasBill ? (
-                            <span className="inline-flex items-center gap-1 text-[9.5px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.2">
-                              <span>✓</span>
-                              <span>Ada Bill</span>
+                          {grp.allHaveBill ? (
+                            <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                              ✓ Lengkap
                             </span>
                           ) : (
-                            <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-rose-700 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30 rounded-full px-2 py-0.2 animate-pulse">
-                              <span>✕</span>
-                              <span>Belum Ada Bill</span>
+                            <span className="text-[9px] font-bold text-rose-700 dark:text-rose-400 bg-rose-500/15 px-1.5 py-0.2 rounded border border-rose-500/30">
+                              Belum Lengkap
                             </span>
                           )}
                         </td>
                       </tr>
-                    )
-                  })
-                ) : (
-                  /* Fallback bila listCodeBreakdown belum tersedia */
-                  res.relatedBillsSummary.relatedInvoices.map((inv) => (
-                    <tr key={inv.invNo} className="hover:bg-[var(--color-surface-hover)]">
-                      <td className="py-1.5 px-2.5 font-mono">{inv.invNo}</td>
-                      <td className="py-1.5 px-2">
-                        <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-700 dark:text-sky-300 font-semibold border border-sky-500/20">
-                          {inv.isParent ? 'Induk' : 'Pecahan'}
-                        </span>
-                      </td>
-                      <td className="py-1.5 px-2 font-mono tabular-nums">{inv.listCode || '—'}</td>
-                      <td className="py-1.5 px-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">
-                        {inv.m3Gudang !== undefined ? `${formatDecimal(inv.m3Gudang, 4)} m³` : '—'}
-                      </td>
-                      <td className="py-1.5 px-2 text-right tabular-nums">
-                        {inv.berat !== undefined ? `${formatDecimal(inv.berat, 2)} kg` : '—'}
-                      </td>
-                      <td className="py-1.5 px-2 text-right tabular-nums">
-                        {inv.qty !== undefined ? formatNumber(inv.qty) : '—'}
-                      </td>
-                      <td className="py-1.5 px-2 text-right tabular-nums">
-                        {inv.billedM3 > 0 ? `${formatDecimal(inv.billedM3, 4)} m³` : (inv.firstItemName || 'Digabung')}
-                      </td>
-                      <td className="py-1.5 px-2.5 text-center">
-                        <span className="inline-flex items-center gap-1 text-[9.5px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.2">
-                          <span>✓</span>
-                          <span>Ada Bill</span>
-                        </span>
-                      </td>
-                    </tr>
+
+                      {/* Baris-baris data dalam grup */}
+                      {grp.items.map((item) => {
+                        const isCur = item.isCurrent || (item.invNo && (invNo || '').replace(/^[\x00-\x1F]+/, '').trim() === item.invNo.replace(/^[\x00-\x1F]+/, '').trim())
+                        return (
+                          <tr
+                            key={item.listCode}
+                            className={`transition-colors ${
+                              isCur
+                                ? 'bg-sky-500/10 dark:bg-sky-950/40 font-semibold'
+                                : !item.hasBill
+                                  ? 'bg-rose-500/5 dark:bg-rose-950/20'
+                                  : 'hover:bg-[var(--color-surface-hover)]'
+                            }`}
+                          >
+                            <td className="py-1.5 px-2.5 font-mono">
+                              <div className="flex items-center gap-1.5">
+                                {item.invNo ? (
+                                  onSelectInvoice ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => onSelectInvoice(item.invNo!)}
+                                      className="text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1 cursor-pointer font-medium"
+                                      title={`Buka invoice ${item.invNo}`}
+                                    >
+                                      <span>{item.invNo}</span>
+                                      <ExternalLink className="w-2.5 h-2.5 opacity-60" />
+                                    </button>
+                                  ) : (
+                                    <span>{item.invNo}</span>
+                                  )
+                                ) : (
+                                  <span className="text-[var(--color-secondary)] italic">—</span>
+                                )}
+                                {isCur && (
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-700 dark:text-sky-300 border border-sky-500/30">
+                                    Saat Ini
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-1.5 px-2">
+                              {item.isParent ? (
+                                <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-700 dark:text-sky-300 font-semibold border border-sky-500/20">
+                                  Induk
+                                </span>
+                              ) : item.childLetter ? (
+                                <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-indigo-500/10 text-indigo-700 dark:text-indigo-300 font-semibold border border-indigo-500/20">
+                                  Pecahan {item.childLetter}
+                                </span>
+                              ) : (
+                                <span className="text-[var(--color-secondary)] text-[10px]">—</span>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-2 font-mono text-[var(--color-secondary)]">
+                              {item.fdMarkingNo || '—'}
+                            </td>
+                            <td className="py-1.5 px-2 font-mono tabular-nums text-[var(--color-primary)]">
+                              {item.listCode}
+                            </td>
+                            <td className="py-1.5 px-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">
+                              {formatDecimal(item.m3Gudang, 4)} m³
+                            </td>
+                            <td className="py-1.5 px-2 text-right tabular-nums">
+                              {formatDecimal(item.berat, 2)} kg
+                            </td>
+                            <td className="py-1.5 px-2 text-right tabular-nums">
+                              {formatNumber(item.qty)}
+                            </td>
+                            <td className="py-1.5 px-2 text-right tabular-nums">
+                              {item.billedM3 > 0 ? (
+                                <span className="text-sky-700 dark:text-sky-300 font-semibold">
+                                  {formatDecimal(item.billedM3, 4)} m³
+                                </span>
+                              ) : item.firstItemName ? (
+                                <span className="text-[10px] text-[var(--color-secondary)] truncate max-w-[130px] inline-block" title={item.firstItemName}>
+                                  {item.firstItemName}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-[var(--color-secondary)] italic">Digabung</span>
+                              )}
+                            </td>
+                            <td className="py-1.5 px-2.5 text-center">
+                              {item.hasBill ? (
+                                <span className="inline-flex items-center gap-1 text-[9.5px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.2">
+                                  <span>✓</span>
+                                  <span>Ada Bill</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 text-[9.5px] font-bold text-rose-700 dark:text-rose-400 bg-rose-500/15 border border-rose-500/30 rounded-full px-2 py-0.2 animate-pulse">
+                                  <span>✕</span>
+                                  <span>Belum Ada Bill</span>
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </Fragment>
                   ))
-                )}
+                ) : fallbackMarkingGroups.length > 0 ? (
+                  /* Fallback bila listCodeBreakdown belum tersedia */
+                  fallbackMarkingGroups.map((grp) => (
+                    <Fragment key={grp.groupName}>
+                      {/* Sub-header Pemisah Grup Prefix Marking Fallback */}
+                      <tr className="bg-sky-500/10 dark:bg-sky-950/50 border-t-2 border-b border-sky-500/30 text-[10.5px] font-semibold">
+                        <td colSpan={4} className="py-1.5 px-2.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[12px]">📦</span>
+                            <span className="font-mono font-bold text-sky-900 dark:text-sky-200">
+                              {grp.groupName}
+                            </span>
+                            <span className="text-[9px] px-1.5 py-0.2 rounded-full bg-sky-500/20 text-sky-800 dark:text-sky-300 font-mono font-bold">
+                              {grp.items.length} Invoice
+                            </span>
+                          </div>
+                        </td>
+                        <td className="py-1.5 px-2 text-right tabular-nums text-emerald-800 dark:text-emerald-300 font-bold">
+                          {formatDecimal(grp.subtotalM3Gudang, 4)} m³
+                        </td>
+                        <td className="py-1.5 px-2 text-right tabular-nums text-[var(--color-primary)] font-bold">
+                          {formatDecimal(grp.subtotalBerat, 2)} kg
+                        </td>
+                        <td className="py-1.5 px-2 text-right tabular-nums text-[var(--color-primary)] font-bold">
+                          {formatNumber(grp.subtotalQty)}
+                        </td>
+                        <td className="py-1.5 px-2 text-right tabular-nums text-sky-800 dark:text-sky-300 font-bold">
+                          {grp.subtotalBilledM3 > 0 ? `${formatDecimal(grp.subtotalBilledM3, 4)} m³` : '—'}
+                        </td>
+                        <td className="py-1.5 px-2.5 text-center">
+                          <span className="text-[9px] font-bold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 px-1.5 py-0.2 rounded border border-emerald-500/20">
+                            ✓ Terdata
+                          </span>
+                        </td>
+                      </tr>
+
+                      {grp.items.map((inv) => (
+                        <tr key={inv.invNo} className="hover:bg-[var(--color-surface-hover)]">
+                          <td className="py-1.5 px-2.5 font-mono">{inv.invNo}</td>
+                          <td className="py-1.5 px-2">
+                            <span className="text-[9.5px] px-1.5 py-0.2 rounded bg-sky-500/10 text-sky-700 dark:text-sky-300 font-semibold border border-sky-500/20">
+                              {inv.isParent ? 'Induk' : 'Pecahan'}
+                            </span>
+                          </td>
+                          <td className="py-1.5 px-2 font-mono text-[var(--color-secondary)]">{inv.markingNo || '—'}</td>
+                          <td className="py-1.5 px-2 font-mono tabular-nums">{inv.listCode || '—'}</td>
+                          <td className="py-1.5 px-2 text-right tabular-nums text-emerald-700 dark:text-emerald-400 font-medium">
+                            {inv.m3Gudang !== undefined ? `${formatDecimal(inv.m3Gudang, 4)} m³` : '—'}
+                          </td>
+                          <td className="py-1.5 px-2 text-right tabular-nums">
+                            {inv.berat !== undefined ? `${formatDecimal(inv.berat, 2)} kg` : '—'}
+                          </td>
+                          <td className="py-1.5 px-2 text-right tabular-nums">
+                            {inv.qty !== undefined ? formatNumber(inv.qty) : '—'}
+                          </td>
+                          <td className="py-1.5 px-2 text-right tabular-nums">
+                            {inv.billedM3 > 0 ? `${formatDecimal(inv.billedM3, 4)} m³` : (inv.firstItemName || 'Digabung')}
+                          </td>
+                          <td className="py-1.5 px-2.5 text-center">
+                            <span className="inline-flex items-center gap-1 text-[9.5px] font-semibold text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.2">
+                              <span>✓</span>
+                              <span>Ada Bill</span>
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </Fragment>
+                  ))
+                ) : null}
               </tbody>
               <tfoot>
                 <tr className="bg-[var(--color-surface-hover)] border-t-2 border-[var(--color-border)] font-bold text-[11px]">
-                  <td colSpan={3} className="py-2.5 px-2.5 text-[var(--color-primary)]">
+                  <td colSpan={4} className="py-2.5 px-2.5 text-[var(--color-primary)]">
                     Total Rekapitulasi ({res.relatedBillsSummary.totalListCodesCount || res.relatedBillsSummary.relatedListCodes.length} ListCode)
                   </td>
                   <td className="py-2.5 px-2 text-right text-emerald-700 dark:text-emerald-400 tabular-nums">

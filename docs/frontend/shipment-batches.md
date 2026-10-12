@@ -34,7 +34,7 @@ Modernisasi form Visual FoxPro `frm_entrylistdetail_per_marking.scx` untuk menga
 
 1. **Toolbar Autocomplete & State Awal Bersih (`MarkingSizeToolbar.tsx`)**:
    - Menu Sidebar: **Batch Marking** $\to$ **Audit Ukuran & Tonase** (`ROUTES.SHIPMENT_BATCH_MARKING_SIZE`).
-   - Autocomplete kode batch marking real-time via `/api/marking/suggestions`, navigasi keyboard (Up/Down/Enter), dan sinkronisasi parameter URL `?code=...`.
+   - Autocomplete kode batch marking real-time via `/api/marking/suggestions`, navigasi keyboard (Up/Down/Enter), tombol aksi **Tampilkan** (`Show`), dan sinkronisasi parameter URL `?code=...`.
    - Pengurutan data: Sortir berdasarkan `ListCode` (Sort 1) vs `Nama Customer` (Sort 2).
    - Tombol ekspor Excel 4 sheet dan tombol refresh.
 2. **5 Kartu KPI Ringkasan Adaptif (`MarkingSizeKpiSection.tsx`)**:

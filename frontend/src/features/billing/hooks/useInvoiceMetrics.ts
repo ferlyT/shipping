@@ -87,17 +87,21 @@ export function useInvoiceMetrics({ details, validationData, expedisiList }: Use
     if ((!validationData && (!expedisiList || expedisiList.length === 0)) || details.length === 0) return []
 
     const isAir = validationData?.fdListType === 1 || validationData?.expectedMode === 'BY AIR'
-    const defaultTypeId = validationData?.defaultFdTypeComodity ?? validationData?.markingComodityType ?? null
-    const defaultComodityName = validationData?.markingComodities?.[0]?.fdComodityName || '—'
+    const entryListTypeId = validationData?.entryListTypeComodity ?? validationData?.defaultFdTypeComodity ?? null
+    const defaultTypeId = entryListTypeId ?? validationData?.markingComodityType ?? null
+    const defaultComodityName = validationData?.entryListComodityName || validationData?.markingComodities?.[0]?.fdComodityName || '—'
 
     return details
-      .map((row) => {
+      .map((row, idx) => {
         const evalRes = evaluateItemPrice(row, {
           res: validationData,
           isAir,
           defaultTypeId,
           defaultComodityName,
           expedisiList,
+          itemIndex: idx,
+          entryListTypeId,
+          entryListComodityName: validationData?.entryListComodityName,
         })
         if (evalRes.statusType !== 'LOWER') return null
         return {

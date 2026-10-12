@@ -1,22 +1,17 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { Menu, LogOut, Bell, Mic } from 'lucide-react'
+import { Menu, LogOut, Bell } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { useLangStore } from '@/stores/langStore'
-import { useVoiceAssistantStore } from '@/stores/voiceAssistantStore'
 import { useTranslation } from '@/hooks/useTranslation'
 import { getInitials, resolveMediaUrl } from '@/lib/utils'
 import { ROUTES } from '@/lib/constants'
-
-import { useVoiceAssistantPermission } from '@/hooks/useVoiceAssistantPermission'
 
 import { ThemeToggle } from './ThemeToggle'
 
 export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   const { user, logout } = useAuthStore()
   const { lang, toggleLang } = useLangStore()
-  const { openAssistant, displayMode } = useVoiceAssistantStore()
-  const canUseVoice = useVoiceAssistantPermission()
   const { t } = useTranslation()
   const [imgError, setImgError] = useState(false)
 
@@ -41,19 +36,6 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Global Voice Assistant Button - Otorisasi Role & Sembunyikan saat di HUD Mode */}
-        {canUseVoice && displayMode !== 'hud' && (
-          <button
-            type="button"
-            onClick={openAssistant}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 text-sky-600 dark:text-sky-400 hover:bg-sky-500/20 text-xs font-semibold shadow-2xs transition-all cursor-pointer"
-            title={`${t('topbar.voiceAssistant')} (Alt+V)`}
-          >
-            <Mic className="w-3.5 h-3.5 animate-pulse" />
-            <span className="hidden md:inline">{t('topbar.voiceAssistant')}</span>
-          </button>
-        )}
-
         {/* Theme Quick Switcher */}
         <ThemeToggle />
 

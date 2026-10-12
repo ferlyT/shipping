@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import {
   View,
   Text,
@@ -12,11 +12,12 @@ import {
   Keyboard,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
+import { useLocalSearchParams } from 'expo-router'
 import { useQuery } from '@tanstack/react-query'
 import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import * as Haptics from 'expo-haptics'
-import { X, User, Search } from 'lucide-react-native'
+import { X, User, Search, Receipt, CheckCircle2, Calculator } from 'lucide-react-native'
 import { Card } from '../../src/components/ui/Card'
 import { Badge } from '../../src/components/ui/Badge'
 import { ErrorRetryCard } from '../../src/components/ui/ErrorRetryCard'
@@ -29,15 +30,23 @@ import { useThemeStore } from '../../src/theme/themeStore'
 import { useToastStore } from '../../src/stores/toastStore'
 import { useTranslation } from '../../src/hooks/useTranslation'
 import { canViewBillingValidation } from '../../src/lib/permissions'
-import { formatCurrency, formatNumber, formatDecimal, formatDate, displayCustName } from '../../src/lib/utils'
+import { formatCurrency, formatNumber, formatDecimal, formatDate, displayCustName, copyToClipboard } from '../../src/lib/utils'
 import { BillingListItem } from '../../src/features/finance/components/BillingListItem'
 import { ValidationListItem } from '../../src/features/finance/components/ValidationListItem'
 import { InvoiceDetailSheet } from '../../src/features/finance/components/InvoiceDetailSheet'
+import { BillingAttachmentSheet } from '../../src/features/finance/components/BillingAttachmentSheet'
 import { useBillingsQuery } from '../../src/features/finance/hooks/useBillings'
 import { useDebounce } from '../../src/hooks/useDebounce'
 import apiClient from '../../src/api/client'
 
+const FINANCE_TABS = [
+  { key: 'billing', label: 'Invoice', icon: Receipt, permissionCheck: false },
+  { key: 'validation', label: 'Validasi', icon: CheckCircle2, permissionCheck: true },
+  { key: 'priceLookup', label: 'Cek Tarif', icon: Calculator, permissionCheck: false },
+] as const
+
 export default function FinanceScreen() {
+  const routeParams = useLocalSearchParams<{ tab?: string; search?: string; t?: string }>()
   const { user } = useAuthStore()
   const { colors, mode } = useThemeStore()
   const { showToast } = useToastStore()
@@ -47,9 +56,19 @@ export default function FinanceScreen() {
 
   const [activeTab, setActiveTab] = useState<'billing' | 'validation' | 'priceLookup'>('billing')
   const [search, setSearch] = useState('')
+
+  useEffect(() => {
+    if (routeParams.tab === 'validation' || routeParams.tab === 'billing' || routeParams.tab === 'priceLookup') {
+      setActiveTab(routeParams.tab)
+    }
+    if (routeParams.search !== undefined) {
+      setSearch(routeParams.search)
+    }
+  }, [routeParams.tab, routeParams.search, routeParams.t])
   const debouncedSearch = useDebounce(search, 300)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [selectedInvoice, setSelectedInvoice] = useState<any | null>(null)
+  const [attachmentInvoice, setAttachmentInvoice] = useState<{ invNo: string; custName?: string } | null>(null)
   const [isPrinting, setIsPrinting] = useState(false)
 
   // Price Lookup states
@@ -164,7 +183,9 @@ export default function FinanceScreen() {
     }
   }
 
-  const copyInvoiceNo = (invNo: string) => {
+  const copyInvoiceNo = async (invNo: string) => {
+    if (!invNo) return
+    await copyToClipboard(invNo)
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     showToast(`No. Invoice ${invNo} berhasil disalin`, 'success')
   }
@@ -215,21 +236,57 @@ export default function FinanceScreen() {
   return (
     <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
       <View style={styles.container}>
-        {/* Header */}
+        {/* Header Bersih Gaya Dashboard */}
         <View style={styles.topSection}>
-          <Text style={[styles.pageTitle, { color: colors.primary }]}>
-            {t('finance.title', 'Keuangan & Billing')}
+          <Text style={[styles.overlineText, { color: colors.secondary }]}>
+            Finansial & penagihan
           </Text>
-          <SegmentedControl
-            options={[
-              { label: t('finance.billing', 'Daftar Invoice'), value: 'billing' },
-              ...(canAuditValidation ? [{ label: t('finance.validation', 'Audit Validasi'), value: 'validation' }] : []),
-              { label: t('finance.priceLookup', 'Cek Tarif'), value: 'priceLookup' },
+          <Text style={[styles.pageTitle, { color: colors.primary }]}>
+            {t('finance.title', 'Keuangan & billing')}
+          </Text>
+
+          {/* Tab Strip Editorial (Teks Bersih, Underline 2px Aksen Bata) */}
+          <View
+            style={[
+              styles.tabBarContainer,
+              { borderBottomColor: isDark ? '#222C38' : '#E3E7EC' },
             ]}
-            selectedValue={activeTab}
-            onValueChange={(val) => { setActiveTab(val as any); setSearch('') }}
-            style={{ marginTop: 10 }}
-          />
+          >
+            {FINANCE_TABS.filter((tab) => !tab.permissionCheck || canAuditValidation).map((tab) => {
+              const isActive = activeTab === tab.key
+
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.selectionAsync()
+                    setActiveTab(tab.key as any)
+                    setSearch('')
+                  }}
+                  style={styles.tabItem}
+                >
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      {
+                        color: isActive ? colors.primary : colors.secondary,
+                        fontWeight: isActive ? '600' : '500',
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                  {isActive ? (
+                    <View style={styles.activeIndicator} />
+                  ) : (
+                    <View style={styles.inactiveIndicatorPlaceholder} />
+                  )}
+                </TouchableOpacity>
+              )
+            })}
+          </View>
 
           {activeTab !== 'priceLookup' && (
             <>
@@ -296,7 +353,18 @@ export default function FinanceScreen() {
                 </Card>
               )
             }
-            renderItem={({ item }) => <BillingListItem item={item} onPress={setSelectedInvoice} />}
+            renderItem={({ item }) => (
+              <BillingListItem
+                item={item}
+                onPress={setSelectedInvoice}
+                onPressAttachment={(inv) => {
+                  setAttachmentInvoice({
+                    invNo: inv.fdInvNo,
+                    custName: displayCustName(inv.customer?.fdCustName || inv.fdCustName || inv.fdBillTo),
+                  })
+                }}
+              />
+            )}
           />
         )}
 
@@ -579,6 +647,14 @@ export default function FinanceScreen() {
           onClose={() => setSelectedInvoice(null)}
           onCopyInvoiceNo={copyInvoiceNo}
         />
+
+        {/* Quick Billing Attachment Sheet from List */}
+        <BillingAttachmentSheet
+          invNo={attachmentInvoice?.invNo || null}
+          custName={attachmentInvoice?.custName}
+          visible={Boolean(attachmentInvoice)}
+          onClose={() => setAttachmentInvoice(null)}
+        />
       </View>
     </SafeAreaView>
   )
@@ -587,9 +663,50 @@ export default function FinanceScreen() {
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { flex: 1 },
-  topSection: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 10 },
-  pageTitle: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
-  listContent: { padding: 16, gap: 10, paddingBottom: 36 },
+  topSection: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
+  overlineText: {
+    fontSize: 13,
+    fontWeight: '400',
+    marginBottom: 2,
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  tabBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderBottomWidth: 1,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    position: 'relative',
+  },
+  tabLabel: {
+    fontSize: 13.5,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#E0644E',
+  },
+  inactiveIndicatorPlaceholder: {
+    height: 2,
+    width: '100%',
+    backgroundColor: 'transparent',
+  },
+  listContent: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 36 },
   emptyCard: { alignItems: 'center', padding: 30 },
   calcContainer: { padding: 16, paddingBottom: 36 },
   calcInput: { borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, height: 42, fontSize: 13 },

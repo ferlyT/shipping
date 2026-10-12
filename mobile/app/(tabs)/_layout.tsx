@@ -1,6 +1,6 @@
 import React from 'react'
 import { Tabs, Redirect } from 'expo-router'
-import { Platform } from 'react-native'
+import { Platform, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { LayoutDashboard, Truck, FileText, Users, Settings } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
@@ -40,18 +40,19 @@ export default function TabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.tabBarBg,
           borderTopColor: colors.tabBarBorder,
-          borderTopWidth: 1,
+          borderTopWidth: StyleSheet.hairlineWidth,
           height: tabBarHeight,
           paddingBottom: bottomInset,
-          paddingTop: 4,
-          elevation: 8,
+          paddingTop: 5,
+          elevation: 0,
         },
         tabBarActiveTintColor: colors.tabBarActive,
         tabBarInactiveTintColor: colors.tabBarInactive,
         tabBarLabelStyle: {
-          fontSize: 10.5,
-          fontWeight: '600',
-          marginTop: 1,
+          fontSize: 10,
+          fontWeight: '700',
+          letterSpacing: 0.2,
+          marginTop: 2,
           marginBottom: 1,
         },
         tabBarItemStyle: {
@@ -71,7 +72,7 @@ export default function TabsLayout() {
         options={{
           title: t('tab.overview', 'Overview'),
           tabBarLabel: t('tab.overview', 'Overview'),
-          tabBarIcon: ({ color }) => <LayoutDashboard size={20} color={color} />,
+          tabBarIcon: ({ color }) => <LayoutDashboard size={19} color={color} strokeWidth={1.75} />,
         }}
       />
       <Tabs.Screen
@@ -80,7 +81,7 @@ export default function TabsLayout() {
           href: canLogistics ? '/(tabs)/logistics' : null,
           title: t('tab.logistics', 'Logistik'),
           tabBarLabel: t('tab.logistics', 'Logistik'),
-          tabBarIcon: ({ color }) => <Truck size={20} color={color} />,
+          tabBarIcon: ({ color }) => <Truck size={19} color={color} strokeWidth={1.75} />,
         }}
       />
       <Tabs.Screen
@@ -89,7 +90,7 @@ export default function TabsLayout() {
           href: canFinance ? '/(tabs)/finance' : null,
           title: t('tab.finance', 'Billing'),
           tabBarLabel: t('tab.finance', 'Billing'),
-          tabBarIcon: ({ color }) => <FileText size={20} color={color} />,
+          tabBarIcon: ({ color }) => <FileText size={19} color={color} strokeWidth={1.75} />,
         }}
       />
       <Tabs.Screen
@@ -98,7 +99,7 @@ export default function TabsLayout() {
           href: canMaster ? '/(tabs)/master' : null,
           title: t('tab.master', 'Master'),
           tabBarLabel: t('tab.master', 'Master'),
-          tabBarIcon: ({ color }) => <Users size={20} color={color} />,
+          tabBarIcon: ({ color }) => <Users size={19} color={color} strokeWidth={1.75} />,
         }}
       />
       <Tabs.Screen
@@ -106,7 +107,7 @@ export default function TabsLayout() {
         options={{
           title: t('tab.profile', 'Akun'),
           tabBarLabel: t('tab.profile', 'Akun'),
-          tabBarIcon: ({ color }) => <Settings size={20} color={color} />,
+          tabBarIcon: ({ color }) => <Settings size={19} color={color} strokeWidth={1.75} />,
         }}
       />
     </Tabs>

@@ -12,6 +12,7 @@ export const UpdateRolePermissionsSchema = z.object({
     z.object({
       path: z.string().min(1, 'Path izin tidak boleh kosong'),
       canView: z.boolean(),
+      isDefault: z.boolean().optional().default(false),
     })
   ).min(1, 'Daftar permissions tidak boleh kosong'),
 })

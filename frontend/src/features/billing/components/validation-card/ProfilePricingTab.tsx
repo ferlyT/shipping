@@ -30,6 +30,7 @@ export interface ProfilePricingTabProps {
   setSelectedNoteMode: (mode: 'air' | 'sea') => void
   setIsModalOpen: (open: boolean) => void
   onOpenAuditModal?: () => void
+  onOpenCustomerHargaModal?: () => void
 }
 
 export const ProfilePricingTab: React.FC<ProfilePricingTabProps> = ({
@@ -45,6 +46,7 @@ export const ProfilePricingTab: React.FC<ProfilePricingTabProps> = ({
   setSelectedNoteMode,
   setIsModalOpen,
   onOpenAuditModal,
+  onOpenCustomerHargaModal,
 }) => {
   const { t } = useTranslation()
 
@@ -73,9 +75,14 @@ export const ProfilePricingTab: React.FC<ProfilePricingTabProps> = ({
                       tbAuditHarga
                     </span>
                   ) : res.profileHarga.fdUpdateSource === 'CUSTOMER_HARGA' ? (
-                    <span className="px-1 py-0.2 rounded text-[8px] font-bold bg-sky-500/10 text-sky-600 border border-sky-500/30">
+                    <button
+                      type="button"
+                      onClick={() => onOpenCustomerHargaModal?.()}
+                      className="px-1 py-0.5 rounded text-[8px] font-bold bg-sky-500/10 text-sky-600 border border-sky-500/30 hover:bg-sky-500/20 cursor-pointer"
+                      title="Buka Tarif Acuan Customer (tbCustomersHarga)"
+                    >
                       tbCustomerHarga
-                    </span>
+                    </button>
                   ) : null}
                 </div>
               )}
@@ -341,6 +348,9 @@ export const ProfilePricingTab: React.FC<ProfilePricingTabProps> = ({
                 defaultComodityName,
                 branchCode,
                 invNo: invoiceNo,
+                itemIndex: idx,
+                entryListTypeId: res?.entryListTypeComodity ?? res?.defaultFdTypeComodity,
+                entryListComodityName: res?.entryListComodityName,
               })
               const {
                 comodityName,

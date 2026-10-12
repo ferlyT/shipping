@@ -2,7 +2,7 @@ import { useModalEscape } from '@/hooks/useModalEscape'
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
-import { X, Search, Plane, Ship, LayoutGrid, Check, ChevronRight, FileText, User, Mic, AlertTriangle, Loader2 } from 'lucide-react'
+import { X, Search, Plane, Ship, LayoutGrid, Check, ChevronRight, FileText, User, Mic, MicOff, AlertTriangle, Loader2 } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { EmptyState } from '@/components/ui/EmptyState'
 import { Badge } from '@/components/ui/Badge'
@@ -70,7 +70,7 @@ export function ValidationListDrawer({
   }, [isOpen])
   const rearmTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const { suppressVoice } = useVoiceAssistantStore()
+  const { suppressVoice, isMuted, toggleVoiceMute } = useVoiceAssistantStore()
 
   // Supresi asisten suara global selama drawer pencarian terbuka
   useEffect(() => {
@@ -107,11 +107,11 @@ export function ValidationListDrawer({
     continuous: true,
     interimResults: true,
     onEnd: () => {
-      // Auto re-arm saat drawer masih terbuka dan tidak dihentikan manual atau sedang proses aksi
-      if (isOpenRef.current && !isManuallyStoppedRef.current && !isProcessingActionRef.current) {
+      // Auto re-arm saat drawer masih terbuka dan tidak dihentikan manual atau sedang proses aksi dan TIDAK DALAM STATUS MUTED TERPUSAT
+      if (isOpenRef.current && !isManuallyStoppedRef.current && !isProcessingActionRef.current && !useVoiceAssistantStore.getState().isMuted) {
         if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
         rearmTimerRef.current = setTimeout(() => {
-          if (isOpenRef.current && !isManuallyStoppedRef.current && !isProcessingActionRef.current) {
+          if (isOpenRef.current && !isManuallyStoppedRef.current && !isProcessingActionRef.current && !useVoiceAssistantStore.getState().isMuted) {
             startVoiceListening()
           }
         }, 300)
@@ -128,7 +128,7 @@ export function ValidationListDrawer({
     setHardwareTest({ isRunning: false, result: res })
   }
 
-  // Otomatis aktifkan mikrofon seketika saat drawer dibuka agar bisa langsung bicara hands-free
+  // Otomatis aktifkan mikrofon seketika saat drawer dibuka HANYA JIKA mikrofon tidak dijeda terpusat (!isMuted)
   useEffect(() => {
     if (isOpen) {
       isProcessingActionRef.current = false
@@ -139,7 +139,8 @@ export function ValidationListDrawer({
       document.body.style.overflow = 'hidden'
       const timer = setTimeout(() => {
         inputRef.current?.focus()
-        if (isVoiceSupported && isOpenRef.current && !isManuallyStoppedRef.current) {
+        // KONTROL TERPUSAT: Jika isMuted bernilai true, jangan dengarkan mic
+        if (isVoiceSupported && isOpenRef.current && !isManuallyStoppedRef.current && !isMuted) {
           startVoiceListening()
         }
       }, 150)
@@ -155,7 +156,21 @@ export function ValidationListDrawer({
       stopVoiceListening()
       resetTranscript()
     }
-  }, [isOpen, isVoiceSupported, resetTranscript, startVoiceListening, stopVoiceListening])
+  }, [isOpen, isVoiceSupported, isMuted, resetTranscript, startVoiceListening, stopVoiceListening])
+
+  // KONTROL TERPUSAT: Bereaksi seketika terhadap perubahan isMuted (dari Floating HUD atau Alt+V) saat drawer terbuka
+  useEffect(() => {
+    if (!isOpen) return
+    if (isMuted) {
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      stopVoiceListening()
+      resetTranscript()
+    } else if (isVoiceSupported && isOpenRef.current && !isProcessingActionRef.current) {
+      isManuallyStoppedRef.current = false
+      startVoiceListening()
+    }
+  }, [isMuted, isOpen, isVoiceSupported, startVoiceListening, stopVoiceListening, resetTranscript])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -401,14 +416,7 @@ export function ValidationListDrawer({
       if (isAltV) {
         e.preventDefault()
         e.stopPropagation() // Cegah pembukaan VoiceAssistantModal global di AppLayout
-        if (isVoiceListening) {
-          isManuallyStoppedRef.current = true
-          stopVoiceListening()
-        } else {
-          isManuallyStoppedRef.current = false
-          inputRef.current?.focus()
-          startVoiceListening()
-        }
+        toggleVoiceMute() // Sinkronkan ke Master Control terpusat!
         return
       }
 
@@ -492,13 +500,15 @@ export function ValidationListDrawer({
                 setHighlightedIndex(0)
               }}
               placeholder={
-                isVoiceListening
+                isMuted
+                  ? 'Mikrofon dijeda terpusat (Klik mic / Alt+V untuk aktifkan)'
+                  : isVoiceListening
                   ? '🎙️ Mendengarkan ucapan... (Sebutkan faktur lalu "Pilih" / "Enter")'
                   : t('billing.validation.searchDrawerPlaceholder')
               }
               className={cn(
                 "w-full pl-9 pr-24 py-2 text-xs rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20 transition-all",
-                isVoiceListening && "border-sky-500 ring-2 ring-sky-500/25 bg-sky-500/5 text-sky-900 dark:text-sky-200 placeholder:text-sky-500 font-medium"
+                !isMuted && isVoiceListening && "border-sky-500 ring-2 ring-sky-500/25 bg-sky-500/5 text-sky-900 dark:text-sky-200 placeholder:text-sky-500 font-medium"
               )}
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
@@ -519,24 +529,29 @@ export function ValidationListDrawer({
                 <button
                   type="button"
                   onClick={() => {
-                    if (isVoiceListening) {
-                      isManuallyStoppedRef.current = true
-                      stopVoiceListening()
-                    } else {
-                      isManuallyStoppedRef.current = false
-                      inputRef.current?.focus()
-                      startVoiceListening()
-                    }
+                    toggleVoiceMute() // Sinkronkan ke Master Control terpusat!
                   }}
                   className={cn(
                     "px-1.5 py-0.5 rounded text-[10px] font-semibold transition-all cursor-pointer flex items-center gap-1",
-                    isVoiceListening
+                    !isMuted && isVoiceListening
                       ? "text-sky-600 dark:text-sky-400 bg-sky-500/20 border border-sky-500/30 animate-pulse"
+                      : isMuted
+                      ? "text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-[var(--color-neutral)] border border-transparent"
                       : "text-[var(--color-secondary)] hover:text-sky-600 dark:hover:text-sky-400 hover:bg-[var(--color-neutral)] border border-transparent"
                   )}
-                  title={isVoiceListening ? "Sedang mendengarkan ucapan... (Klik / Alt+V untuk jeda)" : "Aktifkan pencarian suara (Alt+V)"}
+                  title={
+                    isMuted
+                      ? "Mikrofon dijeda terpusat. Klik atau tekan Alt+V untuk aktifkan"
+                      : isVoiceListening
+                      ? "Mikrofon aktif mendengarkan. Klik atau tekan Alt+V untuk jeda"
+                      : "Aktifkan mikrofon suara (Alt+V)"
+                  }
                 >
-                  <Mic className={cn("w-3.5 h-3.5", isVoiceListening && "text-sky-500 animate-pulse")} />
+                  {isMuted ? (
+                    <MicOff className="w-3.5 h-3.5 text-slate-400" />
+                  ) : (
+                    <Mic className={cn("w-3.5 h-3.5", isVoiceListening && "text-sky-500 animate-pulse")} />
+                  )}
                   <kbd className="hidden sm:inline-block text-[9px] px-1 py-0.2 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-secondary)] font-mono font-bold">
                     Alt+V
                   </kbd>

@@ -248,6 +248,7 @@ model TbBilling {
   employee       TbEmployees? @relation(fields: [fdEmpCode], references: [fdEmpCode])
   details        TbBillingDetail[]
   totals         TbBillingTotal[]
+  attachments    TbBillingAttachment[]
 
   @@map("tbBilling")
 }
@@ -288,6 +289,25 @@ model TbBillingDetail {
 
   @@id([fdInvNo, fdID])
   @@map("tbBillingDetail")
+}
+
+model TbBillingAttachment {
+  fdId            Int       @id @default(autoincrement())
+  fdInvNo         String    @db.Char(20)
+  fdFileName      String    @db.NVarChar(255)
+  fdFileSavedName String    @db.NVarChar(255)
+  fdFileType      String    @db.NVarChar(100)
+  fdFileSize      BigInt
+  fdFileUrl       String    @db.NVarChar(500)
+  fdCaption       String?   @db.NVarChar(255)
+  fdUploadedBy    String    @db.NVarChar(100)
+  fdCreatedAt     DateTime  @default(now()) @db.DateTime2
+
+  billing         TbBilling @relation(fields: [fdInvNo], references: [fdInvNo], onDelete: Cascade)
+
+  @@index([fdInvNo])
+  @@index([fdCreatedAt(sort: Desc)])
+  @@map("tbBillingAttachment")
 }
 
 model VwShipmentDimensionWH {
@@ -808,6 +828,8 @@ model TbInspectionReport {
   fdNamaCustomer String    @db.NVarChar(150)
   fdTerima       String?   @db.NVarChar(50)
   fdKeterangan   String?   @db.NVarChar(Max)
+  fdAudioUrl     String?   @db.NVarChar(500)
+  fdAudioDuration Int?
   fdStatus       String    @default("1") @db.NVarChar(1)
   fdCreatedBy    String    @db.NVarChar(100)
   fdCreatedAt    DateTime  @default(now()) @db.DateTime2
@@ -845,6 +867,110 @@ model TbBAPCounter {
   @@id([fdYear, fdMonth])
   @@map("tbBAPCounter")
 }
+
+// ─── DATA REVISION / FORM INPUT & REVISI DATA ──────────────────────
+model TbDataRevision {
+  fdId           Int       @id @default(autoincrement())
+  fdNomorForm    String    @unique @db.NVarChar(30)
+  fdTipeData     String    @db.NVarChar(30)
+  fdAksi         String    @db.NVarChar(30)
+  fdStatus       String    @default("PENDING") @db.NVarChar(30)
+  fdTanggal      DateTime  @db.DateTime2
+
+  // Penanggung Jawab / Tanda Tangan
+  fdDibuatOleh   String?   @db.NVarChar(100)
+  fdTglDibuat    DateTime? @db.DateTime2
+  fdStuffing     String?   @db.NVarChar(100)
+  fdTglStuffing  DateTime? @db.DateTime2
+  fdBilling      String?   @db.NVarChar(100)
+  fdTglBilling   DateTime? @db.DateTime2
+  fdAR           String?   @db.NVarChar(100)
+  fdTglAR        DateTime? @db.DateTime2
+  fdDiketahui    String?   @db.NVarChar(100)
+  fdTglDiketahui DateTime? @db.DateTime2
+
+  // Eksekusi Aksi Cancel
+  fdExecutedBy   String?   @db.NVarChar(100)
+  fdExecutedAt   DateTime? @db.DateTime2
+
+  // Hasil Auto-Detect Billing
+  fdMatchedInvNo   String?   @db.NVarChar(50)
+  fdMatchedInvDate DateTime? @db.DateTime2
+
+  fdCatatan      String?   @db.NVarChar(Max)
+  fdCreatedBy    String    @db.NVarChar(100)
+  fdCreatedAt    DateTime  @default(now()) @db.DateTime2
+  fdUpdatedAt    DateTime  @default(now()) @updatedAt @db.DateTime2
+  fdDeletedAt    DateTime? @db.DateTime2
+
+  details        TbDataRevisionDetail[]
+  lampiran       TbDataRevisionLampiran[]
+
+  @@index([fdTanggal(sort: Desc)])
+  @@index([fdStatus])
+  @@index([fdAksi])
+  @@index([fdCreatedAt(sort: Desc)])
+  @@map("tbDataRevision")
+}
+
+model TbDataRevisionDetail {
+  fdId            Int            @id @default(autoincrement())
+  fdRevisionId    Int
+  fdNo            Int
+
+  // DATA AWAL
+  fdAwalCustCode  String?        @db.NVarChar(50)
+  fdAwalCustName  String?        @db.NVarChar(150)
+  fdAwalSpMark    String?        @db.NVarChar(100)
+  fdAwalNoBilling String?        @db.NVarChar(100)
+  fdAwalQtyVolWgt String?        @db.NVarChar(100)
+  fdAwalNoInputan String?        @db.NVarChar(100)
+  fdAwalDetail    String?        @db.NVarChar(Max)
+
+  // DATA BARU
+  fdBaruCustCode  String?        @db.NVarChar(50)
+  fdBaruCustName  String?        @db.NVarChar(150)
+  fdBaruSpMark    String?        @db.NVarChar(100)
+  fdBaruNoBilling String?        @db.NVarChar(100)
+  fdBaruQtyVolWgt String?        @db.NVarChar(100)
+  fdBaruNoInputan String?        @db.NVarChar(100)
+  fdBaruDetail    String?        @db.NVarChar(Max)
+
+  revision        TbDataRevision @relation(fields: [fdRevisionId], references: [fdId], onDelete: Cascade)
+
+  @@index([fdRevisionId])
+  @@index([fdAwalNoInputan])
+  @@index([fdBaruNoInputan])
+  @@map("tbDataRevisionDetail")
+}
+
+model TbDataRevisionLampiran {
+  fdId             Int            @id @default(autoincrement())
+  fdRevisionId     Int
+  fdNamaFile       String         @db.NVarChar(255)
+  fdNamaFileSimpan String         @db.NVarChar(255)
+  fdMimeType       String         @db.NVarChar(100)
+  fdUkuranBytes    BigInt
+  fdPath           String         @db.NVarChar(500)
+  fdUploadedBy     String         @db.NVarChar(100)
+  fdUploadedAt     DateTime       @default(now()) @db.DateTime2
+  fdKeterangan     String?        @db.NVarChar(255)
+
+  revision         TbDataRevision @relation(fields: [fdRevisionId], references: [fdId], onDelete: Cascade)
+
+  @@index([fdRevisionId])
+  @@map("tbDataRevisionLampiran")
+}
+
+model TbDataRevisionCounter {
+  fdYear  Int
+  fdMonth Int
+  fdCount Int @default(0)
+
+  @@id([fdYear, fdMonth])
+  @@map("tbDataRevisionCounter")
+}
+
 
 
 

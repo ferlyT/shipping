@@ -82,9 +82,9 @@ export function InspectionTab() {
     payload: CreateInspectionPayload | UpdateInspectionPayload
   ) => {
     if (formItem) {
-      await updateMutation.mutateAsync({ id: formItem.fdId, payload })
+      return await updateMutation.mutateAsync({ id: formItem.fdId, payload })
     } else {
-      await createMutation.mutateAsync(payload as CreateInspectionPayload)
+      return await createMutation.mutateAsync(payload as CreateInspectionPayload)
     }
   }
 
@@ -103,7 +103,7 @@ export function InspectionTab() {
         />
       </View>
 
-      {/* Status Filter Chips */}
+      {/* Status Filter Segment Chips */}
       <View style={styles.filterRow}>
         <TouchableOpacity
           onPress={() => {
@@ -113,18 +113,13 @@ export function InspectionTab() {
           style={[
             styles.filterChip,
             {
-              borderColor:
-                statusFilter === 'all'
-                  ? colors.tabBarActive
-                  : colors.border,
+              borderColor: statusFilter === 'all' ? (isDark ? '#222C38' : '#E3E7EC') : 'transparent',
               backgroundColor:
                 statusFilter === 'all'
                   ? isDark
-                    ? 'rgba(56, 189, 248, 0.15)'
-                    : 'rgba(2, 132, 199, 0.1)'
-                  : isDark
-                  ? 'rgba(255, 255, 255, 0.03)'
-                  : 'rgba(0, 0, 0, 0.03)',
+                    ? '#131A23'
+                    : '#FFFFFF'
+                  : 'transparent',
             },
           ]}
         >
@@ -132,11 +127,8 @@ export function InspectionTab() {
             style={[
               styles.filterText,
               {
-                color:
-                  statusFilter === 'all'
-                    ? colors.tabBarActive
-                    : colors.secondary,
-                fontWeight: statusFilter === 'all' ? '700' : '500',
+                color: statusFilter === 'all' ? (isDark ? '#EEF2F6' : '#141B24') : (isDark ? '#8A97A6' : '#657080'),
+                fontWeight: statusFilter === 'all' ? '600' : '400',
               },
             ]}
           >
@@ -152,18 +144,13 @@ export function InspectionTab() {
           style={[
             styles.filterChip,
             {
-              borderColor:
-                statusFilter === '1'
-                  ? colors.warning
-                  : colors.border,
+              borderColor: statusFilter === '1' ? (isDark ? '#222C38' : '#E3E7EC') : 'transparent',
               backgroundColor:
                 statusFilter === '1'
                   ? isDark
-                    ? 'rgba(251, 191, 36, 0.15)'
-                    : 'rgba(217, 119, 6, 0.1)'
-                  : isDark
-                  ? 'rgba(255, 255, 255, 0.03)'
-                  : 'rgba(0, 0, 0, 0.03)',
+                    ? '#131A23'
+                    : '#FFFFFF'
+                  : 'transparent',
             },
           ]}
         >
@@ -171,11 +158,8 @@ export function InspectionTab() {
             style={[
               styles.filterText,
               {
-                color:
-                  statusFilter === '1'
-                    ? colors.warning
-                    : colors.secondary,
-                fontWeight: statusFilter === '1' ? '700' : '500',
+                color: statusFilter === '1' ? (isDark ? '#EEF2F6' : '#141B24') : (isDark ? '#8A97A6' : '#657080'),
+                fontWeight: statusFilter === '1' ? '600' : '400',
               },
             ]}
           >
@@ -191,18 +175,13 @@ export function InspectionTab() {
           style={[
             styles.filterChip,
             {
-              borderColor:
-                statusFilter === '2'
-                  ? colors.success
-                  : colors.border,
+              borderColor: statusFilter === '2' ? (isDark ? '#222C38' : '#E3E7EC') : 'transparent',
               backgroundColor:
                 statusFilter === '2'
                   ? isDark
-                    ? 'rgba(52, 211, 153, 0.15)'
-                    : 'rgba(5, 150, 105, 0.1)'
-                  : isDark
-                  ? 'rgba(255, 255, 255, 0.03)'
-                  : 'rgba(0, 0, 0, 0.03)',
+                    ? '#131A23'
+                    : '#FFFFFF'
+                  : 'transparent',
             },
           ]}
         >
@@ -210,11 +189,8 @@ export function InspectionTab() {
             style={[
               styles.filterText,
               {
-                color:
-                  statusFilter === '2'
-                    ? colors.success
-                    : colors.secondary,
-                fontWeight: statusFilter === '2' ? '700' : '500',
+                color: statusFilter === '2' ? (isDark ? '#EEF2F6' : '#141B24') : (isDark ? '#8A97A6' : '#657080'),
+                fontWeight: statusFilter === '2' ? '600' : '400',
               },
             ]}
           >
@@ -259,7 +235,7 @@ export function InspectionTab() {
             onPress={handleOpenCreate}
             style={[
               styles.createEmptyBtn,
-              { backgroundColor: colors.tabBarActive },
+              { backgroundColor: isDark ? '#E0644E' : '#B8402C' },
             ]}
           >
             <Plus size={16} color="#FFFFFF" />
@@ -283,7 +259,7 @@ export function InspectionTab() {
             <RefreshControl
               refreshing={isRefetching}
               onRefresh={refetch}
-              tintColor={colors.tertiary}
+              tintColor={isDark ? '#E0644E' : '#B8402C'}
             />
           }
           onEndReached={() => {
@@ -296,7 +272,7 @@ export function InspectionTab() {
             isFetchingNextPage ? (
               <ActivityIndicator
                 size="small"
-                color={colors.tertiary}
+                color={isDark ? '#E0644E' : '#B8402C'}
                 style={{ paddingVertical: 14 }}
               />
             ) : null
@@ -311,8 +287,7 @@ export function InspectionTab() {
         style={[
           styles.fab,
           {
-            backgroundColor: colors.tabBarActive,
-            shadowColor: colors.tabBarActive,
+            backgroundColor: isDark ? '#E0644E' : '#B8402C',
           },
         ]}
       >
@@ -367,23 +342,25 @@ const styles = StyleSheet.create({
   },
   filterRow: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 10,
+    gap: 6,
+    marginBottom: 8,
   },
   filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
+    paddingHorizontal: 14,
+    height: 36,
     borderRadius: 8,
     borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   filterText: {
-    fontSize: 11.5,
+    fontSize: 13,
   },
   loadingContainer: {
     paddingTop: 8,
   },
   listContent: {
-    paddingBottom: 80,
+    paddingBottom: 84,
   },
   emptyContainer: {
     flex: 1,
@@ -393,22 +370,22 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
   emptyIconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 14,
+    marginBottom: 12,
   },
   emptyTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
     marginBottom: 6,
     textAlign: 'center',
   },
   emptyDesc: {
-    fontSize: 12.5,
+    fontSize: 13,
     textAlign: 'center',
     lineHeight: 18,
     marginBottom: 18,
@@ -419,25 +396,22 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: 8,
   },
   createEmptyText: {
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   fab: {
     position: 'absolute',
-    bottom: 20,
+    bottom: 24,
     right: 20,
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 6,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 6,
+    elevation: 4,
   },
 })

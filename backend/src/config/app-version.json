@@ -1,14 +1,14 @@
 {
-  "version": "1.2.6",
-  "versionCode": 18,
-  "minVersion": "1.2.6",
-  "forceUpdate": true,
+  "version": "1.3.8",
+  "versionCode": 30,
+  "minVersion": "1.3.6",
+  "forceUpdate": false,
   "downloadUrl": "https://app.sampai.co/mshipping/mshipping.apk",
   "webDownloadUrl": "https://app.sampai.co/mshipping/download/",
   "releaseNotes": [
-    "Migrasi penuh ke protokol HTTPS terenkripsi SSL Let's Encrypt (app.sampai.co)",
-    "Peningkatan keamanan transmisi data dan integritas API ERP",
-    "Pembaruan endpoint reverse proxy resmi port 443"
+    "Perbaikan menyeluruh infinite scroll direktori pelanggan mobile",
+    "Optimasi virtualisasi dan lazy loading FlatList pelanggan",
+    "Peningkatan stabilitas scroll momentum dan pencegahan duplikasi request"
   ],
-  "publishedAt": "2026-09-28T12:35:00.000Z"
+  "publishedAt": "2026-10-11T05:36:00.000Z"
 }

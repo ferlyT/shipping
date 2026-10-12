@@ -25,9 +25,17 @@ export const ROUTES = {
     return doc ? `/mshipping/logistics/delivery-orders/${cleanId}/print?doc=${doc}` : `/mshipping/logistics/delivery-orders/${cleanId}/print`
   },
   INSPECTION_REPORTS: '/mshipping/logistics/inspection-reports',
+  DATA_REVISIONS: '/mshipping/logistics/data-revisions',
+  DATA_REVISIONS_LIST: '/mshipping/logistics/data-revisions',
+  DATA_REVISION_NEW: '/mshipping/logistics/data-revisions/new',
+  DATA_REVISION_EDIT: (id: string | number) => `/mshipping/logistics/data-revisions/${id}/edit`,
+  DATA_REVISION_DETAIL: (id: string | number) => `/mshipping/logistics/data-revisions/${id}`,
+  DATA_REVISION_PRINT: (id: string | number) => `/mshipping/logistics/data-revisions/${id}/print`,
 
   // Finance
   BILLING: '/mshipping/finance/billing',
+  BILLING_OPERATIONAL: '/mshipping/finance/billing/operational',
+  BILLING_FINANCE: '/mshipping/finance/billing/finance',
   BILLING_TARGET: '/mshipping/finance/billing/target',
   BILLING_LIST: '/mshipping/finance/billing/list',
   BILLING_DETAIL: (id: string) => `/mshipping/finance/billing/${(id || '').trim()}`,
@@ -41,6 +49,7 @@ export const ROUTES = {
   BILLING_VALIDATION_LIST: '/mshipping/finance/billing/validation/list',
   BILLING_VALIDATION_DETAIL: (id: string) => `/mshipping/finance/billing/validation/${(id || '').trim()}`,
   BILLING_PAIRING_LOCAL_CHARGE: '/mshipping/finance/billing/pairing-local-charge',
+  BILLING_VIEW_CONSIGNEE: '/mshipping/finance/billing/view-consignee',
 
   // Cashier & Pelunasan Piutang
   CASHIER: '/mshipping/finance/cashier',
@@ -50,6 +59,10 @@ export const ROUTES = {
   // Customer Wallet & Saldo Deposit
   WALLET: '/mshipping/finance/wallet',
   WALLET_LIST: '/mshipping/finance/wallet',
+
+  // Finance Reports
+  REPORT_OMSET_VOLUME: '/mshipping/finance/reports/omset-volume',
+  REPORT_CARGO_VOLUME: '/mshipping/finance/reports/cargo-volume',
 
   // Price List
   PRICE_LIST: '/mshipping/finance/price-list',

@@ -1,10 +1,11 @@
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import {
   View,
   Text,
   FlatList,
   StyleSheet,
   Keyboard,
+  ActivityIndicator,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useQuery } from '@tanstack/react-query'
@@ -16,6 +17,7 @@ import { useThemeStore } from '../../src/theme/themeStore'
 import { useTranslation } from '../../src/hooks/useTranslation'
 import { useDebounce } from '../../src/hooks/useDebounce'
 import apiClient from '../../src/api/client'
+import { useMasterCustomersQuery } from '../../src/features/master/hooks/useMasterCustomers'
 import { CustomerListItem } from '../../src/features/master/components/CustomerListItem'
 import { CustomerDetailSheet } from '../../src/features/master/components/CustomerDetailSheet'
 
@@ -28,6 +30,7 @@ export default function MasterDataScreen() {
   const debouncedSearch = useDebounce(search, 300)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null)
+  const onEndReachedCalledDuringMomentum = useRef(true)
 
   // Fetch Suggestions untuk Customer
   const { data: suggestions = [], isFetching: isFetchingSuggestions } = useQuery({
@@ -43,32 +46,29 @@ export default function MasterDataScreen() {
     staleTime: 30000,
   })
 
-  // Fetch Customers List
-  const {
-    data: customersData,
-    isLoading,
-    refetch,
-    isRefetching,
-  } = useQuery({
-    queryKey: ['master-customers', debouncedSearch],
-    queryFn: async () => {
-      const params: any = { limit: 30 }
-      if (debouncedSearch.trim()) params.search = debouncedSearch.trim()
-      const res = await apiClient.get('/customers', { params })
-      return res.data.data || []
-    },
-  })
+  // Infinite Query Fetch Customers List via Hook Teruji
+  const customers = useMasterCustomersQuery(debouncedSearch)
+
+  const handleEndReached = () => {
+    if (!onEndReachedCalledDuringMomentum.current && customers.hasNextPage && !customers.isFetchingNextPage) {
+      customers.fetchNextPage()
+      onEndReachedCalledDuringMomentum.current = true
+    }
+  }
 
   return (
     <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
       <View style={styles.container}>
-        {/* Header Section */}
+        {/* Header Bersih Gaya Dashboard */}
         <View style={styles.topSection}>
+          <Text style={[styles.overlineText, { color: colors.secondary }]}>
+            Master data
+          </Text>
           <Text style={[styles.pageTitle, { color: colors.primary }]}>
-            {t('master.title', 'Direktori Pelanggan')}
+            {t('master.title', 'Direktori pelanggan')}
           </Text>
           <Text style={[styles.pageSub, { color: colors.secondary }]}>
-            Master data pelanggan resmi & kontak langsung
+            Daftar pelanggan resmi & kontak langsung
           </Text>
 
           <SearchBar
@@ -107,13 +107,42 @@ export default function MasterDataScreen() {
 
         {/* Customer List */}
         <FlatList
-          data={customersData}
-          keyExtractor={(item) => item.fdCustCode || item.id || Math.random().toString()}
-          refreshing={isRefetching}
-          onRefresh={refetch}
+          data={customers.data}
+          keyExtractor={(item, index) => `${item.fdCustCode || item.id || 'cust'}-${index}`}
+          refreshing={customers.isRefetching}
+          onRefresh={customers.refetch}
           contentContainerStyle={styles.listContent}
+          onMomentumScrollBegin={() => {
+            onEndReachedCalledDuringMomentum.current = false
+          }}
+          onEndReached={handleEndReached}
+          onEndReachedThreshold={0.4}
+          initialNumToRender={20}
+          maxToRenderPerBatch={20}
+          windowSize={10}
+          ListFooterComponent={
+            customers.isFetchingNextPage ? (
+              <ActivityIndicator
+                size="small"
+                color={colors.tertiary || '#E0644E'}
+                style={{ paddingVertical: 18 }}
+              />
+            ) : customers.hasNextPage ? (
+              <View style={{ paddingVertical: 14, alignItems: 'center' }}>
+                <Text style={{ fontSize: 12, color: colors.secondary }}>
+                  Memuat pelanggan lainnya...
+                </Text>
+              </View>
+            ) : customers.data.length > 0 ? (
+              <View style={{ paddingVertical: 18, alignItems: 'center' }}>
+                <Text style={{ fontSize: 12, color: colors.secondary, opacity: 0.7 }}>
+                  Semua {customers.data.length} pelanggan telah dimuat
+                </Text>
+              </View>
+            ) : null
+          }
           ListEmptyComponent={
-            isLoading ? (
+            customers.isLoading ? (
               <View style={{ gap: 10 }}>
                 <SkeletonShimmer height={110} />
                 <SkeletonShimmer height={110} />
@@ -151,23 +180,28 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   topSection: {
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingTop: 14,
     paddingBottom: 8,
   },
+  overlineText: {
+    fontSize: 13,
+    fontWeight: '400',
+    marginBottom: 2,
+  },
   pageTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.4,
+    fontSize: 24,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   pageSub: {
-    fontSize: 12,
+    fontSize: 13,
     marginTop: 2,
   },
   listContent: {
-    padding: 16,
-    paddingTop: 8,
+    paddingHorizontal: 16,
+    paddingTop: 6,
     paddingBottom: 28,
-    gap: 12,
   },
   emptyCard: {
     alignItems: 'center',

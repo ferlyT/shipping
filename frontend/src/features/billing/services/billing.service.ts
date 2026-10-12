@@ -156,5 +156,84 @@ export const billingApi = {
         `/billing/${encodeURIComponent(invNo)}/timeline`
       )
       .then((r) => r.data.data),
-}
 
+  getAttachments: (invNo: string) =>
+    apiClient
+      .get<{ data: import('../types/billing.types').BillingAttachment[] }>(
+        `/billing/${encodeURIComponent(invNo)}/attachments`
+      )
+      .then((r) => r.data.data),
+
+  uploadAttachment: (
+    invNo: string,
+    data: { fileBase64: string; fileName: string; fileType?: string; caption?: string }
+  ) =>
+    apiClient
+      .post<{ data: import('../types/billing.types').BillingAttachment }>(
+        `/billing/${encodeURIComponent(invNo)}/attachments`,
+        data
+      )
+      .then((r) => r.data.data),
+
+  deleteAttachment: (invNo: string, attachmentId: number) =>
+    apiClient
+      .delete<{ data: { fdId: number } }>(
+        `/billing/${encodeURIComponent(invNo)}/attachments/${attachmentId}`
+      )
+      .then((r) => r.data.data),
+
+  getOmsetVolumeReport: (params?: { yearFrom?: number; yearTo?: number; search?: string; sales?: string }) =>
+    apiClient
+      .get<{ data: import('../types/billing.types').OmsetVolumeReportResponse }>(
+        '/billing/reports/omset-volume',
+        { params }
+      )
+      .then((r) => r.data.data),
+
+  exportOmsetVolumePivotExcel: (params?: { yearFrom?: number }) =>
+    apiClient.get('/billing/reports/omset-volume/export-pivot', {
+      params,
+      responseType: 'blob',
+      timeout: 180000,
+    }),
+
+  getCargoVolumeReport: (params?: {
+    branch?: string
+    yearFrom?: number
+    yearTo?: number
+    mode?: number
+    typeComodity?: number
+    sales?: string
+    search?: string
+  }) =>
+    apiClient
+      .get<{ data: import('../types/billing.types').CargoVolumeReportResponse }>(
+        '/billing/reports/cargo-volume',
+        { params }
+      )
+      .then((r) => r.data.data),
+
+  getBatchExitComparison: (params?: { year?: number; month?: number; allTime?: boolean }) =>
+    apiClient.get<{ data: import('../types/billing.types').BatchExitComparisonResponse }>(
+      '/billing/batch-exit-comparison',
+      { params }
+    ),
+
+  getBatchExitCargoDetails: (markingCode: string) =>
+    apiClient.get<{ data: import('../types/billing.types').BatchExitCargoItem[] }>(
+      '/billing/batch-exit-comparison/details',
+      { params: { markingCode } }
+    ),
+
+  getUnissuedBills: (params?: {
+    search?: string
+    mode?: 'all' | 'udara' | 'laut'
+    aging?: 'all' | 'le7' | '8to14' | '15to30' | 'gt30'
+    startDate?: string
+    endDate?: string
+  }) =>
+    apiClient.get<{ data: import('../types/billing.types').UnissuedBillsResponse }>(
+      '/billing/unissued-bills',
+      { params }
+    ),
+}

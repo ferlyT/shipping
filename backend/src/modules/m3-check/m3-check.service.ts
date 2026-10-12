@@ -136,6 +136,22 @@ export async function getCustomerHargaAuditInfo(custCode?: string | null): Promi
 }
 
 /**
+ * Normalisasi kode cabang untuk Price List (-- dan SG adalah SG)
+ */
+export function normalizeBranchCode(branch?: string | null): string {
+  const b = String(branch || '').toUpperCase().trim()
+  if (!b) return ''
+  if (b === '--' || b === '-' || b.includes('SINGAPORE') || b.includes('SINGAPURA') || b === 'SG') return 'SG'
+  if (b.includes('GUANGZHOU') || b === 'GZ') return 'GZ'
+  if (b.includes('YIWU') || b === 'YW') return 'YW'
+  if (b.includes('SHANGHAI') || b === 'SH') return 'SH'
+  if (b.includes('SHENZHEN') || b === 'SZ') return 'SZ'
+  if (b.includes('HONGKONG') || b.includes('HONG KONG') || b === 'HK') return 'HK'
+  if (b.includes('BANGKOK') || b === 'BKK') return 'BKK'
+  return b
+}
+
+/**
  * Evaluasi Cek M3 / Volume secara mendalam.
  * Merupakan Single Source of Truth yang dapat dipanggil dari mana saja:
  * - Billing Validation Modal (BillingValidationCard / BillingValidationSummaryModal)
@@ -155,12 +171,70 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
   let resolvedListType: number | null = null
   let resolvedBranchCode: string | null = null
   let resolvedBranchName: string | null = null
+  let billingBranchCode: string | null = null
   let custBlocked = 0
   let custBroker = 0
   let custName = ''
   let custSalesNM = ''
 
   let agentDate: Date | null = null
+
+  const isInvFormat = cleanIdentifier.includes('-') || /^[A-Za-z]/.test(cleanIdentifier)
+
+  // 1a. Cek tbBilling untuk mengambil fdBranchCode dari tbBilling (Single Source of Truth Acuan Master Price List)
+  const billingInfo = await safeRunRaw(async () => {
+    if (isInvFormat) {
+      return prisma.tbBilling.findFirst({
+        where: { fdInvNo: cleanIdentifier },
+        select: {
+          fdInvNo: true,
+          fdListCode: true,
+          fdMarkingCode: true,
+          fdCustCode: true,
+          fdListType: true,
+          fdBranchCode: true,
+          customer: { select: { fdCustCode: true, fdCustName: true, fdBlocked: true, fdSalesNM: true, fdBroker: true } },
+        },
+      })
+    }
+    return prisma.tbBilling.findFirst({
+      where: {
+        OR: [
+          { fdListCode: cleanIdentifier },
+          { fdMarkingCode: cleanIdentifier },
+        ],
+      },
+      select: {
+        fdInvNo: true,
+        fdListCode: true,
+        fdMarkingCode: true,
+        fdCustCode: true,
+        fdListType: true,
+        fdBranchCode: true,
+        customer: { select: { fdCustCode: true, fdCustName: true, fdBlocked: true, fdSalesNM: true, fdBroker: true } },
+      },
+    })
+  }, 'billingInfo')
+
+  if (billingInfo) {
+    if (billingInfo.fdBranchCode?.trim()) {
+      billingBranchCode = billingInfo.fdBranchCode.trim()
+    }
+    if (billingInfo.fdMarkingCode?.trim()) resolvedMarkingCode = billingInfo.fdMarkingCode.trim()
+    if (billingInfo.fdCustCode?.trim()) resolvedCustCode = billingInfo.fdCustCode.trim()
+    if (billingInfo.fdListType !== null && billingInfo.fdListType !== undefined) {
+      resolvedListType = Number(billingInfo.fdListType)
+    }
+    if (billingInfo.customer) {
+      custName = billingInfo.customer.fdCustName?.trim() || ''
+      custBlocked = billingInfo.customer.fdBlocked ?? 0
+      custBroker = billingInfo.customer.fdBroker ?? 0
+      custSalesNM = billingInfo.customer.fdSalesNM?.trim() || ''
+    }
+    if (is7DigitListCode(billingInfo.fdListCode)) {
+      resolvedListCode = billingInfo.fdListCode!.trim()
+    }
+  }
 
   if (is7DigitListCode(cleanIdentifier)) {
     // Jalur Cepat (Index Seek PK tbEntryList) jika identifier adalah 5-8 digit list code
@@ -191,71 +265,23 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
     if (entryRows && entryRows.length > 0) {
       const e = entryRows[0]
       resolvedListCode = e.fdListCode || cleanIdentifier
-      if (e.fdListType !== null && e.fdListType !== undefined) {
+      if (resolvedListType === null && e.fdListType !== null && e.fdListType !== undefined) {
         resolvedListType = Number(e.fdListType)
       }
-      if (e.fdMarkingCode) resolvedMarkingCode = e.fdMarkingCode
-      if (e.fdCustCode) resolvedCustCode = e.fdCustCode
-      if (e.fdCustName) custName = e.fdCustName
-      custBlocked = e.fdBlocked ?? 0
-      custBroker = e.fdBroker ?? 0
-      if (e.fdSalesNM) custSalesNM = e.fdSalesNM
+      if (!resolvedMarkingCode && e.fdMarkingCode) resolvedMarkingCode = e.fdMarkingCode
+      if (!resolvedCustCode && e.fdCustCode) resolvedCustCode = e.fdCustCode
+      if (!custName && e.fdCustName) custName = e.fdCustName
+      if (!custBlocked && e.fdBlocked) custBlocked = e.fdBlocked ?? 0
+      if (!custBroker && e.fdBroker) custBroker = e.fdBroker ?? 0
+      if (!custSalesNM && e.fdSalesNM) custSalesNM = e.fdSalesNM
       if (e.fdBranchCode) resolvedBranchCode = e.fdBranchCode
       if (e.fdBranchName) resolvedBranchName = e.fdBranchName
       if (e.fdTglAgent) agentDate = new Date(e.fdTglAgent)
     }
   }
 
-  // Jika belum resolved (bukan listcode atau tidak ketemu di tbEntryList), cari di tbBilling secara spesifik
-  if (!resolvedCustCode) {
-    const isInvFormat = cleanIdentifier.includes('-') || /^[A-Za-z]/.test(cleanIdentifier)
-    const billingInfo = await safeRunRaw(async () => {
-      if (isInvFormat) {
-        return prisma.tbBilling.findFirst({
-          where: { fdInvNo: cleanIdentifier },
-          select: {
-            fdInvNo: true,
-            fdListCode: true,
-            fdMarkingCode: true,
-            fdCustCode: true,
-            fdListType: true,
-            fdBranchCode: true,
-            customer: { select: { fdCustCode: true, fdCustName: true, fdBlocked: true, fdSalesNM: true, fdBroker: true } },
-          },
-        })
-      }
-      return prisma.tbBilling.findFirst({
-        where: {
-          OR: [
-            { fdListCode: cleanIdentifier },
-            { fdMarkingCode: cleanIdentifier },
-          ],
-        },
-        select: {
-          fdInvNo: true,
-          fdListCode: true,
-          fdMarkingCode: true,
-          fdCustCode: true,
-          fdListType: true,
-          fdBranchCode: true,
-          customer: { select: { fdCustCode: true, fdCustName: true, fdBlocked: true, fdSalesNM: true, fdBroker: true } },
-        },
-      })
-    }, 'billingInfo')
-
-    if (billingInfo) {
-      if (billingInfo.fdMarkingCode?.trim()) resolvedMarkingCode = billingInfo.fdMarkingCode.trim()
-      if (billingInfo.fdCustCode?.trim()) resolvedCustCode = billingInfo.fdCustCode.trim()
-      if (billingInfo.fdListType !== null && billingInfo.fdListType !== undefined) {
-        resolvedListType = Number(billingInfo.fdListType)
-      }
-      if (billingInfo.fdBranchCode?.trim()) resolvedBranchCode = billingInfo.fdBranchCode.trim()
-      if (billingInfo.customer) {
-        custName = billingInfo.customer.fdCustName?.trim() || ''
-        custBlocked = billingInfo.customer.fdBlocked ?? 0
-        custBroker = billingInfo.customer.fdBroker ?? 0
-        custSalesNM = billingInfo.customer.fdSalesNM?.trim() || ''
-      }
+  // Jika belum resolved (bukan listcode atau tidak ketemu di tbEntryList), cari candidate di tbEntryList
+  if (!resolvedCustCode && billingInfo) {
 
       if (is7DigitListCode(billingInfo.fdListCode)) {
         resolvedListCode = billingInfo.fdListCode!.trim()
@@ -295,47 +321,79 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
         }
       }
     }
+
+  // Ambil informasi komoditi, satuan, dan cabang dari tbEntryList untuk resolvedListCode
+  let entryListInfo: any = null
+  let entryListTypeComodity: number | null = null
+  let entryListComodityName: string | null = null
+
+  if (resolvedListCode) {
+    entryListInfo = await safeRunRaw(async () => {
+      const res = await prisma.$queryRaw<any[]>`
+        SELECT TOP 1
+          el.fdListType,
+          el.fdTypeComodity,
+          el.fdSatuan,
+          m.fdBranchCode,
+          cb.fdBranchName,
+          RTRIM(tc.fdComodityName) as fdComodityName
+        FROM tbEntryList el WITH (NOLOCK)
+        LEFT JOIN tbMarking m WITH (NOLOCK) ON m.fdMarkingCode = el.fdMarkingCode
+        LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = m.fdBranchCode
+        LEFT JOIN tbTypeComodity tc WITH (NOLOCK) ON tc.fdTypeComodity = el.fdTypeComodity AND (el.fdListType IS NULL OR tc.fdListType = el.fdListType)
+        WHERE el.fdListCode = CAST(${resolvedListCode} AS CHAR(7))
+      `
+      return res && res.length > 0 ? res[0] : null
+    }, 'entryListInfo')
+
+    if (entryListInfo) {
+      if (entryListInfo.fdTypeComodity !== null && entryListInfo.fdTypeComodity !== undefined && !isNaN(Number(entryListInfo.fdTypeComodity))) {
+        entryListTypeComodity = Number(entryListInfo.fdTypeComodity)
+      }
+      if (entryListInfo.fdComodityName) {
+        entryListComodityName = String(entryListInfo.fdComodityName).trim()
+      }
+      if (resolvedListType === null && entryListInfo.fdListType !== null && entryListInfo.fdListType !== undefined) {
+        resolvedListType = Number(entryListInfo.fdListType)
+      }
+      if (!resolvedBranchCode && entryListInfo.fdBranchCode) {
+        resolvedBranchCode = String(entryListInfo.fdBranchCode).trim()
+      }
+      if (!resolvedBranchName && entryListInfo.fdBranchName) {
+        resolvedBranchName = String(entryListInfo.fdBranchName).trim()
+      }
+    }
   }
 
-  // Ambil informasi cabang dan marking jika belum lengkap
-  let markingBranch: any = null
-  if (!resolvedBranchCode && (resolvedListCode || resolvedMarkingCode)) {
+  // Fallback informasi cabang & komoditi jika belum lengkap dan ada markingCode
+  let markingBranch: any = entryListInfo
+  if (!resolvedBranchCode && resolvedMarkingCode) {
     markingBranch = await safeRunRaw(async () => {
-      if (resolvedListCode) {
-        const res = await prisma.$queryRaw<any[]>`
-          SELECT TOP 1
-            el.fdListType,
-            el.fdTypeComodity,
-            el.fdSatuan,
-            m.fdBranchCode,
-            cb.fdBranchName
-          FROM tbEntryList el WITH (NOLOCK)
-          LEFT JOIN tbMarking m WITH (NOLOCK) ON m.fdMarkingCode = el.fdMarkingCode
-          LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = m.fdBranchCode
-          WHERE el.fdListCode = CAST(${resolvedListCode} AS CHAR(7))
-        `
-        if (res && res.length > 0) return res[0]
-      }
-      if (resolvedMarkingCode) {
-        const res = await prisma.$queryRaw<any[]>`
-          SELECT TOP 1
-            el.fdListType,
-            el.fdTypeComodity,
-            el.fdSatuan,
-            m.fdBranchCode,
-            cb.fdBranchName
-          FROM tbEntryList el WITH (NOLOCK)
-          LEFT JOIN tbMarking m WITH (NOLOCK) ON m.fdMarkingCode = el.fdMarkingCode
-          LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = m.fdBranchCode
-          WHERE el.fdMarkingCode = CAST(${resolvedMarkingCode} AS VARCHAR(30))
-          ORDER BY el.fdListCode ASC
-        `
-        return res && res.length > 0 ? res[0] : null
-      }
-      return null
+      const res = await prisma.$queryRaw<any[]>`
+        SELECT TOP 1
+          el.fdListType,
+          el.fdTypeComodity,
+          el.fdSatuan,
+          m.fdBranchCode,
+          cb.fdBranchName,
+          RTRIM(tc.fdComodityName) as fdComodityName
+        FROM tbEntryList el WITH (NOLOCK)
+        LEFT JOIN tbMarking m WITH (NOLOCK) ON m.fdMarkingCode = el.fdMarkingCode
+        LEFT JOIN tbCabang cb WITH (NOLOCK) ON cb.fdBranchCode = m.fdBranchCode
+        LEFT JOIN tbTypeComodity tc WITH (NOLOCK) ON tc.fdTypeComodity = el.fdTypeComodity AND (el.fdListType IS NULL OR tc.fdListType = el.fdListType)
+        WHERE el.fdMarkingCode = CAST(${resolvedMarkingCode} AS VARCHAR(30))
+        ORDER BY el.fdListCode ASC
+      `
+      return res && res.length > 0 ? res[0] : null
     }, 'markingBranch')
 
     if (markingBranch) {
+      if (entryListTypeComodity === null && markingBranch.fdTypeComodity !== null && markingBranch.fdTypeComodity !== undefined) {
+        entryListTypeComodity = Number(markingBranch.fdTypeComodity)
+      }
+      if (!entryListComodityName && markingBranch.fdComodityName) {
+        entryListComodityName = String(markingBranch.fdComodityName).trim()
+      }
       if (resolvedListType === null && markingBranch.fdListType !== null && markingBranch.fdListType !== undefined) {
         resolvedListType = Number(markingBranch.fdListType)
       }
@@ -352,15 +410,17 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
   if (resolvedListType === 1) expectedMode = 'BY AIR'
   else if (resolvedListType === 2) expectedMode = 'BY SEA'
 
+  // Aturan Agen / User: Acuan Master Price List -> gunakan fdBranchCode dari tbBilling -> -- dan SG adalah SG
   let expectedBranch: string | null = null
-  const bCombined = `${resolvedBranchName || ''} ${resolvedBranchCode || ''}`.toUpperCase()
-  if (bCombined.includes('GZ') || bCombined.includes('GUANGZHOU')) expectedBranch = 'GZ'
-  else if (bCombined.includes('HK') || bCombined.includes('HONGKONG')) expectedBranch = 'HK'
-  else if (bCombined.includes('SG') || bCombined.includes('SINGAPORE')) expectedBranch = 'SG'
-  else if (bCombined.includes('SH') || bCombined.includes('SHANGHAI')) expectedBranch = 'SH'
-  else if (bCombined.includes('YW') || bCombined.includes('YIWU')) expectedBranch = 'YW'
-  else if (bCombined.includes('SZ') || bCombined.includes('SHENZHEN')) expectedBranch = 'SZ'
-  else if (resolvedBranchCode?.trim()) expectedBranch = resolvedBranchCode.trim().toUpperCase()
+  if (billingBranchCode) {
+    expectedBranch = normalizeBranchCode(billingBranchCode)
+  }
+
+  if (!expectedBranch) {
+    const bCodeNorm = normalizeBranchCode(resolvedBranchCode)
+    const bNameNorm = normalizeBranchCode(resolvedBranchName)
+    expectedBranch = bCodeNorm || bNameNorm || null
+  }
 
   const cleanBatchCode = resolvedMarkingCode.split(';')[0]?.trim() || resolvedMarkingCode
 
@@ -928,6 +988,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
                 fdListCode: true,
                 fdMarkingCode: true,
                 fdMarkingNo: true,
+                fdTypeComodity: true,
                 fdJmlPack: true,
                 fdJmlBerat: true,
                 fdM3: true,
@@ -948,6 +1009,7 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
                   fdJmlBerat: el.fdJmlBerat,
                   fdJmlPack: el.fdJmlPack,
                   fdMarkingNo: el.fdMarkingNo,
+                  fdTypeComodity: el.fdTypeComodity !== null && el.fdTypeComodity !== undefined ? Number(el.fdTypeComodity) : null,
                 })
               }
             }
@@ -956,6 +1018,8 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
             const lc = String(d.fdListCode || '').trim()
             if (lc) {
               const existing = detailByListCode.get(lc) || {}
+              const rawType = d.fdTypeComodity ?? d.TypeComodity ?? d.fdTipe ?? d.Tipe
+              const parsedType = rawType !== null && rawType !== undefined && !isNaN(Number(rawType)) ? Number(rawType) : existing.fdTypeComodity ?? null
               detailByListCode.set(lc, {
                 ...existing,
                 fdListCode: lc,
@@ -965,7 +1029,22 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
                 fdTotalQty: parseM3Val(d.fdTotalQty ?? d.fdQtyPL ?? d.fdTotalQtySJ ?? d.fdJmlPack) || existing.fdJmlPack || 0,
                 fdTotalBeratSJ: parseM3Val(d.fdTotalBeratSJ ?? d.fdJmlBerat ?? d.berat ?? d.Berat) || existing.fdJmlBerat || 0,
                 fdMarkingNo: d.fdMarkingNo || existing.fdMarkingNo || '',
+                fdTypeComodity: parsedType,
+                fdComodityName: d.fdComodityName ?? d.ComodityName ?? existing.fdComodityName ?? null,
               })
+            }
+          }
+
+          // 2b. Map nama tipe komoditi dari tbTypeComodity
+          const comodityTypeRows = await safeRunRaw(async () => {
+            return prisma.$queryRaw<any[]>`SELECT fdTypeComodity, fdComodityName FROM tbTypeComodity WITH (NOLOCK)`
+          }, 'get_tbTypeComodity_map')
+          const comodityNameMap = new Map<number, string>()
+          if (Array.isArray(comodityTypeRows)) {
+            for (const c of comodityTypeRows) {
+              if (c.fdTypeComodity !== null && c.fdTypeComodity !== undefined) {
+                comodityNameMap.set(Number(c.fdTypeComodity), String(c.fdComodityName || '').trim())
+              }
             }
           }
 
@@ -1020,6 +1099,9 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
             const m3K = p ? parseM3Val(p.fdM3Komplain ?? p.fdm3Komplain ?? p['M3 K'] ?? p['M3_K']) || 0 : 0
             const qty = p ? parseM3Val(p.fdTotalQty ?? p.fdQtyPL ?? p.fdTotalQtySJ ?? p.fdJmlPack) || 0 : 0
             const berat = p ? parseM3Val(p.fdTotalBeratSJ ?? p.fdJmlBerat ?? p.berat ?? p.Berat) || 0 : 0
+            const itemTypeComodity = p?.fdTypeComodity !== null && p?.fdTypeComodity !== undefined ? Number(p.fdTypeComodity) : null
+            const itemTypeComodityName = itemTypeComodity !== null ? (comodityNameMap.get(itemTypeComodity) || p?.fdComodityName || null) : (p?.fdComodityName || null)
+            const markingNoVal = p?.fdMarkingNo ? String(p.fdMarkingNo).trim() : (b?.fdMarkingNo ? String(b.fdMarkingNo).trim() : null)
 
             return {
               listCode: lc,
@@ -1027,6 +1109,9 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
               isParent: isP,
               isCurrent: bInv === targetInvNo,
               childLetter: bFam?.isChild ? bFam.headChar : undefined,
+              fdMarkingNo: markingNoVal || null,
+              fdTypeComodity: itemTypeComodity,
+              typeComodityName: itemTypeComodityName,
               m3Gudang: parseFloat(m3G.toFixed(4)),
               m3PL: parseFloat(m3PL.toFixed(4)),
               m3Komplain: parseFloat(m3K.toFixed(4)),
@@ -1122,7 +1207,9 @@ export async function evaluateM3Check(identifier: string): Promise<UnifiedM3Chec
   return {
     fdListCode: resolvedListCode,
     fdListType: resolvedListType,
-    defaultFdTypeComodity: markingBranch?.fdTypeComodity !== null && markingBranch?.fdTypeComodity !== undefined ? Number(markingBranch.fdTypeComodity) : null,
+    defaultFdTypeComodity: entryListTypeComodity ?? (markingBranch?.fdTypeComodity !== null && markingBranch?.fdTypeComodity !== undefined ? Number(markingBranch.fdTypeComodity) : null),
+    entryListTypeComodity,
+    entryListComodityName,
     markingComodityType,
     markingComodities,
     commodityMappings: Array.isArray(commodityMappingRows)

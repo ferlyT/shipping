@@ -75,7 +75,18 @@ export function useRoleList() {
         canView: !!rolePermissions[ap.path],
         isDefault: defaultPath === ap.path,
       }))
-      await userManagementApi.saveRolePermissions(selectedRole, payload)
+      const res = await userManagementApi.saveRolePermissions(selectedRole, payload)
+      const perms = res.data.data ?? []
+      if (perms.length > 0) {
+        const permMap: Record<string, boolean> = {}
+        let dPath = ''
+        perms.forEach((p: any) => {
+          permMap[p.path] = p.canView
+          if (p.isDefault) dPath = p.path
+        })
+        setRolePermissions(permMap)
+        setDefaultPath(dPath)
+      }
       toast.success(t('roles.saveSuccess', { role: selectedRole }))
     } catch (err: any) {
       toast.error(err?.response?.data?.message ?? 'Gagal menyimpan konfigurasi role')

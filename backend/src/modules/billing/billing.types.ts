@@ -114,6 +114,37 @@ export interface M3CheckResponse {
   }>
 }
 
+export interface BranchBillingMetrics {
+  branchCode: string
+  branchName: string
+  totalInvoices: number
+  totalTagihan: number
+  invoicesUdara: number
+  tagihanUdara: number
+  invoicesLaut: number
+  tagihanLaut: number
+  avgInvoiceValue: number
+  uniqueCustomers: number
+  shareOfTotal?: number
+}
+
+export interface BranchBillingComparison {
+  branchCode: string
+  branchName: string
+  current: BranchBillingMetrics
+  prev?: BranchBillingMetrics
+  lastYear?: BranchBillingMetrics
+  momTagihanDiff: number
+  momTagihanPercent: number
+  yoyTagihanDiff: number
+  yoyTagihanPercent: number
+  momInvoicesDiff: number
+  momInvoicesPercent: number
+  yoyInvoicesDiff: number
+  yoyInvoicesPercent: number
+  shareOfTotal: number
+}
+
 export interface PeriodBillingMetrics {
   year: number
   month: number
@@ -126,6 +157,7 @@ export interface PeriodBillingMetrics {
   tagihanLaut: number
   avgInvoiceValue: number
   uniqueCustomers: number
+  branches?: BranchBillingMetrics[]
 }
 
 export interface MetricComparison {
@@ -147,6 +179,7 @@ export interface BillingComparisons {
   tagihanLaut: MetricComparison
   avgInvoiceValue: MetricComparison
   uniqueCustomers: MetricComparison
+  byBranch?: BranchBillingComparison[]
 }
 
 export interface BillingKPIResult {
@@ -226,7 +259,8 @@ export interface BillingTimeline {
   fdLoadDate: string | null    // Loading ke kapal/pesawat (tbMarking.fdLoadDate)
   fdETD: string | null         // Estimated Time of Departure (tbMarking.fdETD)
   fdETA: string | null         // Estimated Time of Arrival (tbMarking.fdETA)
-  fdTgl_IN: string | null      // Masuk Gudang domestik (tbEntrylist.fdTgl_IN)
+  fdTgl_IN: string | null      // Masuk Gudang domestik (tbEntrylist.fdTgl_IN / tbMarking.fdExitDate)
+  fdGudang: string | null      // Nama gudang masuk / sortir (tbMarking.fdGudang)
   fdSjDate: string | null      // Surat Jalan diterbitkan (tbDelivery.fdSJDate)
   fdSndDate: string | null     // Tanggal Kirim MAX per listCode (tbDelivery.fdSndDate)
   fdGiveDate: string | null    // Diserahkan ke customer (tbDelivery.fdGiveDate)

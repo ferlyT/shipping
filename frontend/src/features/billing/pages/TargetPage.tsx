@@ -258,38 +258,38 @@ function TargetTableSkeleton() {
 
       {/* Desktop skeleton */}
       <div className="hidden sm:block overflow-x-auto">
-        <table className="w-full min-w-[1200px] text-left text-xs">
+        <table className="w-full min-w-[1400px] text-left text-xs">
           <thead className="sticky top-0 z-10 text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)] bg-[var(--color-neutral)] font-[var(--font-display)]">
             <tr>
-              <th className="px-4 py-3 w-[72px] border-b border-[var(--color-border)]">Aging</th>
-              <th className="px-4 py-3 border-b border-[var(--color-border)]">PIC</th>
-              <th className="px-4 py-3 border-b border-[var(--color-border)]">Customer & Status</th>
-              <th className="px-4 py-3 border-b border-[var(--color-border)]">Cabang & Sales</th>
-              <th className="px-4 py-3 border-b border-[var(--color-border)]">Marking & Kargo</th>
-              <th className="px-4 py-3 border-b border-[var(--color-border)]">Komoditi</th>
-              <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
-              <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
-              <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
-              <th className="px-3 py-3 border-b border-[var(--color-border)] text-center w-14">Salin</th>
+              <th className="px-3.5 py-3 w-[72px] min-w-[72px] border-b border-[var(--color-border)]">Aging</th>
+              <th className="px-3.5 py-3 w-[84px] min-w-[84px] border-b border-[var(--color-border)]">PIC</th>
+              <th className="px-3.5 py-3 w-[290px] min-w-[290px] border-b border-[var(--color-border)]">Customer & Status</th>
+              <th className="px-3.5 py-3 w-[130px] min-w-[130px] border-b border-[var(--color-border)]">Cabang & Sales</th>
+              <th className="px-3.5 py-3 w-[220px] min-w-[220px] border-b border-[var(--color-border)]">Marking & Kargo</th>
+              <th className="px-3.5 py-3 min-w-[170px] max-w-[220px] border-b border-[var(--color-border)]">Komoditi</th>
+              <th className="px-3.5 py-3 w-[110px] min-w-[110px] border-b border-[var(--color-border)]">Type</th>
+              <th className="px-3.5 py-3 w-[180px] min-w-[180px] text-right border-b border-[var(--color-border)]">Harga</th>
+              <th className="px-3.5 py-3 w-[140px] min-w-[140px] border-b border-[var(--color-border)]">Status Kirim</th>
+              <th className="px-3 py-3 w-14 min-w-14 border-b border-[var(--color-border)] text-center">Salin</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[var(--color-border)]">
             {Array.from({ length: 8 }).map((_, idx) => (
               <tr key={idx} className="border-b border-[var(--color-border)]">
-                <td className="px-4 py-3.5"><div className="h-4 w-12 rounded skeleton-shimmer" /></td>
-                <td className="px-4 py-3.5"><div className="h-4 w-14 rounded-full skeleton-shimmer" /></td>
-                <td className="px-4 py-3.5">
+                <td className="px-3.5 py-3.5"><div className="h-4 w-12 rounded skeleton-shimmer" /></td>
+                <td className="px-3.5 py-3.5"><div className="h-4 w-14 rounded-full skeleton-shimmer" /></td>
+                <td className="px-3.5 py-3.5">
                   <div className="space-y-1">
                     <div className="h-4 w-36 rounded-md skeleton-shimmer" />
-                    <div className="h-3 w-16 rounded skeleton-shimmer" />
+                    <div className="h-3 w-28 rounded skeleton-shimmer" />
                   </div>
                 </td>
-                <td className="px-4 py-3.5"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
-                <td className="px-4 py-3.5"><div className="h-4 w-28 rounded skeleton-shimmer" /></td>
-                <td className="px-4 py-3.5"><div className="h-4 w-32 rounded skeleton-shimmer" /></td>
-                <td className="px-4 py-3.5"><div className="h-4 w-14 rounded skeleton-shimmer" /></td>
-                <td className="px-4 py-3.5 text-right"><div className="h-6 w-24 rounded-lg skeleton-shimmer ml-auto" /></td>
-                <td className="px-4 py-3.5"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                <td className="px-3.5 py-3.5"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
+                <td className="px-3.5 py-3.5"><div className="h-4 w-28 rounded skeleton-shimmer" /></td>
+                <td className="px-3.5 py-3.5"><div className="h-4 w-32 rounded skeleton-shimmer" /></td>
+                <td className="px-3.5 py-3.5"><div className="h-4 w-14 rounded skeleton-shimmer" /></td>
+                <td className="px-3.5 py-3.5 text-right"><div className="h-6 w-24 rounded-lg skeleton-shimmer ml-auto" /></td>
+                <td className="px-3.5 py-3.5"><div className="h-4 w-20 rounded skeleton-shimmer" /></td>
                 <td className="px-3 py-3.5 text-center"><div className="h-6 w-6 rounded-lg skeleton-shimmer mx-auto" /></td>
               </tr>
             ))}
@@ -1028,18 +1028,7 @@ export default function TargetPage() {
                         >
                           {badge.label}
                         </span>
-                        <StatusBadge status={item.status} />
-                        {item.isPartial && (
-                          <button
-                            type="button"
-                            onClick={() => setPartialModalItem(item)}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-purple-500/15 border border-purple-500/50 text-purple-600 dark:text-purple-400 cursor-pointer shadow-2xs"
-                            title={`Kargo ini memiliki pengiriman parsial multi-marking (${item.countTerima || 2} marking). Klik untuk lihat rincian.`}
-                          >
-                            <Layers className="w-2.5 h-2.5 shrink-0" />
-                            <span>PARSIAL ({item.countTerima || 2})</span>
-                          </button>
-                        )}
+                        <StatusBadge status={item.status} size="sm" className="text-[9.5px] px-2 py-0.5 shadow-2xs" />
                         {item.isBroker && (
                           <BrokerBadge size="xs" />
                         )}
@@ -1067,32 +1056,34 @@ export default function TargetPage() {
 
                     {/* Customer & Branch */}
                     <div className="min-w-0">
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="flex items-center justify-between gap-1.5 min-w-0">
                         <span className="font-bold text-[var(--color-primary)] text-sm leading-tight truncate" title={item.consignee ? `${item.customer} (Consignee: ${item.consignee})` : item.customer}>
                           {item.customer || '-'}
                         </span>
-                        {item.custCode && (
-                          <span
-                            className="text-[9.5px] font-mono font-medium px-1.5 py-0.5 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-secondary)] shrink-0"
-                            title={`Kode Customer: ${item.custCode}`}
-                          >
-                            {item.custCode}
-                          </span>
-                        )}
-                        {(item.custCode || item.customer) && (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              setSelectedCustForHarga({ code: item.custCode || item.customer, name: item.customer })
-                            }}
-                            className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-bold rounded-md bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer shrink-0"
-                            title="Lihat Pricelist Customer (tbCustomersHarga)"
-                          >
-                            <Tag className="w-2.5 h-2.5 shrink-0" />
-                            <span>Tarif</span>
-                          </button>
-                        )}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {item.custCode && (
+                            <span
+                              className="text-[9px] font-mono font-medium px-1.5 py-0.5 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-secondary)] shrink-0"
+                              title={`Kode Customer: ${item.custCode}`}
+                            >
+                              {item.custCode}
+                            </span>
+                          )}
+                          {(item.custCode || item.customer) && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedCustForHarga({ code: item.custCode || item.customer, name: item.customer })
+                              }}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold rounded-md bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                              title="Lihat Pricelist Customer (tbCustomersHarga)"
+                            >
+                              <Tag className="w-2.5 h-2.5 shrink-0" />
+                              <span>Tarif</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                       {item.billTo && item.billTo.trim().toUpperCase() !== item.customer.trim().toUpperCase() && (
                         <div className="text-[10px] text-[var(--color-secondary)] truncate mt-0.5" title={`Bill To: ${item.billTo}`}>
@@ -1260,21 +1251,21 @@ export default function TargetPage() {
 
             {/* ── DESKTOP TABLE (>= sm) ── */}
             <div className="hidden sm:block overflow-x-auto">
-              <table className="w-full min-w-[1200px] text-left text-xs">
+              <table className="w-full min-w-[1400px] text-left text-xs">
                 <thead
                   className="sticky top-0 z-10 text-[10px] font-bold uppercase tracking-widest text-[var(--color-secondary)] bg-[var(--color-neutral)] font-[var(--font-display)]"
                 >
                   <tr>
-                    <th className="px-4 py-3 w-[72px] border-b border-[var(--color-border)]">Aging</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">PIC</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Customer & Status</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Cabang & Sales</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Marking & Kargo</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Komoditi</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Type</th>
-                    <th className="px-4 py-3 text-right border-b border-[var(--color-border)]">Harga</th>
-                    <th className="px-4 py-3 border-b border-[var(--color-border)]">Status Kirim</th>
-                    <th className="px-3 py-3 border-b border-[var(--color-border)] text-center w-14">Salin</th>
+                    <th className="px-3.5 py-3 w-[72px] min-w-[72px] border-b border-[var(--color-border)]">Aging</th>
+                    <th className="px-3.5 py-3 w-[84px] min-w-[84px] border-b border-[var(--color-border)]">PIC</th>
+                    <th className="px-3.5 py-3 w-[290px] min-w-[290px] border-b border-[var(--color-border)]">Customer & Status</th>
+                    <th className="px-3.5 py-3 w-[130px] min-w-[130px] border-b border-[var(--color-border)]">Cabang & Sales</th>
+                    <th className="px-3.5 py-3 w-[220px] min-w-[220px] border-b border-[var(--color-border)]">Marking & Kargo</th>
+                    <th className="px-3.5 py-3 min-w-[170px] max-w-[220px] border-b border-[var(--color-border)]">Komoditi</th>
+                    <th className="px-3.5 py-3 w-[110px] min-w-[110px] border-b border-[var(--color-border)]">Type</th>
+                    <th className="px-3.5 py-3 w-[180px] min-w-[180px] text-right border-b border-[var(--color-border)]">Harga</th>
+                    <th className="px-3.5 py-3 w-[140px] min-w-[140px] border-b border-[var(--color-border)]">Status Kirim</th>
+                    <th className="px-3 py-3 w-14 min-w-14 border-b border-[var(--color-border)] text-center">Salin</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1290,12 +1281,12 @@ export default function TargetPage() {
                         )}
                       >
                         {/* Aging */}
-                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+                        <td className="px-3.5 py-3 border-b border-[var(--color-border)] whitespace-nowrap w-[72px] min-w-[72px]">
                           <AgingBadge hari={item.hari} />
                         </td>
 
                         {/* PIC */}
-                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+                        <td className="px-3.5 py-3 border-b border-[var(--color-border)] whitespace-nowrap w-[84px] min-w-[84px]">
                           <span
                             className="inline-block px-2.5 py-0.5 text-[10px] font-bold rounded-full"
                             style={{ background: badge.bg, color: badge.text }}
@@ -1305,68 +1296,64 @@ export default function TargetPage() {
                         </td>
 
                         {/* Customer & Status */}
-                        <td className="px-4 py-3 border-b border-[var(--color-border)] max-w-[240px]">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-[var(--color-primary)] text-xs truncate leading-snug" title={item.consignee ? `${item.customer} (Consignee: ${item.consignee})` : item.customer}>
-                              {item.customer || '-'}
-                            </span>
-                            {item.custCode && (
+                        <td className="px-3.5 py-3 border-b border-[var(--color-border)] w-[290px] min-w-[290px]">
+                          <div className="flex flex-col gap-1 min-w-0">
+                            <div className="flex items-center justify-between gap-1.5 min-w-0">
                               <span
-                                className="text-[9.5px] font-mono font-medium px-1.5 py-0.5 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-secondary)] shrink-0"
-                                title={`Kode Customer: ${item.custCode}`}
+                                className="font-bold text-[var(--color-primary)] text-xs truncate leading-snug"
+                                title={item.consignee ? `${item.customer} (Consignee: ${item.consignee})` : item.customer}
                               >
-                                {item.custCode}
+                                {item.customer || '-'}
                               </span>
-                            )}
-                            {(item.custCode || item.customer) && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setSelectedCustForHarga({ code: item.custCode || item.customer, name: item.customer })
-                                }}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold rounded-md bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer shrink-0"
-                                title="Lihat Pricelist Customer (tbCustomersHarga)"
-                              >
-                                <Tag className="w-2.5 h-2.5 shrink-0" />
-                                <span>Tarif</span>
-                              </button>
-                            )}
-                          </div>
-                          {item.billTo && item.billTo.trim().toUpperCase() !== item.customer.trim().toUpperCase() && (
-                            <div className="text-[10px] text-[var(--color-secondary)] truncate mt-0.5" title={`Bill To: ${item.billTo}`}>
-                              Bill to: {item.billTo}
+                              <div className="flex items-center gap-1 shrink-0">
+                                {item.custCode && (
+                                  <span
+                                    className="text-[9px] font-mono font-medium px-1.5 py-0.5 rounded bg-[var(--color-neutral)] border border-[var(--color-border)] text-[var(--color-secondary)] shrink-0"
+                                    title={`Kode Customer: ${item.custCode}`}
+                                  >
+                                    {item.custCode}
+                                  </span>
+                                )}
+                                {(item.custCode || item.customer) && (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setSelectedCustForHarga({ code: item.custCode || item.customer, name: item.customer })
+                                    }}
+                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-bold rounded bg-amber-500/10 border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                                    title="Lihat Pricelist Customer (tbCustomersHarga)"
+                                  >
+                                    <Tag className="w-2.5 h-2.5 shrink-0" />
+                                    <span>Tarif</span>
+                                  </button>
+                                )}
+                              </div>
                             </div>
-                          )}
-                          <div className="mt-1 flex items-center gap-1.5 flex-nowrap">
-                            <StatusBadge status={item.status} />
-                            {item.isPartial && (
-                              <button
-                                type="button"
-                                onClick={() => setPartialModalItem(item)}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase rounded bg-purple-500/15 border border-purple-500/50 text-purple-600 dark:text-purple-400 hover:bg-purple-500/25 transition-colors cursor-pointer shadow-2xs shrink-0"
-                                title={`Kargo ini memiliki pengiriman parsial multi-marking (${item.countTerima || 2} marking). Klik untuk lihat rincian.`}
-                              >
-                                <Layers className="w-2.5 h-2.5 shrink-0" />
-                                <span>PARSIAL ({item.countTerima || 2} Resi)</span>
-                              </button>
+                            {item.billTo && item.billTo.trim().toUpperCase() !== item.customer.trim().toUpperCase() && (
+                              <div className="text-[10px] text-[var(--color-secondary)] truncate" title={`Bill To: ${item.billTo}`}>
+                                Bill to: {item.billTo}
+                              </div>
                             )}
-                            {item.isBroker && (
-                              <BrokerBadge size="xs" />
-                            )}
+                            <div className="mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              <StatusBadge status={item.status} size="sm" className="text-[9.5px] px-2 py-0.5 shadow-2xs" />
+                              {item.isBroker && (
+                                <BrokerBadge size="xs" />
+                              )}
+                            </div>
                           </div>
                         </td>
 
                         {/* Cabang & Sales */}
-                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+                        <td className="px-3.5 py-3 border-b border-[var(--color-border)] whitespace-nowrap w-[130px] min-w-[130px]">
                           <div className="font-medium text-[var(--color-primary)]">{item.branch || '-'}</div>
                           {item.sales && <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">{item.sales}</div>}
                         </td>
 
                         {/* Marking & Kargo */}
-                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap" title={`${item.markingCode} ${item.markingNo}`}>
+                        <td className="px-3.5 py-3 border-b border-[var(--color-border)] whitespace-nowrap w-[220px] min-w-[220px]" title={`${item.markingCode} ${item.markingNo}`}>
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            <span className="font-semibold text-[var(--color-primary)]">{item.markingCode || '-'}</span>
+                            <span className="font-semibold text-[var(--color-primary)] font-mono">{item.markingCode || '-'}</span>
                             {item.isPartial && (
                               <button
                                 type="button"
@@ -1375,7 +1362,7 @@ export default function TargetPage() {
                                 title={`Klik untuk melihat ${item.countTerima || 2} data pengiriman parsial terkait di tbEntryList`}
                               >
                                 <span
-                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-purple-500/15 border border-purple-500/50 text-purple-600 dark:text-purple-400 group-hover/parsial:bg-purple-500/25 transition-colors shadow-2xs shrink-0"
+                                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded bg-purple-500/15 border border-purple-500/50 text-purple-600 dark:text-purple-400 group-hover/parsial:bg-purple-500/25 transition-colors shadow-2xs shrink-0"
                                 >
                                   <Layers className="w-2.5 h-2.5 shrink-0" />
                                   PARSIAL ({item.countTerima || 2})
@@ -1385,7 +1372,7 @@ export default function TargetPage() {
                             {item.validasiMismatch && activeType !== 'udara' && (
                               <button
                                 onClick={() => setMismatchItem(item)}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded-md bg-transparent border border-rose-500/50 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
+                                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9px] font-extrabold uppercase tracking-wider rounded bg-transparent border border-rose-500/50 text-rose-600 dark:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer shrink-0"
                                 title="Klik untuk lihat detail mismatch"
                               >
                                 <AlertTriangle className="w-2.5 h-2.5 shrink-0" />
@@ -1393,12 +1380,12 @@ export default function TargetPage() {
                               </button>
                             )}
                           </div>
-                          <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">
+                          <div className="text-[10px] text-[var(--color-secondary)] mt-0.5 font-mono">
                             {item.markingNo ? `${item.markingNo} · ` : ''}
                             <span className="font-bold text-[var(--color-primary)]">{item.jmlPack} {item.satuan}</span>
                           </div>
                           {(item.m3Gudang > 0 || item.m3List > 0 || item.berat > 0) && (
-                            <div className="text-[10px] text-[var(--color-secondary)] mt-0.5">
+                            <div className="text-[10px] text-[var(--color-secondary)] mt-0.5 font-mono">
                               {item.m3Gudang > 0 ? `M3 Gdg: ${item.m3Gudang}` : ''}
                               {item.m3List   > 0 ? ` (List: ${item.m3List})` : ''}
                               {item.berat    > 0 ? ` · ${formatDecimal(item.berat, 2)} kg` : ''}
@@ -1407,7 +1394,7 @@ export default function TargetPage() {
                         </td>
 
                         {/* Komoditi */}
-                        <td className="px-4 py-3 border-b border-[var(--color-border)] max-w-[220px] text-[var(--color-secondary)]" title={item.comodity}>
+                        <td className="px-3.5 py-3 border-b border-[var(--color-border)] min-w-[170px] max-w-[220px] text-[var(--color-secondary)]" title={item.comodity}>
                           <div className="flex flex-col gap-1 items-start max-w-full overflow-hidden">
                             <span className="truncate max-w-full font-medium text-[var(--color-primary)]">{item.comodity || '-'}</span>
                             {item.isCommodityOverride && item.commodityOverrideDetail && (
@@ -1423,7 +1410,7 @@ export default function TargetPage() {
                         </td>
 
                         {/* Type */}
-                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+                        <td className="px-3.5 py-3 border-b border-[var(--color-border)] whitespace-nowrap w-[110px] min-w-[110px]">
                           <div className="flex items-center gap-1.5">
                             <CategoryTypeBadge typeText={item.type} />
                             {Number(item.taxReturn) === 1 && (
@@ -1438,7 +1425,7 @@ export default function TargetPage() {
                         </td>
 
                         {/* Harga */}
-                        <td className="px-4 py-3 border-b border-[var(--color-border)] text-right whitespace-nowrap">
+                        <td className="px-3.5 py-3 border-b border-[var(--color-border)] text-right whitespace-nowrap w-[180px] min-w-[180px]">
                           <div className="flex flex-col items-end gap-1">
                             {item.priceStatus === 'MATCH' ? (
                               <div className="flex items-center justify-end gap-1.5 flex-wrap">
@@ -1560,12 +1547,12 @@ export default function TargetPage() {
                         </td>
 
                         {/* Status Kirim */}
-                        <td className="px-4 py-3 border-b border-[var(--color-border)] whitespace-nowrap">
+                        <td className="px-3.5 py-3 border-b border-[var(--color-border)] whitespace-nowrap w-[140px] min-w-[140px]">
                           <StatusKirimBadge status={item.statusKirim} />
                         </td>
 
                         {/* Salin Data Kargo */}
-                        <td className="px-3 py-3 border-b border-[var(--color-border)] text-center whitespace-nowrap">
+                        <td className="px-3 py-3 border-b border-[var(--color-border)] text-center whitespace-nowrap w-14 min-w-14">
                           <button
                             type="button"
                             onClick={() => handleCopyTargetItem(item)}

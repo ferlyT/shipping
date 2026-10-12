@@ -19,6 +19,8 @@ Dokumentasi spesifikasi endpoint, pengelolaan dimensi coly, Stored Procedure kal
 | `GET` | `/api/marking/:code` | `/mshipping/shipments` | Mengambil info profil marking dan data pelanggan terkait |
 | `GET` | `/api/marking/:code/sizes` | `/mshipping/shipments` | Mengambil daftar rincian dimensi coly (`tbMarkingSize`) |
 | `POST` | `/api/marking/:code/sizes` | `/mshipping/shipments` | Menyimpan / memperbarui rincian ukuran fisik marking |
+| `POST` | `/api/marking/ocr-container` | `/mshipping/shipment-batches` / `/mshipping/shipments` | Deteksi OCR nomor kontainer dari gambar kamera / galeri (Tesseract + Sharp + ISO 6346) |
+| `PATCH`/`PUT` | `/api/marking/:id/exit-date` | `/mshipping/shipments` | Update atau hapus Exit Date batch marking (validasi kronologis & future date <= 3 hari) |
 | `GET` | `/api/m3-check` | `/mshipping/m3-check` | Mengambil daftar audit kargo per marking beserta rasio & selisih M³ |
 | `GET` | `/api/m3-check/marking/:code` | `/mshipping/m3-check` | Mengambil rincian perbandingan M³ fisik vs M³ sistem per marking |
 

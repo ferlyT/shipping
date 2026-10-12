@@ -23,6 +23,7 @@ Dokumentasi spesifikasi endpoint pelanggan, single source of truth nama pelangga
 | `GET` | `/api/customers/suggestions` | `/mshipping/customers` | Autocomplete instan nama pelanggan, kode pelanggan, kontak |
 | `GET` | `/api/customers/:custCode/destinations` | `/mshipping/customers` | Mengambil daftar alamat tujuan pengiriman barang |
 | `GET` | `/api/customers/tiers` | `/mshipping/customers` | Daftar tiering pelanggan berdasarkan volume / omset transaksi |
+| `GET` | `/api/customers/:id/commodity-stats` | `/mshipping/customers` | Statistik agregasi 2 bar proporsi (Laut & Udara) serta tren bulanan komoditas pelanggan tahun aktif berbasis `tbEntryListDetail`, komplain, dan `tbBillingDetail` (PCS & CTR) |
 
 ---
 

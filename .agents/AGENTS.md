@@ -50,6 +50,11 @@ Untuk instruksi teknis terperinci, buka modul terkait:
    - Sinkronisasi versi di 4 file (`app.json`, `package.json`, `mobile.service.ts`, `FinanceTab.tsx`).
    - Alur compile Hermes, repack manifest, sign keystore release, dan sync ke 4 titik server.
 
+5. **[Aturan Desain: Dashboard Operasional Mobile](./rules/mobile-design-rules.md)**:
+   - Gaya tenang dan editorial: dilarang menambah dekorasi atau kotak-kotak kartu berwarna tebal.
+   - Angka adalah isi (bukan hiasan), warna hanya untuk arti (`--late`, `--warn`, `--ok`, `--air`, `--sea`).
+   - Satu aksen interaktif `--accent` (merah bata `#e0644e`), teks tag role (bukan ikon), tipografi sentence case IBM Plex Sans, dan pemisah garis tipis `border-top: 1px solid var(--line)`.
+
 ---
 
 ## 🚫 Anti-Pattern Kritis (Ringkasan)

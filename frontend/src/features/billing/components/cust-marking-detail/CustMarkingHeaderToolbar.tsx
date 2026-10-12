@@ -1,4 +1,4 @@
-import { Search, FileSpreadsheet, Loader2, AlertTriangle, X } from 'lucide-react'
+import { Search, FileSpreadsheet, Loader2, AlertTriangle, X, Layers } from 'lucide-react'
 import { Button } from '@/components/ui/Button'
 import type { ColumnPreset } from './types'
 
@@ -17,6 +17,11 @@ export interface CustMarkingHeaderToolbarProps {
   totalAll: number
   hasSelisihCount?: number
   countQtyKomplainMismatch?: number
+  groupByInvoice?: boolean
+  onToggleGroupByInvoice?: () => void
+  onExpandAll?: () => void
+  onCollapseAll?: () => void
+  invoiceGroupCount?: number
 }
 
 export function CustMarkingHeaderToolbar({
@@ -34,6 +39,11 @@ export function CustMarkingHeaderToolbar({
   totalAll,
   hasSelisihCount = 0,
   countQtyKomplainMismatch = 0,
+  groupByInvoice = true,
+  onToggleGroupByInvoice,
+  onExpandAll,
+  onCollapseAll,
+  invoiceGroupCount = 0,
 }: CustMarkingHeaderToolbarProps) {
   const hasMultipleBranches = branches.length > 1
 
@@ -43,13 +53,13 @@ export function CustMarkingHeaderToolbar({
       <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
         {/* Search Field */}
         <div className="relative flex-1 max-w-sm">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none" />
+          <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--color-secondary)] pointer-events-none" />
           <input
             type="text"
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder="Cari invoice, listcode, resi, komoditas..."
-            className="w-full pl-8.5 pr-8 py-1.5 text-xs bg-[var(--color-neutral)]/40 border border-[var(--color-border)] rounded-lg text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] focus:outline-hidden focus:border-[var(--color-tertiary)] transition-colors"
+            className="w-full pl-8 pr-8 py-1.5 text-xs bg-[var(--color-neutral)]/40 border border-[var(--color-border)] rounded-lg text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] focus:outline-none focus:border-[var(--color-tertiary)] transition-colors"
           />
           {search && (
             <button
@@ -167,8 +177,52 @@ export function CustMarkingHeaderToolbar({
           ))}
         </div>
 
-        {/* Toggle Hanya Selisih / Komplain */}
-        <div className="flex items-center gap-2">
+        {/* Kontrol Kanan: Group fdInvNo & Toggle Selisih */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Toggle Grouping fdInvNo */}
+          <button
+            type="button"
+            onClick={onToggleGroupByInvoice}
+            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium transition-all cursor-pointer ${
+              groupByInvoice
+                ? 'border border-[var(--color-tertiary)] bg-[var(--color-tertiary)]/15 text-[var(--color-tertiary)] font-bold shadow-2xs'
+                : 'border border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:border-[var(--color-tertiary)]/40 bg-[var(--color-neutral)]/20'
+            }`}
+            title="Kelompokkan data berdasarkan Nomor Invoice (fdInvNo)"
+          >
+            <Layers className="w-3 h-3 text-[var(--color-tertiary)]" />
+            <span>Group fdInvNo</span>
+            {invoiceGroupCount > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-[var(--color-surface)] border border-[var(--color-border)] text-[var(--color-primary)]">
+                {invoiceGroupCount}
+              </span>
+            )}
+          </button>
+
+          {/* Tombol Expand/Collapse All ketika grouping aktif */}
+          {groupByInvoice && (
+            <div className="inline-flex items-center rounded-full border border-[var(--color-border)] bg-[var(--color-neutral)]/30 px-1 py-0.5 text-[10.5px]">
+              <button
+                type="button"
+                onClick={onExpandAll}
+                className="px-2 py-0.5 rounded-full text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer font-medium"
+                title="Buka semua grup invoice"
+              >
+                Buka Semua
+              </button>
+              <span className="text-[var(--color-border)] text-[10px]">|</span>
+              <button
+                type="button"
+                onClick={onCollapseAll}
+                className="px-2 py-0.5 rounded-full text-[var(--color-secondary)] hover:text-[var(--color-primary)] hover:bg-[var(--color-surface)] transition-colors cursor-pointer font-medium"
+                title="Tutup semua grup invoice"
+              >
+                Tutup Semua
+              </button>
+            </div>
+          )}
+
+          {/* Toggle Hanya Selisih / Komplain */}
           <button
             type="button"
             onClick={onToggleKomplain}
@@ -185,7 +239,7 @@ export function CustMarkingHeaderToolbar({
             />
             <span>Hanya Selisih / Komplain</span>
             {hasSelisihCount > 0 && (
-              <span className="px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold bg-transparent border border-rose-500/40 text-rose-500">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-transparent border border-rose-500/40 text-rose-500">
                 {hasSelisihCount}
               </span>
             )}
@@ -221,7 +275,7 @@ export function CustMarkingHeaderToolbar({
                 Filter cabang aktif: <strong className="text-[var(--color-primary)] font-mono">{selectedBranch}</strong>
               </span>
             ) : (
-              <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
+              <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
                 Gabungan Semua Cabang
               </span>
             )}

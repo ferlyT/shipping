@@ -5,6 +5,7 @@ export interface VoiceAssistantContext {
   currentInvNo?: string
   isIssued?: boolean
   underchargedCount?: number
+  isSea?: boolean
   onOpenSummary?: (tab?: SummaryModalTab) => void
   onCloseSummary?: () => void
   onTriggerIssue?: () => void
@@ -13,7 +14,8 @@ export interface VoiceAssistantContext {
   onNavigateInvoice?: (target: string) => void
   onOpenDrawer?: () => void
   onPrintInvoice?: () => void
-  onOpenModal?: (modalName: 'summary' | 'issue' | 'resi' | 'history' | 'audit') => void
+  onOpenModal?: (modalName: 'summary' | 'issue' | 'resi' | 'history' | 'audit' | 'inspection' | 'tarif') => void
+  onBack?: () => void
 }
 
 export type VoiceDisplayMode = 'modal' | 'hud'
@@ -42,16 +44,17 @@ interface VoiceAssistantState {
   setVoiceTelemetry: (data: Partial<Pick<VoiceAssistantState, 'isListening' | 'isMuted' | 'transcript' | 'interimTranscript'>>) => void
   setCommandStatus: (status: VoiceCommandStatus, feedback?: string) => void
   toggleVoiceMute: () => void
+  setVoiceMuted: (muted: boolean) => void
 }
 
 export const useVoiceAssistantStore = create<VoiceAssistantState>((set, get) => ({
   isOpen: false,
-  displayMode: 'modal',
+  displayMode: 'hud',
   context: null,
   suppressionCount: 0,
   isSuppressed: false,
   isListening: false,
-  isMuted: false,
+  isMuted: true,
   transcript: '',
   interimTranscript: '',
   commandStatus: 'idle',
@@ -103,4 +106,5 @@ export const useVoiceAssistantStore = create<VoiceAssistantState>((set, get) => 
   setCommandStatus: (status, feedback = '') => set({ commandStatus: status, commandFeedback: feedback }),
 
   toggleVoiceMute: () => set((state) => ({ isMuted: !state.isMuted })),
+  setVoiceMuted: (muted) => set({ isMuted: muted }),
 }))

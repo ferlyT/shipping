@@ -1,9 +1,6 @@
 import React from 'react'
-import { View, Text } from 'react-native'
-import { Tag, Calendar } from 'lucide-react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import * as Haptics from 'expo-haptics'
-import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { useThemeStore } from '@/theme/themeStore'
 import { useTranslation } from '@/hooks/useTranslation'
 import { formatNumber, formatDecimal, formatDate } from '@/lib/utils'
@@ -12,10 +9,12 @@ interface ExitBatchListItemProps {
   batch: any
   activeScope: 'today' | 'yesterday' | 'tomorrow' | 'recent' | 'eta_not_exit' | 'missed_sla'
   onPress: (batch: any) => void
+  onEditExitDate?: (batch: any) => void
 }
 
-export function ExitBatchListItem({ batch: b, activeScope, onPress }: ExitBatchListItemProps) {
-  const { colors } = useThemeStore()
+export function ExitBatchListItem({ batch: b, activeScope, onPress, onEditExitDate }: ExitBatchListItemProps) {
+  const { colors, mode } = useThemeStore()
+  const isDark = mode === 'midnight'
   const { t } = useTranslation()
 
   const code = (b.fdMarkingCode || '').trim()
@@ -24,66 +23,179 @@ export function ExitBatchListItem({ batch: b, activeScope, onPress }: ExitBatchL
   const isEtaNotExit = activeScope === 'eta_not_exit'
   const isMissedSla = activeScope === 'missed_sla'
 
-  let dateLabel = ''
-  let dateColor = colors.secondary
+  const isAir = b.fdListType === 1
+  const modeColor = isAir ? '#E2B266' : '#5FA3D4'
+  const modeText = isAir ? t('overview.air', 'Udara') : t('overview.sea', 'Laut')
+  const lineColor = isDark ? '#222C38' : '#E3E7EC'
+
+  let dateText = ''
+  let dateColor = '#4CC38A'
   if (isTomorrow) {
-    dateLabel = `${t('overview.predicted', 'Prediksi:')} ${formatDate(b.predictedExitDate || b.fdETA)}`
-    dateColor = '#F59E0B'
+    dateText = `Prediksi ${formatDate(b.predictedExitDate || b.fdETA)}`
+    dateColor = '#E5A93C'
   } else if (isEtaNotExit) {
-    dateLabel = `${t('overview.eta', 'ETA:')} ${formatDate(b.fdETA)}`
-    dateColor = '#F59E0B'
+    dateText = `ETA ${formatDate(b.fdETA)}`
+    dateColor = '#E5A93C'
   } else if (isMissedSla) {
-    dateLabel = `${t('overview.eta', 'ETA:')} ${formatDate(b.fdETA)}`
-    dateColor = '#EF4444'
-  } else if (activeScope === 'today') {
-    dateLabel = `${t('overview.exit', 'Exit:')} ${formatDate(b.fdExitDate)}`
-    dateColor = '#10B981'
+    dateText = `ETA ${formatDate(b.fdETA)}`
+    dateColor = '#EF6B5B'
   } else {
-    dateLabel = `${t('overview.exit', 'Exit:')} ${formatDate(b.fdExitDate)}`
-    dateColor = colors.secondary
+    dateText = `Exit ${formatDate(b.fdExitDate)}`
+    dateColor = '#4CC38A'
   }
 
   return (
-    <Card
-      style={{ padding: 12, gap: 6 }}
+    <TouchableOpacity
+      activeOpacity={0.7}
+      style={[styles.batchRow, { borderTopColor: lineColor }]}
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         onPress(b)
       }}
     >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1, minWidth: 0 }}>
-          <Tag size={13} color={colors.tertiary} style={{ flexShrink: 0 }} />
-          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary, flex: 1 }} numberOfLines={1}>
+      {/* Baris 1: ID Batch + Type di kiri; Dot + Moda di kanan */}
+      <View style={styles.b1}>
+        <View style={styles.idGroup}>
+          <Text style={[styles.batchId, { color: colors.primary }]} numberOfLines={1}>
             {code || '—'}
           </Text>
-        </View>
-        <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center', flexShrink: 0 }}>
           {b.fdBranchCode?.trim() ? (
-            <Badge label={b.fdBranchCode.trim()} variant="neutral" />
+            <View style={[styles.typeTag, { borderColor: lineColor }]}>
+              <Text style={[styles.typeText, { color: colors.secondary }]}>
+                {b.fdBranchCode.trim()}
+              </Text>
+            </View>
           ) : null}
-          <Badge
-            label={b.fdListType === 1 ? t('overview.air', 'Udara') : t('overview.sea', 'Laut')}
-            variant={b.fdListType === 1 ? 'air' : 'sea'}
-          />
         </View>
-      </View>
 
-      <Text style={{ fontSize: 11.5, color: colors.secondary }} numberOfLines={1}>
-        Cont/AWB: {contOrAwb} • {b.fdConsignee?.trim() || 'No Consignee'}
-      </Text>
-
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6, marginTop: 2 }}>
-        <Text style={{ fontSize: 11, color: colors.secondary, flex: 1, marginRight: 6 }} numberOfLines={1}>
-          {formatNumber(b.fdJmlTerima || b.fdJmlPack || 0)} {b.fdSatuan?.trim() || 'Koli'} • {formatDecimal(b.fdJmlBerat || 0, 1)} kg
-        </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-          <Calendar size={11} color={dateColor} />
-          <Text style={{ fontSize: 11, color: dateColor, fontWeight: '700' }} numberOfLines={1}>
-            {dateLabel}
+        <View style={styles.modeGroup}>
+          <View style={[styles.dot, { backgroundColor: modeColor }]} />
+          <Text style={[styles.modeText, { color: colors.secondary }]}>
+            {modeText}
           </Text>
         </View>
       </View>
-    </Card>
+
+      {/* Baris 2: Kontainer/AWB tebal + Rute/Consignee */}
+      <View style={styles.b2}>
+        <Text style={[styles.boxText, { color: colors.primary }]}>
+          {contOrAwb}
+        </Text>
+        {b.fdConsignee?.trim() ? (
+          <Text style={[styles.routeText, { color: colors.secondary }]} numberOfLines={1}>
+            {'   '}{b.fdConsignee.trim()}
+          </Text>
+        ) : null}
+      </View>
+
+      {/* Baris 3: Koli & Berat di kiri; Status Exit di kanan */}
+      <View style={styles.b3}>
+        <Text style={[styles.qtyText, { color: colors.secondary }]}>
+          {formatNumber(b.fdJmlTerima || b.fdJmlPack || 0)} {b.fdSatuan?.trim() || 'koli'} · {formatDecimal(b.fdJmlBerat || 0, 1)} kg
+        </Text>
+
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Text style={[styles.exitDateText, { color: dateColor }]}>
+            {dateText}
+          </Text>
+
+          {isEtaNotExit && onEditExitDate && (
+            <TouchableOpacity
+              activeOpacity={0.7}
+              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+              onPress={() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                onEditExitDate(b)
+              }}
+              style={[styles.exitActionBtn, { borderColor: '#4CC38A' }]}
+            >
+              <Text style={{ fontSize: 10, fontWeight: '600', color: '#4CC38A' }}>
+                + Exit
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
   )
 }
+
+const styles = StyleSheet.create({
+  batchRow: {
+    paddingVertical: 16,
+    borderTopWidth: 1,
+  },
+  b1: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  idGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  batchId: {
+    fontSize: 19,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+  },
+  typeTag: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 0.5,
+  },
+  typeText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  modeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  modeText: {
+    fontSize: 14,
+  },
+  b2: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginVertical: 4,
+  },
+  boxText: {
+    fontSize: 14,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+  },
+  routeText: {
+    fontSize: 14,
+  },
+  b3: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 3,
+  },
+  qtyText: {
+    fontSize: 14,
+    fontVariant: ['tabular-nums'],
+  },
+  exitDateText: {
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  exitActionBtn: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 1.5,
+  },
+})

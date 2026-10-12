@@ -17,9 +17,14 @@ import {
   deleteBapPhoto,
 } from './inspectionPhotos.service'
 import {
+  uploadBapVoiceMemo,
+  deleteBapVoiceMemo,
+} from './inspectionVoiceMemo.service'
+import {
   CreateInspectionReportSchema,
   UpdateInspectionReportSchema,
   UploadBapPhotoSchema,
+  UploadBapVoiceMemoSchema,
 } from './inspectionReports.types'
 
 export const inspectionReportsRoutes = new Hono()
@@ -138,7 +143,7 @@ inspectionReportsRoutes.post('/:id/photos', validateBody(UploadBapPhotoSchema), 
   const username = user?.username || user?.fullName || 'system'
 
   try {
-    const photo = await uploadBapPhoto(id, body.photoBase64, body.caption, username)
+    const photo = await uploadBapPhoto(id, body.photoBase64, body.caption, username, body.annotationsSvg)
     return successResponse(c, photo, undefined, 201)
   } catch (error: any) {
     return errorResponse(c, error.message || 'Gagal mengunggah foto', 400)
@@ -173,5 +178,39 @@ inspectionReportsRoutes.delete('/:id/photos/:photoId', async (c) => {
     return successResponse(c, result)
   } catch (error: any) {
     return errorResponse(c, error.message || 'Gagal menghapus foto BAP', 400)
+  }
+})
+
+// POST /:id/voice-memo - Upload voice memo (max 90 seconds)
+inspectionReportsRoutes.post('/:id/voice-memo', validateBody(UploadBapVoiceMemoSchema), async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) {
+    return errorResponse(c, 'ID tidak valid', 400)
+  }
+
+  const body = c.req.valid('json')
+  const user = c.get('user')
+  const username = user?.username || user?.fullName || 'system'
+
+  try {
+    const result = await uploadBapVoiceMemo(id, body.audioBase64, body.duration || 0, username)
+    return successResponse(c, result, undefined, 201)
+  } catch (error: any) {
+    return errorResponse(c, error.message || 'Gagal mengunggah catatan suara', 400)
+  }
+})
+
+// DELETE /:id/voice-memo - Delete voice memo
+inspectionReportsRoutes.delete('/:id/voice-memo', async (c) => {
+  const id = Number(c.req.param('id'))
+  if (isNaN(id)) {
+    return errorResponse(c, 'ID tidak valid', 400)
+  }
+
+  try {
+    const result = await deleteBapVoiceMemo(id)
+    return successResponse(c, result)
+  } catch (error: any) {
+    return errorResponse(c, error.message || 'Gagal menghapus catatan suara', 400)
   }
 })

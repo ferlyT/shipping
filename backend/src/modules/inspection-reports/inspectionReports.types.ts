@@ -70,4 +70,10 @@ export const UpdateInspectionReportSchema = z.object({
 export const UploadBapPhotoSchema = z.object({
   photoBase64: z.string().min(1, 'Data foto (photoBase64) wajib disertakan'),
   caption: z.string().optional(),
+  annotationsSvg: z.string().optional(),
+})
+
+export const UploadBapVoiceMemoSchema = z.object({
+  audioBase64: z.string().min(1, 'Data audio (audioBase64) wajib disertakan'),
+  duration: z.number().int().nonnegative().optional(),
 })

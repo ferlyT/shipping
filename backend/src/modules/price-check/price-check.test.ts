@@ -90,6 +90,8 @@ describe('Price Check Module', () => {
       expect(getNormalizedBranchCode('Singapore')).toBe('SG')
       expect(getNormalizedBranchCode('Singapura')).toBe('SG')
       expect(getNormalizedBranchCode('SG')).toBe('SG')
+      expect(getNormalizedBranchCode('--')).toBe('SG')
+      expect(getNormalizedBranchCode('-')).toBe('SG')
     })
 
     it('handles falsy or custom codes gracefully', () => {

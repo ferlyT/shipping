@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ArrowLeft, Copy, Check, FileText, ScanBarcode } from 'lucide-react'
+import { ArrowLeft, Copy, Check, FileText, ScanBarcode, Paperclip } from 'lucide-react'
 import { billingApi } from '../services/billing.service'
 import { Button } from '@/components/ui/Button'
 import { PageHeader } from '@/components/ui/PageHeader'
@@ -12,12 +12,14 @@ import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { CustomerBillingHistoryModal } from '../components/CustomerBillingHistoryModal'
 import { BillResiMarkingModal } from '../components/BillResiMarkingModal'
 import { BillingPrintButtons } from '../components/BillingPrintButtons'
+import BillingLampiranSection from '../components/lampiran/BillingLampiranSection'
 import { useTranslation } from '@/hooks/useTranslation'
 import { ROUTES } from '@/lib/constants'
-import { useAuthStore } from '@/stores/authStore'
 import { useToastStore } from '@/stores/toastStore'
 import type { Billing } from '../types/billing.types'
 import { formatQtyDecimal, isMktCustomer } from '../utils/billing.utils'
+import { useBillingViewConsigneePermission } from '../hooks/useBillingPermissions'
+import { cn } from '@/lib/utils'
 
 function DetailPageSkeleton() {
   const { t } = useTranslation()
@@ -69,7 +71,6 @@ export default function DetailPage() {
   const { t } = useTranslation()
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
-  const { user } = useAuthStore()
   const { addToast } = useToastStore()
 
   const [isCopied, setIsCopied] = useState(false)
@@ -78,10 +79,7 @@ export default function DetailPage() {
   const [isResiModalOpen, setIsResiModalOpen] = useState(false)
 
   // Role check: Admin, superadmin, atau role dengan permission khusus yang dapat melihat fdConsignee
-  const canViewConsignee =
-    user?.role === 'admin' ||
-    user?.role === 'superadmin' ||
-    Boolean(user?.permissions?.includes('billing.view_consignee'))
+  const canViewConsignee = useBillingViewConsigneePermission()
 
   const handleCopyInvNo = async (invNo?: string | null) => {
     const text = (invNo || '').trim()
@@ -217,6 +215,29 @@ export default function DetailPage() {
         ]}
         actions={
           <div className="flex items-center gap-2 flex-wrap">
+            <button
+              type="button"
+              onClick={() => {
+                const el = document.getElementById('billing-lampiran-section')
+                if (el) {
+                  el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              }}
+              title="Lihat atau unggah lampiran dokumen invoice"
+              className={cn(
+                "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-all cursor-pointer select-none active:scale-95 shadow-2xs",
+                (data.attachmentCount ?? 0) > 0
+                  ? "bg-[var(--color-tertiary)]/10 text-[var(--color-tertiary)] border-[var(--color-tertiary)]/40 hover:bg-[var(--color-tertiary)]/20"
+                  : "bg-[var(--color-surface)] hover:bg-[var(--color-neutral)] text-[var(--color-secondary)] hover:text-[var(--color-primary)] border-[var(--color-border)]"
+              )}
+            >
+              <Paperclip className="w-3.5 h-3.5" />
+              <span>
+                {(data.attachmentCount ?? 0) > 0
+                  ? `${data.attachmentCount} Lampiran`
+                  : t('billing.lampiran.title') || 'Lampiran'}
+              </span>
+            </button>
             <BillingPrintButtons invNo={data?.fdInvNo || id || ''} size="sm" />
             <Button variant="ghost" size="sm" onClick={() => navigate(ROUTES.BILLING_LIST)}>
               <ArrowLeft className="w-4 h-4 mr-2" /> {t('billing.detail.backToList')}
@@ -643,6 +664,11 @@ export default function DetailPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Section Lampiran Invoice (Foto & Dokumen PDF) */}
+      <div id="billing-lampiran-section" className="scroll-mt-6">
+        <BillingLampiranSection invNo={data.fdInvNo} />
       </div>
 
       {/* Customer Billing History Modal */}

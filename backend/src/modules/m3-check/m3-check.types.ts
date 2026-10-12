@@ -56,6 +56,8 @@ export interface UnifiedM3CheckResult {
   fdListCode: string
   fdListType: number | null
   defaultFdTypeComodity: number | null
+  entryListTypeComodity?: number | null
+  entryListComodityName?: string | null
   markingComodityType: number | null
   markingComodities: MarkingComodityItem[]
   commodityMappings?: Array<{
@@ -190,6 +192,9 @@ export interface RelatedListCodeItem {
   isParent?: boolean
   isCurrent?: boolean
   childLetter?: string | null
+  fdMarkingNo?: string | null
+  fdTypeComodity?: number | null
+  typeComodityName?: string | null
   m3Gudang: number
   m3PL?: number
   m3Komplain?: number

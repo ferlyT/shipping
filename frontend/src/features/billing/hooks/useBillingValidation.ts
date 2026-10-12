@@ -615,20 +615,23 @@ export function useBillingValidation({
   const isBilledBelowMinM3 = !isAir && !isChildBillMerged && billedM3 > 0 && billedM3 < (effectiveMinChargeM3 - 0.0001)
 
   // 6. Commodity & Item Pricing Evaluation
+  // User Rule: Untuk item baris 1 selalu ikuti tipe comoditi dari tbentrylist
+  const entryListTypeId = (res?.entryListTypeComodity !== null && res?.entryListTypeComodity !== undefined && Number(res.entryListTypeComodity) > 0)
+    ? Number(res.entryListTypeComodity)
+    : (res?.defaultFdTypeComodity !== null && res?.defaultFdTypeComodity !== undefined && Number(res.defaultFdTypeComodity) > 0 ? Number(res.defaultFdTypeComodity) : null)
+
   const billTypeId = (billingData?.fdTypeComodity !== null && billingData?.fdTypeComodity !== undefined && Number(billingData.fdTypeComodity) > 0)
     ? Number(billingData.fdTypeComodity)
     : null
-  const defaultTypeId = billTypeId ?? (res?.defaultFdTypeComodity && res.defaultFdTypeComodity > 0 ? res.defaultFdTypeComodity : null) ?? res?.markingComodityType ?? null
+  const defaultTypeId = entryListTypeId ?? billTypeId ?? res?.markingComodityType ?? null
   const defaultMatchType = res?.comodityTypes?.find(
     (c) => c.fdTypeComodity === defaultTypeId && (res?.fdListType ? c.fdListType === res.fdListType : true)
   )
-  const defaultComodityName = defaultMatchType
-    ? defaultMatchType.fdComodityName
-    : (res?.markingComodities?.[0]?.fdComodityName || (defaultTypeId ? `Kategori ${defaultTypeId}` : '—'))
+  const defaultComodityName = res?.entryListComodityName || defaultMatchType?.fdComodityName || (res?.markingComodities?.[0]?.fdComodityName || (defaultTypeId ? `Kategori ${defaultTypeId}` : '—'))
 
   const evaluatedItems = useMemo(() => {
     if ((!res && (!validExpedisiList || validExpedisiList.length === 0)) || details.length === 0) return []
-    return details.map((item) => {
+    return details.map((item, idx) => {
       const evaluation = evaluateItemPrice(item, {
         res,
         isAir,
@@ -637,10 +640,13 @@ export function useBillingValidation({
         expedisiList: validExpedisiList,
         branchCode: billingData?.fdBranchCode,
         invNo: billingData?.fdInvNo,
+        itemIndex: idx,
+        entryListTypeId,
+        entryListComodityName: res?.entryListComodityName || defaultMatchType?.fdComodityName,
       })
       return { item, evaluation }
     })
-  }, [details, res, isAir, defaultTypeId, defaultComodityName, validExpedisiList, billingData?.fdBranchCode, billingData?.fdInvNo])
+  }, [details, res, isAir, defaultTypeId, defaultComodityName, validExpedisiList, billingData?.fdBranchCode, billingData?.fdInvNo, entryListTypeId, defaultMatchType])
 
   const underchargedItems = useMemo<UnderchargedItem[]>(() => {
     return evaluatedItems

@@ -1,6 +1,7 @@
-import { Check, Copy, Clock, AlertTriangle } from 'lucide-react'
+import { Check, Copy, Clock, AlertTriangle, Tag } from 'lucide-react'
 import { formatDate, formatDateTime, displayCustName } from '@/lib/utils'
 import { isMktCustomer } from '../../utils/billing.utils'
+import { useBillingViewConsigneePermission } from '../../hooks/useBillingPermissions'
 import type { Billing } from '../../types/billing.types'
 
 export interface CustomerInfoCardProps {
@@ -14,6 +15,7 @@ export interface CustomerInfoCardProps {
     correctTotalRp: number
     matchedItemName?: string
   } | null | undefined
+  onOpenCustomerHarga?: () => void
 }
 
 export function CustomerInfoCard({
@@ -22,13 +24,29 @@ export function CustomerInfoCard({
   onCopyMarkingInfo,
   isCurrencyInputError,
   currencyInputErrorDetail,
+  onOpenCustomerHarga,
 }: CustomerInfoCardProps) {
+  const canViewConsignee = useBillingViewConsigneePermission()
+
   return (
     <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-3.5 sm:p-4 shadow-2xs shrink-0 space-y-3">
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-3.5 text-xs">
         {/* Customer */}
         <div className="space-y-1">
-          <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] font-[var(--font-label)] tracking-wider block">Customer</span>
+          <div className="flex items-center justify-between gap-1">
+            <span className="text-[10px] uppercase font-bold text-[var(--color-secondary)] font-[var(--font-label)] tracking-wider block">Customer</span>
+            {onOpenCustomerHarga && (
+              <button
+                type="button"
+                onClick={onOpenCustomerHarga}
+                className="inline-flex items-center gap-1 px-1.5 py-0.5 text-[9.5px] font-bold rounded-md bg-transparent border border-amber-500/40 text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 transition-colors cursor-pointer shrink-0"
+                title="Lihat Tarif Acuan Customer (tbCustomersHarga)"
+              >
+                <Tag size={10} className="text-amber-500" />
+                <span>Tarif</span>
+              </button>
+            )}
+          </div>
           <p className="font-bold text-sm text-[var(--color-primary)] truncate" title={displayCustName(data.customer?.fdCustName || data.fdCustCode)}>
             {displayCustName(data.customer?.fdCustName || data.fdCustCode)}
           </p>
@@ -103,7 +121,7 @@ export function CustomerInfoCard({
               ({data.fdMarkingNo.trim()})
             </p>
           )}
-          {data.fdConsignee && (
+          {canViewConsignee && data.fdConsignee && (
             <p className="text-[11px] text-[var(--color-secondary)] truncate" title={data.fdConsignee}>
               Consignee: <span className="font-semibold text-[var(--color-primary)]">{data.fdConsignee}</span>
             </p>

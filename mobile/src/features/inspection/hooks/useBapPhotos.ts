@@ -25,14 +25,17 @@ export function useUploadBapPhoto() {
       reportId,
       photoBase64,
       caption,
+      annotationsSvg,
     }: {
       reportId: number
       photoBase64: string
       caption?: string
+      annotationsSvg?: string
     }): Promise<BapPhoto> => {
       const res = await apiClient.post(`/inspection-reports/${reportId}/photos`, {
         photoBase64,
         caption,
+        annotationsSvg,
       })
       return res.data.data
     },

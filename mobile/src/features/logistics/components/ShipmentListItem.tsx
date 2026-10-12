@@ -1,12 +1,8 @@
 import React from 'react'
-import { View, Text, TouchableOpacity } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
 import * as Haptics from 'expo-haptics'
-import { Receipt, Tag, ClipboardList } from 'lucide-react-native'
-import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
 import { useThemeStore } from '@/theme/themeStore'
 import { formatNumber, formatDecimal, displayCustName } from '@/lib/utils'
-import { getShipmentStatusBadge } from '../utils/logistics.utils'
 
 interface ShipmentListItemProps {
   item: any
@@ -17,107 +13,159 @@ interface ShipmentListItemProps {
 export function ShipmentListItem({ item, onPress, onCreateBap }: ShipmentListItemProps) {
   const { colors, mode } = useThemeStore()
   const isDark = mode === 'midnight'
-  const statusBadge = getShipmentStatusBadge(item.shipmentStatus)
+  const isAir = item.fdListType === 1
+  const modeColor = isAir ? '#E2B266' : '#5FA3D4'
+  const modeText = isAir ? 'Udara' : 'Laut'
+  const lineColor = isDark ? '#222C38' : '#E3E7EC'
+
+  const resiNo = item.fdTerima?.trim() || item.fdListCode?.trim() || '—'
+  const custName = displayCustName(item.fdCustName)
+  const markingDisplay = item.fdMarkingCode?.trim() || '—'
 
   return (
-    <Card
-      style={{ padding: 14 }}
+    <TouchableOpacity
+      activeOpacity={0.7}
+      style={[styles.row, { borderTopColor: lineColor }]}
       onPress={() => {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
         onPress(item)
       }}
     >
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-        <View style={{ flex: 1, marginRight: 8 }}>
-          {/* Nomor Resi (fdTerima) & List Code */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 }}>
-            <Receipt size={13} color={colors.tertiary} />
-            <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.primary, fontVariant: ['tabular-nums'] }}>
-              {item.fdTerima?.trim() || item.fdListCode?.trim() || '—'}
-            </Text>
-            {item.fdTerima && item.fdListCode && (
-              <Text style={{ fontSize: 11, color: colors.secondary, fontVariant: ['tabular-nums'] }}>
-                ({item.fdListCode.trim()})
-              </Text>
-            )}
-          </View>
-
-          {/* Marking Code & No */}
-          <View style={{ marginTop: 1, gap: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Tag size={11} color={colors.secondary} />
-              <Text style={{ fontSize: 12.5, fontWeight: '700', color: colors.primary }} numberOfLines={1}>
-                {item.fdMarkingCode?.trim() || '—'}
+      {/* Baris 1: No Resi + Branch Tag di kiri; Dot + Moda di kanan */}
+      <View style={styles.b1}>
+        <View style={styles.idGroup}>
+          <Text style={[styles.resiText, { color: colors.primary }]} numberOfLines={1}>
+            {resiNo}
+          </Text>
+          {item.fdBranchCode?.trim() ? (
+            <View style={[styles.typeTag, { borderColor: lineColor }]}>
+              <Text style={[styles.typeText, { color: colors.secondary }]}>
+                {item.fdBranchCode.trim()}
               </Text>
             </View>
-            <Text style={{ fontSize: 11, color: colors.secondary, fontWeight: '500', paddingLeft: 15 }} numberOfLines={1}>
-              {item.fdMarkingNo?.trim() || 'No. Marking: —'}
-            </Text>
-          </View>
+          ) : null}
         </View>
 
-        {/* Badges */}
-        <View style={{ alignItems: 'flex-end', gap: 4, flexShrink: 0 }}>
-          <Badge label={statusBadge.label} variant={statusBadge.variant} />
-          <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
-            {item.fdBranchCode?.trim() ? (
-              <Badge label={item.fdBranchCode.trim()} variant="neutral" />
-            ) : null}
-            <Badge
-              label={item.fdListType === 1 ? 'Udara' : 'Laut'}
-              variant={item.fdListType === 1 ? 'air' : 'sea'}
-            />
-          </View>
+        <View style={styles.modeGroup}>
+          <View style={[styles.dot, { backgroundColor: modeColor }]} />
+          <Text style={[styles.modeText, { color: colors.secondary }]}>
+            {modeText}
+          </Text>
         </View>
       </View>
 
-      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.primary, marginVertical: 4 }} numberOfLines={1}>
-        {displayCustName(item.fdCustName)}
-      </Text>
-      <View style={{
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: 6,
-        marginTop: 6,
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(255,255,255,0.06)',
-        paddingTop: 6,
-      }}>
-        <Text style={{ fontSize: 11.5, fontWeight: '500', color: colors.secondary, fontVariant: ['tabular-nums'], flex: 1 }}>
-          {formatNumber(item.fdJmlPack ?? item.fdColy)} {item.fdSatuan || 'Koli'} • {formatDecimal(item.fdJmlBerat ?? item.fdWeight, 1)} kg • {formatDecimal(item.fdM3, 4)} m³
+      {/* Baris 2: Marking Code & Customer */}
+      <View style={styles.b2}>
+        <Text style={[styles.markingText, { color: colors.primary }]}>
+          {markingDisplay}
+          {item.fdMarkingNo?.trim() ? ` #${item.fdMarkingNo.trim()}` : ''}
+        </Text>
+        <Text style={[styles.custText, { color: colors.secondary }]} numberOfLines={1}>
+          {'   '}{custName}
+        </Text>
+      </View>
+
+      {/* Baris 3: Koli · Berat · M3 di kiri; Action BAP di kanan */}
+      <View style={styles.b3}>
+        <Text style={[styles.qtyText, { color: colors.secondary }]}>
+          {formatNumber(item.fdJmlPack ?? item.fdColy)} {item.fdSatuan || 'koli'} · {formatDecimal(item.fdJmlBerat ?? item.fdWeight, 1)} kg · {formatDecimal(item.fdM3, 4)} m³
         </Text>
 
         {onCreateBap && (
           <TouchableOpacity
             activeOpacity={0.7}
+            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
             onPress={(e) => {
               e.stopPropagation()
               Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
               onCreateBap(item)
             }}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 4,
-              paddingHorizontal: 8,
-              paddingVertical: 3,
-              borderRadius: 6,
-              borderWidth: 1,
-              borderColor: colors.tabBarActive,
-              backgroundColor: isDark
-                ? 'rgba(56, 189, 248, 0.12)'
-                : 'rgba(2, 132, 199, 0.08)',
-            }}
+            style={[styles.bapActionBtn, { borderColor: lineColor }]}
           >
-            <ClipboardList size={11} color={colors.tabBarActive} />
-            <Text style={{ fontSize: 10.5, fontWeight: '700', color: colors.tabBarActive }}>
+            <Text style={{ fontSize: 11, fontWeight: '500', color: colors.primary }}>
               + BAP
             </Text>
           </TouchableOpacity>
         )}
       </View>
-    </Card>
+    </TouchableOpacity>
   )
 }
+
+const styles = StyleSheet.create({
+  row: {
+    paddingVertical: 14,
+    borderTopWidth: 1,
+  },
+  b1: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'baseline',
+  },
+  idGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    flex: 1,
+  },
+  resiText: {
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: -0.1,
+    fontVariant: ['tabular-nums'],
+  },
+  typeTag: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 6,
+    paddingVertical: 0.5,
+  },
+  typeText: {
+    fontSize: 11,
+    fontWeight: '500',
+  },
+  modeGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginLeft: 8,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  modeText: {
+    fontSize: 13.5,
+  },
+  b2: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    marginVertical: 4,
+  },
+  markingText: {
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  custText: {
+    fontSize: 13.5,
+    flex: 1,
+  },
+  b3: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 2,
+  },
+  qtyText: {
+    fontSize: 13,
+    fontVariant: ['tabular-nums'],
+    flex: 1,
+  },
+  bapActionBtn: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 1.5,
+  },
+})

@@ -4,23 +4,68 @@ Modul paling komprehensif pada sistem mshipping yang mencakup siklus hidup penag
 
 ---
 
-## 1. Dashboard Keuangan (`pages/DashboardPage.tsx`)
-- **4 Kartu KPI Terintegrasi Live API (`useBillingDashboard`)**:
-  - *Target Bill Hari Ini (Udara)*: Total listcode udara siap ditagih berserta rincian kategori kriteria interaktif (`SJ Sent`, `COD/Urgent`, `Aging > 7`, `FCL`), garis pemisah, dan rincian per PIC (Kiki vs Yati). Setiap chip kategori dapat diklik langsung untuk memfilter halaman Target Bill $\to$ `ROUTES.BILLING_TARGET?type=udara&group=...`.
-  - *Target Bill Hari Ini (Laut)*: Total listcode laut berserta rincian kategori kriteria interaktif (`SJ Sent`, `COD/Urgent`, `Aging > 7`, `FCL`), garis pemisah, dan rincian per PIC (Thara, Rico, Ferly). Setiap chip kategori dapat diklik langsung untuk memfilter halaman Target Bill $\to$ `ROUTES.BILLING_TARGET?type=laut&group=...`.
-  - *Invoice Terbit Bulan Ini*: Volume invoice bulan berjalan/terpilih, badge tren MoM & YoY interaktif (`GrowthPill`), breakdown per moda $\to$ `ROUTES.BILLING_LIST`.
-  - *Total Nominal Tagihan Bulan Ini*: Akumulasi omzet tagihan bulan terpilih (`formatCurrency`), badge tren MoM & YoY interaktif (`GrowthPill`) $\to$ `ROUTES.BILLING_LIST`.
+### 1. Dashboard Keuangan & Operasional (`pages/DashboardPage.tsx`)
+- **Dual-Tab Master View (`Operation` [Default Aktif] vs `Finance`)**:
+  - **Pemisahan Granular Role Permissions**:
+    - `ROUTES.BILLING_OPERATIONAL` (`/mshipping/finance/billing/operational`): Memberikan hak akses khusus tampilan Operasional (Target Bill, Volume Faktur, Widget Batch Exit vs Bill, Produktivitas PIC, Monitoring SJ). Staf tanpa izin Finance tidak akan melihat tab Finance maupun angka omzet (Rp).
+    - `ROUTES.BILLING_FINANCE` (`/mshipping/finance/billing/finance`): Memberikan hak akses khusus tampilan Keuangan (Omzet Rp, Tren Bulanan 12 Bln & YoY, Tren Harian, Matriks 3 Periode Finansial).
+    - Hook `useBillingDashboardPermissions()` mengatur ketersediaan tombol tab switcher master secara dinamis: jika pengguna hanya memiliki salah satu izin, dashboard otomatis terkunci ke tampilan tersebut tanpa switcher ke tab lain; jika tidak memiliki keduanya, menampilkan halaman Access Denied.
+  - **Tab Operation (`billing.dashboardTab.operation` - Default Aktif)**: Terletak di posisi pertama (kiri). Fokus 100% pada kuantiti bill, muatan kargo, dan KPI produktivitas karyawan/PIC. Menampilkan 3 Kartu Target & Volume Operasional (Target Bill Udara dengan kriteria SJ Sent/COD/>7 Hari/FCL & PIC Kiki/Yati, Target Bill Laut dengan PIC Thara/Rico/Ferly, dan Volume Faktur Diterbitkan). Dilengkapi widget monitoring kargo *Perbandingan Batch Marking Exit vs Bill Dibuat* (`BatchExitComparisonSection.tsx`) serta panel analitik operasional 3 sub-tab: *Produktivitas Karyawan (PIC)* (`EmployeeChart.tsx`), *Arus SJ vs Bill* (`SjVsBillChart.tsx`), dan *Tren Volume Bill* (Harian & Bulanan khusus metrik `count`).
+  - **Tab Finance (`billing.dashboardTab.finance`)**: Terletak di posisi kedua (kanan). Fokus 100% pada nilai finansial & omzet (Rupiah). Menampilkan 4 Kartu KPI Finansial Utama (Total Omzet Tagihan Bulan Ini, Omzet Tagihan Udara, Omzet Tagihan Laut, dan Rata-rata Nilai per Tiket Faktur). Sub-tab analitik memuat Tren Bulanan (Rp) 12 bulan & YoY, Matriks Komparasi 3 Periode (8 metrik finansial & pangsa omzet cabang), serta Tren Harian (Rp). Seluruh metrik dikunci permanen ke nominal `value` (Rp) tanpa opsi `count`, tanpa tab karyawan, dan tanpa sub-mode produksi fisik.
+- **Pemisahan Kartu KPI Berdasarkan Domain**:
+  - *Domain Finance (4 Kartu Finansial)*:
+    1. **Total Tagihan Bulan Ini**: Hero number akumulasi Omzet (Rp `formatCurrency`), breakdown realisasi moda Udara (Rp) & Laut (Rp), serta pill perbandingan MoM & YoY tagihan.
+    2. **Omzet Tagihan Udara**: Akumulasi omzet moda udara (Rp) dan rasio pangsa omzet (%).
+    3. **Omzet Tagihan Laut**: Akumulasi omzet moda laut (Rp) dan rasio pangsa omzet (%).
+    4. **Rata-rata Nilai / Faktur**: Nilai rata-rata tiket faktur per invoice (Rp) beserta tren pertumbuhan MoM & YoY.
+  - *Domain Operation (3 Kartu Operasional)*:
+    1. **Target Bill Hari Ini (Udara)**: Total listcode udara siap ditagih berserta rincian kategori kriteria interaktif (`SJ Sent`, `COD/Urgent`, `Aging > 7`, `FCL`), garis pemisah, dan rincian per PIC (Kiki vs Yati) $\to$ `ROUTES.BILLING_TARGET?type=udara`.
+    2. **Target Bill Hari Ini (Laut)**: Total listcode laut berserta rincian kategori kriteria interaktif (`SJ Sent`, `COD/Urgent`, `Aging > 7`, `FCL`), garis pemisah, dan rincian per PIC (Thara, Rico, Ferly) $\to$ `ROUTES.BILLING_TARGET?type=laut`.
+    3. **Volume Faktur Diterbitkan**: Jumlah faktur/bill yang telah diterbitkan (`N Bill`), breakdown volume udara vs laut, dan persentase pertumbuhan MoM faktur $\to$ `ROUTES.BILLING_LIST`.
 - **Toolbar Navigasi Periode (`BillingPeriodNavigator`)**:
   - Memilih bulan dan tahun evaluasi/audit dengan tombol panah `<` dan `>`.
   - Indikator status visual: badge hijau berdenyut `[Bulan Berjalan]` atau badge amber `[Audit Periode Lampau]`.
   - Tombol aksi cepat reset ke Bulan Berjalan saat staf sedang memeriksa periode lampau.
   - Subline kontekstual nama bulan pembanding MoM vs YoY.
 - **Matriks Komparasi 3 Periode (`BillingPeriodMatrixTable`)**:
-  - Didedikasikan secara eksklusif dan terfokus pada tab mandiri **Komparasi 3 Periode** (menghilangkan redundansi pada tab **Bulanan** sehingga kanvas grafik 12 bulan kembali lapang 100% full-width).
-  - Dilengkapi 3 **Quick Summary Cards** di atas tabel: Total Omzet Tagihan, Volume Faktur Diterbitkan, dan Rata-rata Nilai / Faktur lengkap dengan badge MoM & YoY.
-  - Menyajikan 8 metrik kunci penagihan: *Total Faktur*, *Total Tagihan*, *Faktur Udara*, *Tagihan Udara*, *Faktur Laut*, *Tagihan Laut*, *Rata-rata / Bill*, dan *Customer Ditagih*.
+  - Didedikasikan secara eksklusif dan terfokus pada tab mandiri **Komparasi 3 Periode** pada Tab Finance.
+  - Dilengkapi 3 **Quick Summary Cards** di atas tabel: Total Omzet Tagihan, Omzet Laut & Udara, dan Rata-rata Nilai / Faktur lengkap dengan badge MoM & YoY.
+  - Menyajikan 8 metrik kunci penagihan: *Total Faktur*, *Total Tagihan*, *Faktur Udara*, *Tagihan Udara*, *Faktur Laut*, *Tagihan Laut*, *Rata-rata / Bill*, dan *Customer Ditagih*. Mendukung filter cabang interaktif (`selectedBranch`).
   - Menampilkan nilai aktual saat ini berformat tabular font mono, badge pertumbuhan MoM vs bulan lalu (dengan diff nominal/qty pada tooltip), dan badge pertumbuhan YoY vs tahun lalu.
   - Panel samping memuat ikhtisar periode audit dan **Proporsi Pangsa Omzet Moda (Udara vs Laut)** interaktif dengan progress bar warna semantik.
+- **Rincian Komparasi Penagihan Per Cabang (`BillingBranchComparisonTable`)**:
+  - Terintegrasi di tab **Komparasi 3 Periode** menyajikan rincian kinerja penagihan per cabang asal kargo (`GZ`, `SG`, `HK`, `YW`, `SH`, `SZ`, `LM`, dll).
+  - **Normalisasi Cabang Singapore (`--` = `SG`)**: Mengagregasikan secara otomatis seluruh transaksi dengan kode cabang `--` dan `SG` (termasuk invoice prefix `--S%`, `--A%`, `SGS%`, `SGA%`) ke dalam cabang **Singapore (SG)**.
+  - **Metrik Per Cabang**: Omzet Tagihan Bulan Ini, pertumbuhan MoM (% & nominal diff), pertumbuhan YoY (% & nominal diff), Volume Faktur (Bill + selisih MoM), Breakdown Moda Udara vs Laut (persentase & volume), dan Bilah Visual Pangsa Pasar (% kontribusi dari total tagihan konsolidasi).
+  - **Interaktivitas Filter**: Klik baris cabang atau quick chip pill untuk langsung memfilter tabel Matriks 8 Metrik di atasnya ke cabang tersebut, dilengkapi tombol reset instan kembali ke konsolidasi seluruh cabang.
+- **Widget Perbandingan Batch Marking Exit vs fdBillCreated (`BatchExitComparisonSection.tsx` & `BatchExitModal.tsx`)**:
+  - Terletak pada **Tab Operation** untuk memantau kelengkapan penagihan dari seluruh muatan batch marking yang telah berstatus keluar gudang asal (`tbMarking.fdExitDate IS NOT NULL`).
+  - **Header Ribbon & Filter**: Judul dinamis `Perbandingan Batch Marking Exit vs Bill Dibuat [Oktober 2026]`, subtitle, toggle `Bulan Aktif`, dan tombol `Rincian Batch [N]`.
+  - **Baris Atas Kiri (Hero Ringkasan & Moda)**: Hero number rasio penyelesaian (`72.6%`), 3 kartu kargo (Total exit dari N batch, Sudah terbit bill, Belum terbit bill di N batch), thick progress bar, serta breakdown mikro **Moda Udara** (persentase, bill, sisa, total kargo, batch tuntas vs pending) dan **Moda Laut**.
+  - **Baris Atas Kanan (Kelengkapan Bill per Status Customer)**: Persentase kargo sudah ditagih, tombol link `Buka rincian`, segmented switcher `[Semua | 🟠 Udara | 🔵 Laut]`, dan 5 bar status horizontal semantik (Blocked, Warning, Urgent, COD, OK) lengkap dengan rincian kargo tuntas vs sisa.
+  - **Baris Bawah (Tabel Rasio Penagihan per Cabang Asal Kargo)**: 6 cabang aktif konsolidasi Singapore (`--` & `SG`), tabel 7-kolom presisi (Cabang, Rasio bill [bar + %], Bill, Sisa, Total, Batch tuntas/pending, Moda kargo udara & laut), dan footer catatan.
+  - **Modal Interaktif Rincian Batch (`BatchExitModal.tsx`)**: Menampilkan daftar batch marking berstatus exit, filter status (Semua, Pending, Tuntas), filter moda (Semua, Udara, Laut), **filter cabang asal** (dengan normalisasi Singapore `-- & SG`), **filter status customer** (`[Semua | 🚨 BLOCKED | ⚠️ WARNING | ⚡ URGENT | 💵 COD | ✅ OK]`), pencarian teks bebas, **tabel dengan header dan data sejajar 100% presisi** (arsitektur native cell `<td>`), kolom ringkasan status customer per batch, progress bar per batch, expandable row drill-down resi kargo lengkap dengan identitas pelanggan & badge status customer (`statusConfig[custStatus]`), status Surat Jalan & PIC, serta shortcut tombol aksi `[Target Bill]`.
+- **Fitur Ekspor PDF Dashboard Billing Lengkap (Terpisah per Domain: Finance 6 Lembar & Operation 10 Lembar)** (`DashboardPdfFullReport.tsx`, `dashboard-pdf.utils.ts`):
+  - Tombol aksi semantik dinamis `[Unduh PDF Finance (6 Lembar)]` atau `[Unduh PDF Operation (10 Lembar)]` pada toolbar header (`PageHeader.actions`).
+  - **Laporan Keuangan PDF (Finance - 6 Lembar Eksekutif A4 Landscape, 100% Berfokus Nilai Uang/Omzet Rp)**:
+    1. *Lembar 1 (Ringkasan Eksekutif & KPI Finansial)*: Kop laporan, 4 Kartu KPI Omzet Rp, 3 Highlight Cards (Omzet, Volume, Nilai Rata-rata/Bill), dan Panel Proporsi Omzet Moda (Udara vs Laut).
+    2. *Lembar 2 (Matriks Komparasi 3 Periode 8 Metrik Finansial)*: Tabel matriks komparasi 8 metrik kunci finansial (Total Faktur, Total Tagihan, Faktur Udara, Tagihan Udara, Faktur Laut, Tagihan Laut, Rata-rata/Bill, Customer Ditagih) membandingkan nilai saat ini, MoM (% & Diff), dan YoY (% & Diff) dengan catatan interpretasi data.
+    3. *Lembar 3 (Rincian Kinerja Penagihan Per Cabang)*: Banner normalisasi Singapore (`--` dan `SG`), tabel lengkap seluruh cabang logistik (Omzet, MoM, YoY, Volume, Moda Udara/Laut, Pangsa Pasar), baris Total Konsolidasi, dan catatan evaluasi cabang.
+    4. *Lembar 4 (Analitik Tren Bulanan 12 Bulan & YoY — Kurva Tren)*: 4 Kartu KPI Kuantiti & Finansial 12 Bulan (Total Qty Bill, Pertumbuhan Qty YoY vs thn lalu, Total Omzet, Rata-rata/Bulan), kurva penagihan 12 bulan luas penuh (`chartHeight={420}`) berpadu dengan batang kuantiti faktur diterbitkan dan kurva omzet vs YoY tahun lalu, serta catatan evaluasi tren.
+    5. *Lembar 5 (Tabel Rekapitulasi Kinerja Penagihan 12 Bulan Terakhir — Mandiri)*: 4 Mini Summary Cards (Total Omzet, Total Bill, Rata-rata Nilai per Bill, Rata-rata Omzet Bulanan), tabel rekapitulasi 10 kolom lengkap (Bulan, Qty Udara/Laut, Total Bill, YoY Qty %, Omzet Udara/Laut, Total Omzet, YoY Omzet %, Rata-rata/Bill) dengan baris Total Konsolidasi di footer dan pedoman audit kepatuhan finansial.
+    6. *Lembar 6 (Analitik Tren Harian Daily Bill)*: 3 Kartu Ringkasan Harian (Total Omzet N Hari, Rata-rata/Hari, Peak Day), grafik kurva harian kurva penuh dinamis sesuai rentang hari aktif (`dailyDaysFilter` 7, 14, 30 hari), dan catatan operasional harian.
+  - **Laporan Operasional PDF (Operation - 10 Lembar Eksekutif A4 Landscape, 100% Bebas Nilai Uang/Omzet Rp)**:
+    1. *Lembar 1 (Ringkasan Eksekutif Operasional & Target Kargo)*: 3 Kartu KPI Kuantiti Target (Target Udara, Target Laut, Volume Faktur Terbit), Hero Rasio Penyelesaian Kargo Exit (`billedPercentage%`), thick progress bar, dual moda udara & laut, serta 5 progress bar status customer (Blocked, Warning, Urgent, COD, OK).
+    2. *Lembar 2 (Rasio Penagihan per Cabang Asal Kargo)*: 4 Mini Summary KPI Cards (Total Cabang Aktif, Total Kargo Terkonsolidasi, Kargo Billed, Kargo Belum Ditagih), 2 Highlight Cards (Cabang Efisiensi Tertinggi & Fokus Penagihan Terbanyak), Tabel Utama Rasio Cabang (8 kolom presisi: #, Cabang, Rasio Bill [bar + %], Billed, Sisa, Total Kargo, Batch [tuntas/pending], Moda Kargo [✈️ Udara / 🚢 Laut]), baris Total Konsolidasi Seluruh Cabang di footer tabel, serta Pedoman Kepatuhan Penagihan Cabang (normalisasi `--` & `SG`).
+    3. *Lembar 3 (Matriks Komparasi 3 Periode Volume Operasional)*: Evaluasi 7 metrik operasional non-moneter (Total Faktur, Faktur Udara, Faktur Laut, Customer Ditagih, Pangsa Udara %, Pangsa Laut %, Rata-rata Faktur/Cust) MoM & YoY.
+    4. *Lembar 4 (Evaluasi Produktivitas PIC — Tabel Rekapitulasi & Peringkat)*: Banner tim penagihan dinamis (`employeeDaysFilter` 7, 14, 30, atau 365 hari / 1 tahun), Tabel Peringkat PIC lengkap menampung seluruh PIC tanpa sesak, kontribusi persentase, rata-rata harian/bulanan, dan instruksi panduan SLA operasional.
+    5. *Lembar 5 (Evaluasi Produktivitas PIC — Kurva Tren Volume Faktur)*: 4 KPI Cards ringkasan tren PIC dan kanvas grafik deret waktu kurva penuh tinggi lega (`chartHeight={440}`) untuk analisis mendalam tren kinerja penerbitan faktur staf.
+    6. *Lembar 6 (Monitoring Arus Surat Jalan vs Faktur Diterbitkan — KPI & Kurva Konversi)*: 4 Kartu KPI Konversi Dokumen Fisik dan kanvas grafik konversi harian luas penuh (`height: 420px`) dinamis sesuai `sjDaysFilter`.
+    7. *Lembar 7 (Monitoring Surat Jalan — Daftar Rincian Surat Jalan Belum Ditagih / Unbilled SJ)*: 4 KPI ringkasan backlog kargo, tabel 9 kolom menampung hingga 15–18 data resi kargo pending beserta status prioritas (🚨 >7 Hari, ⚡ Urgent, 💵 COD), dan instruksi operasional follow-up AR aging.
+    8. *Lembar 8 (Monitoring Perbandingan Batch Marking Exit vs Bill Dibuat)*: Evaluasi kesiapan penagihan seluruh kargo dari batch keluar gudang.
+    9. *Lembar 9 (Rincian Batch Pending & Target Bill Logistik)*: Highlight kesiapan target bill harian dan tabel rincian batch marking yang masih memiliki kargo unbilled.
+    10. *Lembar 10 (Batch Marking Exit & Billing Progress Details)*: 4 Mini KPI Cards ringkasan batch, tabel 7 kolom presisi seluruh batch marking exit dengan pill status customer kritis (🚨 Blocked, ⚠️ Warning, ⚡ Urgent, 💵 COD, OK) dan progress bar penyelesaian penagihan.
+  - **Zero Page-Cut (Anti-Terputus & Rapi)**: Setiap lembar di-render tepat 1 lembar A4 Landscape (1200px x 840px), bebas teks terpotong, bebas baris tabel terbelah, dan siap disajikan langsung ke level direksi/manajemen operasional.
 - **Grafik Analitik Interaktif**:
   - **Diferensiasi Moda Udara vs Laut pada Grafik Harian & Bulanan (`TrendChart.tsx`)**:
     - **Filter Moda Terintegrasi**: Pilihan pill selector `[Semua | ✈️ Udara | 🚢 Laut]` berdampingan dengan sakelar metrik `[Jumlah Bill | Total Tagihan]`.
@@ -44,8 +89,11 @@ Modul paling komprehensif pada sistem mshipping yang mencakup siklus hidup penag
     - **Mini Summary Banner Per-Moda**: Chip metrik akumulatif di atas kanvas grafik (`✈️ Udara: X Bill • Rp Y (A%)` dan `🚢 Laut: B Bill • Rp C (D%)` serta total gabungan) untuk periode yang sedang ditampilkan.
     - **Multi-Theme Floating Tooltip**: Tooltip interaktif responsif multi-tema dengan header tanggal, breakdown item Udara & Laut, total gabungan, dan progress bar rasio persentase volume/nominal.
     - **Filter Rentang Waktu Harian**: Dropdown rentang 7, 14, atau 30 hari aktif pada tab Harian.
+    - **Integrasi Arus Surat Jalan (SJ vs Bill) pada Tab Harian (`TrendChart.tsx`)**:
+      - Mengintegrasikan data produksi Surat Jalan dan Penerbitan Faktur langsung ke tab **Harian** dengan segmented toggle: `[Tren Faktur | Arus SJ vs Bill]`.
+      - Saat mode `[Arus SJ vs Bill]` aktif, grafik menampilkan kurva Surat Jalan Diterima (`sjProduction`), Bill Diterbitkan (`sjBillProduction`), dan backlog Unbilled SJ (`unbilledSj`) lengkap dengan pill selector PIC (Semua, Yati & Kiki [Udara], Thara, Ferly, Rico) tanpa perlu berpindah ke tab terpisah.
+      - Saat mode `[Tren Faktur]` dalam mode `Jumlah Bill`, garis pandu produksi SJ otomatis tampil halus di latar belakang untuk membandingkan volume masuk vs volume terbit secara real-time.
   - Tren Harian Penagihan per Karyawan/Sales (`by-employee-daily`).
-  - Komparasi Surat Jalan vs Faktur Terbit (`sj-vs-bill`).
 
 ---
 
@@ -64,6 +112,12 @@ Modul paling komprehensif pada sistem mshipping yang mencakup siklus hidup penag
     - Tombol semantik ringkas `[🏷️ Tarif]` (aksen amber) di samping nama customer pada tabel desktop dan kartu mobile.
     - Membuka modal terstruktur berisi daftar tarif aktif pelanggan dari `tbCustomersHarga`, dilengkapi breakdown per cabang (`GZ`, `YW`, `SH`, `SZ`, `HK`, `SG`, `BKK`, `KR`), switcher moda (`[Semua | ✈️ Udara | 🚢 Laut]`), pencarian instan, metadata (tipe tagihan, no. penawaran, rasio overweight kg/m³, asuransi, catatan udara/laut), serta audit override dari `tbCustomersHargaAudit` (badge revisi dan riwayat harga).
     - Dilengkapi fitur ekspor tarif pelanggan ke format berkas Excel (`.xlsx`).
+  - **Optimalisasi Tata Letak Tabel & Tag Status Multi-Aktif (`TargetPage.tsx`)**:
+    - **Pencegahan Kolisi Kolom (Anti-Overflow)**: Memberikan lebar kolom eksplisit terstruktur pada header (`th`) dan sel (`td`) tabel desktop (`min-w-[1400px]`): Aging (72px), PIC (84px), Customer & Status (290px), Cabang & Sales (130px), Marking & Kargo (220px), Komoditi (170-220px), Type (110px), Harga (180px), Status Kirim (140px), dan Salin (56px).
+    - **Harmonisasi Tag & Eliminasi Badge Redundan**:
+      - **Eliminasi Redundansi PARSIAL**: Tombol badge `[PARSIAL (N)]` yang sebelumnya duplikat di kolom *Customer & Status* dan *Marking & Kargo* (serta di dua tempat pada mobile card) kini dieliminasi dari *Customer & Status* / top row mobile, dan ditempatkan secara tepat & kontekstual hanya di kolom *Marking & Kargo* di samping nomor kode marking kargo.
+      - Baris 1 Customer: Nama customer rata kiri (`truncate min-w-0`), sedangkan kode customer (`font-mono`) dan tombol `[🏷️ Tarif]` tersusun rata kanan (`shrink-0`).
+      - Baris 2 Customer: Tag operasional (`StatusBadge` ukuran `sm` 9.5px dan `BrokerBadge` ukuran `xs` 9px) tersusun dengan `flex-wrap gap-1.5` yang kompak, bersih, proporsional, dan bebas dari penumpukan badge berulang.
 
 ---
 
@@ -71,11 +125,22 @@ Modul paling komprehensif pada sistem mshipping yang mencakup siklus hidup penag
 - **Toolbar Pencarian & Preservasi Teks Customer (`BillingToolbar.tsx`)**:
   - Terhubung dengan `SearchSuggestionsDropdown` (`GET /api/billing/suggestions`).
   - **Preservasi Teks & Filter Presisi (`selectedCustCode`)**: Saat saran customer dipilih, input teks tetap menampilkan nama pelanggan (e.g. `"RICO"`), sementara sistem mengunci `custCode` (`"R000470"`) di backend sehingga 100% faktur milik pelanggan tersebut difilter secara akurat.
+  - **Keyboard Handlers (`Enter` & `Escape`)**: Menekan `Enter` menutup popover saran dan mengeksekusi filter instan; `Escape` menutup dropdown.
+- **Optimasi Performa Pencarian & UX Anti-Flicker (`ListPage.tsx`)**:
+  - Menggunakan konstanta global `DEBOUNCE_DELAY = 400` ms untuk mencegah beban komputasi berlebihan saat mengetik.
+  - **Preservasi Baris Data saat Background Fetch (`keepPreviousData`)**: Mengeliminasi efek flickering layar kosong/skeleton shimmer yang sebelumnya mereset tabel ke `data={[]}` saat `isRefreshing` bernilai `true`. Baris data yang ada tetap tampil lembut dengan transisi `opacity-60` didukung spinner indikator pada toolbar hingga data hasil pencarian baru selesai dimuat.
 - **Aksi Terbitkan Invoice (*Issue Invoice*)**:
   - Mengunci faktur dengan tanggal penyerahan resmi (`fdGive = 1`, `fdGiveDate = GETDATE()`), nomor invoice, dan ID penagih (`fdEmpId`).
   - Menjalankan update atomik pada `tbBilling`, `tbBillingPrev`, dan `tbBillingGiveEmp`.
 - **Dukungan Dual-Bahasa (i18n) & Salin Cepat**: Tombol salin No. Invoice instan dengan notifikasi toast.
 - **Penguncian Rincian Item (Read-Only)**: Jika faktur telah berstatus **ISSUED** (`fdGive = 1`) atau **LUNAS/COLLECTED** (`fdGive2 = 1`), form beralih menjadi mode **Read-Only** dengan badge gembok.
+- **Fitur Upload & Manajemen Lampiran Invoice (`BillingLampiranSection.tsx`, `BillingLampiranUploader.tsx`, `BillingLampiranLightbox.tsx`, `BillingQuickLampiranModal.tsx`)**:
+  - Mengadopsi standar keandalan dan pengalaman pengguna modul BAP.
+  - **Dukungan Format**: Menerima berkas gambar (**JPG, PNG, WebP**) dan dokumen (**PDF**) tanpa watermark otomatis hingga ukuran **10 MB per berkas** (kuota maks 10 berkas per invoice).
+  - **Kemudahan Unggah**: Drag-and-drop zone, file picker dialog, dan penempelan tangkapan layar langsung via **CTRL+V** (*paste listener*). Progress bar visual dinamis saat proses transmisi.
+  - **Pratinjau Layar Penuh (Lightbox)**: Modal pratinjau interaktif dengan kontrol Zoom In/Out, putar 90° (Rotate), reset zoom, iframe dokumen PDF, tombol unduh berkas, dan navigasi keyboard (`Esc`, `ArrowLeft`, `ArrowRight`, `+`, `-`, `R`).
+  - **Integrasi Cepat di Daftar Invoice (`ListPage.tsx`)**: Kolom aksi dan tombol pada kartu mobile `[Berkas]` dengan icon `Paperclip` yang membuka `BillingQuickLampiranModal` untuk melihat atau mengunggah lampiran langsung tanpa berpindah halaman.
+  - **Proteksi Role (RBAC)**: Dibatasi oleh permission path `/mshipping/finance/billing/attachments` (dapat diatur di Role Management Matrix). User tanpa izin hanya dapat melihat dan mengunduh berkas (*read-only*).
 
 ---
 
@@ -120,12 +185,21 @@ Mencegah kebocoran pendapatan perusahaan dan komplain pelanggan dengan memeriksa
      - **Invoice Anak (`isChildBillMerged`)**: Otomatis berstatus **VALID** (`matchStatus: MATCH_PRIMARY`) dengan label `Digabung ke [Invoice Induk]`, tanpa memicu peringatan keliru di bawah minimum charge (`isBilledBelowMinM3`) maupun COD/urgent shortfall.
      - **UI Highlight (`PhysicalAuditTab.tsx`, `BillingValidationCard.tsx`)**: Menampilkan box rincian keluarga invoice, daftar invoice terkait, status induk vs pecahan, dan akumulasi M³ fisik gudang/PL.
 
-### B. Infinite Scroll Antrean Validasi (`ValidationListPage.tsx`) & Detail Validasi (`ValidationDetailPage.tsx`)
+### B. Antrean Validasi Faktur (`ValidationListPage.tsx`) & Detail Validasi (`ValidationDetailPage.tsx`)
+- **Redesign Antrean Validasi Billing Modern ERP (`ValidationListPage.tsx`)**:
+  - **4 Kartu Ringkasan KPI Eksekutif (Header Metrics)**:
+    - *Total Draft Tagihan*: Akumulasi nominal seluruh faktur draft aktif (`kpiStats.totalDraftAmount`, format `Rp.`) beserta counter total draft aktif.
+    - *Aging Kritis (> 14 Hari)*: Deteksi instan faktur berumur $> 14$ hari sejak tanggal terbit dengan border aksen rose (`border-rose-500/40 text-rose-500`) sebagai prioritas penanganan tim billing.
+    - *Moda Laut (Sea)*: Jumlah faktur dan total nominal muatan laut dengan ikon vektor resmi **Lucide `Ship`** dan filter interaktif (klik kartu langsung memfilter moda).
+    - *Moda Udara (Air)*: Jumlah faktur dan total nominal muatan udara dengan ikon vektor resmi **Lucide `Plane`** dan filter interaktif (klik kartu langsung memfilter moda).
+  - **Konsistensi Ikon Moda**: Penyeragaman 100% ikon Lucide `Ship` (biru) dan Lucide `Plane` (amber) di seluruh titik: kartu KPI, filter moda toolbar, baris tabel desktop, kartu tampilan mobile, serta modal master tarif.
+  - **Penyelarasan Tipografi & Multi-Tema**: Kepatuhan token `--font-body` (Public Sans), `--font-display` (Fraunces), dan `--font-label` (Space Grotesk) di seluruh 5 tema (Midnight Dark, Ocean, Emerald, Amber, Heritage) dengan outline transparan anti-solid white.
 - Menggunakan `PAGE_SIZE = 25` dengan `IntersectionObserver` sentinel untuk mencegah DOM bloating.
-- Menyaring hanya faktur **Draft Murni** (`fdGive != 1`, `fdGive2 != 1`, `fdCekDate == null`).
+- Menyaring hanya faktur **Draft Murni** (`fdGive != 1`, `fdGive2 != 1`, `fdCekDate == null`) dengan tahun tagihan $> 2022$.
 - **Indikator BillTo ≠ Master**:
   - Mendeteksi perbedaan nama antara penerima faktur (`fdBillTo`) dengan nama master customer (`tbCustomers.fdCustName`).
   - Menampilkan badge amber `BillTo ≠ Master` pada kolom customer tabel desktop dan kartu mobile `ValidationListPage.tsx`.
+- **Aksi Cepat [🏷️ Tarif]**: Akses langsung ke daftar tarif acuan `tbCustomersHarga` per pelanggan dari baris antrean validasi tanpa harus meninggalkan halaman.
 - **Timestamp Issued & Petugas Penerbit (`ValidationDetailPage.tsx`)**:
   - Ditempatkan di bawah tampilan **Tgl Tagihan** pada kartu "Identitas Tagihan & Customer":
     - **Header**: Ikon `Clock` + label `WAKTU ISSUED`.
@@ -133,6 +207,10 @@ Mencegah kebocoran pendapatan perusahaan dan komplain pelanggan dengan memeriksa
     - **Petugas**: `Oleh: [Nama Petugas]` (`data.giveEmployee?.fdEmpName`) jika faktur telah diterbitkan.
     - **Status Belum Terbit**: Teks amber `Belum Terbit (Draft)` jika `fdGiveDate` belum terisi.
   - **Tooltip `IssuedBadge`**: Komponen `IssuedBadge` pada header bar kini menerima properti `issuedDate` dan `issuedBy` untuk menampilkan tooltip hover lengkap (e.g. `Diterbitkan: 30 Sep 2026, 13.06 WIB oleh FERLY`).
+- **Timeline Siklus Kargo (`ShipmentTimeline.tsx`)**:
+  - Menampilkan strip timeline horizontal (8 milestone logistik kargo: Diterima Agen, Loading, ETD, ETA, Masuk Gudang, Surat Jalan, Dikirim, Diserahkan) dengan format tanggal lengkap menyertakan tahun (`DD Mmm YYYY`, misal `02 Okt 2026`) dan chip durasi hari di atas tabel rincian item.
+  - **Sub-label Nama Gudang (`fdGudang`)**: Pada milestone *Masuk Gudang* (`fdTgl_IN`), bila `fdGudang` terisi dari master `tbMarking`, nama gudang ditampilkan sebagai sub-teks kecil di bawah label utama dengan native tooltip hover.
+  - **Dukungan Midnight Dark Mode**: Node milestone yang telah selesai (`isDone`) menggunakan `dark:border-emerald-400 dark:bg-emerald-500/20 dark:text-emerald-400` dan garis penghubung `dark:bg-emerald-500/60`, mencegah icon invisible akibat latar solid putih, serta menggunakan token CSS resmi (`--color-secondary`, `--color-primary`, `--color-surface`).
 - **Drawer Pencarian & Pemilihan Invoice (`ValidationListDrawer.tsx`)**:
   - Dibuka dari `ValidationDetailPage` via tombol pencarian cepat atau perintah suara (*"cari"*, *"pilih invoice"*, *"drawer"*, *"daftar invoice"*).
   - Standby suara otomatis saat terbuka dengan pembersihan transkrip atomik (`resetTranscript()`) saat mount/unmount untuk mencegah trigger residual.
@@ -166,16 +244,17 @@ Mencegah kebocoran pendapatan perusahaan dan komplain pelanggan dengan memeriksa
   - Indikator standby titik hijau blinking `[ 🟢 Standby Suara ]` langsung pada header modal **Audit & Validasi Invoice** (`ValidationSummaryHeader.tsx`).
 
 ### D. Modal Ringkasan Validasi (`BillingValidationSummaryModal.tsx`)
-- Dialog komprehensif `size="3xl"` (`max-w-7xl` = 1280px) dengan tinggi 85vh yang menggabungkan:
+- Dialog komprehensif `size="3xl"` diperlebar dengan `max-w-[1400px] w-full` (tinggi 85vh) yang menggabungkan:
   - **Verdict Rinci & Multi-Issue List (`ValidationSummaryFooter.tsx`)**: Mengeliminasi pesan generik "Terdapat Catatan Validasi Pada Invoice Ini" dengan rincian spesifik: shortfall volume COD/Urgent (`isCodUrgentShortfall`), ketidaksesuaian koli (`hasQtyMismatch`), overweight kuota rasio, selisih hasil komplain disetujui, selisih simulasi Type 2, serta rendering daftar catatan berpoin lengkap (`validationIssues`).
   - **Audit Finansial (`FinancialAuditTab.tsx`)**: Menampilkan **Total Invoice** pada KPI card atas dan baris `tfoot` tabel, kolom **Subtotal Tagihan** per baris item, badge **Tipe Komoditi** (`COMMODITY_TYPES`), prioritas pemetaan khusus pelanggan di atas global, dukungan Tier 0 direct price, dan komparasi selisih tarif master.
   - **Audit Fisik (`PhysicalAuditTab.tsx`)**:
     - **Banner Prioritas Atas**: Banner peringatan volume di bawah rekomendasi COD/Urgent (`recommendedM3` vs `billedM3`) dan di bawah batas minimum charge (`minChargeM3`) diposisikan di urutan paling atas dengan aksen border kiri tebal (`border-l-4 border-l-amber-500 bg-amber-500/5`), ikon squircle, dan sorotan angka mono.
     - **Kartu KPI Primer & Sekunder Berdensitas Tinggi**: Menampilkan angka volume dan berat dengan `text-lg sm:text-xl font-bold font-mono tracking-tight tabular-nums`. Kartu acuan terpilih (`isUsedGudang`, `isUsedPL`, `isUsedKomplain`) mendapat elevasi semantik beraksen emerald (`border-emerald-500/60 bg-emerald-500/[0.04] ring-1 ring-emerald-500/20`) dengan pill `Dipakai Bill` berdenyut hijau.
     - **Tabel Rekapitulasi Kelompok Bill Terkait (Induk & Pecahan 1 Batch)**:
-      - Menampilkan tabel komprehensif seluruh `fdListCode` dalam batch: No. Invoice (dengan navigasi klik `onSelectInvoice`, ikon `ExternalLink`, dan highlight aksen baris `(Saat Ini)` `bg-sky-500/10 border-l-4 border-l-sky-500`), Posisi (Induk / Pecahan A-Z), fdListCode mono, M³ Fisik Gudang, Berat (kg), Koli, M³ Ditagih, dan Status Bill (`✓ Ada Bill` vs `✕ Belum Ada Bill`).
-      - Status audit badge header otomatis: `✓ Semua ListCode Ada Bill (N/N)` (Emerald) atau `⚠️ X ListCode Belum Ada Bill` (Rose pulse).
-      - Baris total akumulasi `tfoot` merangkum total M³ gudang, berat kg, koli, billed M³, dan status kelengkapan batch 100%.
+      - Menampilkan tabel komprehensif seluruh `fdListCode` dalam batch: No. Invoice (dengan navigasi klik `onSelectInvoice`, ikon `ExternalLink`, dan highlight aksen baris `(Saat Ini)` `bg-sky-500/10 border-l-4 border-l-sky-500`), Posisi (Induk / Pecahan A-Z), **fdMarkingNo** (kode marking kontainer fisik), fdListCode mono, M³ Fisik Gudang, Berat (kg), Koli, M³ Ditagih, dan Status Bill (`✓ Ada Bill` vs `✕ Belum Ada Bill`).
+      - **Grouping fdMarkingNo (String Sebelum Karakter `:`)**: Baris-baris data dikelompokkan secara visual berdasarkan prefix marking (string sebelum karakter `:`, misal `FA/SYAIFUL21`, `FA/J021`), dilengkapi baris sub-header khusus per grup dengan ikon `📦`, counter jumlah listcode, subtotal M³ fisik, berat kg, koli, M³ ditagih, serta status kelengkapan bill (`✓ Lengkap` vs `Belum Lengkap`).
+      - Status audit badge header otomatis: `✓ Semua ListCode Ada Bill (N/N)` (Emerald) atau `⚠️ X ListCode Belum Ada Bill` (Rose pulse) serta badge counter `{N} Grup Marking`.
+      - Baris total akumulasi `tfoot` (`colSpan={4}`) merangkum total M³ gudang, berat kg, koli, billed M³, dan status kelengkapan batch 100%.
     - **Eliminasi Redundansi Rincian Marking**: Tabel `markingDetails` dikonversi menjadi panel accordion yang dapat dibuka/tutup (`isMarkingDetailsOpen`) ketika tabel kelompok bill terkait sudah aktif di atas, atau ditampilkan langsung bila invoice berstatus single bill.
     - **Dashboard Konsistensi Muatan Fisik**: Panel audit 3 kolom di bagian bawah mencakup Kuantitas Koli (`Package`), Timbangan Fisik (`Scale`), dan Status Validasi Fisik (`CheckCircle2`/`XCircle`), 100% patuh standar Midnight Dark Mode.
   - **Audit Overweight (`OverweightAuditTab.tsx`)**: Audit rasio overweight muatan laut, kuota rasio, berat aktual fisik multi-sumber dengan fallback keluarga bill terkait (`sumBerat`), toleransi selisih penagihan KG, dan status aman untuk invoice anak pecahan (`isChildBillMerged`).
@@ -189,7 +268,7 @@ Mencegah kebocoran pendapatan perusahaan dan komplain pelanggan dengan memeriksa
 
 ### E. Arsitektur Modular Kartu Validasi (`BillingValidationCard.tsx` & `validation-card/`)
 Komponen visual utama validasi billing individual (`BillingValidationCard.tsx`) direfaktorisasi dari monolithic 2.276 baris menjadi arsitektur orchestrator ramping (~640 baris) dengan subkomponen tersegmen di bawah direktori `src/features/billing/components/validation-card/`:
-- **`ValidationCardHeader.tsx`**: Header kartu dengan identitas listCode, status mode (By Air / Type 2), badge status dinamis (termasuk status amber `PEMBULATAN WAJAR X KG` dengan `badgeTitle` tooltip saat ada selisih pembulatan wajar $\le 1\text{ kg}$), dan tombol refresh kuari.
+- **`ValidationCardHeader.tsx`**: Header kartu dengan identitas listCode, status mode (By Air / Type 2), badge status dinamis (termasuk status amber `PEMBULATAN WAJAR X KG` dengan `badgeTitle` tooltip saat ada selisih pembulatan wajar $\le 1\text{ kg}$). Tombol refresh kartu dihilangkan untuk mengeliminasi redundansi tombol (sudah terakomodasi secara universal pada Top Action Ribbon).
 - **`ValidationCardTabsBar.tsx`**: Bilah navigasi 5 tab kompak dengan status pill indikator live (`Cek`, `✓ Valid`, `✓ Sesuai`, `✓ Toleransi`, `Selisih`, `Nihil`, dll).
 - **`ProfilePricingTab.tsx`**: Tab 1 (Item & Tarif) — profil harga customer, 4 KPI tarif utama, layout rata samping Tax Return & Catatan Tarif Customer dengan switcher moda pill (`[Udara] [Laut]`) tanpa tab Semua dan hanya menampilkan note yang relevan (`fdNote` untuk Udara, `fdNote 1` untuk Laut), evaluasi komoditas 3-way check, link acuan Price List modal, serta **pengecekan masa berlaku tarif customer (`endDate`)**:
   - Menampilkan rentang masa berlaku lengkap: `Masa Berlaku: [Tgl Mulai] s/d [Tgl Akhir / Selamanya]`.
@@ -202,12 +281,13 @@ Komponen visual utama validasi billing individual (`BillingValidationCard.tsx`) 
 - **`TransportTab.tsx`**: Tab 5 (Ekspedisi Lokal) — verifikasi biaya ekspedisi lokal `tbExpIndo` (Harus Tagih vs COD).
 - **`types.ts` & `index.ts`**: Kontrak antarmuka `ValidationCardDerivedProps` dan barrel export terpusat.
 - **Tabel Rincian Item (`InvoiceItemsTable.tsx` & `ValidationBadges.tsx`)**: Menampilkan item baris tagihan pada kolom kiri `ValidationDetailPage.tsx` lengkap dengan **Badge Hybrid Ganda** (`ItemPriceBadge`) yang menampilkan `[✓ Sesuai Profil]` sekaligus `[▲ Overcharge (+Rp ...)]` atau `[Diskon Profil (-Rp ...)]` serta `[Non-Validasi]` untuk biaya invoice cabang.
+- **Aturan Prioritas Komoditas Baris 1 (`tbEntryList`)**: Item detail pertama (baris 1 / `itemIndex: 0`) **selalu mengikuti tipe komoditas dari `tbEntryList`** (`entryListTypeComodity` / `defaultFdTypeComodity` dan `tbTypeComodity`). Kategori baris 1 tidak boleh ditimpa teks mentah deskripsi barang maupun dibajak oleh kata kunci parsial (seperti `ACCESSORIES`) menjadi `General Goods`. Barang `LARTAS - S` yang memuat perangkat/terapi/medis (`LASER`, `THERAPY`, `DEVICE`, `ALKES`, `MEDICAL`) otomatis dicocokkan ke kategori Price List **Alkes, Makanan & LS Lainnya**.
 
 ### F. Modal Pricelist Customer (`CustomerHargaModal.tsx`)
 - **Tujuan**: Menampilkan seluruh tarif acuan aktif milik pelanggan dari tabel lebar `tbCustomersHarga` (136 kolom) yang telah diparsing secara terstruktur sesuai cabang dan komoditas, terintegrasi langsung dengan revisi audit `tbCustomersHargaAudit`.
 - **Integrasi Tombol [🏷️ Tarif]**:
   - `ValidationListPage.tsx`: Terpasang di samping nama customer pada kolom tabel desktop dan kartu mobile (dengan `e.stopPropagation()` agar tidak memicu navigasi baris).
-  - `ValidationDetailPage.tsx`: Terpasang pada **Ribbon Tombol Header Cepat** (di samping tombol Audit) dan pada kartu **Identitas Tagihan & Customer** di samping nama pelanggan.
+  - `ValidationDetailPage.tsx`: Terpasang kontekstual pada kartu **Identitas Tagihan & Customer** (`CustomerInfoCard.tsx`) di samping nama pelanggan, serta klik interaktif pada badge sumber data `tbCustomerHarga` di tab **Item & Profil Tarif** (`ProfilePricingTab.tsx`). Redundansi tombol Tarif & Audit di Top Action Ribbon dan tombol duplikat di ProfilePricingTab telah dieliminasi agar antarmuka rapi dan terfokus.
 - **Fitur Antarmuka**:
   - Banner Metadata: Tipe Tagihan (`metadata.typeTagihanLabel`), No. Penawaran (`metadata.penawaran`), Batas Rasio Overweight kg/m³ (LR, SP, PM), Tarif Asuransi (format 2 digit desimal via `formatDecimal(..., 2)`), serta Catatan Khusus Udara (`fdNote`) dan Catatan Laut (`fdNote1`).
   - Navigasi Tab Cabang (`Semua`, `GZ`, `YW`, `SH`, `SZ`, `HK`, `SG`, `BKK`, `KR`) dengan counter tarif per cabang.
@@ -385,7 +465,9 @@ Untuk mencegah *God Components*, modal audit dipecah menjadi submodul terisolasi
      - *Toolbar & Modal Header*: Banner notifikasi peringatan audit selisih koli komplain pada toolbar dan badge peringatan `Selisih Qty K (N)` pada `Modal.Header`.
    - **Redesign Standar Enterprise ERP & Generative UI (CustMarkingDetailModal.tsx)**: Mengunci tinggi modal pada h-[860px] max-h-[95vh] dengan sticky identity columns (No, BC, No. Invoice), sticky table footer (	foot), segmented presets, visualisasi kartu analitik komparatif, dan highlight selisih koli/overweight. Prototipe interaktif tersimpan di artefak marking_detail_redesign.html.
    - **Ekspor Excel 2-Sheet**: Sheet 1 (Ringkasan 23 kolom FoxPro) dan Sheet 2 (Detail dimensi fisik koli).
+   - **Grouping Berdasarkan fdInvNo (Nomor Invoice)**: Mengelompokkan seluruh baris data fisik & tagihan berdasarkan nomor invoice (dInvNo / invoice) dengan group header collapsible, badge klasifikasi (Utama sky, Gabungan purple, Tambahan amber), mini subtotal kargo (Qty, Berat, M3/VFC, Bill, Nilai), subtotal footer row per invoice (jika > 1 baris), kontrol toggle [Group fdInvNo (N)] di toolbar, tombol [Buka Semua | Tutup Semua], serta counter di header modal.
    - Berkas: `types.ts`, `useCustMarkingData.ts`, `CustMarkingHeaderToolbar.tsx`, `CustMarkingSummaryBanner.tsx`, `CustMarkingDataTable.tsx`, `custMarkingExcel.ts`, `CustMarkingDetailModal.tsx`.
+    - **Search Input & Icon Alignment (`CustMarkingHeaderToolbar.tsx`)**: Mengoreksi positioning ikon `Search` (`left-2.5 top-1/2 -translate-y-1/2`), padding input standar Tailwind v3 (`pl-8 pr-8` menggantikan `pl-8.5` yang tidak valid), dan `focus:outline-none` sehingga teks pencarian dan placeholder tidak bertumpuk di atas ikon kaca pembesar.
 2. `src/features/billing/components/customer-history/`: `types.ts`, `useCustomerHistoryData.ts` (Infinite scroll TanStack Query), `CustomerHistoryToolbar.tsx`, `CustomerHistoryKpiCards.tsx` (agregasi tarif rata-rata per tipe komoditi `commodityAvgRates`), `CustomerHistoryInvoiceTable.tsx`, `CustomerHistoryDetailTable.tsx`.
 3. `src/features/billing/components/validation-summary/`: `types.ts`, `ValidationSummaryHeader.tsx`, `ValidationSummaryTabsBar.tsx`, `FinancialAuditTab.tsx`, `PhysicalAuditTab.tsx`, `OverweightAuditTab.tsx`, `FreightAuditTab.tsx`, `TransportAuditTabContent.tsx`, `ValidationSummaryFooter.tsx`.
 4. `src/features/billing/components/IssueInvoiceModal.tsx`:
@@ -462,3 +544,73 @@ Untuk mencegah *God Components*, modal audit dipecah menjadi submodul terisolasi
 | `/api/billing/customer-tariff-audit/:custCode` | `GET` | Audit tarif kontrak customer |
 | `/api/billing/pairing-local-charge` | `POST` | Matching otomatis biaya lokal via Excel |
 | `/api/billing/report-template` | `GET` / `PUT` | Konfigurasi template JSON cetak invoice |
+| `/api/billing/reports/omset-volume` | `GET` | Report analisa multi-tahun (YoY) kubikasi M3, KG Laut, KG Udara, FCL, dan Omzet per customer |
+
+---
+
+## 9. Report Analisa Omset & Volume Customer (`pages/OmsetVolumeReportPage.tsx`)
+- **Rute ERP**: `ROUTES.REPORT_OMSET_VOLUME` (`/mshipping/finance/reports/omset-volume`).
+- **Navigasi Sidebar**: Berada pada grup baru **Modul Keuangan $\to$ Report $\to$ Omset & Volume**.
+- **Otorisasi Role**: Dikendalikan oleh `tbRolePermissions` path `/mshipping/finance/reports/omset-volume` (default aktif untuk `admin`, `superadmin`, `finance`, `billing`, dan dapat disesuaikan pada Halaman Role Setting).
+- **Fitur Utama**:
+  - **5 KPI Utama Konsolidasi**: Total Customer Aktif, Total Volume M3, Berat Kargo (Laut 🚢 vs Udara ✈️), Total Kontainer FCL, dan Grand Total Omzet Penagihan.
+  - **Tabel Multi-Year Pivot Matrix**:
+    - Kolom tetap: Customer (`fdCustName`, `fdCustCode`) dan Sales (`fdSalesNM`).
+    - Sub-kolom dinamis per tahun (misal: 2024, 2025, 2026): `M3`, `KG Laut`, `KG Udara`, `Total FCL`, dan `Omset (Rp)`.
+    - Kolom Grand Total Konsolidasi seluruh rentang tahun.
+    - Footer akumulasi seluruh data customer.
+  - **Toolbar Filter**: Rentang tahun dinamis (`yearFrom` s/d `yearTo`), Filter Sales, dan Pencarian teks bebas.
+  - **Sorting Interaktif**: Klik header kolom untuk mengurutkan customer berdasarkan metrik apapun (omzet, volume m3, kontainer, per tahun, dsb).
+  - **Dual Ekspor Excel (.xlsx)**:
+    - **`[Download Excel (Rekap)]`**: Mengunduh tabel rekap datar multi-metrik sesuai filter aktif yang ditampilkan di halaman.
+    - **`[Export Pivot (4 Sheet)]`**: Memanggil endpoint backend `GET /api/billing/reports/omset-volume/export-pivot` untuk menghasilkan 1 file Excel (.xlsx) dengan 4 sheet terpisah (`Total`, `M3`, `KG Udara`, `CTR`) dari data penuh multi-tahun (2018 s/d tahun terbaru) lengkap dengan header solid navy (`#1F4E78`), font putih Arial tebal, freeze panes C2, number format `#,##0`, dan SSOT nama customer dari `tbCustomers`.
+
+---
+
+## 10. Report Rekap Volume & Berat Kargo Customer & Sales (`pages/CargoVolumeReportPage.tsx`)
+- **Rute ERP**: `ROUTES.REPORT_CARGO_VOLUME` (`/mshipping/finance/reports/cargo-volume`).
+- **Navigasi Sidebar**: Berada pada grup **Modul Keuangan $\to$ Report $\to$ Rekap Volume & Berat**.
+- **Fitur & Logika Bisnis**:
+  - **Hirarki Perhitungan Volume M³ (Laut)**:
+    1. Mengutamakan item penagihan `tbBillingItem.fdListCode` bertipe satuan `M3` (`fdUnit = 'M3'` / `BILLING`).
+    2. Fallback gudang `tbEntrylistDetail.fdm3` (`GUDANG`).
+    3. Fallback packing list `tbEntrylistDetail_packinglist.fdM3` (`PACKING_LIST`).
+    4. Fallback master entry `tbEntrylist.fdm3` (`ENTRY_LIST`).
+  - **Perhitungan Berat (KG)**:
+    - Udara: Wajib dari `tbEntrylist.fdJmlBerat` (`calculatedBeratUdara`).
+    - Laut: Tonase muatan kapal (`tbEntrylistDetail` atau `tbEntrylist.fdJmlBerat`, `calculatedBeratLaut`).
+  - **Normalisasi Cabang Singapore (`--` & `SG` $\to$ `SG`)**:
+    - Transaksi berlabel `--` dan `SG` otomatis dikonsolidasi menjadi satu cabang representatif `SG - SINGAPORE`.
+  - **Desain UI Ringkas & Kompak (ERP Standard)**:
+    - Spacing kompak: `space-y-3.5`, KPI padding `p-3 sm:p-3.5`, font KPI `18px/19px font-bold font-mono`, form height `h-8`, table padding `py-2 px-2.5`, sub-table padding `py-1.5 px-2`.
+    - Ikon proporsional & seperlunya: Ikon 14px inline subtle pada KPI cards (`Users`, `Package`, `Ship`, `Plane`, `Scale`), segmented buttons moda (`Ship`, `Plane`), search (`Search`), reset (`RotateCcw`), expand/collapse (`ChevronDown`, `ChevronRight`), dan tombol aksi export (`FileSpreadsheet`, `Layers`), bebas kotak ikon warna-warni bulky.
+  - **Tabel Data Collapsible Drill-Down**:
+    - Baris utama: Ringkasan per Pelanggan dan Sales (Jumlah Resi, Total M³, Berat Udara, Berat Laut).
+    - Rincian resi kargo (nested table): No. Resi (`fdTerima`), No. Listcode (`fdListCode`), Kode Marking, Moda (pill Udara/Laut), Komoditi, No. Faktur (Bill), Volume M³, Sumber M³, Berat Udara, dan Berat Laut.
+    - Kontrol instan: Tombol `[Buka Semua | Tutup Semua]`.
+  - **Dual Ekspor Excel (.xlsx)**:
+    - `[Export Rekap (.xlsx)]`: Lembar ringkasan rekapitulasi per pelanggan & sales.
+    - `[Export Detail Resi (.xlsx)]`: Lembar komprehensif seluruh rincian resi kargo pelanggan dengan kolom terpisah `No. Resi` (dari `fdTerima`) dan `No. Listcode` (dari `fdListCode`).
+
+---
+
+## 11. Widget Perbandingan Batch Marking Exit vs fdBillCreated (`BatchExitComparisonSection.tsx` & `BatchExitModal.tsx`)
+- **Lokasi Penempatan**: Dashboard Billing (`DashboardPage.tsx`), tepat di bawah 4 kartu KPI utama dan di atas tab grafik analitik.
+- **Komponen Utama**:
+  - `BatchExitComparisonSection.tsx`: Widget ringkasan KPI dan visualisasi perbandingan kargo batch yang keluar gudang terhadap status penagihan fakturnya.
+  - `BatchExitModal.tsx`: Modal dialog rincian batch marking yang sudah exit (`tbMarking.fdExitDate IS NOT NULL`) beserta rincian status penagihan kargonya (`tbEntryList.fdBillCreated = 1` vs `0`).
+- **Fitur & Logika Bisnis**:
+  - **4 Kartu Metrik Utama**:
+    1. *Total Kargo Exit*: Akumulasi jumlah item kargo (`tbEntryList`) dari seluruh batch marking yang telah memiliki `fdExitDate`.
+    2. *Sudah Terbit Bill (`fdBillCreated = 1`)*: Jumlah kargo yang telah terbit tagihan beserta persentase kelulusan/billed (aksen hijau/emerald).
+    3. *Belum Terbit Bill (`fdBillCreated = 0`)*: Jumlah kargo yang belum terbit tagihan beserta jumlah batch marking yang masih memiliki sisa unbilled (aksen amber).
+    4. *Rasio Penyelesaian*: Persentase kelengkapan penagihan secara keseluruhan beserta perbandingan moda Udara vs Laut.
+  - **Dual Filter Periode**: Sinkron dengan `BillingPeriodNavigator` (Bulan & Tahun aktif terpilih) serta toggle switch instan ke mode **Semua Waktu (All-Time)** untuk memantau backlog historis.
+  - **Progress Bar Rasio Visual**: Indikator bar proporsional perbandingan billed vs unbilled secara real-time.
+  - **Modal Interaktif & Drilldown Kargo**:
+    - Filter status: *Semua Batch*, *Perlu Ditagih (Pending)*, dan *Tuntas (100%)*.
+    - Filter moda: *Semua*, *Udara*, dan *Laut*.
+    - Pencarian teks bebas berdasarkan kode marking atau nama cabang.
+    - Progress bar kelengkapan per batch marking dengan indikator status tuntas/pending.
+    - Tombol expand kargo: Mengambil rincian kargo dalam batch via `GET /api/billing/batch-exit-comparison/details?markingCode=...` (menampilkan Kode List, Nama Pelanggan SSOT, Koli, M³, Berat KG, status Bill, dan status Surat Jalan).
+    - Tombol shortcut aksi `[Target Bill]`: Membuka halaman Target Bill (`ROUTES.BILLING_TARGET`) terfilter otomatis pada kode marking terkait.

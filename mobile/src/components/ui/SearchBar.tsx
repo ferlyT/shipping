@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { View, TextInput, TouchableOpacity, StyleSheet, ViewStyle, Keyboard } from 'react-native'
-import { Search, X, ScanLine } from 'lucide-react-native'
+import { Search, X, ScanLine, Camera } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { useThemeStore } from '../../theme/themeStore'
 
@@ -9,6 +9,7 @@ interface SearchBarProps {
   onChangeText: (text: string) => void
   placeholder?: string
   onScanPress?: () => void
+  onScanContainerPress?: () => void
   onFocus?: () => void
   debounceMs?: number
   style?: ViewStyle
@@ -19,6 +20,7 @@ export const SearchBar: React.FC<SearchBarProps> = ({
   onChangeText,
   placeholder = 'Cari...',
   onScanPress,
+  onScanContainerPress,
   onFocus,
   debounceMs = 0,
   style,
@@ -104,8 +106,20 @@ export const SearchBar: React.FC<SearchBarProps> = ({
           <X size={15} color={colors.secondary} />
         </TouchableOpacity>
       )}
+      {onScanContainerPress && (
+        <TouchableOpacity
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
+            onScanContainerPress()
+          }}
+          style={styles.scanBtn}
+          accessibilityLabel="Pindai Nomor Kontainer"
+        >
+          <Camera size={17} color={colors.tertiary} />
+        </TouchableOpacity>
+      )}
       {onScanPress && (
-        <TouchableOpacity onPress={handleScan} style={styles.scanBtn}>
+        <TouchableOpacity onPress={handleScan} style={styles.scanBtn} accessibilityLabel="Pindai Barcode">
           <ScanLine size={18} color={colors.tertiary} />
         </TouchableOpacity>
       )}
@@ -118,9 +132,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderRadius: 12,
+    borderRadius: 10,
     paddingHorizontal: 12,
-    height: 44,
+    height: 40,
   },
   searchIcon: {
     marginRight: 8,
@@ -134,9 +148,10 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   scanBtn: {
-    padding: 6,
+    padding: 4,
     marginLeft: 6,
     borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.1)',
+    borderLeftColor: 'rgba(128,128,128,0.15)',
+    paddingLeft: 8,
   },
 })

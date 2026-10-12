@@ -7,10 +7,10 @@ Dokumen ini adalah panduan standar operasional bagi pengembang dan AI Agent untu
 ## 1. Single Source of Truth Versi (`mobile/src/config/version.ts`)
 Versi aplikasi didefinisikan secara statis di `mobile/src/config/version.ts`:
 ```ts
-export const APP_VERSION = '1.2.2'
-export const APP_VERSION_CODE = 14
+export const APP_VERSION = '1.2.8'
+export const APP_VERSION_CODE = 20
 export const FORCE_UPDATE = true
-export const MIN_APP_VERSION = '1.2.2'
+export const MIN_APP_VERSION = '1.2.8'
 ```
 > **Penting**: Penulisan statis ini menjamin nomor versi tertanam permanen ke dalam bytecode Hermes, mencegah nilai `null` pada `Constants.expoConfig` di lingkungan APK standalone Android.
 

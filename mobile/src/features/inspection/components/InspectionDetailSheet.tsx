@@ -51,7 +51,7 @@ export function InspectionDetailSheet({
   onDelete,
   onOpenPhotos,
 }: Props) {
-  const { colors, mode } = useThemeStore()
+  const { mode } = useThemeStore()
   const isDark = mode === 'midnight'
   const insets = useSafeAreaInsets()
   const bottomInset = Platform.OS === 'android'
@@ -68,6 +68,24 @@ export function InspectionDetailSheet({
   }
 
   if (!item) return null
+
+  // Semantic tokens from mobile-design-rules.md
+  const lineColor = isDark ? '#222C38' : '#E3E7EC'
+  const surfaceColor = isDark ? '#131A23' : '#FFFFFF'
+  const textColor = isDark ? '#EEF2F6' : '#141B24'
+  const mutedColor = isDark ? '#8A97A6' : '#657080'
+  const airColor = isDark ? '#E2B266' : '#A9741C'
+  const seaColor = isDark ? '#5FA3D4' : '#256A9E'
+  const okColor = isDark ? '#4CC38A' : '#17855A'
+  const warnColor = isDark ? '#E5A93C' : '#A97612'
+  const lateColor = isDark ? '#EF6B5B' : '#C4402F'
+  const accentColor = isDark ? '#E0644E' : '#B8402C'
+
+  const isAir = item.fdListType === 1
+  const modaColor = isAir ? airColor : seaColor
+  const isDone = item.fdStatus === '2'
+  const statusColor = isDone ? okColor : warnColor
+  const statusLabel = isDone ? 'Selesai' : 'Draft'
 
   const handleDelete = () => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
@@ -92,411 +110,214 @@ export function InspectionDetailSheet({
     <Modal
       visible={visible}
       animationType="slide"
-      transparent
+      transparent={false}
       onRequestClose={onClose}
     >
-      <View style={styles.backdrop}>
+      <View style={[styles.root, { backgroundColor: isDark ? '#0C1118' : '#F6F7F9' }]}>
+        {/* Sticky Header Bar */}
         <View
           style={[
-            styles.sheetContainer,
+            styles.bar,
             {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
+              borderBottomColor: lineColor,
+              backgroundColor: isDark ? 'rgba(12,17,24,0.95)' : 'rgba(246,247,249,0.95)',
+              paddingTop: Platform.OS === 'android'
+                ? Math.max(insets.top, 24) + 12
+                : Math.max(insets.top, 16) + 10,
             },
           ]}
         >
-          {/* Header */}
-          <View
+          <View style={{ flex: 1, marginRight: 12 }}>
+            <Text style={[styles.reportNumber, { color: textColor }]} numberOfLines={1}>
+              {item.fdReportNumber}
+            </Text>
+            <View style={styles.t2}>
+              {item.fdListType ? (
+                <View style={styles.modaWrap}>
+                  <View style={[styles.dot, { backgroundColor: modaColor }]} />
+                  <Text style={[styles.modaText, { color: mutedColor }]}>
+                    {isAir ? 'Udara' : 'Laut'}
+                  </Text>
+                </View>
+              ) : null}
+              <View style={[styles.tag, { borderColor: isDone ? okColor : warnColor }]}>
+                <Text style={[styles.tagText, { color: statusColor }]}>
+                  {statusLabel}
+                </Text>
+              </View>
+              <Text style={[styles.dateText, { color: mutedColor }]}>
+                {formatDate(item.fdReportDate)}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            onPress={onClose}
+            activeOpacity={0.7}
             style={[
-              styles.header,
+              styles.iconBtn,
               {
-                borderBottomColor: isDark
-                  ? 'rgba(255,255,255,0.08)'
-                  : 'rgba(0,0,0,0.08)',
+                borderColor: lineColor,
+                backgroundColor: surfaceColor,
               },
             ]}
           >
-            <View style={{ flex: 1, marginRight: 10 }}>
-              <View style={styles.titleRow}>
-                <ClipboardList size={16} color={colors.tertiary} />
-                <Text
-                  style={[styles.reportNumber, { color: colors.primary }]}
-                  numberOfLines={1}
-                >
-                  {item.fdReportNumber}
-                </Text>
-              </View>
-              <View style={styles.badgeRow}>
-                {item.fdListType ? (
-                  <View
-                    style={[
-                      styles.modaBadge,
-                      {
-                        backgroundColor:
-                          item.fdListType === 1
-                            ? isDark
-                              ? 'rgba(56, 189, 248, 0.15)'
-                              : 'rgba(2, 132, 199, 0.1)'
-                            : isDark
-                            ? 'rgba(52, 211, 153, 0.15)'
-                            : 'rgba(5, 150, 105, 0.1)',
-                        borderColor:
-                          item.fdListType === 1
-                            ? '#0284C7'
-                            : '#10B981',
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.modaBadgeText,
-                        {
-                          color:
-                            item.fdListType === 1
-                              ? isDark ? '#38BDF8' : '#0284C7'
-                              : isDark ? '#34D399' : '#059669',
-                        },
-                      ]}
-                    >
-                      {item.fdListType === 1 ? '✈️ Udara' : '🚢 Laut'}
-                    </Text>
-                  </View>
-                ) : null}
-                <InspectionStatusBadge status={item.fdStatus} />
-                <Text style={[styles.dateText, { color: colors.secondary }]}>
-                  {formatDate(item.fdReportDate)}
-                </Text>
-              </View>
-            </View>
+            <X size={20} color={textColor} />
+          </TouchableOpacity>
+        </View>
 
-            <TouchableOpacity
-              onPress={onClose}
-              style={[
-                styles.closeButton,
-                {
-                  borderColor: colors.border,
-                  backgroundColor: isDark
-                    ? 'rgba(255,255,255,0.04)'
-                    : 'rgba(0,0,0,0.04)',
-                },
-              ]}
-            >
-              <X size={18} color={colors.secondary} />
-            </TouchableOpacity>
+        {/* Scroll Content */}
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: bottomInset + 80 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Customer Section */}
+          <View style={[styles.section, styles.sectionFirst]}>
+            <Text style={[styles.lbl, { color: mutedColor }]}>Customer</Text>
+            <Text style={[styles.cust, { color: textColor }]} numberOfLines={2}>
+              {displayCustName(item.fdNamaCustomer)}
+            </Text>
           </View>
 
-          {/* Content */}
-          <ScrollView
-            style={styles.scroll}
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={true}
-          >
-            {/* Customer Box */}
-            <View
-              style={[
-                styles.cardBox,
-                {
-                  backgroundColor: isDark
-                    ? 'rgba(255,255,255,0.03)'
-                    : 'rgba(0,0,0,0.02)',
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>
-                CUSTOMER
-              </Text>
-              <Text style={[styles.custName, { color: colors.primary }]}>
-                {displayCustName(item.fdNamaCustomer)}
-              </Text>
-            </View>
-
-            {/* Marking & Identifikasi */}
-            <View
-              style={[
-                styles.cardBox,
-                {
-                  backgroundColor: isDark
-                    ? 'rgba(255,255,255,0.03)'
-                    : 'rgba(0,0,0,0.02)',
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>
-                IDENTIFIKASI MUATAN
-              </Text>
-
-              <View style={styles.gridRow}>
-                <View style={styles.gridCol}>
-                  <Text style={[styles.fieldLabel, { color: colors.secondary }]}>
-                    Marking Code
-                  </Text>
-                  <View style={styles.valueRow}>
-                    <Tag size={13} color={colors.tertiary} />
-                    <Text
-                      style={[styles.fieldValue, { color: colors.primary }]}
-                    >
-                      {item.fdMarkingCode || '—'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.gridCol}>
-                  <Text style={[styles.fieldLabel, { color: colors.secondary }]}>
-                    Marking No
-                  </Text>
-                  <Text style={[styles.fieldValue, { color: colors.primary }]}>
-                    {item.fdMarkingNo || '—'}
-                  </Text>
-                </View>
-              </View>
-
-              <View style={[styles.gridRow, { marginTop: 10 }]}>
-                <View style={styles.gridCol}>
-                  <Text style={[styles.fieldLabel, { color: colors.secondary }]}>
-                    List Code
-                  </Text>
-                  <View style={styles.valueRow}>
-                    <Hash size={13} color={colors.secondary} />
-                    <Text
-                      style={[styles.fieldValue, { color: colors.primary }]}
-                    >
-                      {item.fdListCode || '—'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.gridCol}>
-                  <Text style={[styles.fieldLabel, { color: colors.secondary }]}>
-                    No. Resi (Terima)
-                  </Text>
-                  <View style={styles.valueRow}>
-                    <Receipt size={13} color={colors.secondary} />
-                    <Text
-                      style={[styles.fieldValue, { color: colors.primary }]}
-                    >
-                      {item.fdTerima || '—'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={[styles.gridRow, { marginTop: 10 }]}>
-                <View style={styles.gridCol}>
-                  <Text style={[styles.fieldLabel, { color: colors.secondary }]}>
-                    Moda Pengiriman
-                  </Text>
-                  <View style={styles.valueRow}>
-                    {item.fdListType === 1 ? (
-                      <Plane size={13} color="#0284C7" />
-                    ) : (
-                      <Ship size={13} color="#10B981" />
-                    )}
-                    <Text
-                      style={[
-                        styles.fieldValue,
-                        {
-                          color:
-                            item.fdListType === 1
-                              ? isDark ? '#38BDF8' : '#0284C7'
-                              : isDark ? '#34D399' : '#059669',
-                        },
-                      ]}
-                    >
-                      {item.fdListType === 1 ? 'Udara (Air)' : 'Laut (Sea)'}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
-
-            {/* Keterangan / Pemeriksaan */}
-            <View
-              style={[
-                styles.cardBox,
-                {
-                  backgroundColor: isDark
-                    ? 'rgba(255,255,255,0.03)'
-                    : 'rgba(0,0,0,0.02)',
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>
-                HASIL PEMERIKSAAN / KETERANGAN
-              </Text>
-              <Text
-                style={[
-                  styles.remarksText,
-                  { color: item.fdKeterangan ? colors.primary : colors.secondary },
-                ]}
-              >
-                {item.fdKeterangan || 'Tidak ada catatan tambahan.'}
-              </Text>
-            </View>
-
-            {/* Foto Pemeriksaan */}
-            <View
-              style={[
-                styles.cardBox,
-                {
-                  backgroundColor: isDark
-                    ? 'rgba(255,255,255,0.03)'
-                    : 'rgba(0,0,0,0.02)',
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <View
-                style={{
-                  flexDirection: 'row',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: 8,
-                }}
-              >
-                <Text
-                  style={[
-                    styles.sectionTitle,
-                    { color: colors.secondary, marginBottom: 0 },
-                  ]}
-                >
-                  FOTO PEMERIKSAAN ({photos.length})
+          {/* Identifikasi Muatan */}
+          <View style={[styles.section, { borderTopColor: lineColor }]}>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>Identifikasi muatan</Text>
+            <View style={styles.stats}>
+              <View style={[styles.statBox, { borderLeftColor: lineColor }]}>
+                <Text style={[styles.statDt, { color: mutedColor }]}>Marking code</Text>
+                <Text style={[styles.statDd, { color: item.fdMarkingCode ? textColor : mutedColor }]}>
+                  {item.fdMarkingCode || '—'}
                 </Text>
-                {onOpenPhotos && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-                      onOpenPhotos(item)
-                    }}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                  >
-                    <Camera size={13} color={colors.tertiary} />
-                    <Text
-                      style={{
-                        fontSize: 11,
-                        fontWeight: '700',
-                        color: colors.tertiary,
-                      }}
-                    >
-                      {photos.length > 0 ? 'Kelola Foto' : '+ Tambah Foto'}
-                    </Text>
-                  </TouchableOpacity>
-                )}
               </View>
 
-              {photos.length === 0 ? (
+              <View style={[styles.statBox, { borderLeftColor: lineColor }]}>
+                <Text style={[styles.statDt, { color: mutedColor }]}>Marking no</Text>
+                <Text style={[styles.statDd, { color: item.fdMarkingNo ? textColor : mutedColor }]}>
+                  {item.fdMarkingNo || '—'}
+                </Text>
+              </View>
+
+              <View style={[styles.statBox, { borderLeftColor: lineColor }]}>
+                <Text style={[styles.statDt, { color: mutedColor }]}>List code</Text>
+                <Text style={[styles.statDd, { color: item.fdListCode ? textColor : mutedColor }]}>
+                  {item.fdListCode || '—'}
+                </Text>
+              </View>
+
+              <View style={[styles.statBox, { borderLeftColor: lineColor }]}>
+                <Text style={[styles.statDt, { color: mutedColor }]}>No. resi (terima)</Text>
+                <Text style={[styles.statDd, { color: item.fdTerima ? textColor : mutedColor }]}>
+                  {item.fdTerima || '—'}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Hasil pemeriksaan / catatan */}
+          <View style={[styles.section, { borderTopColor: lineColor }]}>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>Hasil pemeriksaan / catatan</Text>
+            <Text
+              style={[
+                styles.note,
+                { color: item.fdKeterangan ? textColor : mutedColor },
+              ]}
+            >
+              {item.fdKeterangan ? item.fdKeterangan.trim() : 'Tidak ada catatan tambahan.'}
+            </Text>
+          </View>
+
+          {/* Foto pemeriksaan */}
+          <View style={[styles.section, { borderTopColor: lineColor }]}>
+            <View style={styles.photoHeaderRow}>
+              <View style={styles.photoTitleWrap}>
+                <Text style={[styles.sectionTitle, { color: textColor }]}>Foto pemeriksaan</Text>
+                <View style={[styles.countBadge, { borderColor: lineColor }]}>
+                  <Text style={[styles.countText, { color: mutedColor }]}>{photos.length}</Text>
+                </View>
+              </View>
+
+              {onOpenPhotos && (
                 <TouchableOpacity
-                  onPress={() => onOpenPhotos?.(item)}
-                  style={{
-                    paddingVertical: 14,
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderStyle: 'dashed',
-                    borderColor: colors.border,
-                    gap: 6,
+                  onPress={() => {
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                    onOpenPhotos(item)
                   }}
+                  activeOpacity={0.7}
+                  style={styles.linkBtn}
                 >
-                  <Camera size={18} color={colors.secondary} />
-                  <Text style={{ fontSize: 12, color: colors.secondary }}>
-                    Belum ada foto kargo. Tap untuk menambah foto.
-                  </Text>
+                  <Camera size={18} color={accentColor} />
+                  <Text style={[styles.linkBtnText, { color: accentColor }]}>Tambah foto</Text>
                 </TouchableOpacity>
-              ) : (
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={false}
-                  contentContainerStyle={{ gap: 8 }}
-                >
-                  {photos.map((p) => (
-                    <TouchableOpacity
-                      key={p.fdId}
-                      activeOpacity={0.8}
-                      onPress={() => onOpenPhotos?.(item)}
-                      style={{
-                        width: 76,
-                        height: 76,
-                        borderRadius: 8,
-                        overflow: 'hidden',
-                        borderWidth: 1,
-                        borderColor: colors.border,
-                      }}
-                    >
-                      <Image
-                        source={{ uri: getFullPhotoUrl(p.fdPhotoUrl) }}
-                        style={{ width: '100%', height: '100%' }}
-                        resizeMode="cover"
-                      />
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
               )}
             </View>
 
-            {/* Audit Log */}
-            <View
-              style={[
-                styles.cardBox,
-                {
-                  backgroundColor: isDark
-                    ? 'rgba(255,255,255,0.03)'
-                    : 'rgba(0,0,0,0.02)',
-                  borderColor: colors.border,
-                },
-              ]}
-            >
-              <Text style={[styles.sectionTitle, { color: colors.secondary }]}>
-                LOG & PEMBUAT
-              </Text>
-
-              <View style={styles.auditRow}>
-                <User size={13} color={colors.secondary} />
-                <Text style={[styles.auditText, { color: colors.secondary }]}>
-                  Dibuat oleh:{' '}
-                  <Text style={{ color: colors.primary, fontWeight: '700' }}>
-                    {item.fdCreatedBy || '—'}
-                  </Text>
-                </Text>
+            {photos.length === 0 ? (
+              <Text style={[styles.note, { color: mutedColor }]}>Belum ada foto kargo.</Text>
+            ) : (
+              <View style={styles.photosGrid}>
+                {photos.map((p) => (
+                  <TouchableOpacity
+                    key={p.fdId}
+                    activeOpacity={0.85}
+                    onPress={() => onOpenPhotos?.(item)}
+                    style={[styles.photoCard, { borderColor: lineColor }]}
+                  >
+                    <Image
+                      source={{ uri: getFullPhotoUrl(p.fdPhotoUrl) }}
+                      style={styles.photoImg}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                ))}
               </View>
+            )}
+          </View>
 
-              <View style={[styles.auditRow, { marginTop: 4 }]}>
-                <Calendar size={13} color={colors.secondary} />
-                <Text style={[styles.auditText, { color: colors.secondary }]}>
-                  Waktu pembuatan: {formatDate(item.fdCreatedAt)}
-                </Text>
+          {/* Riwayat dokumen */}
+          <View style={[styles.section, { borderTopColor: lineColor }]}>
+            <Text style={[styles.sectionTitle, { color: textColor }]}>Riwayat dokumen</Text>
+            <View style={styles.kv}>
+              <View style={styles.kvRow}>
+                <Text style={[styles.kvDt, { color: mutedColor }]}>Dibuat oleh</Text>
+                <Text style={[styles.kvDd, { color: textColor }]}>{item.fdCreatedBy || '—'}</Text>
+              </View>
+              <View style={styles.kvRow}>
+                <Text style={[styles.kvDt, { color: mutedColor }]}>Tanggal</Text>
+                <Text style={[styles.kvDd, { color: textColor }]}>{formatDate(item.fdCreatedAt)}</Text>
               </View>
             </View>
-          </ScrollView>
+          </View>
+        </ScrollView>
 
-          {/* Action Bar Footer */}
-          <View
-            style={[
-              styles.footer,
-              {
-                borderTopColor: isDark
-                  ? 'rgba(255,255,255,0.08)'
-                  : 'rgba(0,0,0,0.08)',
-                paddingBottom: bottomInset + 8,
-              },
-            ]}
-          >
+        {/* Floating Actions Bar */}
+        <View
+          style={[
+            styles.actionsBar,
+            {
+              borderTopColor: lineColor,
+              backgroundColor: isDark ? 'rgba(12,17,24,0.95)' : 'rgba(246,247,249,0.95)',
+              paddingBottom: bottomInset + 12,
+            },
+          ]}
+        >
+          <View style={styles.actionsInner}>
             <TouchableOpacity
               onPress={handleDelete}
+              activeOpacity={0.7}
               style={[
-                styles.deleteBtn,
+                styles.btn,
+                styles.btnDel,
                 {
-                  borderColor: 'rgba(239, 68, 68, 0.3)',
-                  backgroundColor: isDark
-                    ? 'rgba(239, 68, 68, 0.1)'
-                    : 'rgba(239, 68, 68, 0.08)',
+                  borderColor: lateColor,
                 },
               ]}
             >
-              <Trash2 size={16} color="#EF4444" />
-              <Text style={styles.deleteText}>Hapus</Text>
+              <Trash2 size={20} color={lateColor} />
+              <Text style={[styles.btnText, { color: lateColor }]}>Hapus</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
@@ -505,15 +326,18 @@ export function InspectionDetailSheet({
                 onClose()
                 onEdit(item)
               }}
+              activeOpacity={0.85}
               style={[
-                styles.editBtn,
+                styles.btn,
+                styles.btnMain,
                 {
-                  backgroundColor: colors.tabBarActive,
+                  backgroundColor: accentColor,
+                  borderColor: accentColor,
                 },
               ]}
             >
-              <Edit2 size={16} color="#FFFFFF" />
-              <Text style={styles.editText}>Edit BAP</Text>
+              <Edit2 size={20} color="#FFFFFF" />
+              <Text style={[styles.btnText, { color: '#FFFFFF' }]}>Edit BAP</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -523,150 +347,216 @@ export function InspectionDetailSheet({
 }
 
 const styles = StyleSheet.create({
-  backdrop: {
+  root: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
   },
-  sheetContainer: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    borderWidth: 1,
-    maxHeight: '85%',
-    height: '75%',
-  },
-  header: {
+  bar: {
+    borderBottomWidth: 1,
+    paddingHorizontal: 20,
+    paddingBottom: 14,
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    borderBottomWidth: 1,
+    alignItems: 'flex-start',
+    zIndex: 10,
   },
-  titleRow: {
+  reportNumber: {
+    fontSize: 19,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+    letterSpacing: -0.2,
+  },
+  t2: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+    marginTop: 4,
+  },
+  modaWrap: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    marginBottom: 4,
   },
-  reportNumber: {
-    fontSize: 15,
-    fontWeight: '800',
-    fontVariant: ['tabular-nums'],
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 2,
+  modaText: {
+    fontSize: 14,
+    fontWeight: '400',
   },
-  modaBadge: {
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
+  tag: {
     borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 7,
+    paddingVertical: 1,
   },
-  modaBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
+  tagText: {
+    fontSize: 12,
+    fontWeight: '600',
   },
   dateText: {
-    fontSize: 11.5,
-    fontWeight: '500',
+    fontSize: 14,
+    fontVariant: ['tabular-nums'],
   },
-  closeButton: {
-    padding: 6,
-    borderRadius: 8,
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   scroll: {
     flex: 1,
   },
   scrollContent: {
-    padding: 16,
-    gap: 12,
-    paddingBottom: 24,
+    paddingHorizontal: 20,
+    paddingTop: 4,
   },
-  cardBox: {
-    padding: 12,
-    borderRadius: 10,
-    borderWidth: 1,
+  section: {
+    paddingVertical: 22,
+    borderTopWidth: 1,
+  },
+  sectionFirst: {
+    borderTopWidth: 0,
+    paddingTop: 18,
+    paddingBottom: 22,
+  },
+  lbl: {
+    fontSize: 13,
+    marginBottom: 4,
+  },
+  cust: {
+    fontSize: 22,
+    fontWeight: '500',
+    lineHeight: 28,
   },
   sectionTitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.8,
-    marginBottom: 6,
+    fontSize: 16,
+    fontWeight: '600',
   },
-  custName: {
-    fontSize: 14,
-    fontWeight: '700',
+  stats: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    rowGap: 18,
+    columnGap: 16,
+    marginTop: 14,
   },
-  gridRow: {
+  statBox: {
+    width: '47%',
+    borderLeftWidth: 2,
+    paddingLeft: 12,
+  },
+  statDt: {
+    fontSize: 12,
+    marginBottom: 2,
+  },
+  statDd: {
+    fontSize: 18,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+  },
+  note: {
+    marginTop: 8,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  photoHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  photoTitleWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  countBadge: {
+    borderWidth: 1,
+    borderRadius: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 1,
+    marginLeft: 8,
+  },
+  countText: {
+    fontSize: 13,
+    fontWeight: '400',
+  },
+  linkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 44,
+  },
+  linkBtnText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  photosGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 10,
+  },
+  photoCard: {
+    width: '48%',
+    aspectRatio: 4 / 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  photoImg: {
+    width: '100%',
+    height: '100%',
+  },
+  kv: {
+    marginTop: 8,
+    gap: 6,
+  },
+  kvRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
   },
-  gridCol: {
-    flex: 1,
+  kvDt: {
+    fontSize: 14,
   },
-  fieldLabel: {
-    fontSize: 11,
+  kvDd: {
+    fontSize: 14,
     fontWeight: '500',
-    marginBottom: 2,
   },
-  valueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  fieldValue: {
-    fontSize: 12.5,
-    fontWeight: '700',
-  },
-  remarksText: {
-    fontSize: 12.5,
-    lineHeight: 18,
-  },
-  auditRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  auditText: {
-    fontSize: 11.5,
-  },
-  footer: {
-    flexDirection: 'row',
-    padding: 14,
-    gap: 10,
+  actionsBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     borderTopWidth: 1,
+    paddingHorizontal: 20,
+    paddingTop: 12,
   },
-  deleteBtn: {
+  actionsInner: {
     flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 16,
+    gap: 12,
+  },
+  btn: {
+    minHeight: 48,
     borderRadius: 10,
     borderWidth: 1,
-    gap: 6,
-  },
-  deleteText: {
-    color: '#EF4444',
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  editBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-    gap: 6,
+    gap: 8,
+    paddingHorizontal: 16,
   },
-  editText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700',
+  btnDel: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  btnMain: {
+    flex: 2,
+  },
+  btnText: {
+    fontSize: 15,
+    fontWeight: '600',
   },
 })

@@ -27,6 +27,13 @@ export function CustMarkingDetailModal({
     filteredRows,
     sortedRows,
     aggregates,
+    invoiceGroups,
+    groupByInvoice,
+    setGroupByInvoice,
+    collapsedInvoices,
+    toggleInvoiceCollapse,
+    expandAllInvoices,
+    collapseAllInvoices,
     branches,
     selectedCommodityType,
     setSelectedCommodityType,
@@ -86,7 +93,7 @@ export function CustMarkingDetailModal({
             <span className="text-[var(--color-primary)] font-semibold">{displayCustName}</span>
             <span className="text-[var(--color-secondary)]/50">·</span>
             <span className="text-[var(--color-secondary)]">Marking:</span>
-            <span className="font-mono text-[var(--color-tertiary)] font-bold bg-[var(--color-tertiary)]/10 px-1.5 py-0.2 rounded-xs border border-[var(--color-tertiary)]/30 text-[11px]">
+            <span className="font-mono text-[var(--color-tertiary)] font-bold bg-[var(--color-tertiary)]/10 px-1.5 py-0.5 rounded-sm border border-[var(--color-tertiary)]/30 text-[11px]">
               {markingCode || 'Semua'}
             </span>
           </div>
@@ -112,7 +119,7 @@ export function CustMarkingDetailModal({
               </span>
             )}
             <span className="text-[11px] font-mono font-semibold px-2 py-0.5 rounded-full border border-[var(--color-border)] text-[var(--color-secondary)]">
-              {filteredRows.length} baris
+              {groupByInvoice ? `${invoiceGroups.length} invoice · ` : ''}{filteredRows.length} baris
             </span>
           </div>
         }
@@ -134,6 +141,11 @@ export function CustMarkingDetailModal({
         totalAll={normalizedRows.length}
         hasSelisihCount={aggregates.countSelisih}
         countQtyKomplainMismatch={aggregates.countQtyKomplainMismatch}
+        groupByInvoice={groupByInvoice}
+        onToggleGroupByInvoice={() => setGroupByInvoice((prev) => !prev)}
+        onExpandAll={expandAllInvoices}
+        onCollapseAll={collapseAllInvoices}
+        invoiceGroupCount={invoiceGroups.length}
       />
 
       <CustMarkingSummaryBanner
@@ -164,6 +176,10 @@ export function CustMarkingDetailModal({
             sortField={sortField}
             sortOrder={sortOrder}
             onSort={handleSort}
+            groupByInvoice={groupByInvoice}
+            invoiceGroups={invoiceGroups}
+            collapsedInvoices={collapsedInvoices}
+            onToggleCollapse={toggleInvoiceCollapse}
           />
         )}
       </Modal.Body>

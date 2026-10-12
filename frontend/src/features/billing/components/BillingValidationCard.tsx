@@ -55,6 +55,7 @@ export function BillingValidationCard({
   customerName: customerNameProp,
   custCode: custCodeProp,
   onOpenAuditModal,
+  onOpenCustomerHargaModal,
   activeTab: activeTabProp,
   onTabChange,
 }: BillingValidationCardProps) {
@@ -392,7 +393,7 @@ export function BillingValidationCard({
   // Price Discrepancy Check across all items
   const fallbackEvaluatedItems = useMemo(() => {
     if (!res || !invoiceDetails || invoiceDetails.length === 0) return []
-    return invoiceDetails.map((item) => {
+    return invoiceDetails.map((item, idx) => {
       const evaluation = evaluateItemPrice(item, {
         res,
         isAir,
@@ -400,6 +401,9 @@ export function BillingValidationCard({
         defaultComodityName,
         branchCode,
         invNo: invoiceNo,
+        itemIndex: idx,
+        entryListTypeId: res?.entryListTypeComodity ?? res?.defaultFdTypeComodity,
+        entryListComodityName: res?.entryListComodityName,
       })
       return { item, evaluation }
     })
@@ -629,6 +633,7 @@ export function BillingValidationCard({
             setSelectedNoteMode={setSelectedNoteMode}
             setIsModalOpen={setIsModalOpen}
             onOpenAuditModal={onOpenAuditModal}
+            onOpenCustomerHargaModal={onOpenCustomerHargaModal}
           />
         )}
 

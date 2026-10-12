@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AxiosError } from 'axios'
-import { ChevronRight, Plane, Ship, Package } from 'lucide-react'
+import { ChevronRight, Plane, Ship, Package, Paperclip } from 'lucide-react'
 import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import { billingApi } from '../services/billing.service'
 import { usePagination } from '@/hooks/usePagination'
@@ -14,11 +14,12 @@ import { Skeleton } from '@/components/ui/Skeleton'
 import { BillingStatusTag } from '../components/BillingStatusTag'
 import { BillingFilterBar, type BillingModeFilter, type BillingStatusFilter } from '../components/BillingFilterBar'
 import { BillingToolbar } from '../components/BillingToolbar'
+import BillingQuickLampiranModal from '../components/lampiran/BillingQuickLampiranModal'
 import { formatDate, cn, displayCustName } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
 import { statusConfig } from '@/features/customers/components/CustomerBadges'
 import { useTranslation } from '@/hooks/useTranslation'
-import { ROUTES } from '@/lib/constants'
+import { ROUTES, DEBOUNCE_DELAY } from '@/lib/constants'
 import { useToastStore } from '@/stores/toastStore'
 import type { Billing } from '../types/billing.types'
 
@@ -38,8 +39,9 @@ export default function ListPage() {
   const [modeFilter, setModeFilter] = useState<BillingModeFilter>('all')
   const [statusFilter, setStatusFilter] = useState<BillingStatusFilter>('all')
   const [jumpPage, setJumpPage] = useState('')
+  const [attachmentModalInv, setAttachmentModalInv] = useState<{ invNo: string; custName?: string } | null>(null)
 
-  const debouncedSearch = useDebounce(search, 300)
+  const debouncedSearch = useDebounce(search, DEBOUNCE_DELAY)
 
   const { page, limit, setLimit, goToPage, reset } = usePagination(20)
 
@@ -229,6 +231,38 @@ export default function ListPage() {
         </span>
       ),
     },
+    {
+      key: 'lampiran',
+      header: 'Lampiran',
+      className: 'w-[9%] text-center whitespace-nowrap',
+      render: (row: Billing) => {
+        const count = row.attachmentCount ?? 0
+        const hasAttachments = count > 0
+
+        return (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              setAttachmentModalInv({
+                invNo: row.fdInvNo,
+                custName: displayCustName(row.customer?.fdCustName || row.fdCustCode),
+              })
+            }}
+            title={hasAttachments ? `${count} Lampiran Dokumen (Klik untuk membuka)` : 'Unggah Lampiran Invoice'}
+            className={cn(
+              "inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border transition-transform hover:scale-105 active:scale-95 cursor-pointer",
+              hasAttachments
+                ? "bg-[var(--color-tertiary)]/10 text-[var(--color-tertiary)] border-[var(--color-tertiary)]/40 hover:bg-[var(--color-tertiary)]/20 shadow-2xs"
+                : "bg-neutral-500/10 text-neutral-400 dark:text-neutral-500 border-neutral-500/20 hover:text-[var(--color-primary)] hover:border-[var(--color-border)]"
+            )}
+          >
+            <Paperclip size={11} className={hasAttachments ? "text-[var(--color-tertiary)]" : "text-neutral-400 dark:text-neutral-500"} />
+            <span>{hasAttachments ? `${count} Lampiran` : '0 Lampiran'}</span>
+          </button>
+        )
+      },
+    },
   ]
 
   return (
@@ -279,7 +313,7 @@ export default function ListPage() {
 
           {/* Data Area - Desktop Table */}
           <div className="hidden sm:flex flex-1 min-h-0 flex-col overflow-auto bg-[var(--color-surface)]">
-            {isInitialLoading || isRefreshing ? (
+            {isInitialLoading ? (
               <Table
                 columns={columns}
                 data={[]}
@@ -297,15 +331,17 @@ export default function ListPage() {
                 getRowClassName={() => 'bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/40 border-l-4 border-l-transparent hover:border-l-[var(--color-tertiary)]'}
               />
             ) : (
-              <Table
-                columns={columns}
-                data={filteredData}
-                keyExtractor={(row) => row.fdInvNo}
-                isLoading={false}
-                onRowClick={(row) => navigate(ROUTES.BILLING_DETAIL(row.fdInvNo))}
-                emptyMessage={t('common.noData')}
-                getRowClassName={() => 'bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/40 border-l-4 border-l-transparent hover:border-l-[var(--color-tertiary)]'}
-              />
+              <div className={cn("flex-1 flex flex-col min-h-0 transition-opacity duration-200", isRefreshing && "opacity-60")}>
+                <Table
+                  columns={columns}
+                  data={filteredData}
+                  keyExtractor={(row) => row.fdInvNo}
+                  isLoading={false}
+                  onRowClick={(row) => navigate(ROUTES.BILLING_DETAIL(row.fdInvNo))}
+                  emptyMessage={t('common.noData')}
+                  getRowClassName={() => 'bg-[var(--color-surface)] hover:bg-[var(--color-neutral)]/40 border-l-4 border-l-transparent hover:border-l-[var(--color-tertiary)]'}
+                />
+              </div>
             )}
           </div>
 
@@ -332,7 +368,8 @@ export default function ListPage() {
                 {t('common.noData')}
               </div>
             ) : (
-              groupedData.map(({ type, label, icon: Icon, accent, rows, totalAmount }) => (
+              <div className={cn("flex flex-col min-h-0 transition-opacity duration-200", isRefreshing && "opacity-60")}>
+                {groupedData.map(({ type, label, icon: Icon, accent, rows, totalAmount }) => (
                 <div key={type} className="flex flex-col">
                   {/* Group Header Banner */}
                   <div className="sticky top-0 z-10 flex items-center justify-between px-3.5 py-2 bg-[var(--color-neutral)]/95 backdrop-blur-sm border-y border-[var(--color-border)] shadow-2xs">
@@ -388,15 +425,41 @@ export default function ListPage() {
                           )}
                         </div>
 
-                        {/* Line 3: Marking Chip + Total Amount + Arrow */}
+                        {/* Line 3: Marking Chip + Lampiran Button + Total Amount + Arrow */}
                         <div className="flex items-center justify-between gap-2 pt-0.5">
-                          {row.fdMarkingCode ? (
-                            <span className="inline-flex items-center max-w-[55%] px-2 py-0.5 rounded-md bg-[var(--color-neutral)] border border-[var(--color-border)] text-[11px] font-mono text-[var(--color-primary)] truncate">
-                              {row.fdMarkingCode}{row.fdMarkingNo ? ` · #${row.fdMarkingNo}` : ''}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-[var(--color-secondary)]">Tanpa Marking</span>
-                          )}
+                          <div className="flex items-center gap-1.5 min-w-0 max-w-[60%]">
+                            {row.fdMarkingCode ? (
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-[var(--color-neutral)] border border-[var(--color-border)] text-[11px] font-mono text-[var(--color-primary)] truncate">
+                                {row.fdMarkingCode}{row.fdMarkingNo ? ` · #${row.fdMarkingNo}` : ''}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-[var(--color-secondary)]">Tanpa Marking</span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setAttachmentModalInv({
+                                  invNo: row.fdInvNo,
+                                  custName: displayCustName(row.customer?.fdCustName || row.fdCustCode),
+                                })
+                              }}
+                              className={cn(
+                                "flex items-center gap-1 px-2 py-0.5 rounded-full border text-[10px] font-mono font-bold active:scale-95 shrink-0 transition-transform",
+                                (row.attachmentCount ?? 0) > 0
+                                  ? "bg-[var(--color-tertiary)]/15 border-[var(--color-tertiary)]/40 text-[var(--color-tertiary)]"
+                                  : "bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
+                              )}
+                              title="Lihat & Kelola Lampiran"
+                            >
+                              <Paperclip size={10} className={(row.attachmentCount ?? 0) > 0 ? "text-[var(--color-tertiary)]" : "text-[var(--color-secondary)]"} />
+                              {(row.attachmentCount ?? 0) > 0 ? (
+                                <span>{row.attachmentCount} Lampiran</span>
+                              ) : (
+                                <span className="hidden xs:inline">Lampiran</span>
+                              )}
+                            </button>
+                          </div>
                           <div className="flex items-center gap-1 flex-shrink-0">
                             <span className="text-sm font-bold text-[var(--color-primary)] tabular-nums">
                               <CurrencyValue value={row.fdJumlah1} currency={row.fdCurr1} />
@@ -408,7 +471,8 @@ export default function ListPage() {
                     ))}
                   </div>
                 </div>
-              ))
+              ))}
+              </div>
             )}
           </div>
 
@@ -446,6 +510,14 @@ export default function ListPage() {
           )}
         </div>
       </div>
+
+      {/* Modal Aksi Cepat Lampiran Invoice */}
+      <BillingQuickLampiranModal
+        isOpen={Boolean(attachmentModalInv)}
+        onClose={() => setAttachmentModalInv(null)}
+        invNo={attachmentModalInv?.invNo || null}
+        custName={attachmentModalInv?.custName}
+      />
     </div>
   )
 }

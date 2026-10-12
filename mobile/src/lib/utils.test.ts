@@ -15,7 +15,10 @@ import {
   formatWithCurrency,
   getInitials,
   resolveAvatarUrl,
+  replaceDbCaret,
+  cleanDbData,
 } from './utils'
+
 
 describe('mobile utils', () => {
   describe('formatDate', () => {
@@ -141,4 +144,24 @@ describe('mobile utils', () => {
       expect(formatCustomerTenure('invalid')).toBeNull()
     })
   })
+
+  describe('replaceDbCaret & cleanDbData', () => {
+    it('replaces ^ caret with single quote', () => {
+      expect(replaceDbCaret('ALAM RAYA TRANSPORT^S')).toBe("ALAM RAYA TRANSPORT'S")
+      expect(replaceDbCaret('D^CLASSIC, PT')).toBe("D'CLASSIC, PT")
+      expect(replaceDbCaret(null)).toBe('')
+
+      const cleaned = cleanDbData({
+        customer: 'BOB^S GOLF SHOP',
+        branches: ['ASANG INT^L TAILOR', 'BERCA HARDAYAPERKASA^PT'],
+        nested: { note: 'DON^T WORRY' },
+        num: 42
+      })
+      expect(cleaned.customer).toBe("BOB'S GOLF SHOP")
+      expect(cleaned.branches).toEqual(["ASANG INT'L TAILOR", "BERCA HARDAYAPERKASA'PT"])
+      expect(cleaned.nested.note).toBe("DON'T WORRY")
+      expect(cleaned.num).toBe(42)
+    })
+  })
 })
+

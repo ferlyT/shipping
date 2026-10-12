@@ -1,3 +1,8 @@
+// Dukungan serialisasi BigInt ke JSON untuk seluruh modul (termasuk Prisma BigInt)
+;(BigInt.prototype as any).toJSON = function () {
+  return Number(this)
+}
+
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { secureHeaders } from 'hono/secure-headers'
@@ -28,6 +33,7 @@ import { appVersionRoutes } from './modules/app-version/app-version.routes'
 import cashierRoutes from './modules/cashier/cashier.routes'
 import walletRoutes from './modules/wallet/wallet.routes'
 import { inspectionReportsRoutes } from './modules/inspection-reports/inspectionReports.routes'
+import { dataRevisionsRoutes } from './modules/data-revisions/dataRevisions.routes'
 
 
 import path from 'path'
@@ -172,6 +178,7 @@ apiApp.route('/app-version', appVersionRoutes)
 apiApp.route('/cashier', cashierRoutes)
 apiApp.route('/wallet', walletRoutes)
 apiApp.route('/inspection-reports', inspectionReportsRoutes)
+apiApp.route('/data-revisions', dataRevisionsRoutes)
 
 // OpenAPI JSON & Swagger UI
 apiApp.get('/openapi.json', (c) => c.json(openApiSpec))

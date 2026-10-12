@@ -67,4 +67,33 @@ describe('Backend Response Utilities', () => {
     expect(json.error).toBe('Data tidak ditemukan')
     expect(json.details.code).toBe('NOT_FOUND')
   })
+
+  it('converts ^ caret to single quote in strings, objects, and arrays', async () => {
+    const app = new Hono()
+    app.get('/caret-test', (c) => {
+      return successResponse(c, {
+        customerName: 'ALAM RAYA TRANSPORT^S',
+        branch: "ASANG INT^L TAILOR",
+        company: "D^CLASSIC, PT",
+        items: [
+          { name: "BOB^S GOLF SHOP", desc: "LAKER^S & CLUB" },
+          "BERCA HARDAYAPERKASA^PT"
+        ],
+        rawText: "DON^T WORRY"
+      })
+    })
+
+    const res = await app.request('/caret-test')
+    expect(res.status).toBe(200)
+    const json: any = await res.json()
+    expect(json.success).toBe(true)
+    expect(json.data.customerName).toBe("ALAM RAYA TRANSPORT'S")
+    expect(json.data.branch).toBe("ASANG INT'L TAILOR")
+    expect(json.data.company).toBe("D'CLASSIC, PT")
+    expect(json.data.items[0].name).toBe("BOB'S GOLF SHOP")
+    expect(json.data.items[0].desc).toBe("LAKER'S & CLUB")
+    expect(json.data.items[1]).toBe("BERCA HARDAYAPERKASA'PT")
+    expect(json.data.rawText).toBe("DON'T WORRY")
+  })
 })
+

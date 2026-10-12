@@ -6,6 +6,10 @@ import {
   hasTabAccess,
   canViewBillingValidation,
   canManageInspectionReports,
+  canManageDataRevisions,
+  canManageBatchExitDate,
+  canManageBillingAttachments,
+  canDeleteBillingAttachment,
 } from './permissions'
 import type { User } from '@/stores/authStore'
 
@@ -93,7 +97,7 @@ describe('mobile permissions helper', () => {
         permissions: ['/mshipping/logistics'],
       }
       expect(hasPermission(subpathUser, '/mshipping/logistics/shipments')).toBe(true)
-      expect(hasPermission(staffUser, '/mshipping/logistics')).toBe(true)
+      expect(hasPermission(staffUser, '/mshipping/logistics')).toBe(false)
     })
   })
 
@@ -104,6 +108,11 @@ describe('mobile permissions helper', () => {
 
     it('allows users with billing.view_consignee permission', () => {
       const permittedUser: User = { ...staffUser, permissions: ['billing.view_consignee'] }
+      expect(canViewConsignee(permittedUser)).toBe(true)
+    })
+
+    it('allows users with full path /mshipping/finance/billing/view_consignee', () => {
+      const permittedUser: User = { ...staffUser, permissions: ['/mshipping/finance/billing/view_consignee'] }
       expect(canViewConsignee(permittedUser)).toBe(true)
     })
 
@@ -171,14 +180,79 @@ describe('mobile permissions helper', () => {
       expect(canManageInspectionReports(adminUser)).toBe(true)
     })
 
-    it('allows user with logistics or inspection permissions', () => {
+    it('allows user with inspection permissions', () => {
       const inspUser: User = { ...guestUser, permissions: ['/mshipping/logistics/inspection'] }
       expect(canManageInspectionReports(inspUser)).toBe(true)
+    })
+
+    it('denies user who only has shipments permission (granular isolation)', () => {
+      expect(canManageInspectionReports(staffUser)).toBe(false)
     })
 
     it('denies user without inspection permissions or unauthenticated', () => {
       expect(canManageInspectionReports(guestUser)).toBe(false)
       expect(canManageInspectionReports(null)).toBe(false)
+    })
+  })
+
+  describe('canManageDataRevisions', () => {
+    it('allows admin unconditionally', () => {
+      expect(canManageDataRevisions(adminUser)).toBe(true)
+    })
+
+    it('allows user with data revisions permission', () => {
+      const revUser: User = { ...guestUser, permissions: ['/mshipping/logistics/data-revisions'] }
+      expect(canManageDataRevisions(revUser)).toBe(true)
+    })
+
+    it('denies user who only has shipments permission', () => {
+      expect(canManageDataRevisions(staffUser)).toBe(false)
+    })
+
+    it('denies unauthenticated user', () => {
+      expect(canManageDataRevisions(null)).toBe(false)
+    })
+  })
+
+  describe('canManageBatchExitDate', () => {
+    it('allows admin unconditionally', () => {
+      expect(canManageBatchExitDate(adminUser)).toBe(true)
+    })
+
+    it('allows user with batch marking permission', () => {
+      const batchUser: User = { ...guestUser, permissions: ['/mshipping/logistics/batches'] }
+      expect(canManageBatchExitDate(batchUser)).toBe(true)
+    })
+
+    it('denies user who only has shipments permission', () => {
+      expect(canManageBatchExitDate(staffUser)).toBe(false)
+    })
+
+    it('denies unauthenticated user', () => {
+      expect(canManageBatchExitDate(null)).toBe(false)
+    })
+  })
+
+  describe('canManageBillingAttachments & canDeleteBillingAttachment', () => {
+    it('allows admin unconditionally', () => {
+      expect(canManageBillingAttachments(adminUser)).toBe(true)
+      expect(canDeleteBillingAttachment(adminUser)).toBe(true)
+    })
+
+    it('allows upload for user with billing attachments permission', () => {
+      const uploadUser: User = { ...guestUser, permissions: ['/mshipping/finance/billing/attachments'] }
+      expect(canManageBillingAttachments(uploadUser)).toBe(true)
+      expect(canDeleteBillingAttachment(uploadUser)).toBe(false)
+    })
+
+    it('allows delete only for user with attachments delete permission', () => {
+      const deleteUser: User = { ...guestUser, permissions: ['/mshipping/finance/billing/attachments/delete'] }
+      expect(canDeleteBillingAttachment(deleteUser)).toBe(true)
+    })
+
+    it('denies unauthenticated user', () => {
+      expect(canManageBillingAttachments(null)).toBe(false)
+      expect(canDeleteBillingAttachment(null)).toBe(false)
     })
   })
 })

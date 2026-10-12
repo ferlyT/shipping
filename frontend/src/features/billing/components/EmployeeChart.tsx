@@ -23,27 +23,28 @@ interface EmployeeChartProps {
   isLoading: boolean
   isMobile: boolean
   metric: MetricMode
+  chartHeight?: number
 }
 
-export function EmployeeChart({ data, series, isLoading, isMobile, metric }: EmployeeChartProps) {
+export function EmployeeChart({ data, series, isLoading, isMobile, metric, chartHeight }: EmployeeChartProps) {
   const { t } = useTranslation()
 
   if (isLoading) {
-    return <div className="h-[260px] sm:h-[320px] w-full skeleton-shimmer rounded-xl" />
+    return <div className="h-[260px] sm:h-[320px] w-full skeleton-shimmer rounded-xl" style={chartHeight ? { height: chartHeight } : undefined} />
   }
 
   if (data.length === 0 || series.length === 0) {
     return (
-      <div className="h-[180px] sm:h-[200px] flex items-center justify-center text-sm text-[var(--color-secondary)] text-center px-4">
+      <div className="h-[180px] sm:h-[200px] flex items-center justify-center text-sm text-[var(--color-secondary)] text-center px-4" style={chartHeight ? { height: chartHeight } : undefined}>
         {t('billing.noData')}
       </div>
     )
   }
 
   return (
-    <div className="h-[260px] sm:h-[320px] w-full">
+    <div className={chartHeight ? "w-full" : "h-[260px] sm:h-[320px] w-full"} style={chartHeight ? { height: chartHeight } : undefined}>
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 10, right: isMobile ? 12 : 24, left: 10, bottom: 20 }}>
+        <LineChart data={data} margin={{ top: 10, right: isMobile ? 12 : 24, left: 10, bottom: 25 }}>
           <CartesianGrid strokeDasharray="3 6" vertical={false} stroke="var(--color-border)" opacity={0.7} />
           <XAxis
             dataKey={(row: any) => row.date || row.label}
@@ -75,7 +76,14 @@ export function EmployeeChart({ data, series, isLoading, isMobile, metric }: Emp
           />
           <Legend
             iconType="circle"
-            wrapperStyle={{ fontSize: '12px', paddingTop: '10px', fontFamily: 'var(--font-label)', letterSpacing: '0.02em' }}
+            wrapperStyle={{
+              fontSize: isMobile ? '10px' : '11px',
+              paddingTop: '6px',
+              paddingBottom: '2px',
+              fontFamily: 'var(--font-label)',
+              letterSpacing: '0.02em',
+              lineHeight: '16px',
+            }}
           />
           {series.map((s, idx) => (
             <Line

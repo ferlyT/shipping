@@ -5,10 +5,11 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  SafeAreaView,
   StatusBar,
+  Platform,
 } from 'react-native'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import * as Haptics from 'expo-haptics'
 import { X, Zap, ZapOff } from 'lucide-react-native'
 import { Button } from '../ui/Button'
@@ -31,6 +32,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
   const [flash, setFlash] = useState(false)
   const [scanned, setScanned] = useState(false)
   const { colors } = useThemeStore()
+  const insets = useSafeAreaInsets()
 
   if (!visible) return null
 
@@ -45,18 +47,34 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
     }, 500)
   }
 
+  const topPadding = Platform.OS === 'android'
+    ? Math.max(insets.top, StatusBar.currentHeight ?? 24) + 6
+    : Math.max(insets.top, 16) + 4
+
   return (
     <Modal visible={visible} animationType="slide" transparent={false} onRequestClose={onClose}>
-      <StatusBar barStyle="light-content" />
-      <SafeAreaView style={styles.container}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose} style={styles.iconBtn}>
-            <X size={22} color="#FFFFFF" />
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <View style={[styles.container, { backgroundColor: '#0C1118' }]}>
+        {/* Header Bar dengan Safe Padding Top Status Bar */}
+        <View style={[styles.header, { paddingTop: topPadding }]}>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.iconBtn}
+            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            activeOpacity={0.7}
+          >
+            <X size={20} color="#EEF2F6" />
           </TouchableOpacity>
-          <Text style={styles.title}>{title}</Text>
-          <TouchableOpacity onPress={() => setFlash(!flash)} style={styles.iconBtn}>
-            {flash ? <Zap size={20} color="#FBBF24" /> : <ZapOff size={20} color="#FFFFFF" />}
+          <View style={styles.headerTitleWrap}>
+            <Text style={styles.overlineText}>Pemindaian barcode kargo</Text>
+            <Text style={styles.title} numberOfLines={1}>{title}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setFlash(!flash)}
+            style={[styles.iconBtn, flash && styles.iconBtnActive]}
+            activeOpacity={0.7}
+          >
+            {flash ? <Zap size={18} color="#E0644E" /> : <ZapOff size={18} color="#8A97A6" />}
           </TouchableOpacity>
         </View>
 
@@ -105,7 +123,7 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
             </View>
           </View>
         )}
-      </SafeAreaView>
+      </View>
     </Modal>
   )
 }
@@ -113,24 +131,50 @@ export const BarcodeScannerModal: React.FC<BarcodeScannerModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: '#0C1118',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingBottom: 14,
+    backgroundColor: '#131A23',
+    borderBottomWidth: 1,
+    borderBottomColor: '#222C38',
     zIndex: 10,
   },
+  headerTitleWrap: {
+    flex: 1,
+    marginHorizontal: 12,
+  },
+  overlineText: {
+    fontSize: 11,
+    color: '#8A97A6',
+    fontWeight: '400',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
   title: {
-    color: '#FFFFFF',
+    color: '#EEF2F6',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
   iconBtn: {
-    padding: 8,
+    width: 38,
+    height: 38,
+    borderRadius: 8,
+    backgroundColor: '#131A23',
+    borderWidth: 1,
+    borderColor: '#222C38',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconBtnActive: {
+    borderColor: '#E0644E',
+    backgroundColor: 'rgba(224, 100, 78, 0.12)',
   },
   permissionContainer: {
     flex: 1,

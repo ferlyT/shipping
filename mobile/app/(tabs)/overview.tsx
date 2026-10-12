@@ -14,11 +14,7 @@ import {
   Moon,
   Sun,
   Globe,
-  LogOut,
-  AlertTriangle,
-  Clock,
-  ChevronRight,
-  ShieldAlert,
+  Shield,
 } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
 import { Card } from '../../src/components/ui/Card'
@@ -29,14 +25,28 @@ import { useAuthStore } from '../../src/stores/authStore'
 import { useThemeStore } from '../../src/theme/themeStore'
 import { useTranslation } from '../../src/hooks/useTranslation'
 import { formatNumber } from '../../src/lib/utils'
-import apiClient from '../../src/api/client'
+import { canManageBatchExitDate, canViewBillingOperational } from '../../src/lib/permissions'
+import { BatchExitDateModal } from '../../src/features/logistics/components/BatchExitDateModal'
 import { AlertDetailModal } from '../../src/features/overview/components/AlertDetailModal'
 import { ExitActivityKpiGrid } from '../../src/features/overview/components/ExitActivityKpiGrid'
 import { ExitBatchListItem } from '../../src/features/overview/components/ExitBatchListItem'
 import { BatchManifestSheet } from '../../src/features/logistics/components/BatchManifestSheet'
 import { useToastStore } from '../../src/stores/toastStore'
 import { useInspectionMutations } from '../../src/features/inspection/hooks/useInspectionMutations'
+import apiClient from '../../src/api/client'
 import { InspectionFormSheet } from '../../src/features/inspection/components/InspectionFormSheet'
+import { BillingPeriodNavigator } from '../../src/features/overview/components/BillingPeriodNavigator'
+import { TargetBillKpiCards } from '../../src/features/overview/components/TargetBillKpiCards'
+import { UnissuedBillsDetailSheet } from '../../src/features/overview/components/UnissuedBillsDetailSheet'
+import { BatchExitComparisonWidget } from '../../src/features/overview/components/BatchExitComparisonWidget'
+import { BatchExitDetailSheet } from '../../src/features/overview/components/BatchExitDetailSheet'
+import { HeroCard } from '../../src/features/overview/components/HeroCard'
+import type { HeroSection, HeroStat } from '../../src/features/overview/types/hero.types'
+import {
+  useBillingKpisQuery,
+  useBatchExitComparisonQuery,
+} from '../../src/features/overview/hooks/useOperationBilling'
+
 
 type ExitScope = 'today' | 'yesterday' | 'tomorrow' | 'recent' | 'eta_not_exit' | 'missed_sla'
 
@@ -45,6 +55,7 @@ export default function OverviewScreen() {
   const { user } = useAuthStore()
   const { colors, mode, toggleTheme } = useThemeStore()
   const { t, language, toggleLanguage } = useTranslation()
+  const canEditExitDate = canManageBatchExitDate(user)
 
   const currentYear = new Date().getFullYear().toString()
   const [activeScope, setActiveScope] = useState<ExitScope>('today')
@@ -52,7 +63,9 @@ export default function OverviewScreen() {
   const [yearFilter, setYearFilter] = useState<string>(currentYear)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedBatch, setSelectedBatch] = useState<any | null>(null)
+  const [batchForExitDate, setBatchForExitDate] = useState<any | null>(null)
   const scrollViewRef = useRef<ScrollView>(null)
+
 
   const { showToast } = useToastStore()
 
@@ -79,10 +92,11 @@ export default function OverviewScreen() {
 
   const handleBapSubmit = async (payload: any) => {
     try {
-      await createBapMutation.mutateAsync(payload)
+      const res = await createBapMutation.mutateAsync(payload)
       setIsBapFormVisible(false)
       setBapInitialData(null)
       showToast('Berita Acara Pemeriksaan berhasil dibuat', 'success')
+      return res
     } catch {
       // handled by mutation
     }
@@ -163,11 +177,48 @@ export default function OverviewScreen() {
     },
   })
 
+  const canViewBillingOps = canViewBillingOperational(user)
+  const [dashboardSection, setDashboardSection] = useState<'exit_activity' | 'billing_ops'>('exit_activity')
+
+  // Billing Ops State
+  const [billingYear, setBillingYear] = useState<number>(new Date().getFullYear())
+  const [billingMonth, setBillingMonth] = useState<number>(new Date().getMonth() + 1)
+  const [billingAllTime, setBillingAllTime] = useState<boolean>(false)
+  const [unissuedSheetVisible, setUnissuedSheetVisible] = useState(false)
+  const [unissuedInitialAging, setUnissuedInitialAging] = useState<string | undefined>(undefined)
+  const [batchExitDetailVisible, setBatchExitDetailVisible] = useState(false)
+
+  // Fetch Billing KPIs & Batch Exit comparison
+  const {
+    data: billingKpis,
+    isLoading: isBillingKpiLoading,
+    refetch: refetchBillingKpis,
+  } = useBillingKpisQuery(
+    billingYear,
+    billingMonth,
+    canViewBillingOps && dashboardSection === 'billing_ops'
+  )
+
+  const {
+    data: batchExitData,
+    isLoading: isBatchExitLoading,
+    refetch: refetchBatchExit,
+  } = useBatchExitComparisonQuery(
+    billingYear,
+    billingMonth,
+    billingAllTime,
+    canViewBillingOps && dashboardSection === 'billing_ops'
+  )
+
   const onRefresh = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
     setRefreshing(true)
     try {
-      await Promise.all([refetchMarkingKpi(), refetchExitBatches()])
+      if (dashboardSection === 'exit_activity') {
+        await Promise.all([refetchMarkingKpi(), refetchExitBatches()])
+      } else {
+        await Promise.all([refetchBillingKpis(), refetchBatchExit()])
+      }
     } finally {
       setRefreshing(false)
     }
@@ -220,6 +271,80 @@ export default function OverviewScreen() {
     }
   }
 
+  // Scalable Config-Driven Hero Card Configuration (Icon-Free)
+  const heroSections: HeroSection[] = [
+    {
+      id: 'exit_activity',
+      label: t('overview.exitActivity', 'Exit Activity'),
+      value: markingKpis?.exitTodayCount || 0,
+      subLabel: t('overview.batchExitToday', 'Batch Exit Hari Ini'),
+      subLabelColor: colors.tertiary,
+      breakdown: [
+        { label: 'Udara', value: markingKpis?.exitTodayAir || 0 },
+        { label: 'Laut', value: markingKpis?.exitTodaySea || 0 },
+      ],
+      visible: true,
+      onPress: () => {
+        setDashboardSection('exit_activity')
+        handleScopeChange('today')
+      },
+    },
+    {
+      id: 'billing_ops',
+      label: t('overview.tabBilling', 'Billing Ops'),
+      value:
+        (billingKpis?.targetBillUdara?.total || 0) +
+        (billingKpis?.targetBillLaut?.total || 0),
+      subLabel: t('overview.targetBillMonth', 'Target Bill Bulan Ini'),
+      subLabelColor: colors.success,
+      breakdown: [
+        { label: 'Udara', value: billingKpis?.targetBillUdara?.total || 0 },
+        { label: 'Laut', value: billingKpis?.targetBillLaut?.total || 0 },
+      ],
+      visible: canViewBillingOps,
+      onPress: () => {
+        setDashboardSection('billing_ops')
+      },
+    },
+  ]
+
+  const heroStats: HeroStat[] = [
+    {
+      id: 'eta_not_exit',
+      value: markingKpis?.etaNotExitBatches || 0,
+      label: 'ETA Not Exit',
+      color: colors.warning,
+      visible: true,
+      onPress: () => handleScopeChange('eta_not_exit'),
+    },
+    {
+      id: 'missed_sla',
+      value: markingKpis?.missedTargetBatches || 0,
+      label: 'Missed SLA',
+      color: colors.danger,
+      visible: true,
+      onPress: () => handleScopeChange('missed_sla'),
+    },
+    {
+      id: 'draft_unissued',
+      value: billingKpis?.unissuedBills?.totalCount || 0,
+      label: 'Draft Unissued',
+      color: colors.primary,
+      visible: canViewBillingOps && (billingKpis?.unissuedBills?.totalCount || 0) > 0,
+      onPress: () => {
+        setUnissuedSheetVisible(true)
+      },
+    },
+  ]
+
+  const getRoleShieldColor = () => {
+    const r = (user?.role || '').toLowerCase()
+    if (r.includes('admin') || r.includes('superadmin')) return '#EF4444' // Red
+    if (r.includes('staff') || r.includes('operator') || r.includes('logistics')) return '#0284C7' // Sky Blue
+    if (r.includes('cashier') || r.includes('finance') || r.includes('billing')) return '#10B981' // Emerald
+    return '#94A3B8' // Slate / Secondary
+  }
+
   return (
     <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: isDark ? '#0B0F17' : '#F7F5F2' }]}>
       <ScrollView
@@ -235,21 +360,32 @@ export default function OverviewScreen() {
       >
         {/* Top Header */}
         <View style={styles.headerRow}>
-          <View>
+          <View style={{ flex: 1, paddingRight: 8 }}>
             <Text style={[styles.welcomeLabel, { color: colors.secondary }]}>
-              {t('overview.welcomeBack', 'Selamat datang kembali,')}
+              {t('overview.greeting', 'Halo,')}
             </Text>
-            <Text style={[styles.userName, { color: colors.primary }]}>
-              {user?.fullName || user?.username || 'User'}
-            </Text>
-            <View style={styles.roleBadgeRow}>
-              <Badge label={user?.role?.toUpperCase() || 'USER'} variant="info" />
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 1 }}>
+              <Text style={[styles.userName, { color: colors.primary }]} numberOfLines={1}>
+                {user?.fullName || user?.username || 'User'}
+              </Text>
+              <View
+                style={[
+                  styles.roleTextTag,
+                  {
+                    borderColor: isDark ? '#222C38' : '#E3E7EC',
+                  },
+                ]}
+              >
+                <Text style={[styles.roleTextTagLabel, { color: colors.secondary }]}>
+                  {user?.role || 'User'}
+                </Text>
+              </View>
             </View>
           </View>
           <View style={styles.headerActions}>
             <TouchableOpacity
               onPress={toggleLanguage}
-              style={[styles.headerBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[styles.headerBtn, { borderColor: isDark ? '#222C38' : '#E3E7EC', backgroundColor: isDark ? '#131A23' : '#FFFFFF' }]}
             >
               <Globe size={18} color={colors.secondary} />
               <Text style={[styles.langText, { color: colors.primary }]}>
@@ -258,178 +394,94 @@ export default function OverviewScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={toggleTheme}
-              style={[styles.headerBtn, { borderColor: colors.border, backgroundColor: colors.surface }]}
+              style={[styles.headerBtn, { borderColor: isDark ? '#222C38' : '#E3E7EC', backgroundColor: isDark ? '#131A23' : '#FFFFFF' }]}
             >
               {isDark ? <Sun size={18} color="#FBBF24" /> : <Moon size={18} color={colors.primary} />}
             </TouchableOpacity>
           </View>
         </View>
 
-        {/* 1. Operasional Lapangan & Peringatan Dini (Actionable Alerts) */}
-        <View style={[styles.sectionHeader, { marginTop: 10 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <ShieldAlert size={16} color="#EF4444" />
-            <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-              {t('overview.operationalAlerts', 'Peringatan Dini Operasional')}
-            </Text>
+        {/* Summary Overview Section */}
+        <HeroCard
+          sections={heroSections}
+          stats={heroStats}
+          isLoading={isMarkingKpiLoading || (canViewBillingOps && isBillingKpiLoading)}
+        />
+
+        {/* Main Tabs Switcher: Logistik Exit vs Billing Ops */}
+        {canViewBillingOps && (
+          <View style={[styles.mainTabsContainer, { borderBottomColor: isDark ? '#222C38' : '#E3E7EC' }]}>
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[
+                styles.mainTabBtn,
+                dashboardSection === 'exit_activity' && styles.mainTabBtnActive,
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync()
+                setDashboardSection('exit_activity')
+              }}
+            >
+              <Text
+                style={[
+                  styles.mainTabText,
+                  {
+                    color: dashboardSection === 'exit_activity' ? colors.primary : colors.secondary,
+                    fontWeight: dashboardSection === 'exit_activity' ? '600' : '500',
+                  },
+                ]}
+              >
+                {t('overview.tabExit', 'Logistik exit')}
+              </Text>
+              {dashboardSection === 'exit_activity' && <View style={styles.mainTabUnderline} />}
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              activeOpacity={0.7}
+              style={[
+                styles.mainTabBtn,
+                dashboardSection === 'billing_ops' && styles.mainTabBtnActive,
+              ]}
+              onPress={() => {
+                Haptics.selectionAsync()
+                setDashboardSection('billing_ops')
+              }}
+            >
+              <Text
+                style={[
+                  styles.mainTabText,
+                  {
+                    color: dashboardSection === 'billing_ops' ? colors.primary : colors.secondary,
+                    fontWeight: dashboardSection === 'billing_ops' ? '600' : '500',
+                  },
+                ]}
+              >
+                {t('overview.tabBilling', 'Billing ops')}
+              </Text>
+              {dashboardSection === 'billing_ops' && <View style={styles.mainTabUnderline} />}
+            </TouchableOpacity>
           </View>
-        </View>
+        )}
 
-        {/* 2 Actionable Alert Cards */}
-        <View style={styles.alertCardsRow}>
-          {/* Alert 1: ETA Belum Keluar */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => handleScopeChange('eta_not_exit')}
-            style={[
-              styles.alertCard,
-              {
-                borderWidth: activeScope === 'eta_not_exit' ? 2 : 1,
-                borderColor: activeScope === 'eta_not_exit'
-                  ? '#F59E0B'
-                  : (markingKpis?.etaNotExitBatches || 0) > 0
-                  ? 'rgba(245, 158, 11, 0.5)'
-                  : colors.border,
-                backgroundColor: activeScope === 'eta_not_exit'
-                  ? (isDark ? 'rgba(245, 158, 11, 0.16)' : 'rgba(245, 158, 11, 0.1)')
-                  : (isDark ? 'rgba(245, 158, 11, 0.08)' : 'rgba(245, 158, 11, 0.05)'),
-              },
-            ]}
-          >
-            <View style={styles.alertCardHeader}>
-              <View style={styles.alertTitleWrapper}>
-                <AlertTriangle size={13} color="#F59E0B" style={{ flexShrink: 0 }} />
-                <Text
-                  style={[styles.alertCardTitle, { color: '#F59E0B' }]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {t('overview.etaNotExit', 'ETA NOT EXIT').toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.alertActionsWrapper}>
-                {activeScope === 'eta_not_exit' ? (
-                  <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#F59E0B' }} />
-                ) : null}
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation()
-                    openEtaModal()
-                  }}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                >
-                  <ChevronRight size={13} color={colors.secondary} />
-                </TouchableOpacity>
-              </View>
+        {dashboardSection === 'exit_activity' ? (
+          <>
+            {/* Exit Activity Section Header */}
+            <View style={[styles.sectionHeader, { marginTop: 4 }]}>
+              <Text style={[styles.sectionTitle, { color: colors.primary }]}>
+                {t('overview.exitActivity', 'Exit Activity')}
+              </Text>
+              <TouchableOpacity
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  router.push({
+                    pathname: '/(tabs)/logistics',
+                    params: { tab: 'batches', t: Date.now().toString() },
+                  })
+                }}
+              >
+                <Text style={[styles.seeAllText, { color: colors.tertiary }]}>{t('overview.seeAllBatches', 'Lihat Semua Batch')}</Text>
+              </TouchableOpacity>
             </View>
-
-            <View style={{ marginVertical: 3 }}>
-              <Text style={[styles.alertCardValue, { color: colors.primary }]}>
-                {formatNumber(markingKpis?.etaNotExitBatches || 0)}
-              </Text>
-              <Text style={[styles.alertCardSub, { color: colors.secondary }]} numberOfLines={2}>
-                {t('overview.etaCardSub', 'Batch ETA lewat & belum keluar')}
-              </Text>
-            </View>
-
-            <View style={[styles.alertBreakdownRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-              <Text style={[styles.alertBreakdownText, { color: colors.secondary }]} numberOfLines={1}>
-                {t('overview.air', 'Udara')}: <Text style={{ fontWeight: '700', color: colors.primary }}>{markingKpis?.etaNotExitBatchesAir || 0}</Text>
-              </Text>
-              <Text style={[styles.alertBreakdownDot, { color: colors.secondary }]}>•</Text>
-              <Text style={[styles.alertBreakdownText, { color: colors.secondary }]} numberOfLines={1}>
-                {t('overview.sea', 'Laut')}: <Text style={{ fontWeight: '700', color: colors.primary }}>{markingKpis?.etaNotExitBatchesSea || 0}</Text>
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          {/* Alert 2: Melewati Target SLA */}
-          <TouchableOpacity
-            activeOpacity={0.8}
-            onPress={() => handleScopeChange('missed_sla')}
-            style={[
-              styles.alertCard,
-              {
-                borderWidth: activeScope === 'missed_sla' ? 2 : 1,
-                borderColor: activeScope === 'missed_sla'
-                  ? '#EF4444'
-                  : (markingKpis?.missedTargetBatches || 0) > 0
-                  ? 'rgba(239, 68, 68, 0.5)'
-                  : colors.border,
-                backgroundColor: activeScope === 'missed_sla'
-                  ? (isDark ? 'rgba(239, 68, 68, 0.16)' : 'rgba(239, 68, 68, 0.1)')
-                  : (isDark ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.05)'),
-              },
-            ]}
-          >
-            <View style={styles.alertCardHeader}>
-              <View style={styles.alertTitleWrapper}>
-                <Clock size={13} color="#EF4444" style={{ flexShrink: 0 }} />
-                <Text
-                  style={[styles.alertCardTitle, { color: '#EF4444' }]}
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                >
-                  {t('overview.missedSla', 'MISSED SLA').toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.alertActionsWrapper}>
-                {activeScope === 'missed_sla' ? (
-                  <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#EF4444' }} />
-                ) : null}
-                <TouchableOpacity
-                  onPress={(e) => {
-                    e.stopPropagation()
-                    openSlaModal()
-                  }}
-                  hitSlop={{ top: 8, bottom: 8, left: 6, right: 6 }}
-                >
-                  <ChevronRight size={13} color={colors.secondary} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <View style={{ marginVertical: 3 }}>
-              <Text style={[styles.alertCardValue, { color: colors.primary }]}>
-                {formatNumber(markingKpis?.missedTargetBatches || 0)}
-              </Text>
-              <Text style={[styles.alertCardSub, { color: colors.secondary }]} numberOfLines={2}>
-                {t('overview.slaCardSub', 'Durasi transit melebihi target')}
-              </Text>
-            </View>
-
-            <View style={[styles.alertBreakdownRow, { borderTopColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-              <Text style={[styles.alertBreakdownText, { color: colors.secondary }]} numberOfLines={1}>
-                {t('overview.air', 'Udara')}: <Text style={{ fontWeight: '700', color: colors.primary }}>{markingKpis?.missedTargetBatchesAir || 0}</Text>
-              </Text>
-              <Text style={[styles.alertBreakdownDot, { color: colors.secondary }]}>•</Text>
-              <Text style={[styles.alertBreakdownText, { color: colors.secondary }]} numberOfLines={1}>
-                {t('overview.sea', 'Laut')}: <Text style={{ fontWeight: '700', color: colors.primary }}>{markingKpis?.missedTargetBatchesSea || 0}</Text>
-              </Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Exit Activity Section Header */}
-        <View style={[styles.sectionHeader, { marginTop: 14 }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <LogOut size={16} color={colors.tertiary} />
-            <Text style={[styles.sectionTitle, { color: colors.primary }]}>
-              {t('overview.exitActivity', 'Exit Activity')}
-            </Text>
-          </View>
-          <TouchableOpacity
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              router.push({
-                pathname: '/(tabs)/logistics',
-                params: { tab: 'batches', t: Date.now().toString() },
-              })
-            }}
-          >
-            <Text style={[styles.seeAllText, { color: colors.tertiary }]}>{t('overview.seeAllBatches', 'Lihat Semua Batch')}</Text>
-          </TouchableOpacity>
-        </View>
 
         {/* Exit Activity 4-Column Stat Cards */}
         <ExitActivityKpiGrid
@@ -439,38 +491,65 @@ export default function OverviewScreen() {
         />
 
         {/* Dynamic List Header with Active Scope Badge */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>
-            {getScopeTitle()}
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 14, marginBottom: 4 }}>
+          <Text style={{ fontSize: 16, fontWeight: '600', color: colors.primary }}>
+            {isAlertScope ? getScopeTitle() : t('overview.batchList', 'Daftar batch')}
           </Text>
-          <Badge
-            label={`${exitBatches?.length || 0} Batch`}
-            variant={
-              activeScope === 'today'
-                ? 'success'
-                : activeScope === 'tomorrow' || activeScope === 'eta_not_exit'
-                ? 'warning'
-                : activeScope === 'missed_sla'
-                ? 'danger'
-                : 'neutral'
-            }
-          />
+          <View
+            style={{
+              borderWidth: 1,
+              borderColor: '#4CC38A',
+              borderRadius: 4,
+              paddingHorizontal: 8,
+              paddingVertical: 1,
+            }}
+          >
+            <Text style={{ fontSize: 13, fontWeight: '500', color: '#4CC38A' }}>
+              {exitBatches?.length || 0} batch
+            </Text>
+          </View>
         </View>
 
-        {/* Group Pills Udara dan Laut */}
-        <View style={{ marginBottom: isAlertScope ? 8 : 10 }}>
-          <SegmentedControl
-            options={[
-              { label: t('overview.all', 'Semua'), value: 'all' },
-              { label: t('overview.air', 'Udara'), value: '1' },
-              { label: t('overview.sea', 'Laut'), value: '2' },
-            ]}
-            selectedValue={modeFilter}
-            onValueChange={(val) => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
-              setModeFilter(val as any)
-            }}
-          />
+        {/* Group Filter Moda (seg style) */}
+        <View style={{ flexDirection: 'row', gap: 4, marginVertical: 8 }}>
+          {[
+            { label: t('overview.all', 'Semua'), value: 'all' },
+            { label: t('overview.air', 'Udara'), value: '1' },
+            { label: t('overview.sea', 'Laut'), value: '2' },
+          ].map((opt) => {
+            const isSelected = modeFilter === opt.value
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                activeOpacity={0.7}
+                style={{
+                  borderWidth: 1,
+                  borderColor: isSelected ? (isDark ? '#222C38' : '#E3E7EC') : 'transparent',
+                  backgroundColor: isSelected ? (isDark ? '#131A23' : '#FFFFFF') : 'transparent',
+                  borderRadius: 8,
+                  paddingHorizontal: 14,
+                  paddingVertical: 7,
+                  minHeight: 36,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
+                  setModeFilter(opt.value as any)
+                }}
+              >
+                <Text
+                  style={{
+                    color: isSelected ? colors.primary : colors.secondary,
+                    fontWeight: isSelected ? '600' : '400',
+                    fontSize: 13,
+                  }}
+                >
+                  {opt.label}
+                </Text>
+              </TouchableOpacity>
+            )
+          })}
         </View>
 
         {/* Group Pills Berdasarkan Tahun */}
@@ -517,6 +596,7 @@ export default function OverviewScreen() {
                 onPress={(batch) => {
                   setSelectedBatch(batch)
                 }}
+                onEditExitDate={canEditExitDate ? (batch) => setBatchForExitDate(batch) : undefined}
               />
             ))}
           </View>
@@ -524,6 +604,51 @@ export default function OverviewScreen() {
           <Card style={{ alignItems: 'center', padding: 20 }}>
             <Text style={{ color: colors.secondary, fontSize: 12 }}>{getScopeEmptyText()}</Text>
           </Card>
+        )}
+          </>
+        ) : (
+          <>
+            {/* Billing Period Navigator */}
+            <BillingPeriodNavigator
+              year={billingYear}
+              month={billingMonth}
+              onChange={(y, m) => {
+                setBillingYear(y)
+                setBillingMonth(m)
+              }}
+            />
+
+            {/* 4 Target Bill KPI Cards */}
+            {isBillingKpiLoading ? (
+              <View style={{ gap: 10, marginBottom: 14 }}>
+                <SkeletonShimmer height={110} />
+                <SkeletonShimmer height={110} />
+              </View>
+            ) : (
+              <TargetBillKpiCards
+                kpis={billingKpis}
+                onOpenUnissuedModal={(agingGroup) => {
+                  setUnissuedInitialAging(agingGroup)
+                  setUnissuedSheetVisible(true)
+                }}
+              />
+            )}
+
+            {/* Batch Exit vs Bill Dibuat Comparison Widget */}
+            {isBatchExitLoading ? (
+              <View style={{ gap: 10 }}>
+                <SkeletonShimmer height={180} />
+                <SkeletonShimmer height={140} />
+              </View>
+            ) : (
+              <BatchExitComparisonWidget
+                summary={batchExitData?.summary}
+                allTime={billingAllTime}
+                onToggleAllTime={() => setBillingAllTime((prev) => !prev)}
+                onOpenBatchDetailModal={() => setBatchExitDetailVisible(true)}
+              />
+            )}
+          </>
         )}
       </ScrollView>
 
@@ -557,6 +682,32 @@ export default function OverviewScreen() {
         onSubmit={handleBapSubmit}
         isSaving={createBapMutation.isPending}
       />
+
+      {/* Batch Exit Date Modal */}
+      <BatchExitDateModal
+        visible={Boolean(batchForExitDate)}
+        batch={batchForExitDate}
+        onClose={() => setBatchForExitDate(null)}
+      />
+
+      {/* Unissued Bills Detail Sheet */}
+      <UnissuedBillsDetailSheet
+        visible={unissuedSheetVisible}
+        initialAgingFilter={unissuedInitialAging}
+        summaryKpis={billingKpis?.unissuedBills}
+        onClose={() => {
+          setUnissuedSheetVisible(false)
+          setUnissuedInitialAging(undefined)
+        }}
+      />
+
+      {/* Batch Exit Detail Sheet */}
+      <BatchExitDetailSheet
+        visible={batchExitDetailVisible}
+        summary={batchExitData?.summary}
+        batches={batchExitData?.batches}
+        onClose={() => setBatchExitDetailVisible(false)}
+      />
     </SafeAreaView>
   )
 }
@@ -576,16 +727,51 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   welcomeLabel: {
-    fontSize: 12,
-    fontWeight: '500',
+    fontSize: 13,
+    fontWeight: '400',
   },
   userName: {
-    fontSize: 20,
-    fontWeight: '800',
-    letterSpacing: -0.3,
+    fontSize: 24,
+    fontWeight: '600',
+    letterSpacing: -0.2,
   },
-  roleBadgeRow: {
+  roleTextTag: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderRadius: 4,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  roleTextTagLabel: {
+    fontSize: 12,
+    fontWeight: '500',
+    textTransform: 'capitalize',
+  },
+  mainTabsContainer: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
     marginTop: 4,
+    marginBottom: 12,
+  },
+  mainTabBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    position: 'relative',
+  },
+  mainTabBtnActive: {},
+  mainTabText: {
+    fontSize: 15,
+  },
+  mainTabUnderline: {
+    position: 'absolute',
+    bottom: -1,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#E0644E',
   },
   headerActions: {
     flexDirection: 'row',
@@ -595,15 +781,17 @@ const styles = StyleSheet.create({
   headerBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 10,
-    paddingVertical: 7,
+    justifyContent: 'center',
+    minWidth: 40,
+    height: 40,
+    paddingHorizontal: 8,
     borderRadius: 10,
     borderWidth: 1,
     gap: 4,
   },
   langText: {
     fontSize: 12,
-    fontWeight: '700',
+    fontWeight: '600',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -612,75 +800,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   sectionTitle: {
-    fontSize: 13,
-    fontWeight: '700',
-    letterSpacing: -0.2,
+    fontSize: 16,
+    fontWeight: '600',
+    letterSpacing: -0.1,
   },
   seeAllText: {
-    fontSize: 11.5,
-    fontWeight: '700',
-  },
-  alertCardsRow: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 12,
-  },
-  alertCard: {
-    flex: 1,
-    paddingHorizontal: 10,
-    paddingVertical: 10,
-    borderRadius: 14,
-    overflow: 'hidden',
-  },
-  alertCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    minHeight: 20,
-  },
-  alertTitleWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    flex: 1,
-    minWidth: 0,
-    marginRight: 4,
-  },
-  alertActionsWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    flexShrink: 0,
-  },
-  alertCardTitle: {
-    fontSize: 10,
-    fontWeight: '800',
-    letterSpacing: 0.1,
-    flexShrink: 1,
-  },
-  alertCardValue: {
-    fontSize: 24,
-    fontWeight: '900',
-    letterSpacing: -0.5,
-  },
-  alertCardSub: {
-    fontSize: 10,
-    marginTop: 1,
-    lineHeight: 14,
-  },
-  alertBreakdownRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    borderTopWidth: 1,
-    paddingTop: 5,
-    marginTop: 4,
-    flexWrap: 'wrap',
-  },
-  alertBreakdownText: {
-    fontSize: 9.5,
-  },
-  alertBreakdownDot: {
-    fontSize: 9.5,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#E0644E',
   },
 })

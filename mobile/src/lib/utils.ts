@@ -1,5 +1,20 @@
 // ATURAN: Semua formatter didefinisikan di sini
 // DILARANG: format date/currency inline di komponen
+import { Clipboard } from 'react-native'
+
+export async function copyToClipboard(text: string | null | undefined): Promise<boolean> {
+  if (!text) return false
+  const str = String(text).trim()
+  try {
+    if (Clipboard && typeof (Clipboard as any).setString === 'function') {
+      (Clipboard as any).setString(str)
+      return true
+    }
+  } catch (err) {
+    console.warn('[Clipboard] setString failed:', err)
+  }
+  return false
+}
 
 export function formatDate(date: string | Date | null | undefined): string {
   if (!date) return '—'
@@ -101,6 +116,24 @@ export function cleanFoxProString(str: string | null | undefined): string {
   if (!str) return ''
   return str.replace(/\^/g, "'").trim()
 }
+
+export const replaceDbCaret = cleanFoxProString
+
+export function cleanDbData<T = any>(obj: T): T {
+  if (typeof obj === 'string') return cleanFoxProString(obj) as unknown as T
+  if (Array.isArray(obj)) return obj.map((item) => cleanDbData(item)) as unknown as T
+  if (obj !== null && typeof obj === 'object') {
+    const cleaned: any = {}
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        cleaned[key] = cleanDbData((obj as any)[key])
+      }
+    }
+    return cleaned as T
+  }
+  return obj
+}
+
 
 export function displayCustName(name: string | null | undefined, fallback = '—'): string {
   if (!name || !name.trim()) return fallback

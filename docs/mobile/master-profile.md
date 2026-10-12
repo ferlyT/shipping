@@ -5,6 +5,9 @@ Dokumen ini merangkum dua layar penting: **Direktori Master Pelanggan** (`master
 ---
 
 ## 1. Halaman Master Data Customer (`app/(tabs)/master.tsx`)
+- **Pagination & Infinite Scrolling**:
+  - Menggunakan `useInfiniteQuery` dengan parameter batch `{ page, limit: 30 }`.
+  - Integrasi `FlatList` dengan `onEndReached` (`threshold: 0.5`) dan `ListFooterComponent` dengan `ActivityIndicator`.
 - **Tampilan Kartu Pelanggan (Paritas Penuh dengan Web)**:
   - Kode Customer monospace (`fdCustCode`).
   - Badge Customer Tier (`DIAMOND`, `PLATINUM`, `GOLD`, `SILVER`, `BRONZE`).
@@ -14,10 +17,11 @@ Dokumen ini merangkum dua layar penting: **Direktori Master Pelanggan** (`master
   - **Aksi Cepat Komunikasi**:
     - Tombol **Telepon**: Membuka dialer telepon langsung (`tel:...`).
     - Tombol **WhatsApp**: Membuka WhatsApp chat dengan kode negara 62 (`https://wa.me/...`).
-- **Modal Detail Customer 3-Tab**:
-  - Tab 1: *Ringkasan (`info`)* — Kartu CP & Sales, kontak lengkap, alamat kantor utama, catatan operasional.
-  - Tab 2: *Finansial (`finansial`)* — Tier aktif, omset berjalan, progress bar target tier, tabel histori omzet per tahun.
-  - Tab 3: *Daftar Alamat (`alamat`)* — Kartu alamat operasional (`addresses` / `vwCustomerContacts`) lengkap dengan tombol dialer.
+- **Modal Detail Customer 4-Tab**:
+  - Tab 1: *Ringkasan (`ringkasan`)* — Kartu CP & Sales, kontak lengkap, alamat kantor utama, catatan operasional.
+  - Tab 2: *Finansial (`finansial`)* — Tier aktif, omset berjalan, format compact Rupiah anti-overflow, tabel histori omzet tahunan.
+  - Tab 3: *Komoditas (`komoditas`)* — 2 Stacked horizontal proportion bar (Laut & Udara) dengan satuan dinamis (`m³`, `CTR`, `PCS`, `kg`) serta multi-line SVG chart tren bulanan Jan–Des.
+  - Tab 4: *Daftar Alamat (`alamat`)* — Kartu alamat operasional (`addresses` / `vwCustomerContacts`) lengkap dengan tombol dialer & WhatsApp.
 
 ---
 

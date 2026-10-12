@@ -305,6 +305,9 @@ export interface PriceEvaluationContext {
   expedisiList?: TransportExpedisiRef[]
   branchCode?: string | null
   invNo?: string | null
+  itemIndex?: number
+  entryListTypeId?: number | null
+  entryListComodityName?: string | null
 }
 
 export interface ItemPriceEvaluation {
@@ -570,12 +573,13 @@ export function isMktCustomer(
 
 export function getNormalizedBranchCode(branch?: string | null): string {
   const b = String(branch || '').toUpperCase().trim()
+  if (!b) return ''
+  if (b === '--' || b === '-' || b.includes('SINGAPORE') || b.includes('SINGAPURA') || b === 'SG') return 'SG'
   if (b.includes('GUANGZHOU') || b === 'GZ') return 'GZ'
   if (b.includes('YIWU') || b === 'YW') return 'YW'
   if (b.includes('SHANGHAI') || b === 'SH') return 'SH'
   if (b.includes('SHENZHEN') || b === 'SZ') return 'SZ'
   if (b.includes('HONGKONG') || b.includes('HONG KONG') || b === 'HK') return 'HK'
-  if (b.includes('SINGAPORE') || b.includes('SINGAPURA') || b === 'SG') return 'SG'
   if (b.includes('BANGKOK') || b === 'BKK') return 'BKK'
   return b
 }
@@ -788,10 +792,24 @@ export function evaluateItemPrice(
 
   const { res, isAir, defaultTypeId, defaultComodityName = '—' } = ctx
   const listType = res?.fdListType ?? null
+  const itemIndex = ctx.itemIndex ?? 0
+  const isFirstItem = itemIndex === 0
+
+  // Aturan Agen: Untuk item baris 1 (isFirstItem), selalu ikuti tipe comoditi dari tbEntryList
+  const entryListTypeId = (ctx.entryListTypeId !== null && ctx.entryListTypeId !== undefined && Number(ctx.entryListTypeId) > 0)
+    ? Number(ctx.entryListTypeId)
+    : (res?.entryListTypeComodity !== null && res?.entryListTypeComodity !== undefined && Number(res.entryListTypeComodity) > 0)
+    ? Number(res.entryListTypeComodity)
+    : (res?.defaultFdTypeComodity !== null && res?.defaultFdTypeComodity !== undefined && Number(res.defaultFdTypeComodity) > 0)
+    ? Number(res.defaultFdTypeComodity)
+    : null
+
   const itemTypeId = (item?.fdTypeComodity !== null && item?.fdTypeComodity !== undefined && Number(item.fdTypeComodity) > 0)
     ? Number(item.fdTypeComodity)
     : null
-  let typeId = itemTypeId ?? (defaultTypeId && defaultTypeId > 0 ? defaultTypeId : null) ?? res?.markingComodityType ?? null
+  let typeId = (isFirstItem && entryListTypeId)
+    ? entryListTypeId
+    : (itemTypeId ?? (defaultTypeId && defaultTypeId > 0 ? defaultTypeId : null) ?? res?.markingComodityType ?? null)
   let directComodityName = ''
   let isCustPriceExpired = Boolean(res?.priceValidation?.isCustomerPriceExpired)
   let expiredCustEndDate: string | null = res?.priceValidation?.customerEndDate || null
@@ -979,6 +997,12 @@ export function evaluateItemPrice(
   let comodityName = ''
   if (isKgOverweightItem) {
     comodityName = 'HARGA KG (PER AGEN)'
+  } else if (isFirstItem && entryListTypeId) {
+    // 💡 ATURAN AGEN: Untuk item baris 1 selalu ikuti tipe comoditi dari tbentrylist
+    const entryMatchType = res?.comodityTypes?.find(
+      (c: any) => c.fdTypeComodity === entryListTypeId && (listType ? c.fdListType === listType : true)
+    )
+    comodityName = ctx.entryListComodityName || res?.entryListComodityName || entryMatchType?.fdComodityName || directComodityName || `Kategori ${entryListTypeId}`
   } else if (directComodityName) {
     // 💡 Prioritaskan nama komoditas hasil pemetaan eksplisit (Customer Mapping lebih dulu, lalu Global).
     // DILARANG menimpa directComodityName dengan fallback isGenuineBattery / isGenuineIpad / isGenuineLaptop!
@@ -1002,8 +1026,8 @@ export function evaluateItemPrice(
       }
     }
     const rawTarget = (item?.fdComodity || '').trim()
-    if (!comodityName || (itemSpecificText && (comodityName.toUpperCase().includes('LARTAS') || comodityName === '—'))) {
-      // Jika nama komoditas umum (LARTAS - S / LARTAS - N) tapi item punya teks barang spesifik, gunakan teks barang spesifik
+    if (!comodityName || (!isFirstItem && itemSpecificText && (comodityName.toUpperCase().includes('LARTAS') || comodityName === '—'))) {
+      // Jika nama komoditas umum (LARTAS - S / LARTAS - N) tapi item punya teks barang spesifik, gunakan teks barang spesifik (kecuali item baris 1)
       comodityName = itemSpecificText || rawTarget || (defaultComodityName !== '—' ? defaultComodityName : '') || comodityName || itemNameUpper || '—'
     }
   }
@@ -1025,7 +1049,8 @@ export function evaluateItemPrice(
     }
   } else if (!isTaxReturnItem && !isKgOverweightItem && res?.priceValidation?.items && comodityName !== '—') {
     const modeFilter = res.expectedMode || (listType === 1 ? 'BY AIR' : listType === 2 ? 'BY SEA' : null)
-    const branchFilter = res.expectedBranch || null
+    const rawBranch = ctx.branchCode || res.expectedBranch || ctx.res?.customer?.fdBranchCode || null
+    const branchFilter = rawBranch ? getNormalizedBranchCode(rawBranch) : null
     const isMkt = isMktCustomer(res?.customer, res?.customer?.fdSalesNM || (res as any)?.sales)
     const expectedSheetType = isMkt ? 'MKT' : 'CS'
 
@@ -1138,12 +1163,27 @@ export function evaluateItemPrice(
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('ls &') || String(p?.category || '').toLowerCase().includes('food')) || null
         }
       } else {
+        const isRestrictedOrSpecificCategory =
+          normName.includes('LARTAS') ||
+          normName.includes('ALKES') ||
+          normName.includes('MEDIS') ||
+          normName.includes('MEDICAL') ||
+          normName.includes('TEKSTIL') ||
+          normName.includes('FABRIC') ||
+          normName.includes('GARMENT') ||
+          normName.includes('SEMI') ||
+          normName.includes('KOSMETIK') ||
+          normName.includes('OBAT') ||
+          (isFirstItem && entryListTypeId && entryListTypeId !== 1)
+
         if (
           normName.includes('UMUM') ||
           normName.includes('GENERAL') ||
-          textAfterDash.includes('GLASS') ||
-          textAfterDash.includes('ACCESSORIES') ||
-          textAfterDash.includes('SPAREPART')
+          (!isRestrictedOrSpecificCategory && (
+            textAfterDash.includes('GLASS') ||
+            textAfterDash.includes('ACCESSORIES') ||
+            textAfterDash.includes('SPAREPART')
+          ))
         ) {
           heuristicItem = items.find((p: any) => String(p?.category || '').toLowerCase().includes('general goods') || String(p?.category || '').toUpperCase() === 'UMUM') || null
         } else if (normName.includes('TEKSTIL')) {
@@ -1163,7 +1203,14 @@ export function evaluateItemPrice(
           /\bLS\b/i.test(normName) ||
           textAfterDash.includes('MEDICAL') ||
           textAfterDash.includes('ALKES') ||
-          textAfterDash.includes('MEDIS')
+          textAfterDash.includes('MEDIS') ||
+          textAfterDash.includes('DEVICE') ||
+          textAfterDash.includes('THERAPY') ||
+          textAfterDash.includes('LASER') ||
+          textAfterDash.includes('DENTAL') ||
+          textAfterDash.includes('SURGICAL') ||
+          textAfterDash.includes('HEALTHCARE') ||
+          textAfterDash.includes('DIAGNOSTIC')
         ) {
           heuristicItem = items.find((p: any) => {
             const cat = String(p?.category || '').toLowerCase()
@@ -1188,11 +1235,24 @@ export function evaluateItemPrice(
             textAfterDash.includes('SUPPLEMENT') ||
             normName.includes('KOSMETIK')
 
+          const isMedical =
+            textAfterDash.includes('DEVICE') ||
+            textAfterDash.includes('THERAPY') ||
+            textAfterDash.includes('LASER') ||
+            textAfterDash.includes('MEDICAL') ||
+            textAfterDash.includes('ALKES') ||
+            textAfterDash.includes('MEDIS') ||
+            textAfterDash.includes('DENTAL') ||
+            textAfterDash.includes('SURGICAL')
+
           const matchedItems = items.filter((p: any) => {
             const cat = String(p?.category || '').toLowerCase()
             const catUpper = String(p?.category || '').toUpperCase()
             if (isCosmetic) {
               return cat.includes('kosmetik') || cat.includes('obat')
+            }
+            if (isMedical) {
+              return cat.includes('alkes') || cat.includes('makanan') || /\bls\b/i.test(cat)
             }
             return cat.includes('kosmetik') || cat.includes('obat') || cat.includes('alkes') || cat.includes('makanan') || /\bls\b/i.test(cat) || catUpper.includes('LARTAS S') || catUpper.includes('LARTAS-S')
           })

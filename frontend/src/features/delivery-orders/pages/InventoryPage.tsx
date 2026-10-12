@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { 
+import {
   Warehouse,
   RefreshCw,
   Search,
@@ -178,7 +178,7 @@ export default function InventoryPage() {
                 )}
               >
                 <Ship size={13} className="text-blue-500" />
-                <span>Kapal / Laut ({formatNumber(totalPendingSea)})</span>
+                <span>Laut ({formatNumber(totalPendingSea)})</span>
               </button>
               <button
                 type="button"
@@ -398,14 +398,14 @@ export default function InventoryPage() {
                             {formatDecimal(row.m3 ?? 0, 4)} m³
                           </span>
                           {row.m3Source === 'Gudang' ? (
-                            <span 
+                            <span
                               className="inline-flex items-center px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-emerald-500/10 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 tracking-wide uppercase"
                               title="Ukuran fisik dihitung dari tbEntryListDetail (Panjang x Lebar x Tinggi x Qty)"
                             >
                               Gudang
                             </span>
                           ) : (
-                            <span 
+                            <span
                               className="inline-flex items-center px-1.5 py-0.2 rounded text-[9.5px] font-semibold bg-sky-500/10 border border-sky-500/40 text-sky-600 dark:text-sky-400 tracking-wide uppercase"
                               title="Ukuran diambil dari master fdM3 tbEntryList"
                             >

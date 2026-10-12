@@ -37,12 +37,18 @@ const MILESTONES: Milestone[] = [
 
 function formatDate(raw: string | null | undefined): string {
   if (!raw) return '—'
-  const parts = raw.split('-')
-  if (parts.length !== 3) return raw
-  const [, month, day] = parts
-  const monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des']
-  const m = parseInt(month, 10)
-  return `${day} ${monthNames[m - 1] ?? month}`
+  const clean = raw.trim()
+  const parts = clean.split(/[-/]/)
+  if (parts.length === 3) {
+    const [year, month, dayPart] = parts
+    const day = dayPart.split(/[T\s]/)[0]
+    const monthNames = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agt','Sep','Okt','Nov','Des']
+    const m = parseInt(month, 10)
+    if (!isNaN(m) && m >= 1 && m <= 12) {
+      return `${day} ${monthNames[m - 1]} ${year}`
+    }
+  }
+  return clean
 }
 
 /** Hitung selisih hari antara dua string YYYY-MM-DD */
@@ -109,7 +115,7 @@ export function ShipmentTimeline({ timeline, isLoading }: ShipmentTimelineProps)
               <div className="flex flex-col items-center gap-1.5">
                 <div className="skeleton-shimmer w-7 h-7 rounded-full" />
                 <div className="skeleton-shimmer h-2 w-10 rounded" />
-                <div className="skeleton-shimmer h-2 w-8 rounded" />
+                <div className="skeleton-shimmer h-2 w-12 rounded" />
               </div>
               {i < 7 && <div className="skeleton-shimmer h-px flex-1 mx-1" />}
             </div>
@@ -130,7 +136,7 @@ export function ShipmentTimeline({ timeline, isLoading }: ShipmentTimelineProps)
     <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2.5 mb-2">
       {/* Header row: label + durasi chip */}
       <div className="flex items-center justify-between mb-2.5 gap-2">
-        <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] select-none">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-[var(--color-secondary)] select-none">
           Siklus Kargo
         </p>
 
@@ -169,8 +175,8 @@ export function ShipmentTimeline({ timeline, isLoading }: ShipmentTimelineProps)
                   className={cn(
                     'w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all duration-200 shrink-0',
                     isDone
-                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white shadow-sm'
-                      : 'border-[var(--color-border)] bg-[var(--color-surface-alt,var(--color-surface))] text-[var(--color-text-muted)]'
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white dark:border-emerald-400 dark:bg-emerald-500/20 dark:text-emerald-400 shadow-xs'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-secondary)]/60'
                   )}
                 >
                   <ms.Icon className="w-3.5 h-3.5" />
@@ -180,17 +186,29 @@ export function ShipmentTimeline({ timeline, isLoading }: ShipmentTimelineProps)
                 <p
                   className={cn(
                     'mt-1.5 text-center leading-tight text-[10px] font-medium px-0.5 truncate w-full',
-                    isDone ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'
+                    isDone ? 'text-[var(--color-primary)] font-semibold' : 'text-[var(--color-secondary)]'
                   )}
                 >
                   {ms.label}
                 </p>
 
+                {/* Sub-label gudang jika tersedia */}
+                {ms.key === 'fdTgl_IN' && timeline?.fdGudang && (
+                  <span
+                    className="block text-center leading-tight text-[9px] font-normal text-[var(--color-secondary)] truncate max-w-full px-0.5 -mt-0.5"
+                    title={`Gudang: ${timeline.fdGudang}`}
+                  >
+                    {timeline.fdGudang}
+                  </span>
+                )}
+
                 {/* Date */}
                 <p
                   className={cn(
-                    'text-[10px] tabular-nums text-center font-mono',
-                    isDone ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] opacity-50'
+                    'text-[10px] tabular-nums text-center font-mono whitespace-nowrap',
+                    isDone
+                      ? 'text-[var(--color-primary)] dark:text-emerald-400 font-medium'
+                      : 'text-[var(--color-secondary)] opacity-50'
                   )}
                 >
                   {formatDate(raw)}
@@ -204,7 +222,7 @@ export function ShipmentTimeline({ timeline, isLoading }: ShipmentTimelineProps)
                     className={cn(
                       'h-0.5 w-full rounded-full transition-all duration-300',
                       connectorDone
-                        ? 'bg-[var(--color-primary)] opacity-70'
+                        ? 'bg-[var(--color-primary)]/70 dark:bg-emerald-500/60'
                         : 'bg-[var(--color-border)]'
                     )}
                   />
@@ -227,21 +245,31 @@ export function ShipmentTimeline({ timeline, isLoading }: ShipmentTimelineProps)
                 className={cn(
                   'w-6 h-6 rounded-full flex items-center justify-center border-2 shrink-0',
                   isDone
-                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white'
-                    : 'border-[var(--color-border)] text-[var(--color-text-muted)]'
+                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)] text-white dark:border-emerald-400 dark:bg-emerald-500/20 dark:text-emerald-400'
+                    : 'border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-secondary)]/60'
                 )}
               >
                 <ms.Icon className="w-3 h-3" />
               </div>
               <p className={cn(
                 'text-[9px] font-medium text-center leading-tight',
-                isDone ? 'text-[var(--color-text)]' : 'text-[var(--color-text-muted)]'
+                isDone ? 'text-[var(--color-primary)] font-semibold' : 'text-[var(--color-secondary)]'
               )}>
                 {ms.label}
               </p>
+              {ms.key === 'fdTgl_IN' && timeline?.fdGudang && (
+                <span
+                  className="block text-center leading-tight text-[8px] font-normal text-[var(--color-secondary)] truncate max-w-full px-0.5 -mt-0.5"
+                  title={`Gudang: ${timeline.fdGudang}`}
+                >
+                  {timeline.fdGudang}
+                </span>
+              )}
               <p className={cn(
                 'text-[9px] tabular-nums font-mono text-center',
-                isDone ? 'text-[var(--color-primary)]' : 'text-[var(--color-text-muted)] opacity-40'
+                isDone
+                  ? 'text-[var(--color-primary)] dark:text-emerald-400 font-medium'
+                  : 'text-[var(--color-secondary)] opacity-50'
               )}>
                 {formatDate(raw)}
               </p>

@@ -25,6 +25,7 @@ export interface BillingTimeline {
   fdETD: string | null         // ETD
   fdETA: string | null         // ETA
   fdTgl_IN: string | null      // Masuk Gudang
+  fdGudang: string | null      // Nama gudang masuk / sortir (tbMarking.fdGudang)
   fdSjDate: string | null      // Surat Jalan
   fdSndDate: string | null     // Dikirim (MAX)
   fdGiveDate: string | null    // Diserahkan
@@ -109,6 +110,7 @@ export interface Billing {
   totalJumlah?: number
   totalBayar?: number
   sisaBayar?: number
+  attachmentCount?: number
   totals?: {
     fdJumlah: number | null
     fdBayar: number | null
@@ -352,6 +354,37 @@ export interface Trend {
   direction: 'up' | 'down' | 'flat'
 }
 
+export interface BranchBillingMetrics {
+  branchCode: string
+  branchName: string
+  totalInvoices: number
+  totalTagihan: number
+  invoicesUdara: number
+  tagihanUdara: number
+  invoicesLaut: number
+  tagihanLaut: number
+  avgInvoiceValue: number
+  uniqueCustomers: number
+  shareOfTotal?: number
+}
+
+export interface BranchBillingComparison {
+  branchCode: string
+  branchName: string
+  current: BranchBillingMetrics
+  prev?: BranchBillingMetrics
+  lastYear?: BranchBillingMetrics
+  momTagihanDiff: number
+  momTagihanPercent: number
+  yoyTagihanDiff: number
+  yoyTagihanPercent: number
+  momInvoicesDiff: number
+  momInvoicesPercent: number
+  yoyInvoicesDiff: number
+  yoyInvoicesPercent: number
+  shareOfTotal: number
+}
+
 export interface PeriodBillingMetrics {
   year: number
   month: number
@@ -364,6 +397,7 @@ export interface PeriodBillingMetrics {
   tagihanLaut: number
   avgInvoiceValue: number
   uniqueCustomers: number
+  branches?: BranchBillingMetrics[]
 }
 
 export interface MetricComparison {
@@ -385,13 +419,64 @@ export interface BillingComparisons {
   tagihanLaut: MetricComparison
   avgInvoiceValue: MetricComparison
   uniqueCustomers: MetricComparison
+  byBranch?: BranchBillingComparison[]
+}
+
+export interface UnissuedBillsAgingSummary {
+  le7: { count: number; nominal: number }
+  d8to14: { count: number; nominal: number }
+  d15to30: { count: number; nominal: number }
+  gt30: { count: number; nominal: number }
+}
+
+export interface UnissuedBillsSummary {
+  totalCount: number
+  totalNominal: number
+  countUdara: number
+  nominalUdara: number
+  countLaut: number
+  nominalLaut: number
+  aging: UnissuedBillsAgingSummary
+}
+
+export interface UnissuedBillItem {
+  invNo: string
+  invDate: string | null
+  custCode: string
+  custName: string
+  listType: number
+  mode: 'udara' | 'laut'
+  markingCode: string
+  markingNo: string
+  jumlah1: number
+  jumlahTotal: number
+  empCode: string
+  empName: string
+  branchCode: string
+  agingDays: number
+  agingGroup: 'le7' | '8to14' | '15to30' | 'gt30'
+}
+
+export interface UnissuedBillsResponse {
+  summary: UnissuedBillsSummary
+  filteredCount: number
+  filteredNominal: number
+  items: UnissuedBillItem[]
 }
 
 export interface BillingKpis {
   totalInvoices: number
   totalTagihan: number
   invoicesBulanIni: number
+  invoicesBulanIniBreakdown?: {
+    udara: number
+    laut: number
+  }
   tagihanBulanIni: number
+  tagihanBulanIniBreakdown?: {
+    udara: number
+    laut: number
+  }
   trend: {
     invoicesBulanIni: Trend
     tagihanBulanIni: Trend
@@ -400,6 +485,27 @@ export interface BillingKpis {
   prevMonth?: PeriodBillingMetrics
   lastYearSameMonth?: PeriodBillingMetrics
   comparisons?: BillingComparisons
+  targetBillUdara?: {
+    total: number
+    breakdown?: { kiki: number; yati: number }
+    categories?: {
+      sjSent: number
+      codUrgent: number
+      agingGt7: number
+      fcl: number
+    }
+  }
+  targetBillLaut?: {
+    total: number
+    breakdown?: { thara: number; rico: number; ferly: number }
+    categories?: {
+      sjSent: number
+      codUrgent: number
+      agingGt7: number
+      fcl: number
+    }
+  }
+  unissuedBills?: UnissuedBillsSummary
 }
 
 export interface SjVsBillPoint {
@@ -426,6 +532,8 @@ export interface UnbilledSjDetailItem {
   markingCode: string
   branchName: string
   descr: string
+  pic?: string
+  listType?: string
 }
 
 export interface SurplusBillDetailItem {
@@ -437,6 +545,115 @@ export interface SurplusBillDetailItem {
   markingCode: string
   totalAmount: number
   descr: string
+}
+
+export interface BatchExitBranchMetric {
+  branchCode: string
+  branchName: string
+  totalBatches: number
+  fullyBilledBatches: number
+  pendingBatches: number
+  totalKargo: number
+  totalBilled: number
+  totalUnbilled: number
+  billedPercentage: number
+  airBatches: number
+  airKargo: number
+  airBilled: number
+  airUnbilled: number
+  seaBatches: number
+  seaKargo: number
+  seaBilled: number
+  seaUnbilled: number
+}
+
+export interface CustomerStatusMetric {
+  totalKargo: number
+  totalBilled: number
+  totalUnbilled: number
+  billedPercentage: number
+}
+
+export interface BatchCustomerStatusCounts {
+  blocked: number
+  warning: number
+  urgent: number
+  cod: number
+  ok: number
+  noStatus: number
+  unbilledBlocked: number
+  unbilledWarning: number
+  unbilledUrgent: number
+  unbilledCod: number
+}
+
+export interface BatchExitComparisonSummary {
+  totalBatches: number
+  fullyBilledBatches: number
+  pendingBatches: number
+  totalKargo: number
+  totalBilled: number
+  totalUnbilled: number
+  billedPercentage: number
+  air: {
+    totalBatches: number
+    totalKargo: number
+    totalBilled: number
+    totalUnbilled: number
+    billedPercentage: number
+  }
+  sea: {
+    totalBatches: number
+    totalKargo: number
+    totalBilled: number
+    totalUnbilled: number
+    billedPercentage: number
+  }
+  byBranch: BatchExitBranchMetric[]
+  byCustomerStatus: {
+    blocked: CustomerStatusMetric
+    warning: CustomerStatusMetric
+    urgent: CustomerStatusMetric
+    cod: CustomerStatusMetric
+    ok: CustomerStatusMetric
+    noStatus: CustomerStatusMetric
+  }
+}
+
+export interface BatchExitItem {
+  markingCode: string
+  exitDate: string | null
+  listType: number // 1: Udara, 2: Laut
+  branchCode: string
+  branchName: string
+  totalKargo: number
+  totalBilled: number
+  totalUnbilled: number
+  billedPercentage: number
+  isFullyBilled: boolean
+  customerStatus: BatchCustomerStatusCounts
+}
+
+export interface BatchExitCargoItem {
+  listCode: string
+  markingCode: string
+  custCode: string
+  custName: string
+  custStatus: number
+  custStatusLabel: string
+  isBroker: boolean
+  coly: number
+  satuan: string
+  m3: number
+  berat: number
+  isBilled: boolean
+  sjNo: string | null
+  isSent: boolean
+}
+
+export interface BatchExitComparisonResponse {
+  summary: BatchExitComparisonSummary
+  batches: BatchExitItem[]
 }
 
 export interface CustMarkingDetailItem {
@@ -842,6 +1059,8 @@ export interface M3CheckResponse {
   fdListCode: string
   fdListType?: number | null
   defaultFdTypeComodity?: number | null
+  entryListTypeComodity?: number | null
+  entryListComodityName?: string | null
   markingComodityType?: number | null
   markingComodities?: { fdTypeComodity: number | null; fdComodity: string | null; fdComodityName?: string | null; directPrice?: number | null }[]
   commodityMappings?: {
@@ -971,6 +1190,9 @@ export interface RelatedListCodeItem {
   isParent?: boolean
   isCurrent?: boolean
   childLetter?: string | null
+  fdMarkingNo?: string | null
+  fdTypeComodity?: number | null
+  typeComodityName?: string | null
   m3Gudang: number
   m3PL?: number
   m3Komplain?: number
@@ -1051,5 +1273,99 @@ export interface BillingDimensionsResponse {
   komplain: DimensionGroup
 }
 
+export interface BillingAttachment {
+  fdId: number
+  fdInvNo: string
+  fdFileName: string
+  fdFileSavedName: string
+  fdFileType: string
+  fdFileSize: number
+  fdFileUrl: string
+  fdCaption?: string | null
+  fdUploadedBy: string
+  fdCreatedAt: string
+}
 
+export interface OmsetVolumeItem {
+  fdCustCode: string
+  fdCustName: string
+  fdSalesNM: string
+  metrics: Record<string, {
+    m3: number
+    kgLaut: number
+    kgUdara: number
+    totalFcl: number
+    fdJumlah: number
+  }>
+  totalM3: number
+  totalKgLaut: number
+  totalKgUdara: number
+  totalFcl: number
+  totalOmset: number
+}
 
+export interface OmsetVolumeReportResponse {
+  years: number[]
+  data: OmsetVolumeItem[]
+  summary: {
+    totalCustomers: number
+    metricsPerYear: Record<string, {
+      m3: number
+      kgLaut: number
+      kgUdara: number
+      totalFcl: number
+      fdJumlah: number
+    }>
+    grandTotalM3: number
+    grandTotalKgLaut: number
+    grandTotalKgUdara: number
+    grandTotalFcl: number
+    grandTotalOmset: number
+  }
+}
+
+export interface CargoResiDetail {
+  fdListCode: string
+  fdTerima?: string | null
+  fdMarkingCode: string
+  fdBranchCode: string
+  fdTahun: number
+  fdListType: number // 1: Udara, 2: Laut
+  fdTypeComodity: number
+  fdComodityName: string
+  fdInvNo: string | null
+  calculatedM3: number
+  calculatedBeratUdara: number
+  calculatedBeratLaut: number
+  sourceM3: 'BILLING' | 'GUDANG' | 'PACKING_LIST' | 'ENTRY_LIST' | 'NONE'
+}
+
+export interface CargoCustomerSummary {
+  fdCustCode: string
+  fdCustName: string
+  fdSalesNM: string
+  totalResi: number
+  totalM3: number
+  totalBeratUdara: number
+  totalBeratLaut: number
+  resiDetails?: CargoResiDetail[]
+}
+
+export interface CargoVolumeFilterMeta {
+  branches: Array<{ code: string; name: string }>
+  commodities: Array<{ id: number; name: string; listType: number }>
+  availableYears: number[]
+}
+
+export interface CargoVolumeReportResponse {
+  meta: CargoVolumeFilterMeta
+  years: number[]
+  data: CargoCustomerSummary[]
+  summary: {
+    totalCustomers: number
+    totalResi: number
+    grandTotalM3: number
+    grandTotalBeratUdara: number
+    grandTotalBeratLaut: number
+  }
+}

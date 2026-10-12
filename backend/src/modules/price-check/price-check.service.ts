@@ -22,12 +22,14 @@ import { getCustomerHargaAuditInfo } from '../m3-check/m3-check.service'
  */
 export function getNormalizedBranchCode(branch?: string | null): string {
   const b = String(branch || '').toUpperCase().trim()
+  if (!b) return ''
+  if (b === '--' || b === '-' || b.includes('SINGAPORE') || b.includes('SINGAPURA') || b === 'SG') return 'SG'
   if (b.includes('GUANGZHOU') || b === 'GZ') return 'GZ'
   if (b.includes('YIWU') || b === 'YW') return 'YW'
   if (b.includes('SHANGHAI') || b === 'SH') return 'SH'
   if (b.includes('SHENZHEN') || b === 'SZ') return 'SZ'
   if (b.includes('HONGKONG') || b.includes('HONG KONG') || b === 'HK') return 'HK'
-  if (b.includes('SINGAPORE') || b.includes('SINGAPURA') || b === 'SG') return 'SG'
+  if (b.includes('BANGKOK') || b === 'BKK') return 'BKK'
   return b
 }
 

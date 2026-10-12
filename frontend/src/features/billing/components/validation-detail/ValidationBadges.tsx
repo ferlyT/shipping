@@ -53,11 +53,13 @@ export function ItemPriceBadge({
   validationData,
   expedisiList,
   evaluation,
+  itemIndex,
 }: {
   row: BillingDetail
   validationData?: M3CheckResponse | null
   expedisiList?: any[]
   evaluation?: any
+  itemIndex?: number
 }) {
   if (!validationData && (!expedisiList || expedisiList.length === 0) && !evaluation) return null
   const evalRes = evaluation || evaluateItemPrice(row, {
@@ -66,8 +68,11 @@ export function ItemPriceBadge({
     defaultTypeId: (validationData?.defaultFdTypeComodity && validationData.defaultFdTypeComodity > 0)
       ? validationData.defaultFdTypeComodity
       : (validationData?.markingComodityType ?? null),
-    defaultComodityName: validationData?.markingComodities?.[0]?.fdComodityName || '—',
+    defaultComodityName: validationData?.entryListComodityName || validationData?.markingComodities?.[0]?.fdComodityName || '—',
     expedisiList,
+    itemIndex: itemIndex ?? (row.fdID === '01' ? 0 : undefined),
+    entryListTypeId: validationData?.entryListTypeComodity ?? validationData?.defaultFdTypeComodity,
+    entryListComodityName: validationData?.entryListComodityName,
   })
 
   // Item biaya cabang tanpa validasi tarif

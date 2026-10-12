@@ -757,5 +757,17 @@
   "profile.logout": "Keluar dari Akun (Logout)",
   "profile.logoutConfirmTitle": "Konfirmasi Logout",
   "profile.logoutConfirmDesc": "Apakah Anda yakin ingin keluar dari akun?",
-  "profile.logoutConfirmBtn": "Keluar"
+  "profile.logoutConfirmBtn": "Keluar",
+  "overview.tabExit": "Logistik Exit",
+  "overview.tabBilling": "Billing Ops",
+  "overview.currentMonthBadge": "Bulan Berjalan",
+  "overview.pastAuditBadge": "Audit Lampau",
+  "overview.thisMonth": "Bulan Ini",
+  "overview.targetAirTitle": "TARGET BILL UDARA",
+  "overview.targetSeaTitle": "TARGET BILL LAUT",
+  "overview.invoicesIssuedTitle": "FAKTUR DITERBITKAN",
+  "overview.batchExitComparisonTitle": "Batch Exit vs Bill Dibuat",
+  "overview.batchExitToday": "Batch Exit Hari Ini",
+  "overview.targetBillMonth": "Target Bill Bulan Ini",
+  "overview.dashboardOverview": "DASHBOARD OVERVIEW"
 }

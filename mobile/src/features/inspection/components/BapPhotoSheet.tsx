@@ -12,6 +12,7 @@ import {
   Alert,
   Dimensions,
   Platform,
+  StatusBar,
 } from 'react-native'
 import {
   X,
@@ -34,6 +35,7 @@ import { useThemeStore } from '@/theme/themeStore'
 import { useToastStore } from '@/stores/toastStore'
 import { DEFAULT_API_URL } from '@/api/client'
 import { useBapPhotos, useUploadBapPhoto, useDeleteBapPhoto } from '../hooks/useBapPhotos'
+import { PhotoAnnotationModal } from './PhotoAnnotationModal'
 import type { InspectionReport, BapPhoto } from '../types/inspectionReport.types'
 
 interface Props {
@@ -56,10 +58,11 @@ export function BapPhotoSheet({ report, visible, onClose }: Props) {
   const [isSharingPhoto, setIsSharingPhoto] = useState(false)
   const previewFlatListRef = useRef<FlatList<BapPhoto>>(null)
 
-  // Native integrated camera states
+  // Native integrated camera & annotation states
   const [isCameraActive, setIsCameraActive] = useState(false)
   const [cameraFacing, setCameraFacing] = useState<'back' | 'front'>('back')
   const [cameraFlash, setCameraFlash] = useState(false)
+  const [annotationPhoto, setAnnotationPhoto] = useState<{ uri: string; base64: string } | null>(null)
   const [permission, requestPermission] = useCameraPermissions()
   const cameraRef = useRef<CameraView>(null)
 
@@ -117,16 +120,35 @@ export function BapPhotoSheet({ report, visible, onClose }: Props) {
         base64: true,
       })
 
-      if (photo?.base64) {
-        await uploadMutation.mutateAsync({
-          reportId: report.fdId,
-          photoBase64: photo.base64,
-        })
+      if (photo?.uri && photo?.base64) {
         setIsCameraActive(false)
-        showToast('Foto berhasil ditambahkan', 'success')
+        setAnnotationPhoto({ uri: photo.uri, base64: photo.base64 })
       }
     } catch (err: any) {
       showToast(err.message || 'Gagal mengambil foto dari kamera', 'error')
+    } finally {
+      setIsProcessing(false)
+    }
+  }
+
+  const handleSaveAnnotatedPhoto = async ({
+    photoBase64,
+    annotationsSvg,
+  }: {
+    photoBase64: string
+    annotationsSvg?: string
+  }) => {
+    try {
+      setIsProcessing(true)
+      setAnnotationPhoto(null)
+      await uploadMutation.mutateAsync({
+        reportId: report.fdId,
+        photoBase64,
+        annotationsSvg,
+      })
+      showToast('Foto kargo berhasil ditambahkan', 'success')
+    } catch (err: any) {
+      showToast(err.message || 'Gagal mengunggah foto', 'error')
     } finally {
       setIsProcessing(false)
     }
@@ -396,6 +418,7 @@ export function BapPhotoSheet({ report, visible, onClose }: Props) {
           animationType="slide"
           onRequestClose={() => setIsCameraActive(false)}
         >
+          <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
           <View style={styles.cameraContainer}>
             <CameraView
               ref={cameraRef}
@@ -408,7 +431,12 @@ export function BapPhotoSheet({ report, visible, onClose }: Props) {
             <View
               style={[
                 styles.cameraTopBar,
-                { paddingTop: Platform.OS === 'ios' ? insets.top + 10 : insets.top + 16 },
+                {
+                  paddingTop:
+                    Platform.OS === 'android'
+                      ? Math.max(insets.top, StatusBar.currentHeight ?? 24) + 6
+                      : Math.max(insets.top, 16) + 4,
+                },
               ]}
             >
               <TouchableOpacity
@@ -563,8 +591,18 @@ export function BapPhotoSheet({ report, visible, onClose }: Props) {
               />
             </View>
 
-            {/* Footer with Metadata & Pagination Dots */}
-            <View style={styles.fullscreenFooter}>
+            {/* Footer with Metadata & Action Buttons from mockup */}
+            <View
+              style={[
+                styles.fullscreenFooter,
+                {
+                  paddingBottom:
+                    Platform.OS === 'android'
+                      ? Math.max(insets.bottom, 48) + 12
+                      : Math.max(insets.bottom, 16) + 10,
+                },
+              ]}
+            >
               {photos.length > 1 && (
                 <View style={styles.dotsRow}>
                   {photos.map((_, i) => (
@@ -587,10 +625,53 @@ export function BapPhotoSheet({ report, visible, onClose }: Props) {
                   "{photos[previewIndex].fdCaption}"
                 </Text>
               ) : null}
+
+              {/* Action Buttons: Tandai Kerusakan & Bagikan */}
+              <View style={styles.fullscreenBtnRow}>
+                <TouchableOpacity
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    const currentPhoto = photos[previewIndex]
+                    setPreviewIndex(null)
+                    setAnnotationPhoto({
+                      uri: getFullPhotoUrl(currentPhoto.fdPhotoUrl),
+                      base64: '',
+                    })
+                  }}
+                  style={styles.fullscreenVwAnnBtn}
+                >
+                  <Text style={styles.fullscreenVwAnnText}>Tandai kerusakan</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  activeOpacity={0.85}
+                  onPress={() => handleSharePhoto(photos[previewIndex])}
+                  disabled={isSharingPhoto}
+                  style={styles.fullscreenVwShareBtn}
+                >
+                  {isSharingPhoto ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Share2 size={18} color="#FFFFFF" />
+                      <Text style={styles.fullscreenVwShareText}>Bagikan</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         </Modal>
       )}
+
+      {/* Photo Damage Annotation Modal */}
+      <PhotoAnnotationModal
+        visible={Boolean(annotationPhoto)}
+        photoUri={annotationPhoto?.uri || null}
+        photoBase64={annotationPhoto?.base64 || null}
+        onSave={handleSaveAnnotatedPhoto}
+        onClose={() => setAnnotationPhoto(null)}
+      />
     </Modal>
   )
 }
@@ -886,5 +967,43 @@ const styles = StyleSheet.create({
     fontSize: 12.5,
     fontStyle: 'italic',
     textAlign: 'center',
+  },
+  fullscreenBtnRow: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+    marginTop: 10,
+  },
+  fullscreenVwAnnBtn: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#222C38',
+    backgroundColor: '#131A23',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  fullscreenVwAnnText: {
+    color: '#EEF2F6',
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  fullscreenVwShareBtn: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#E0644E',
+    backgroundColor: '#E0644E',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  fullscreenVwShareText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
 })

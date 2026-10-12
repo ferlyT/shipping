@@ -562,3 +562,87 @@ export interface DeliveryEstimasiDetailItem {
   invDates: string | null
   billCount: number
 }
+
+export interface DeliveryEstimasiDetailResponse {
+  date: string
+  filterType: 'all' | 'overdue' | 'pending' | 'sent'
+  totalSj: number
+  pendingOverdueCount: number
+  pendingToleranceCount: number
+  sentCount: number
+  totalPack: number
+  totalWeight: number
+  billingRecap?: {
+    billedSjCount: number
+    unbilledSjCount: number
+    totalListCodes: number
+    billedListCodeCount: number
+    unbilledListCodeCount: number
+    billedPack: number
+    billedWeight: number
+    unbilledPack: number
+    unbilledWeight: number
+  }
+  items: DeliveryEstimasiDetailItem[]
+}
+
+export interface DeliveryBatchOrderItem {
+  fdSJNo: string
+  fdSJDate: string
+  fdEstimasi?: string
+  fdSent: number
+  fdSndDate?: string
+  fdKembali?: string
+  fdCarID: string
+  fdSupir: string
+  fdTelpSupir?: string
+  fdCustCode: string
+  fdCustName: string
+  fdListCode: string
+  fdListType: number
+  moda: 'Udara' | 'Laut'
+  fdJmlPackSJ: number
+  fdSatuan: string
+  fdJmlBeratSJ: number
+  fdDescr?: string
+  fdAddr?: string
+  fdCity?: string
+  fdMarkingCode: string
+  fdMarkingNo?: string
+  fdM3: number
+  branchCode: string
+  branchName: string
+  batchTime?: string
+  isBilled?: boolean
+  invNos?: string | null
+  invDates?: string | null
+  billCount?: number
+}
+
+export interface DeliveryBatchDetailResponse {
+  batchDate: string
+  batchSession: 'Pagi' | 'Sore'
+  batchTime: string
+  totalSj: number
+  totalPack: number
+  totalWeight: number
+  sjUdara: number
+  sjLaut: number
+  packUdara: number
+  packLaut: number
+  weightUdara: number
+  weightLaut: number
+  billingRecap?: {
+    billedSjCount: number
+    unbilledSjCount: number
+    totalListCodes: number
+    billedListCodeCount: number
+    unbilledListCodeCount: number
+    billedPack: number
+    billedWeight: number
+    unbilledPack: number
+    unbilledWeight: number
+  }
+  items: DeliveryBatchOrderItem[]
+}
+

@@ -58,6 +58,15 @@ export function ShipmentTimelineTab({ shipment }: ShipmentTimelineTabProps) {
   }
 
   const steps = [
+    ...(shipment.fdCreatedDate || shipment.fdEmp1
+      ? [{
+          label: 'Entri Data Resi',
+          desc: shipment.fdEmp1?.trim() ? `Diinput oleh ${shipment.fdEmp1.trim()}` : 'Data resi diinput ke sistem',
+          date: shipment.fdCreatedDate,
+          stepValue: 0,
+          isAlwaysDone: true,
+        }]
+      : []),
     { label: 'Waiting Loading', desc: 'Menunggu proses loading ke kontainer', date: status?.fdLoadDate, stepValue: 1 },
     { label: 'ETD (Keberangkatan)', desc: 'Estimated Time of Departure', date: status?.fdETD, stepValue: 2 },
     { label: 'ETA (Kedatangan)', desc: 'Estimated Time of Arrival di pelabuhan', date: status?.fdETA, stepValue: 3 },
@@ -70,9 +79,11 @@ export function ShipmentTimelineTab({ shipment }: ShipmentTimelineTabProps) {
     <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-sm p-4 sm:p-5 animate-in fade-in duration-200">
       <div className="relative flex flex-col gap-5">
         {steps.map((step, idx) => {
-          const isDone = currentStep >= step.stepValue
-          const isCurrent = currentStep === step.stepValue
+          const isDone = (step as any).isAlwaysDone || currentStep >= step.stepValue
+          const isCurrent = !((step as any).isAlwaysDone) && currentStep === step.stepValue
           const isLast = idx === steps.length - 1
+
+          const isNextActive = (step as any).isAlwaysDone ? currentStep >= 1 : currentStep > step.stepValue
 
           return (
             <div key={step.label} className="relative flex gap-3.5">
@@ -81,7 +92,7 @@ export function ShipmentTimelineTab({ shipment }: ShipmentTimelineTabProps) {
                 <div
                   className={cn(
                     'absolute top-6 bottom-[-20px] left-[13px] w-[2px] transition-colors',
-                    currentStep > step.stepValue ? 'bg-emerald-500' : 'bg-[var(--color-border)]'
+                    isNextActive ? 'bg-emerald-500' : 'bg-[var(--color-border)]'
                   )}
                 />
               )}

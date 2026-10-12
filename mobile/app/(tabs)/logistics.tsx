@@ -15,10 +15,11 @@ import * as Haptics from 'expo-haptics'
 import { Card } from '../../src/components/ui/Card'
 import { ErrorRetryCard } from '../../src/components/ui/ErrorRetryCard'
 import { SearchBar } from '../../src/components/ui/SearchBar'
-import { SegmentedControl } from '../../src/components/ui/SegmentedControl'
 import { SkeletonShimmer } from '../../src/components/ui/SkeletonShimmer'
 import { SearchSuggestionsDropdown } from '../../src/components/ui/SearchSuggestionsDropdown'
 import { BarcodeScannerModal } from '../../src/components/scanner/BarcodeScannerModal'
+import { ContainerScannerModal } from '../../src/components/scanner/ContainerScannerModal'
+import { Receipt, Tag, Truck, ClipboardList, Pencil } from 'lucide-react-native'
 import { useThemeStore } from '../../src/theme/themeStore'
 import { useToastStore } from '../../src/stores/toastStore'
 import { useTranslation } from '../../src/hooks/useTranslation'
@@ -33,13 +34,31 @@ import { BatchManifestSheet } from '../../src/features/logistics/components/Batc
 import { InspectionTab } from '../../src/features/inspection/components/InspectionTab'
 import { InspectionFormSheet } from '../../src/features/inspection/components/InspectionFormSheet'
 import { useInspectionMutations } from '../../src/features/inspection/hooks/useInspectionMutations'
+import { useAuthStore } from '../../src/stores/authStore'
+import { canManageDataRevisions, canManageBatchExitDate, canManageInspectionReports } from '../../src/lib/permissions'
 import { useDebounce } from '../../src/hooks/useDebounce'
+import { DataRevisionsTab } from '../../src/features/data-revisions/components/DataRevisionsTab'
+import { BatchExitDateModal } from '../../src/features/logistics/components/BatchExitDateModal'
 import apiClient from '../../src/api/client'
 
+
+
+const LOGISTICS_TABS = [
+  { key: 'shipments', label: 'Resi', icon: Receipt },
+  { key: 'batches', label: 'Marking', icon: Tag },
+  { key: 'delivery', label: 'Surat Jalan', icon: Truck },
+  { key: 'inspection', label: 'BAP', icon: ClipboardList },
+  { key: 'revisions', label: 'Revisi', icon: Pencil },
+] as const
+
 export default function LogisticsScreen() {
+  const { user } = useAuthStore()
   const { colors, mode } = useThemeStore()
   const { showToast } = useToastStore()
   const { t } = useTranslation()
+  const canAccessRevisions = canManageDataRevisions(user)
+  const canAccessInspection = canManageInspectionReports(user)
+  const canEditExitDate = canManageBatchExitDate(user)
   const params = useLocalSearchParams<{
     tab?: string
     initialTab?: string
@@ -50,14 +69,16 @@ export default function LogisticsScreen() {
     t?: string
   }>()
 
-  const [activeTab, setActiveTab] = useState<'shipments' | 'batches' | 'delivery' | 'inspection'>('shipments')
+  const [activeTab, setActiveTab] = useState<'shipments' | 'batches' | 'delivery' | 'inspection' | 'revisions'>('shipments')
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebounce(search, 300)
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [modeFilter, setModeFilter] = useState<'all' | '1' | '2'>('all')
   const [scannerVisible, setScannerVisible] = useState(false)
+  const [containerScannerVisible, setContainerScannerVisible] = useState(false)
   const [selectedItem, setSelectedItem] = useState<any | null>(null)
   const [selectedBatch, setSelectedBatch] = useState<any | null>(null)
+  const [batchForExitDate, setBatchForExitDate] = useState<any | null>(null)
 
   // BAP from shipment state
   const [bapInitialData, setBapInitialData] = useState<any | null>(null)
@@ -82,10 +103,11 @@ export default function LogisticsScreen() {
 
   const handleBapSubmit = async (payload: any) => {
     try {
-      await createBapMutation.mutateAsync(payload)
+      const res = await createBapMutation.mutateAsync(payload)
       setIsBapFormVisible(false)
       setBapInitialData(null)
       showToast('Berita Acara Pemeriksaan berhasil dibuat', 'success')
+      return res
     } catch {
       // handled by mutation
     }
@@ -95,7 +117,17 @@ export default function LogisticsScreen() {
 
   useEffect(() => {
     const target = params.tab || params.initialTab
-    if (target === 'batches' || target === 'shipments' || target === 'delivery' || target === 'inspection') {
+    if (target === 'revisions' && !canAccessRevisions) {
+      setActiveTab('shipments')
+    } else if (target === 'inspection' && !canAccessInspection) {
+      setActiveTab('shipments')
+    } else if (
+      target === 'batches' ||
+      target === 'shipments' ||
+      target === 'delivery' ||
+      (target === 'inspection' && canAccessInspection) ||
+      (target === 'revisions' && canAccessRevisions)
+    ) {
       setActiveTab(target)
       setModeFilter('all')
       setSearch(params.search || '')
@@ -132,7 +164,10 @@ export default function LogisticsScreen() {
       const res = await apiClient.get(suggestionEndpoint, { params: { q: debouncedSearch.trim() } })
       return res.data.data || []
     },
-    enabled: activeTab !== 'inspection' && debouncedSearch.trim().length >= 2,
+    enabled:
+      activeTab !== 'inspection' &&
+      activeTab !== 'revisions' &&
+      debouncedSearch.trim().length >= 2,
     staleTime: 30000,
   })
 
@@ -147,31 +182,75 @@ export default function LogisticsScreen() {
     showToast(`Scanned: ${code}`, 'info')
   }
 
-  return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.neutral }]}>
-      <View style={styles.container}>
-        {/* Header */}
-        <View style={styles.topSection}>
-          <Text style={[styles.pageTitle, { color: colors.primary }]}>
-            {t('logistics.title', 'Logistik Lapangan')}
-          </Text>
-          <SegmentedControl
-            options={[
-              { label: t('logistics.shipments', 'Daftar Resi'), value: 'shipments' },
-              { label: t('logistics.batches', 'Batch Marking'), value: 'batches' },
-              { label: t('logistics.delivery', 'Surat Jalan'), value: 'delivery' },
-              { label: t('logistics.inspection', 'BAP'), value: 'inspection' },
-            ]}
-            selectedValue={activeTab}
-            onValueChange={(val) => {
-              setActiveTab(val as any)
-              setSearch('')
-              setModeFilter('all')
-            }}
-            style={{ marginTop: 10 }}
-          />
+  const handleContainerScanned = (containerNo: string) => {
+    setActiveTab('batches')
+    setModeFilter('all')
+    setSearch(containerNo)
+    setContainerScannerVisible(false)
+    showToast(`Kontainer: ${containerNo}`, 'info')
+  }
 
-          {activeTab !== 'inspection' && (
+  return (
+    <SafeAreaView edges={['top']} style={[styles.safeArea, { backgroundColor: colors.neutral }]}>
+      <View style={styles.container}>
+        {/* Header Bersih Gaya Dashboard */}
+        <View style={styles.topSection}>
+          <Text style={[styles.overlineText, { color: colors.secondary }]}>
+            Modul operasional
+          </Text>
+          <Text style={[styles.pageTitle, { color: colors.primary }]}>
+            {t('logistics.title', 'Logistik lapangan')}
+          </Text>
+
+          {/* Tab Strip Editorial (Teks Bersih, Underline 2px Aksen Bata) */}
+          <View
+            style={[
+              styles.tabBarContainer,
+              { borderBottomColor: isDark ? '#222C38' : '#E3E7EC' },
+            ]}
+          >
+            {LOGISTICS_TABS.filter((tab) => {
+              if (tab.key === 'revisions') return canAccessRevisions
+              if (tab.key === 'inspection') return canAccessInspection
+              return true
+            }).map((tab) => {
+              const isActive = activeTab === tab.key
+
+              return (
+                <TouchableOpacity
+                  key={tab.key}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    Haptics.selectionAsync()
+                    setActiveTab(tab.key as any)
+                    setSearch('')
+                    setModeFilter('all')
+                  }}
+                  style={styles.tabItem}
+                >
+                  <Text
+                    style={[
+                      styles.tabLabel,
+                      {
+                        color: isActive ? colors.primary : colors.secondary,
+                        fontWeight: isActive ? '600' : '500',
+                      },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {tab.label}
+                  </Text>
+                  {isActive ? (
+                    <View style={styles.activeIndicator} />
+                  ) : (
+                    <View style={styles.inactiveIndicatorPlaceholder} />
+                  )}
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+
+          {activeTab !== 'inspection' && activeTab !== 'revisions' && (
             <>
               <SearchBar
                 value={search}
@@ -190,7 +269,16 @@ export default function LogisticsScreen() {
                     ? t('logistics.searchBatchPlaceholder', 'Cari nomor batch marking...')
                     : t('logistics.searchDeliveryPlaceholder', 'Cari surat jalan, supir, plat...')
                 }
-                onScanPress={() => setScannerVisible(true)}
+                onScanPress={
+                  activeTab === 'shipments'
+                    ? () => setScannerVisible(true)
+                    : undefined
+                }
+                onScanContainerPress={
+                  activeTab === 'batches'
+                    ? () => setContainerScannerVisible(true)
+                    : undefined
+                }
                 style={{ marginTop: 10 }}
               />
 
@@ -288,7 +376,7 @@ export default function LogisticsScreen() {
               <ShipmentListItem
                 item={item}
                 onPress={(it) => setSelectedItem(it)}
-                onCreateBap={handleCreateBapFromShipment}
+                onCreateBap={canAccessInspection ? handleCreateBapFromShipment : undefined}
               />
             )}
           />
@@ -346,7 +434,11 @@ export default function LogisticsScreen() {
               )
             }
             renderItem={({ item }) => (
-              <BatchListItem item={item} onPress={(it) => setSelectedBatch(it)} />
+              <BatchListItem
+                item={item}
+                onPress={(it) => setSelectedBatch(it)}
+                onEditExitDate={canEditExitDate ? (it) => setBatchForExitDate(it) : undefined}
+              />
             )}
           />
         )}
@@ -392,6 +484,9 @@ export default function LogisticsScreen() {
         {/* Inspection Reports (BAP) */}
         {activeTab === 'inspection' && <InspectionTab />}
 
+        {/* Form Input & Revisi Data */}
+        {activeTab === 'revisions' && <DataRevisionsTab />}
+
         {/* Barcode Scanner Modal */}
         <BarcodeScannerModal
           visible={scannerVisible}
@@ -399,11 +494,18 @@ export default function LogisticsScreen() {
           onScanned={handleBarcodeScanned}
         />
 
+        {/* Container Scanner Modal */}
+        <ContainerScannerModal
+          visible={containerScannerVisible}
+          onClose={() => setContainerScannerVisible(false)}
+          onScanned={handleContainerScanned}
+        />
+
         {/* Shipment Detail Sheet */}
         <ShipmentDetailSheet
           selectedItem={selectedItem}
           onClose={() => setSelectedItem(null)}
-          onCreateBap={handleCreateBapFromShipment}
+          onCreateBap={canAccessInspection ? handleCreateBapFromShipment : undefined}
         />
 
         {/* Batch Manifest Sheet */}
@@ -411,7 +513,7 @@ export default function LogisticsScreen() {
           selectedBatch={selectedBatch}
           onClose={() => setSelectedBatch(null)}
           setSelectedBatch={setSelectedBatch}
-          onCreateBap={handleCreateBapFromShipment}
+          onCreateBap={canAccessInspection ? handleCreateBapFromShipment : undefined}
         />
 
         {/* Create BAP from Resi Modal */}
@@ -425,19 +527,76 @@ export default function LogisticsScreen() {
           onSubmit={handleBapSubmit}
           isSaving={createBapMutation.isPending}
         />
+
+        {/* Batch Exit Date Modal */}
+        <BatchExitDateModal
+          visible={Boolean(batchForExitDate)}
+          batch={batchForExitDate}
+          onClose={() => setBatchForExitDate(null)}
+        />
       </View>
     </SafeAreaView>
   )
 }
 
+
 const styles = StyleSheet.create({
   safeArea: { flex: 1 },
   container: { flex: 1 },
-  topSection: { padding: 16, paddingBottom: 8 },
-  pageTitle: { fontSize: 20, fontWeight: '800', letterSpacing: -0.4 },
-  filterPillRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
-  pillBtn: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8, borderWidth: 1 },
-  pillText: { fontSize: 12, fontWeight: '600' },
-  listContent: { padding: 16, paddingTop: 8, paddingBottom: 28, gap: 10 },
+  topSection: { paddingHorizontal: 16, paddingTop: 14, paddingBottom: 6 },
+  overlineText: {
+    fontSize: 13,
+    fontWeight: '400',
+    marginBottom: 2,
+  },
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: '600',
+    letterSpacing: -0.2,
+  },
+  tabBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    borderBottomWidth: 1,
+    marginTop: 10,
+    marginBottom: 4,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    position: 'relative',
+  },
+  tabLabel: {
+    fontSize: 13.5,
+    marginBottom: 6,
+    textAlign: 'center',
+  },
+  activeIndicator: {
+    position: 'absolute',
+    bottom: -1,
+    left: 0,
+    right: 0,
+    height: 2,
+    backgroundColor: '#E0644E',
+  },
+  inactiveIndicatorPlaceholder: {
+    height: 2,
+    width: '100%',
+    backgroundColor: 'transparent',
+  },
+  filterPillRow: { flexDirection: 'row', gap: 6, marginTop: 10 },
+  pillBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 8,
+    borderWidth: 1,
+    minHeight: 36,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pillText: { fontSize: 13, fontVariant: ['tabular-nums'] },
+  listContent: { paddingHorizontal: 16, paddingTop: 6, paddingBottom: 28 },
   emptyCard: { alignItems: 'center', padding: 30 },
 })

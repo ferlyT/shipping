@@ -13,7 +13,10 @@ import {
   truncate,
   formatDate,
   formatYearMonthKey,
+  replaceDbCaret,
+  cleanDbData,
 } from './utils'
+
 
 describe('Frontend utils test suite', () => {
   describe('cn (Tailwind class merger)', () => {
@@ -113,5 +116,23 @@ describe('Frontend utils test suite', () => {
       expect(formatted).toContain('2026')
       expect(formatDate(null)).toBe('—')
     })
+
+    it('replaces ^ caret with single quote in string and nested data', () => {
+      expect(replaceDbCaret('ALAM RAYA TRANSPORT^S')).toBe("ALAM RAYA TRANSPORT'S")
+      expect(replaceDbCaret('D^CLASSIC, PT')).toBe("D'CLASSIC, PT")
+      expect(replaceDbCaret(null)).toBe('')
+
+      const cleaned = cleanDbData({
+        customer: 'BOB^S GOLF SHOP',
+        branches: ['ASANG INT^L TAILOR', 'BERCA HARDAYAPERKASA^PT'],
+        nested: { note: 'DON^T WORRY' },
+        num: 42
+      })
+      expect(cleaned.customer).toBe("BOB'S GOLF SHOP")
+      expect(cleaned.branches).toEqual(["ASANG INT'L TAILOR", "BERCA HARDAYAPERKASA'PT"])
+      expect(cleaned.nested.note).toBe("DON'T WORRY")
+      expect(cleaned.num).toBe(42)
+    })
   })
 })
+

@@ -1,0 +1,8 @@
+export { default as DataRevisionsListPage } from './pages/DataRevisionsListPage'
+export { default as DataRevisionFormPage } from './pages/DataRevisionFormPage'
+export { default as DataRevisionPrintPage } from './pages/DataRevisionPrintPage'
+export { default as RevisionDetailViewModal } from './components/RevisionDetailViewModal'
+export { default as RevisionGalleryModal } from './components/RevisionGalleryModal'
+export * from './types/data-revisions.types'
+export * from './services/data-revisions.service'
+export * from './hooks/useDataRevisions'

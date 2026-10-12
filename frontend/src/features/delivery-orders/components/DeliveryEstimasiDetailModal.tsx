@@ -24,6 +24,7 @@ import {
   LayoutGrid,
   PhoneCall,
   Inbox,
+  Receipt,
 } from 'lucide-react'
 import { deliveryOrdersApi } from '../services/delivery-orders.service'
 import { useModalEscape } from '@/hooks/useModalEscape'
@@ -39,6 +40,7 @@ interface DeliveryEstimasiDetailModalProps {
   estimasiDate: string // YYYY-MM-DD
   displayDate?: string
   initialFilter?: 'all' | 'overdue' | 'pending' | 'tolerance' | 'sent'
+  initialBillingFilter?: 'all' | 'billed' | 'unbilled'
 }
 
 /**
@@ -110,12 +112,14 @@ export function DeliveryEstimasiDetailModal({
   estimasiDate,
   displayDate,
   initialFilter = 'all',
+  initialBillingFilter = 'all',
 }: DeliveryEstimasiDetailModalProps) {
   const addToast = useToastStore((s) => s.addToast)
   useModalEscape(isOpen, onClose)
 
   // Filter states
   const [statusFilter, setStatusFilter] = useState<'all' | 'overdue' | 'pending' | 'tolerance' | 'sent'>(initialFilter)
+  const [billingFilter, setBillingFilter] = useState<'all' | 'billed' | 'unbilled'>(initialBillingFilter)
   const [selectedModa, setSelectedModa] = useState<'all' | '1' | '2'>('all')
   const [search, setSearch] = useState<string>('')
   const [viewMode, setViewMode] = useState<'cards' | 'table'>(() => {
@@ -128,6 +132,10 @@ export function DeliveryEstimasiDetailModal({
   useEffect(() => {
     setStatusFilter(initialFilter)
   }, [initialFilter, isOpen])
+
+  useEffect(() => {
+    setBillingFilter(initialBillingFilter)
+  }, [initialBillingFilter, isOpen])
 
   // Query details from backend
   const { data, isLoading, isError, refetch } = useQuery({
@@ -147,6 +155,26 @@ export function DeliveryEstimasiDetailModal({
   const overdueCount = useMemo(() => rawItems.filter((i) => i.statusLabel === 'PENDING_OVERDUE').length, [rawItems])
   const toleranceCount = useMemo(() => rawItems.filter((i) => i.statusLabel === 'PENDING_TOLERANCE').length, [rawItems])
   const sentCount = useMemo(() => rawItems.filter((i) => i.fdSent === 1).length, [rawItems])
+  
+  // Hitung metrik penagihan (Billing)
+  const billedCount = useMemo(() => rawItems.filter((i) => Boolean(i.isBilled)).length, [rawItems])
+  const unbilledCount = useMemo(() => rawItems.filter((i) => !i.isBilled).length, [rawItems])
+  const billedPack = useMemo(
+    () => rawItems.filter((i) => Boolean(i.isBilled)).reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0),
+    [rawItems]
+  )
+  const billedWeight = useMemo(
+    () => Math.round(rawItems.filter((i) => Boolean(i.isBilled)).reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10,
+    [rawItems]
+  )
+  const unbilledPack = useMemo(
+    () => rawItems.filter((i) => !i.isBilled).reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0),
+    [rawItems]
+  )
+  const unbilledWeight = useMemo(
+    () => Math.round(rawItems.filter((i) => !i.isBilled).reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10,
+    [rawItems]
+  )
   const maxToleranceDate = rawItems[0]?.maxToleranceDate || null
 
   // Filtered items
@@ -157,6 +185,10 @@ export function DeliveryEstimasiDetailModal({
       if (statusFilter === 'tolerance' && item.statusLabel !== 'PENDING_TOLERANCE') return false
       if (statusFilter === 'pending' && item.fdSent === 1) return false
       if (statusFilter === 'sent' && item.fdSent !== 1) return false
+
+      // Billing filter
+      if (billingFilter === 'billed' && !item.isBilled) return false
+      if (billingFilter === 'unbilled' && item.isBilled) return false
 
       // Moda filter
       if (selectedModa === '1' && item.fdListType !== 1) return false
@@ -175,18 +207,29 @@ export function DeliveryEstimasiDetailModal({
           (item.fdCarID && item.fdCarID.toLowerCase().includes(q)) ||
           (item.fdListCode && item.fdListCode.toLowerCase().includes(q)) ||
           (item.fdTerima && item.fdTerima.toLowerCase().includes(q)) ||
-          (item.fdDescr && item.fdDescr.toLowerCase().includes(q))
+          (item.fdDescr && item.fdDescr.toLowerCase().includes(q)) ||
+          (item.invNos && item.invNos.toLowerCase().includes(q))
         if (!match) return false
       }
 
       return true
     })
-  }, [rawItems, statusFilter, selectedModa, search])
+  }, [rawItems, statusFilter, billingFilter, selectedModa, search])
 
   // Total koli & berat item terfilter
   const filteredPack = useMemo(() => filteredItems.reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0), [filteredItems])
   const filteredWeight = useMemo(
     () => Math.round(filteredItems.reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10,
+    [filteredItems]
+  )
+  const filteredBilledCount = useMemo(() => filteredItems.filter((i) => Boolean(i.isBilled)).length, [filteredItems])
+  const filteredUnbilledCount = useMemo(() => filteredItems.filter((i) => !i.isBilled).length, [filteredItems])
+  const filteredBilledPack = useMemo(
+    () => filteredItems.filter((i) => Boolean(i.isBilled)).reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0),
+    [filteredItems]
+  )
+  const filteredUnbilledPack = useMemo(
+    () => filteredItems.filter((i) => !i.isBilled).reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0),
     [filteredItems]
   )
 
@@ -212,6 +255,9 @@ export function DeliveryEstimasiDetailModal({
             : item.statusLabel === 'SENT_ONTIME'
             ? 'TERKIRIM TEPAT WAKTU'
             : 'TERKIRIM LEWAT ESTIMASI',
+        'Status Penagihan': item.isBilled ? 'SUDAH DIBUAT BILL' : 'BELUM DIBUAT BILL',
+        'No Invoice': item.invNos || '—',
+        'Tgl Invoice': item.invDates || '—',
         Moda: item.fdListType === 1 ? 'Udara' : 'Laut',
         Customer: displayCustName(item.custName),
         'Kode Cust': item.fdCustCode || '',
@@ -230,7 +276,7 @@ export function DeliveryEstimasiDetailModal({
       const ws = XLSX.utils.json_to_sheet(rows)
       const wb = XLSX.utils.book_new()
       XLSX.utils.book_append_sheet(wb, ws, 'Target Estimasi')
-      const fileName = `Rincian_Estimasi_${estimasiDate}_${statusFilter}.xlsx`
+      const fileName = `Rincian_Estimasi_${estimasiDate}_${statusFilter}_bill_${billingFilter}.xlsx`
       XLSX.writeFile(wb, fileName)
       addToast({ type: 'success', message: `Berhasil mengunduh ${fileName}` })
     } catch (err: any) {
@@ -269,13 +315,17 @@ export function DeliveryEstimasiDetailModal({
                     <span>Batas H+1: {formattedToleranceDate}</span>
                   </span>
                 )}
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] sm:text-[11px] font-mono font-semibold bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                  <Receipt size={11} className="text-emerald-500 shrink-0" />
+                  <span>Bill: {billedCount}/{totalCount} SJ ({totalCount > 0 ? Math.round((billedCount / totalCount) * 100) : 0}%)</span>
+                </span>
               </div>
 
-              {/* Aturan Toleransi Info Banner */}
+              {/* Aturan Toleransi & Status Info Banner */}
               <div className="mt-2 p-2 rounded-lg bg-amber-500/10 border border-amber-500/20 text-[11px] text-[var(--color-secondary)] flex items-start gap-1.5 leading-relaxed">
                 <AlertCircle size={13} className="text-amber-500 shrink-0 mt-0.5" />
                 <span>
-                  Aturan Toleransi: <strong className="text-[var(--color-primary)]">fdSent = fdEstimasi + 1 hari itu max (H+1)</strong>. Apabila belum terkirim setelah batas H+1 berstatus <strong className="text-rose-600 dark:text-rose-400">Pending Overdue</strong>.
+                  Aturan Toleransi: <strong className="text-[var(--color-primary)]">fdSent = fdEstimasi + 1 hari itu max (H+1)</strong>. Status Penagihan: <strong className="text-emerald-600 dark:text-emerald-400 font-semibold">{billedCount} SJ Sudah Dibuat Bill</strong> dan <strong className="text-amber-600 dark:text-amber-400 font-semibold">{unbilledCount} SJ Belum Dibuat Bill</strong>.
                 </span>
               </div>
             </div>
@@ -303,17 +353,21 @@ export function DeliveryEstimasiDetailModal({
           </div>
         </div>
 
-        {/* ── KPI Ribbon Ringkasan ── */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-2.5 p-2.5 sm:p-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] text-xs shrink-0">
-          {/* Total Target Estimasi */}
+        {/* ── KPI Ribbon Ringkasan (6 Kartu Metrik) ── */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-2.5 p-2.5 sm:p-4 border-b border-[var(--color-border)] bg-[var(--color-surface)] text-xs shrink-0">
+          {/* 1. Total Target Estimasi */}
           <div
-            onClick={() => setStatusFilter('all')}
+            onClick={() => {
+              setStatusFilter('all')
+              setBillingFilter('all')
+            }}
             className={cn(
               "p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer select-none",
-              statusFilter === 'all'
+              statusFilter === 'all' && billingFilter === 'all'
                 ? "bg-[var(--color-primary)]/10 border-[var(--color-primary)]/40 ring-1 ring-[var(--color-primary)]/60 shadow-xs"
                 : "border-[var(--color-border)] bg-[var(--color-neutral)]/30 hover:bg-[var(--color-neutral)]/50"
             )}
+            title="Tampilkan semua target estimasi"
           >
             <span className="text-[10px] sm:text-[10.5px] uppercase tracking-wider text-[var(--color-secondary)] block font-medium">
               Target Estimasi
@@ -323,9 +377,9 @@ export function DeliveryEstimasiDetailModal({
             </span>
           </div>
 
-          {/* Pending Overdue (> H+1) */}
+          {/* 2. Pending Overdue (> H+1) */}
           <div
-            onClick={() => setStatusFilter('overdue')}
+            onClick={() => setStatusFilter((prev) => (prev === 'overdue' ? 'all' : 'overdue'))}
             className={cn(
               "p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer select-none",
               overdueCount > 0
@@ -333,9 +387,10 @@ export function DeliveryEstimasiDetailModal({
                 : "bg-[var(--color-neutral)]/30 border-[var(--color-border)] text-[var(--color-secondary)]",
               statusFilter === 'overdue' && "ring-2 ring-rose-500 shadow-xs"
             )}
+            title="Filter SJ Pending Overdue (> H+1)"
           >
             <div className="flex items-center justify-between text-[10px] sm:text-[10.5px] uppercase tracking-wider font-semibold">
-              <span className="truncate">⚠️ Pending (&gt; H+1)</span>
+              <span className="truncate">⚠️ Overdue (&gt; H+1)</span>
               {overdueCount > 0 && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shrink-0 ml-1" />}
             </div>
             <span className="text-sm sm:text-lg font-bold font-mono">
@@ -343,9 +398,9 @@ export function DeliveryEstimasiDetailModal({
             </span>
           </div>
 
-          {/* Pending Toleransi (<= H+1) */}
+          {/* 3. Pending Toleransi (<= H+1) */}
           <div
-            onClick={() => setStatusFilter('tolerance')}
+            onClick={() => setStatusFilter((prev) => (prev === 'tolerance' ? 'all' : 'tolerance'))}
             className={cn(
               "p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer select-none",
               toleranceCount > 0
@@ -353,6 +408,7 @@ export function DeliveryEstimasiDetailModal({
                 : "bg-[var(--color-neutral)]/30 border-[var(--color-border)] text-[var(--color-secondary)]",
               statusFilter === 'tolerance' && "ring-2 ring-amber-500 shadow-xs"
             )}
+            title="Filter SJ Dalam Toleransi H+1"
           >
             <span className="text-[10px] sm:text-[10.5px] uppercase tracking-wider text-[var(--color-secondary)] block font-medium truncate">
               🕒 Toleransi H+1
@@ -362,30 +418,92 @@ export function DeliveryEstimasiDetailModal({
             </span>
           </div>
 
-          {/* Realisasi Terkirim */}
+          {/* 4. Realisasi Terkirim */}
           <div
-            onClick={() => setStatusFilter('sent')}
+            onClick={() => setStatusFilter((prev) => (prev === 'sent' ? 'all' : 'sent'))}
             className={cn(
               "p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer select-none",
               sentCount > 0
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15"
+                ? "bg-sky-500/10 border-sky-500/30 text-sky-700 dark:text-sky-300 hover:bg-sky-500/15"
                 : "bg-[var(--color-neutral)]/30 border-[var(--color-border)] text-[var(--color-secondary)]",
-              statusFilter === 'sent' && "ring-2 ring-emerald-500 shadow-xs"
+              statusFilter === 'sent' && "ring-2 ring-sky-500 shadow-xs"
             )}
+            title="Filter SJ yang sudah terkirim riil"
           >
             <span className="text-[10px] sm:text-[10.5px] uppercase tracking-wider text-[var(--color-secondary)] block font-medium truncate">
-              ✅ Sudah Terkirim
+              🚚 Sudah Terkirim
             </span>
             <span className="text-sm sm:text-lg font-bold font-mono">
               {formatNumber(sentCount)} <span className="text-xs font-normal">SJ</span>
             </span>
           </div>
+
+          {/* 5. Sudah Dibuat Bill */}
+          <div
+            onClick={() => setBillingFilter((prev) => (prev === 'billed' ? 'all' : 'billed'))}
+            className={cn(
+              "p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer select-none",
+              billedCount > 0
+                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-500/15"
+                : "bg-[var(--color-neutral)]/30 border-[var(--color-border)] text-[var(--color-secondary)]",
+              billingFilter === 'billed' && "ring-2 ring-emerald-500 shadow-xs"
+            )}
+            title="Filter SJ yang SUDAH dibuatkan bill / invoice"
+          >
+            <div className="flex items-center justify-between text-[10px] sm:text-[10.5px] uppercase tracking-wider font-semibold">
+              <span className="truncate">🧾 Sudah Dibuat Bill</span>
+              <span className="text-[9px] font-mono px-1 py-0.2 rounded bg-emerald-500/20 text-emerald-700 dark:text-emerald-300">
+                {totalCount > 0 ? Math.round((billedCount / totalCount) * 100) : 0}%
+              </span>
+            </div>
+            <div className="flex items-baseline justify-between gap-1 mt-0.5">
+              <span className="text-sm sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400">
+                {formatNumber(billedCount)} <span className="text-xs font-normal">SJ</span>
+              </span>
+              <span className="text-[10px] text-[var(--color-secondary)] font-mono truncate">
+                {formatNumber(billedPack)} coly
+              </span>
+            </div>
+            <div className="text-[9.5px] text-[var(--color-secondary)] font-mono mt-0.5 truncate">
+              {billedWeight.toLocaleString('id-ID', { maximumFractionDigits: 1 })} kg
+            </div>
+          </div>
+
+          {/* 6. Belum Dibuat Bill */}
+          <div
+            onClick={() => setBillingFilter((prev) => (prev === 'unbilled' ? 'all' : 'unbilled'))}
+            className={cn(
+              "p-2 sm:p-2.5 rounded-xl border transition-all cursor-pointer select-none",
+              unbilledCount > 0
+                ? "bg-amber-500/10 border-amber-500/30 text-amber-700 dark:text-amber-300 hover:bg-amber-500/15"
+                : "bg-[var(--color-neutral)]/30 border-[var(--color-border)] text-[var(--color-secondary)]",
+              billingFilter === 'unbilled' && "ring-2 ring-amber-500 shadow-xs"
+            )}
+            title="Filter SJ yang BELUM dibuatkan bill / invoice"
+          >
+            <div className="flex items-center justify-between text-[10px] sm:text-[10.5px] uppercase tracking-wider font-semibold">
+              <span className="truncate">⏳ Belum Dibuat Bill</span>
+              {unbilledCount > 0 && <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse shrink-0 ml-1" />}
+            </div>
+            <div className="flex items-baseline justify-between gap-1 mt-0.5">
+              <span className="text-sm sm:text-lg font-bold font-mono text-amber-600 dark:text-amber-400">
+                {formatNumber(unbilledCount)} <span className="text-xs font-normal">SJ</span>
+              </span>
+              <span className="text-[10px] text-[var(--color-secondary)] font-mono truncate">
+                {formatNumber(unbilledPack)} coly
+              </span>
+            </div>
+            <div className="text-[9.5px] text-[var(--color-secondary)] font-mono mt-0.5 truncate">
+              {unbilledWeight.toLocaleString('id-ID', { maximumFractionDigits: 1 })} kg
+            </div>
+          </div>
         </div>
 
         {/* ── Filter Toolbar ── */}
         <div className="p-2.5 sm:p-4 border-b border-[var(--color-border)] bg-[var(--color-neutral)]/20 flex flex-col gap-2 text-xs shrink-0">
-          {/* Row 1: Status Filter Chips (Smooth Horizontal Scroll on Mobile) */}
+          {/* Row 1: Status Pengiriman & Status Penagihan Filters */}
           <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-none py-0.5 sm:flex-wrap">
+            {/* Status Kirim */}
             <button
               type="button"
               onClick={() => setStatusFilter('all')}
@@ -437,6 +555,51 @@ export function DeliveryEstimasiDetailModal({
               <CheckCircle2 size={12} />
               <span>Sudah Terkirim ({sentCount})</span>
             </button>
+
+            {/* Separator Divider */}
+            <span className="hidden sm:inline-block w-px h-5 bg-[var(--color-border)] mx-1 shrink-0" />
+
+            {/* Status Billing Filters */}
+            <div className="inline-flex rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-0.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setBillingFilter('all')}
+                className={cn(
+                  "px-2 py-0.5 rounded-md font-medium text-[11px] transition cursor-pointer",
+                  billingFilter === 'all'
+                    ? "bg-[var(--color-neutral)] text-[var(--color-primary)] font-semibold shadow-2xs"
+                    : "text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
+                )}
+              >
+                Semua Bill
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingFilter('billed')}
+                className={cn(
+                  "px-2 py-0.5 rounded-md font-medium text-[11px] transition cursor-pointer flex items-center gap-1",
+                  billingFilter === 'billed'
+                    ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 font-semibold shadow-2xs"
+                    : "text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
+                )}
+              >
+                <CheckCircle2 size={11} className="text-emerald-600 dark:text-emerald-400" />
+                <span>Sudah Bill ({billedCount})</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillingFilter('unbilled')}
+                className={cn(
+                  "px-2 py-0.5 rounded-md font-medium text-[11px] transition cursor-pointer flex items-center gap-1",
+                  billingFilter === 'unbilled'
+                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 font-semibold shadow-2xs"
+                    : "text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
+                )}
+              >
+                <AlertCircle size={11} className="text-amber-600 dark:text-amber-400" />
+                <span>Belum Bill ({unbilledCount})</span>
+              </button>
+            </div>
           </div>
 
           {/* Row 2: Moda Filter + View Mode Switcher + Search Input + Refresh */}
@@ -453,7 +616,7 @@ export function DeliveryEstimasiDetailModal({
                     : "text-[var(--color-secondary)] hover:text-[var(--color-primary)]"
                 )}
               >
-                Semua
+                Semua Moda
               </button>
               <button
                 type="button"
@@ -520,7 +683,7 @@ export function DeliveryEstimasiDetailModal({
                 type="text"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Cari SJ, customer, supir..."
+                placeholder="Cari SJ, customer, no invoice, supir..."
                 className="w-full pl-8 pr-7 py-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-xs text-[var(--color-primary)] placeholder:text-[var(--color-secondary)] focus:outline-hidden focus:ring-1 focus:ring-sky-500"
               />
               {search && (
@@ -597,11 +760,12 @@ export function DeliveryEstimasiDetailModal({
                   {search ? 'Coba ubah kata kunci pencarian atau reset filter status.' : 'Belum ada target pada kriteria yang dipilih.'}
                 </p>
               </div>
-              {(search || statusFilter !== 'all' || selectedModa !== 'all') && (
+              {(search || statusFilter !== 'all' || billingFilter !== 'all' || selectedModa !== 'all') && (
                 <button
                   type="button"
                   onClick={() => {
                     setStatusFilter('all')
+                    setBillingFilter('all')
                     setSelectedModa('all')
                     setSearch('')
                   }}
@@ -786,6 +950,51 @@ export function DeliveryEstimasiDetailModal({
                       </div>
                     </div>
 
+                    {/* Status Penagihan / Bill Box */}
+                    <div className="p-2 rounded-xl bg-[var(--color-neutral)]/40 border border-[var(--color-border)]/70 flex items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <Receipt size={12} className="text-[var(--color-secondary)] shrink-0" />
+                        <span className="text-[9.5px] uppercase font-semibold text-[var(--color-secondary)]">Bill:</span>
+                        {item.isBilled ? (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-semibold text-[10px] bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                            <CheckCircle2 size={10} />
+                            <span>Sudah Dibuat Bill</span>
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded font-medium text-[10px] bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                            <AlertCircle size={10} />
+                            <span>Belum Dibuat Bill</span>
+                          </span>
+                        )}
+                      </div>
+
+                      {item.isBilled && item.invNos ? (
+                        <div className="flex items-center gap-1 shrink-0 flex-wrap justify-end">
+                          {item.invNos.split(',').map((inv) => {
+                            const trimmed = inv.trim()
+                            return (
+                              <Link
+                                key={trimmed}
+                                to={ROUTES.BILLING_VALIDATION_DETAIL(trimmed)}
+                                className="font-mono text-[10.5px] text-sky-600 dark:text-sky-400 hover:underline font-semibold inline-flex items-center gap-0.5"
+                                title={`Buka Validasi Invoice: ${trimmed}`}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <span>{trimmed}</span>
+                                <ExternalLink size={9} />
+                              </Link>
+                            )
+                          })}
+                        </div>
+                      ) : (
+                        item.fdListCode && (
+                          <span className="text-[9.5px] font-mono text-[var(--color-secondary)]">
+                            List: {item.fdListCode}
+                          </span>
+                        )
+                      )}
+                    </div>
+
                     {/* Timeline Dates & Action */}
                     <div className="pt-1 border-t border-[var(--color-border)]/50 flex items-center justify-between gap-2 text-[10.5px] text-[var(--color-secondary)]">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -818,10 +1027,11 @@ export function DeliveryEstimasiDetailModal({
                   <th className="py-2.5 px-3">No. Surat Jalan</th>
                   <th className="py-2.5 px-3">Moda</th>
                   <th className="py-2.5 px-3">Customer & Marking</th>
+                  <th className="py-2.5 px-3 text-center min-w-[130px]">Status Penagihan</th>
                   <th className="py-2.5 px-3 text-right">Koli / Coly</th>
                   <th className="py-2.5 px-3 text-right">Tonase Berat</th>
                   <th className="py-2.5 px-3">Armada & Supir</th>
-                  <th className="py-2.5 px-3 text-center min-w-[130px]">Status</th>
+                  <th className="py-2.5 px-3 text-center min-w-[130px]">Status Kirim</th>
                   <th className="py-2.5 px-3 text-center w-16">Aksi</th>
                 </tr>
               </thead>
@@ -890,6 +1100,51 @@ export function DeliveryEstimasiDetailModal({
                           {item.fdMarkingNo && <span>• {item.fdMarkingNo}</span>}
                           {item.fdCustCode && <span>({item.fdCustCode})</span>}
                         </div>
+                      </td>
+
+                      {/* Status Penagihan */}
+                      <td className="py-2.5 px-3 text-center">
+                        {item.isBilled ? (
+                          <div className="inline-flex flex-col items-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-semibold text-[10.5px] whitespace-nowrap bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30">
+                              <Receipt size={11} />
+                              <span>Sudah Ada Bill</span>
+                            </span>
+                            {item.invNos && (
+                              <div className="flex items-center gap-1 mt-0.5 flex-wrap justify-center max-w-[150px]">
+                                {item.invNos.split(',').map((inv) => {
+                                  const trimmed = inv.trim()
+                                  return (
+                                    <Link
+                                      key={trimmed}
+                                      to={ROUTES.BILLING_VALIDATION_DETAIL(trimmed)}
+                                      className="text-[10px] font-mono text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-0.5"
+                                      title={`Lihat Detail Validasi Invoice: ${trimmed}`}
+                                    >
+                                      <span>{trimmed}</span>
+                                      <ExternalLink size={9} />
+                                    </Link>
+                                  )
+                                })}
+                              </div>
+                            )}
+                            {item.invDates && (
+                              <span className="text-[9px] text-[var(--color-secondary)] font-mono">
+                                {item.invDates}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="inline-flex flex-col items-center">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium text-[10.5px] whitespace-nowrap bg-amber-500/15 text-amber-700 dark:text-amber-300 border border-amber-500/30">
+                              <AlertCircle size={11} />
+                              <span>Belum Ada Bill</span>
+                            </span>
+                            <span className="text-[9px] text-[var(--color-secondary)] mt-0.5 font-mono">
+                              List: {item.fdListCode || '—'}
+                            </span>
+                          </div>
+                        )}
                       </td>
 
                       {/* Koli */}
@@ -1002,6 +1257,16 @@ export function DeliveryEstimasiDetailModal({
               {filteredWeight.toLocaleString('id-ID', { maximumFractionDigits: 1 })}
             </strong>{' '}
             kg
+            <span className="hidden sm:inline mx-1.5 text-[var(--color-border)]">|</span>
+            <span className="inline-block sm:inline mt-1 sm:mt-0 font-medium">
+              <span className="text-emerald-600 dark:text-emerald-400 font-semibold">
+                ✓ Sudah Bill: {filteredBilledCount} SJ ({formatNumber(filteredBilledPack)} coly)
+              </span>
+              {' • '}
+              <span className="text-amber-600 dark:text-amber-400 font-semibold">
+                ⏳ Belum Bill: {filteredUnbilledCount} SJ ({formatNumber(filteredUnbilledPack)} coly)
+              </span>
+            </span>
           </div>
           <Button variant="secondary" size="sm" onClick={onClose} className="w-full sm:w-auto cursor-pointer">
             Tutup

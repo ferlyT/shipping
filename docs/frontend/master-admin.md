@@ -8,17 +8,24 @@ Dokumen ini merangkum 3 domain operasional: **Master Data Pelanggan** (`customer
 - **Katalog Master Data Resmi (SSOT `tbCustomers`)**:
   - Seluruh nama pelanggan mengutamakan `tbCustomers.fdCustName`.
   - Format penulisan petik FoxPro dinormalkan menggunakan helper `displayCustName`.
+- **Infinite Scroll Otomatis & Status Progress (`ListPage.tsx`)**:
+  - Menggantikan pagination manual dengan `useInfiniteQuery` (@tanstack/react-query) dan `IntersectionObserver` sentinel untuk pemuatan data tanpa jeda saat halaman digulir.
+  - Ukuran batch: 30 pelanggan per request, dilengkapi indikator loading bawah serta tombol fallback manual "Muat Lebih Banyak".
+  - Bar status bawah interaktif: Menampilkan jumlah data termuat vs total pelanggan, persentase progress bar visual, dan tombol "Ke Atas" (ArrowUp) untuk smooth scroll ke puncak tabel.
+  - Floating button "Scroll to Top" yang muncul otomatis saat scroll posisi > 400px.
 - **Toolbar Pelanggan Cerdas (`CustomerToolbar.tsx`)**:
   - Terhubung dengan `SearchSuggestionsDropdown` (`GET /api/customers/suggestions`).
   - Pencarian debounced 350ms, shortcut keyboard `Ctrl+K` untuk fokus, `Esc` untuk menutup saran/membersihkan pencarian, dan `Enter` untuk submit instan.
   - Dukungan navigasi keyboard panah atas/bawah (`↑` / `↓`) untuk memilih entri saran autocomplete secara cepat.
   - Sinkronisasi URL dua arah: parameter query `?search=` tersinkronisasi otomatis dengan input pencarian, memungkinkan bookmarking dan deep-linking.
   - Filter status (Aktif/Discontinued), filter sales in-charge, dan switch tampilan (Tabel, Grid, Shortlist).
-  - Transisi loading halus: eliminasi layar kedip (*flicker*) saat background fetch (`isRefreshing`) dengan mempertahankan tabel aktif semi-transparan.
+  - Transisi loading halus: eliminasi layar kedip (*flicker*) saat background fetch (`isRefreshing`) dengan mempertahankan data aktif tetap 100% terlihat tanpa opasitas redup saat penambahan batch baru (`!isFetchingNextPage`).
+
 - **Modal Detail Pelanggan (`CustomerDetailModal.tsx`)**:
   - Tab 1: *Ringkasan & Kontak* (PIC, sales, telepon, WA, alamat, status blokir `fdBlocked`).
   - Tab 2: *Tier & Finansial* (Tier aktif, omset tahun berjalan, progress bar, riwayat transaksi).
-  - Tab 3: *Daftar Alamat* (Alamat kontak dan gudang operasional cabang `vwCustomerContacts`).
+  - Tab 3: *Komoditas* (Analisis komposisi 2 bar proporsi Laut & Udara dengan satuan dinamis m³, CTR, PCS, kg serta multi-line chart tren bulanan Jan–Des berbasis Recharts).
+  - Tab 4: *Daftar Alamat* (Alamat kontak dan gudang operasional cabang `vwCustomerContacts`).
 
 ---
 

@@ -200,3 +200,13 @@ export const MarkingListQuerySchema = z.object({
   year: z.string().optional(),
 })
 
+export const UpdateMarkingExitDateSchema = z.object({
+  exitDate: z.string().refine((val) => !isNaN(Date.parse(val)), {
+    message: 'Format tanggal exit tidak valid',
+  }),
+  notes: z.string().max(500).optional(),
+})
+
+export type UpdateMarkingExitDateInput = z.infer<typeof UpdateMarkingExitDateSchema>
+
+

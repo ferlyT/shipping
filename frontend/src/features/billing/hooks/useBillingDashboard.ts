@@ -6,6 +6,9 @@ import type {
   BillingTrends,
   BillingByEmployeeDaily,
   SjVsBillPoint,
+  UnbilledSjDetailItem,
+  BatchExitComparisonSummary,
+  BatchExitItem,
 } from '../types/billing.types'
 
 export interface TargetCategories {
@@ -35,17 +38,27 @@ export interface BillingDashboardData {
   byEmployeeSeries: BillingByEmployeeDaily['series']
   byEmployeeData: BillingByEmployeeDaily['data']
   sjVsBillData: SjVsBillPoint[]
+  unbilledSjDetails: UnbilledSjDetailItem[]
+  batchExitSummary?: BatchExitComparisonSummary
+  batchExitBatches: BatchExitItem[]
   isLoadingKpi: boolean
   isLoadingTrends: boolean
   isLoadingByEmployee: boolean
   isLoadingSjVsBill: boolean
+  isLoadingBatchExit: boolean
 }
 
 export function useBillingDashboard(
   daysFilter: number = 30,
   selectedYear?: number,
-  selectedMonth?: number
+  selectedMonth?: number,
+  batchExitAllTime: boolean = false,
+  employeeDaysFilter?: number,
+  sjDaysFilter?: number
 ): BillingDashboardData {
+  const actualEmployeeDays = employeeDaysFilter ?? daysFilter
+  const actualSjDays = sjDaysFilter ?? daysFilter
+
   const { data: kpiData, isLoading: isLoadingKpi } = useQuery({
     queryKey: ['billingKpi', selectedYear, selectedMonth],
     queryFn: async () => {
@@ -65,22 +78,38 @@ export function useBillingDashboard(
   })
 
   const { data: byEmployeeRes, isLoading: isLoadingByEmployee } = useQuery({
-    queryKey: ['billingByEmployeeDaily', daysFilter],
+    queryKey: ['billingByEmployeeDaily', actualEmployeeDays],
     queryFn: async () => {
-      const res = await billingApi.byEmployeeDailyChart({ days: daysFilter })
+      const res = await billingApi.byEmployeeDailyChart({ days: actualEmployeeDays })
       return res.data as { data: BillingByEmployeeDaily }
     },
     staleTime: 60_000,
   })
 
   const { data: sjVsBillRes, isLoading: isLoadingSjVsBill } = useQuery({
-    queryKey: ['billingSjVsBill', daysFilter],
+    queryKey: ['billingSjVsBill', actualSjDays],
     queryFn: async () => {
-      const res = await billingApi.sjVsBillChart({ days: daysFilter })
+      const res = await billingApi.sjVsBillChart({ days: actualSjDays })
       return res.data as { data: { data: SjVsBillPoint[] } }
     },
     staleTime: 60_000,
   })
+
+  const { data: unbilledSjDetailsRes } = useQuery({
+    queryKey: ['billingSjVsBillUnbilledDetails'],
+    queryFn: async () => {
+      const res = await billingApi.sjVsBillDetails({ pic: 'all', type: 'unbilled' })
+      return res.data as { data: UnbilledSjDetailItem[] }
+    },
+    staleTime: 60_000,
+  })
+
+  const rawUnbilledDetails = unbilledSjDetailsRes?.data
+  const unbilledSjDetails: UnbilledSjDetailItem[] = Array.isArray(rawUnbilledDetails)
+    ? rawUnbilledDetails
+    : Array.isArray((rawUnbilledDetails as any)?.data)
+    ? (rawUnbilledDetails as any).data
+    : []
 
   const byEmployeeSeries = byEmployeeRes?.data.series || []
 
@@ -120,17 +149,46 @@ export function useBillingDashboard(
       const unbilledFerly = Number(row['unbilled_ferly']) || 0
       const unbilledRico = Number(row['unbilled_rico']) || 0
 
+      const totalSjAll = sjYati + sjKiki + sjThara + sjFerly + sjRico
+      const totalBillAll = billYati + billKiki + billThara + billFerly + billRico
+      const totalUnbilledAll = unbilledYati + unbilledKiki + unbilledThara + unbilledFerly + unbilledRico
+
+      const unbilledListYati = Number(row['unbilled_list_yati']) || 0
+      const unbilledListKiki = Number(row['unbilled_list_kiki']) || 0
+      const unbilledListThara = Number(row['unbilled_list_thara']) || 0
+      const unbilledListFerly = Number(row['unbilled_list_ferly']) || 0
+      const unbilledListRico = Number(row['unbilled_list_rico']) || 0
+      const totalUnbilledListAll = unbilledListYati + unbilledListKiki + unbilledListThara + unbilledListFerly + unbilledListRico
+
       return {
         ...row,
+        sj: totalSjAll,
+        bill: totalBillAll,
+        unbilled: totalUnbilledAll,
+        unbilledList: totalUnbilledListAll,
         sj_yatiKiki: sjYati + sjKiki,
         bill_yatiKiki: billYati + billKiki,
         unbilled_yatiKiki: unbilledYati + unbilledKiki,
-        sj_all: sjYati + sjKiki + sjThara + sjFerly + sjRico,
-        bill_all: billYati + billKiki + billThara + billFerly + billRico,
-        unbilled_all: unbilledYati + unbilledKiki + unbilledThara + unbilledFerly + unbilledRico,
+        sj_all: totalSjAll,
+        bill_all: totalBillAll,
+        unbilled_all: totalUnbilledAll,
+        unbilled_list_all: totalUnbilledListAll,
       }
     })
   }, [sjVsBillRaw])
+
+  const { data: batchExitRes, isLoading: isLoadingBatchExit } = useQuery({
+    queryKey: ['billingBatchExitComparison', selectedYear, selectedMonth, batchExitAllTime],
+    queryFn: async () => {
+      const res = await billingApi.getBatchExitComparison({
+        year: selectedYear,
+        month: selectedMonth,
+        allTime: batchExitAllTime,
+      })
+      return res.data as { data: import('../types/billing.types').BatchExitComparisonResponse }
+    },
+    staleTime: 60_000,
+  })
 
   return {
     kpis: kpiData?.data,
@@ -139,9 +197,13 @@ export function useBillingDashboard(
     byEmployeeSeries,
     byEmployeeData,
     sjVsBillData,
+    unbilledSjDetails,
+    batchExitSummary: batchExitRes?.data.summary,
+    batchExitBatches: batchExitRes?.data.batches || [],
     isLoadingKpi,
     isLoadingTrends,
     isLoadingByEmployee,
     isLoadingSjVsBill,
+    isLoadingBatchExit,
   }
 }

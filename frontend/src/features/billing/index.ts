@@ -8,6 +8,8 @@ export { ReportDesignerPage, ReportDesignerPage as BillingReportDesignerPage } f
 export { ValidationListPage } from './pages/ValidationListPage'
 export { ValidationDetailPage } from './pages/ValidationDetailPage'
 export { PairingLocalChargePage, default as BillingPairingLocalChargePage } from './pages/PairingLocalChargePage'
+export { default as OmsetVolumeReportPage } from './pages/OmsetVolumeReportPage'
+export { default as CargoVolumeReportPage } from './pages/CargoVolumeReportPage'
 
 // Services
 export { billingApi } from './services/billing.service'

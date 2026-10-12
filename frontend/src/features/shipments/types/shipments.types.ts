@@ -125,6 +125,10 @@ export interface Shipment {
   fdM3: number | null
   fdCancel?: number | null
   fdLocalTrackingNo?: string | null
+  fdEmp1?: string | null
+  fdCreatedDate?: string | null
+  fdEmp2?: string | null
+  fdUpdate?: string | null
   shipmentStatus?: ShipmentStatus
   invoice?: ShipmentInvoice | null
 }

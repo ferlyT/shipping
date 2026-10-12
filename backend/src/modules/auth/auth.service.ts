@@ -36,8 +36,20 @@ export async function loginUser(input: LoginInput) {
 
   // Fetch permissions
   const { rolesService } = await import('../roles/roles.service')
-  const permissionsList = await rolesService.getRolePermissions(user.role)
-  const permissions = permissionsList.filter(p => p.canView).map(p => p.path)
+  let permissionsList = await rolesService.getRolePermissions(user.role)
+  if (user.role === 'superadmin' && permissionsList.length < 10) {
+    const adminPerms = await rolesService.getRolePermissions('admin')
+    if (adminPerms.length > 0) {
+      permissionsList = adminPerms
+    }
+  }
+
+  let permissions = permissionsList.filter(p => p.canView).map(p => p.path)
+  if (user.role === 'admin' || user.role === 'superadmin') {
+    if (!permissions.includes('/*')) {
+      permissions.unshift('/*')
+    }
+  }
 
   const fdEmpCode = user.fdEmpCode ? user.fdEmpCode.trim() : null
   const fdEmpName = user.employee?.fdEmpName ? user.employee.fdEmpName.trim() : null
@@ -50,11 +62,22 @@ export async function loginUser(input: LoginInput) {
 
   logger.info('User login berhasil', { username: input.username, fdEmpCode })
   
-  // Determine default route
-  const defaultPermission = permissionsList.find(p => p.isDefault)
+  // Determine default route (hanya rute halaman valid yang dapat menjadi defaultRoute)
+  const nonPagePaths = [
+    '/mshipping/finance/billing/attachments',
+    '/mshipping/finance/billing/attachments/delete',
+    '/mshipping/finance/billing/validation/summary',
+    '/mshipping/finance/billing/view-consignee',
+    '/mshipping/finance/billing/view_consignee',
+    '/mshipping/master/customers/tier',
+  ]
+  const defaultPermission = permissionsList.find(p => p.isDefault && !nonPagePaths.includes(p.path))
+  const candidatePermissions = permissions.filter(p => p !== '/*' && !nonPagePaths.includes(p))
   const defaultRoute = defaultPermission 
     ? defaultPermission.path 
-    : (permissions.length > 0 ? permissions[0] : null)
+    : (user.role === 'admin' || user.role === 'superadmin'
+        ? '/mshipping/overview/dashboard'
+        : (candidatePermissions.length > 0 ? candidatePermissions[0] : (permissions.length > 0 ? permissions[0] : null)))
 
   return {
     token,

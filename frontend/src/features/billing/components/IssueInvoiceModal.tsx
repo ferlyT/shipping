@@ -21,6 +21,7 @@ import {
   Loader2,
   AlertTriangle,
   Mic,
+  MicOff,
   Copy,
   UserCheck,
   Lock,
@@ -71,7 +72,7 @@ export function IssueInvoiceModal({
 }: IssueInvoiceModalProps) {
   const queryClient = useQueryClient()
   const { user } = useAuthStore()
-  const { suppressVoice } = useVoiceAssistantStore()
+  const { suppressVoice, isMuted, toggleVoiceMute } = useVoiceAssistantStore()
 
   const [employees, setEmployees] = useState<EmployeeItem[]>([])
   const [isLoadingEmployees, setIsLoadingEmployees] = useState(false)
@@ -115,11 +116,11 @@ export function IssueInvoiceModal({
     continuous: false,
     interimResults: true,
     onEnd: () => {
-      // Auto re-arm standby jika modal konfirmasi masih terbuka dan tidak distop manual
-      if (isOpenRef.current && !isManuallyStoppedRef.current) {
+      // Auto re-arm standby jika modal konfirmasi masih terbuka, tidak distop manual, dan TIDAK MUTED TERPUSAT
+      if (isOpenRef.current && !isManuallyStoppedRef.current && !useVoiceAssistantStore.getState().isMuted) {
         if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
         rearmTimerRef.current = setTimeout(() => {
-          if (isOpenRef.current && !isManuallyStoppedRef.current) {
+          if (isOpenRef.current && !isManuallyStoppedRef.current && !useVoiceAssistantStore.getState().isMuted) {
             startListening()
           }
         }, 200)
@@ -127,12 +128,14 @@ export function IssueInvoiceModal({
     },
   })
 
-  // Standby otomatis mendengarkan seketika saat modal konfirmasi dibuka
+  // Standby otomatis mendengarkan seketika saat modal konfirmasi dibuka HANYA JIKA !isMuted
   useEffect(() => {
-    if (isOpen && isSupported) {
+    if (isOpen && isSupported && !isMuted) {
       isManuallyStoppedRef.current = false
       const timer = setTimeout(() => {
-        startListening()
+        if (isOpenRef.current && !isManuallyStoppedRef.current && !useVoiceAssistantStore.getState().isMuted) {
+          startListening()
+        }
       }, 150)
       return () => {
         clearTimeout(timer)
@@ -142,10 +145,25 @@ export function IssueInvoiceModal({
       isManuallyStoppedRef.current = true
       if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
       stopListening()
+      resetTranscript()
     }
-  }, [isOpen, isSupported, startListening, stopListening])
+  }, [isOpen, isSupported, isMuted, startListening, stopListening, resetTranscript])
 
-  // Shortcut Alt+V di dalam modal konfirmasi untuk toggle mic lokal
+  // KONTROL TERPUSAT: Bereaksi seketika terhadap perubahan isMuted (dari Floating HUD atau Alt+V) saat modal konfirmasi terbuka
+  useEffect(() => {
+    if (!isOpen) return
+    if (isMuted) {
+      isManuallyStoppedRef.current = true
+      if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
+      stopListening()
+      resetTranscript()
+    } else if (isSupported && isOpenRef.current) {
+      isManuallyStoppedRef.current = false
+      startListening()
+    }
+  }, [isMuted, isOpen, isSupported, startListening, stopListening, resetTranscript])
+
+  // Shortcut Alt+V di dalam modal konfirmasi untuk toggle mic terpusat
   useEffect(() => {
     if (!isOpen) return
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -153,19 +171,12 @@ export function IssueInvoiceModal({
       if (isAltV) {
         e.preventDefault()
         e.stopPropagation()
-        if (isListening) {
-          isManuallyStoppedRef.current = true
-          if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
-          stopListening()
-        } else {
-          isManuallyStoppedRef.current = false
-          startListening()
-        }
+        toggleVoiceMute() // Sinkronkan ke Master Control terpusat!
       }
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [isOpen, isListening, startListening, stopListening])
+  }, [isOpen, toggleVoiceMute])
 
   // Sinkronisasi hasConfirmedUnderchargeRef agar selalu mutakhir tanpa stale closure
   useEffect(() => {
@@ -707,28 +718,23 @@ export function IssueInvoiceModal({
             <button
               type="button"
               onClick={() => {
-                if (isListening) {
-                  isManuallyStoppedRef.current = true
-                  if (rearmTimerRef.current) clearTimeout(rearmTimerRef.current)
-                  stopListening()
-                } else {
-                  isManuallyStoppedRef.current = false
-                  startListening()
-                }
+                toggleVoiceMute() // Sinkronkan ke Master Control terpusat!
               }}
               className={cn(
                 'px-2.5 py-1.5 rounded-lg border text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-2xs',
-                isListening
+                !isMuted && isListening
                   ? 'bg-emerald-500/10 border-emerald-500/35 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/15'
                   : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-secondary)] hover:text-[var(--color-primary)]'
               )}
               title={
-                isListening
+                isMuted
+                  ? 'Mikrofon dijeda terpusat. Klik atau tekan Alt+V untuk aktifkan'
+                  : isListening
                   ? "Standby Suara Aktif: Katakan 'Ya' / 'Ok' / 'Terbitkan' atau 'Batal' / 'Cancel'. Klik untuk jeda (Alt+V)."
                   : 'Klik untuk aktifkan standby suara (Alt+V)'
               }
             >
-              {isListening ? (
+              {!isMuted && isListening ? (
                 <span className="relative flex h-2 w-2 shrink-0">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                   <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
@@ -736,14 +742,18 @@ export function IssueInvoiceModal({
               ) : (
                 <span className="h-2 w-2 rounded-full bg-slate-400 shrink-0" />
               )}
-              <Mic
-                className={cn(
-                  'w-3.5 h-3.5',
-                  isListening ? 'text-emerald-500' : 'text-[var(--color-secondary)]'
-                )}
-              />
+              {isMuted ? (
+                <MicOff className="w-3.5 h-3.5 text-slate-400" />
+              ) : (
+                <Mic
+                  className={cn(
+                    'w-3.5 h-3.5',
+                    isListening ? 'text-emerald-500' : 'text-[var(--color-secondary)]'
+                  )}
+                />
+              )}
               <span className="font-medium text-[11px] max-w-[150px] sm:max-w-[200px] truncate">
-                {isListening
+                {!isMuted && isListening
                   ? interimTranscript || transcript || 'Standby ("Ya" / "Batal")'
                   : 'Mikrofon Jeda'}
               </span>

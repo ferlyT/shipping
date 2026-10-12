@@ -1,4 +1,4 @@
-﻿# 🚚 Modul Surat Jalan & Inventori Gudang (`src/features/delivery-orders/`)
+# 🚚 Modul Surat Jalan & Inventori Gudang (`src/features/delivery-orders/`)
 
 Pusat kendali distribusi pengantaran barang, inventori kargo masuk gudang (`fdListCode`), penerbitan Surat Jalan baru, riwayat pengiriman, dan pencetakan continuous form standar FoxPro.
 
@@ -99,7 +99,17 @@ Pusat kendali distribusi pengantaran barang, inventori kargo masuk gudang (`fdLi
        - Mode Compare: Tabel harian target estimasi, realisasi, % ketercapaian, selisih SJ, koli, berat, serta kolom Sesi Batch & Jam Cetak berdesain stacked structured cardlets vertikal (dot status warna, label sesi PAGI/SORE, jam WIB presisi, badge counter volume SJ ramping interaktif yang dapat diklik untuk membuka modal rincian Surat Jalan batch dengan hierarki grouping Moda [Sea/Air] → Cabang → Marking).
        - Mode Batch: Tabel rincian per sesi batch konfirmasi `tbDeliveryConfirm`.
        - Ekspor Excel (.xlsx) instan dengan dual-sheet (`Estimasi_vs_Realisasi` lengkap dengan kolom pending overdue/toleransi & `Sesi_Batch_tbDeliveryConfirm`).
-      - **Modal Rincian Target Estimasi & Pending H+1 (DeliveryEstimasiDetailModal.tsx)**:
+      - **Modal Rincian Target Estimasi & Evaluasi Penagihan (DeliveryEstimasiDetailModal.tsx)**:
+        - **Hitung Status Penagihan (Sudah vs Belum Dibuat Bill)**:
+          - Perhitungan metrik kuantitas Surat Jalan, Koli/Coly, dan Berat (Kg) yang **Sudah Dibuat Bill** (`isBilled = true`) vs **Belum Dibuat Bill** (`isBilled = false`).
+          - Tautan langsung nomor invoice (`invNos`) ke halaman validasi penagihan `ROUTES.BILLING_VALIDATION_DETAIL(invNo)`.
+        - **6 Kartu KPI Ribbon Ringkasan**: Target Estimasi, Overdue (> H+1), Toleransi H+1, Realisasi Terkirim, Sudah Dibuat Bill (% & koli/berat), Belum Dibuat Bill (dengan badge perhatian & koli/berat).
+        - **Filter Terintegrasi Interaktif**: Filter Status Pengiriman (Semua, Overdue, Toleransi, Terkirim) dan Filter Status Penagihan (Semua Bill, Sudah Bill, Belum Bill).
+        - **Dual View Mode (Kartu Mobile vs Tabel Lengkap)**:
+          - Tampilan Kartu (Cards Mode): Dilengkapi Box Status Bill (`[✓ Sudah Dibuat Bill]` + nomor invoice link atau `[Belum Dibuat Bill]`).
+          - Tampilan Tabel (Table Mode): Tabel desktop sticky header 10 kolom dengan kolom khusus **Status Penagihan** lengkap dengan nomor invoice klik-able.
+        - **Ekspor Excel (.xlsx)**: Kolom Status Penagihan, Nomor Invoice, dan Tanggal Invoice disertakan saat unduh data.
+        - **Footer Ringkasan Kompak**: Total SJ terfilter, total koli, berat kg, dan live breakdown `✓ Sudah Bill: X SJ (A coly) • ⏳ Belum Bill: Y SJ (B coly)`.
         - **Desain Responsif Mobile Penuh**: Shell modal fullscreen-fit pada layar smartphone (h-full sm:h-auto max-h-[100dvh] sm:max-h-[92vh] rounded-none sm:rounded-2xl) dengan touch targets nyaman (36–40px) dan banner aturan toleransi kompak.
         - **Dual View Mode (Kartu Mobile vs Tabel Lengkap)**:
           - Tampilan Kartu (Cards Mode, default pada viewport < 768px): Menampilkan kartu surat jalan informatif berisi no SJ (link ke ROUTES.DELIVERY_DETAIL), status badge semantic outline, customer (displayCustName), moda badge (✈️ Udara / 🚢 Laut), marking code/resi, armada & supir dengan link panggilan cepat telepon (	el:), muatan fisik koli & berat, timeline estimasi & realisasi, serta tombol detail.
@@ -111,6 +121,42 @@ Pusat kendali distribusi pengantaran barang, inventori kargo masuk gudang (`fdLi
         - **4 KPI Ribbon Ringkasan**: Total Target Estimasi, Pending Overdue, Pending Toleransi H+1, dan Sudah Terkirim yang dapat diklik langsung sebagai jalan pintas filter.
         - **Ekspor Excel (.xlsx)**: Unduh data Surat Jalan terfilter langsung ke lembar kerja Excel dengan feedback toast.
         - **Footer Ringkasan Kompak**: Total SJ terfilter, total koli, dan berat kg dengan tombol Tutup full-width pada mobile.
+      - **Modal Rincian Surat Jalan Batch FoxPro (DeliveryBatchDetailModal.tsx) - Redesign Premium B2B ERP**:
+        - **Redesign UI/UX High-Density B2B ERP (`taste-skill` & `redesign-skill`)**:
+          - **Header Komando Interaktif**:
+            - Sesi badge dinamis: Sesi Pagi (amber squircle) vs Sesi Sore (indigo squircle) dengan timestamp aktual FoxPro (`effectiveTime WIB`).
+            - Pill progress penagihan interaktif: `[🧾 Bill: {billedCount}/{total} SJ ({pct}%)]`.
+            - Global accordion toggle: `[ ⇕ Buka/Tutup Semua ]` (`ChevronsUpDown`) untuk melipat/membuka seluruh accordion cabang & marking secara serentak.
+            - Quick export button & modern close button.
+          - **5 Kartu Grid KPI Eksekutif**:
+            1. *Total Batch* (`{totalSj} SJ`, coly, kg) dengan accent border dinamis.
+            2. *✈️ Air Freight* (`{sjUdara} SJ`, %, coly, kg).
+            3. *🚢 Sea Freight* (`{sjLaut} SJ`, %, coly, kg).
+            4. *🧾 Sudah Bill* (`{billedCount} SJ`, %, coly, kg, emerald).
+            5. *⏳ Belum Bill* (`{unbilledCount} SJ`, amber, pulse indicator jika > 0).
+            - Setiap kartu dapat diklik langsung sebagai jalan pintas filter real-time.
+          - **Smart Toolbar & Dual View Engine**:
+            - Switcher Mode Tampilan: `[ ▤ Tabel | 📱 Kartu ]` (`Rows3` vs `LayoutGrid`).
+            - Segmented Control Filter Status Penagihan: `[Semua Bill]`, `[✓ Sudah Bill]`, `[⚠️ Belum Bill]`.
+            - Segmented Control Filter Moda: `[Semua Moda]`, `[✈️ Air]`, `[🚢 Sea]`.
+            - Dropdown Cabang dengan indikator jumlah cabang.
+            - Input pencarian autocomplete multi-field (SJ, customer, marking, nomor invoice `item.invNos`, supir, armada) lengkap dengan tombol clear `(X)`.
+            - Tombol reset filter `RotateCcw`.
+          - **Mode Tampilan Tabel (Table View)**:
+            - Header 8 kolom terstandarisasi dengan `tabular-nums`.
+            - Subheader marking & cabang dengan `displayCustName(marking.custName)` dan pill akumulasi volume kargo.
+            - Kolom Status Penagihan: Emerald badge + tautan invoice `ROUTES.BILLING_VALIDATION_DETAIL(invNo)` vs Amber badge + list code manifest.
+            - Tautan no. SJ langsung mengarah ke `ROUTES.DELIVERY_DETAIL(item.fdSJNo)`.
+          - **Penyempurnaan Marking Subheader (Redesign Tata Letak & Multi-Customer)**:
+            - **Eliminasi String Kode Pelanggan Meluber**: Menggantikan list horizontal puluhan kode customer mentah dalam tanda kurung yang memadati baris dengan representasi cerdas: jika 1 customer tampilkan `Nama (Kode)`, jika multi-customer tampilkan `Nama Pertama` + badge chip `+N Pelanggan` berikon `Users` dengan `title` tooltip daftar seluruh pelanggan beserta kodenya.
+            - **Kunci Sisi Kanan Metrik Fisik**: Metrik akumulasi muatan fisik (`X coly • Y kg`) terkunci permanen rata kanan (`ml-auto whitespace-nowrap`) tanpa terdorong ke baris bawah oleh overflow teks kiri.
+            - **Sinkronisasi Dual Mode**: Struktur subheader marking yang rapi dan konsisten diterapkan pada mode Tabel (`Table Mode`) maupun Kartu (`Cards Mode`).
+          - **Mode Tampilan Kartu (Cards View)**:
+            - Layout grid 2-kolom responsif untuk kartu SJ per marking.
+            - Detail logistik kargo, supir, armada, dan invoice dalam container kompak.
+          - **Ekspor Excel (.xlsx)**: Dilengkapi kolom `Status Penagihan`, `No Invoice`, dan `Tgl Invoice`.
+          - **Footer Status Real-Time**: Rekapitulasi instan jumlah SJ terfilter, `✓ Sudah Bill: X SJ`, dan `⏳ Belum Bill: Y SJ`.
+          - **Midnight Dark Mode Compliant**: Zero solid white badges/buttons, seluruh komponen menggunakan semantic outline, hover effects, dan CSS tokens theme-aware.
 - **Optimalisasi Responsif Penuh Mobile (`MonitoringPage.tsx` & `DeliveryConfirmChart.tsx`)**:
   - **Tab 1 (Surat Jalan Pending)**: Dual View Desktop Table (`hidden md:block`) 9 kolom + Mobile Card List (`md:hidden`) lengkap dengan checkbox multi-select massal, link no SJ, badge aging, customer/marking box, armada/supir, serta tombol aksi Kirim dan Cetak.
   - **Tab 2 (Tren Konfirmasi Terkirim)**:

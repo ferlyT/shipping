@@ -230,6 +230,17 @@ export function InspectionFormSheet({
     }
   }
 
+  // Semantic tokens from mobile-design-rules.md
+  const lineColor = isDark ? '#222C38' : '#E3E7EC'
+  const surfaceColor = isDark ? '#131A23' : '#FFFFFF'
+  const textColor = isDark ? '#EEF2F6' : '#141B24'
+  const mutedColor = isDark ? '#8A97A6' : '#657080'
+  const accentColor = isDark ? '#E0644E' : '#B8402C'
+  const airColor = isDark ? '#E2B266' : '#A9741C'
+  const seaColor = isDark ? '#5FA3D4' : '#256A9E'
+  const okColor = isDark ? '#4CC38A' : '#17855A'
+  const warnColor = isDark ? '#E5A93C' : '#A97612'
+
   return (
     <Modal
       visible={visible}
@@ -245,8 +256,8 @@ export function InspectionFormSheet({
           style={[
             styles.sheetContainer,
             {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
+              backgroundColor: surfaceColor,
+              borderColor: lineColor,
             },
           ]}
         >
@@ -254,18 +265,14 @@ export function InspectionFormSheet({
           <View
             style={[
               styles.header,
-              {
-                borderBottomColor: isDark
-                  ? 'rgba(255,255,255,0.08)'
-                  : 'rgba(0,0,0,0.08)',
-              },
+              { borderBottomColor: lineColor },
             ]}
           >
             <View>
-              <Text style={[styles.title, { color: colors.primary }]}>
+              <Text style={[styles.title, { color: textColor }]}>
                 {isEdit ? 'Edit BAP' : 'Buat BAP Baru'}
               </Text>
-              <Text style={[styles.subtitle, { color: colors.secondary }]}>
+              <Text style={[styles.subtitle, { color: mutedColor }]}>
                 {isEdit ? editItem?.fdReportNumber : 'Berita Acara Pemeriksaan'}
               </Text>
             </View>
@@ -275,14 +282,14 @@ export function InspectionFormSheet({
               style={[
                 styles.closeButton,
                 {
-                  borderColor: colors.border,
+                  borderColor: lineColor,
                   backgroundColor: isDark
                     ? 'rgba(255,255,255,0.04)'
                     : 'rgba(0,0,0,0.04)',
                 },
               ]}
             >
-              <X size={18} color={colors.secondary} />
+              <X size={18} color={textColor} />
             </TouchableOpacity>
           </View>
 
@@ -299,17 +306,15 @@ export function InspectionFormSheet({
           >
             {/* Moda Switcher */}
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.secondary }]}>
-                MODA PENGIRIMAN
+              <Text style={[styles.label, { color: mutedColor }]}>
+                Moda Pengiriman
               </Text>
               <View
                 style={[
                   styles.statusContainer,
                   {
-                    borderColor: colors.border,
-                    backgroundColor: isDark
-                      ? 'rgba(255,255,255,0.03)'
-                      : 'rgba(0,0,0,0.03)',
+                    borderColor: lineColor,
+                    backgroundColor: isDark ? '#0C1118' : '#F6F7F9',
                   },
                 ]}
               >
@@ -322,31 +327,23 @@ export function InspectionFormSheet({
                     styles.statusPill,
                     styles.modaPillRow,
                     fdListType === 1 && {
-                      backgroundColor: isDark
-                        ? 'rgba(56, 189, 248, 0.2)'
-                        : 'rgba(2, 132, 199, 0.15)',
-                      borderColor: '#0284C7',
+                      backgroundColor: surfaceColor,
+                      borderColor: lineColor,
                       borderWidth: 1,
                     },
                   ]}
                 >
-                  <Plane
-                    size={14}
-                    color={fdListType === 1 ? '#0284C7' : colors.secondary}
-                  />
+                  <View style={[styles.dot, { backgroundColor: airColor }]} />
                   <Text
                     style={[
                       styles.statusText,
                       {
-                        color:
-                          fdListType === 1
-                            ? isDark ? '#38BDF8' : '#0284C7'
-                            : colors.secondary,
-                        fontWeight: fdListType === 1 ? '700' : '500',
+                        color: fdListType === 1 ? textColor : mutedColor,
+                        fontWeight: fdListType === 1 ? '600' : '400',
                       },
                     ]}
                   >
-                    Udara / Air
+                    Udara (Air)
                   </Text>
                 </TouchableOpacity>
 
@@ -359,31 +356,23 @@ export function InspectionFormSheet({
                     styles.statusPill,
                     styles.modaPillRow,
                     fdListType === 2 && {
-                      backgroundColor: isDark
-                        ? 'rgba(52, 211, 153, 0.2)'
-                        : 'rgba(5, 150, 105, 0.15)',
-                      borderColor: '#10B981',
+                      backgroundColor: surfaceColor,
+                      borderColor: lineColor,
                       borderWidth: 1,
                     },
                   ]}
                 >
-                  <Ship
-                    size={14}
-                    color={fdListType === 2 ? '#10B981' : colors.secondary}
-                  />
+                  <View style={[styles.dot, { backgroundColor: seaColor }]} />
                   <Text
                     style={[
                       styles.statusText,
                       {
-                        color:
-                          fdListType === 2
-                            ? isDark ? '#34D399' : '#059669'
-                            : colors.secondary,
-                        fontWeight: fdListType === 2 ? '700' : '500',
+                        color: fdListType === 2 ? textColor : mutedColor,
+                        fontWeight: fdListType === 2 ? '600' : '400',
                       },
                     ]}
                   >
-                    Laut / Sea
+                    Laut (Sea)
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -391,17 +380,15 @@ export function InspectionFormSheet({
 
             {/* Status Switcher */}
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: colors.secondary }]}>
-                STATUS BAP
+              <Text style={[styles.label, { color: mutedColor }]}>
+                Status BAP
               </Text>
               <View
                 style={[
                   styles.statusContainer,
                   {
-                    borderColor: colors.border,
-                    backgroundColor: isDark
-                      ? 'rgba(255,255,255,0.03)'
-                      : 'rgba(0,0,0,0.03)',
+                    borderColor: lineColor,
+                    backgroundColor: isDark ? '#0C1118' : '#F6F7F9',
                   },
                 ]}
               >
@@ -413,10 +400,8 @@ export function InspectionFormSheet({
                   style={[
                     styles.statusPill,
                     fdStatus === '1' && {
-                      backgroundColor: isDark
-                        ? 'rgba(251, 191, 36, 0.2)'
-                        : 'rgba(217, 119, 6, 0.15)',
-                      borderColor: '#F59E0B',
+                      backgroundColor: surfaceColor,
+                      borderColor: lineColor,
                       borderWidth: 1,
                     },
                   ]}
@@ -425,11 +410,8 @@ export function InspectionFormSheet({
                     style={[
                       styles.statusText,
                       {
-                        color:
-                          fdStatus === '1'
-                            ? colors.warning
-                            : colors.secondary,
-                        fontWeight: fdStatus === '1' ? '700' : '500',
+                        color: fdStatus === '1' ? warnColor : mutedColor,
+                        fontWeight: fdStatus === '1' ? '600' : '400',
                       },
                     ]}
                   >
@@ -445,10 +427,8 @@ export function InspectionFormSheet({
                   style={[
                     styles.statusPill,
                     fdStatus === '2' && {
-                      backgroundColor: isDark
-                        ? 'rgba(52, 211, 153, 0.2)'
-                        : 'rgba(5, 150, 105, 0.15)',
-                      borderColor: '#10B981',
+                      backgroundColor: surfaceColor,
+                      borderColor: lineColor,
                       borderWidth: 1,
                     },
                   ]}
@@ -457,11 +437,8 @@ export function InspectionFormSheet({
                     style={[
                       styles.statusText,
                       {
-                        color:
-                          fdStatus === '2'
-                            ? colors.success
-                            : colors.secondary,
-                        fontWeight: fdStatus === '2' ? '700' : '500',
+                        color: fdStatus === '2' ? okColor : mutedColor,
+                        fontWeight: fdStatus === '2' ? '600' : '400',
                       },
                     ]}
                   >
@@ -1029,9 +1006,7 @@ export function InspectionFormSheet({
             style={[
               styles.footer,
               {
-                borderTopColor: isDark
-                  ? 'rgba(255,255,255,0.08)'
-                  : 'rgba(0,0,0,0.08)',
+                borderTopColor: lineColor,
                 paddingBottom: bottomInset + 8,
               },
             ]}
@@ -1039,9 +1014,9 @@ export function InspectionFormSheet({
             <TouchableOpacity
               onPress={onClose}
               disabled={isSaving}
-              style={[styles.cancelBtn, { borderColor: colors.border }]}
+              style={[styles.cancelBtn, { borderColor: lineColor }]}
             >
-              <Text style={[styles.cancelText, { color: colors.secondary }]}>
+              <Text style={[styles.cancelText, { color: mutedColor }]}>
                 Batal
               </Text>
             </TouchableOpacity>
@@ -1052,7 +1027,7 @@ export function InspectionFormSheet({
               style={[
                 styles.saveBtn,
                 {
-                  backgroundColor: colors.tabBarActive,
+                  backgroundColor: accentColor,
                   opacity: isSaving ? 0.7 : 1,
                 },
               ]}
@@ -1145,6 +1120,11 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     alignItems: 'center',
     borderRadius: 8,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
   statusText: {
     fontSize: 12.5,

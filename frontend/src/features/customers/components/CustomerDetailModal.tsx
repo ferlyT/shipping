@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import {
   X, Check, Copy, User, Phone, Mail, MapPin,
   MapPinned, FileText, ExternalLink, Calendar,
-  ChevronLeft, ChevronRight, TrendingUp, CheckCircle2
+  ChevronLeft, ChevronRight, TrendingUp, CheckCircle2, Package
 } from 'lucide-react'
 import { cn, formatCurrency, formatCompactRupiah, displayCustName, copyToClipboard as copyTextToClipboard } from '@/lib/utils'
 import { Badge } from '@/components/ui/Badge'
@@ -12,6 +12,7 @@ import {
   statusConfig, BrokerBadge, DiscontinuedBadge, CustomerTierBadge,
   formatCustomerSince, formatCustomerTenure, tierBadgeConfig
 } from './CustomerBadges'
+import { CustomerCommodityTab } from './CustomerCommodityTab'
 import type { Customer } from '../types/customers.types'
 
 export function CustomerDetailBodySkeleton() {
@@ -156,9 +157,9 @@ interface CustomerDetailModalProps {
   canViewTier?: boolean
 }
 
-type TabType = 'info' | 'finansial' | 'alamat'
+type TabType = 'info' | 'finansial' | 'komoditas' | 'alamat'
 
-const TAB_KEYS: TabType[] = ['info', 'finansial', 'alamat']
+const TAB_KEYS: TabType[] = ['info', 'finansial', 'komoditas', 'alamat']
 
 export function CustomerDetailModal({
   customer,
@@ -172,6 +173,7 @@ export function CustomerDetailModal({
   const tabButtonRefs = useRef<Record<TabType, HTMLButtonElement | null>>({
     info: null,
     finansial: null,
+    komoditas: null,
     alamat: null,
   })
 
@@ -235,6 +237,7 @@ export function CustomerDetailModal({
   const tabs: { key: TabType; label: string; icon: React.ElementType; badge?: number }[] = [
     { key: 'info', label: 'Ringkasan & Kontak', icon: User },
     { key: 'finansial', label: 'Tier & Finansial', icon: TrendingUp },
+    { key: 'komoditas', label: 'Komoditas', icon: Package },
     { key: 'alamat', label: 'Daftar Alamat', icon: MapPinned, badge: addressCount },
   ]
 
@@ -629,7 +632,12 @@ export function CustomerDetailModal({
                 </div>
               )}
 
-              {/* TAB 3: DAFTAR ALAMAT TAMBAHAN */}
+              {/* TAB 3: KOMODITAS */}
+              {activeTab === 'komoditas' && (
+                <CustomerCommodityTab customerId={customer.fdCustCode} />
+              )}
+
+              {/* TAB 4: DAFTAR ALAMAT TAMBAHAN */}
               {activeTab === 'alamat' && (
                 <div className="space-y-3">
                   {customer.addresses && customer.addresses.length > 0 ? (

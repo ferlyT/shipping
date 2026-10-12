@@ -1,5 +1,5 @@
-import { Package, Weight, Box, Hash, Barcode, Tag, CalendarDays, FileText } from 'lucide-react'
-import { formatDate } from '@/lib/utils'
+import { Package, Weight, Box, Hash, Barcode, Tag, CalendarDays, FileText, Clock, UserCheck, History } from 'lucide-react'
+import { formatDate, formatDateTime } from '@/lib/utils'
 import { MetricCard } from './MetricCard'
 import { CopyField } from './CopyField'
 import type { Shipment } from '../../types/shipments.types'
@@ -118,6 +118,53 @@ export function ShipmentInfoTab({
           <p className="text-xs text-[var(--color-secondary)] leading-relaxed bg-[var(--color-neutral)] p-3 rounded-xl border border-[var(--color-border)] whitespace-pre-wrap">
             {shipment.fdDesc}
           </p>
+        </div>
+      )}
+
+      {/* Audit Trail: Created By & Updated By with Timestamps */}
+      {(shipment.fdEmp1 || shipment.fdCreatedDate || shipment.fdEmp2 || shipment.fdUpdate) && (
+        <div className="bg-[var(--color-surface)] rounded-2xl border border-[var(--color-border)] shadow-xs p-3.5 sm:p-4 space-y-3">
+          <div className="flex items-center gap-2 text-[var(--color-secondary)]">
+            <Clock size={13} className="hidden sm:inline-block text-[var(--color-primary)]" />
+            <span className="text-[11px] font-bold uppercase tracking-wider">Riwayat Pembuatan & Pembaruan</span>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {/* Created By & Date */}
+            <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[var(--color-neutral)] border border-[var(--color-border)]">
+              <div className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5">
+                <UserCheck size={14} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)] block">
+                  Dibuat Oleh (Created By)
+                </span>
+                <span className="text-xs font-bold text-[var(--color-text)] truncate block mt-0.5">
+                  {shipment.fdEmp1?.trim() || '—'}
+                </span>
+                <span className="text-[11px] text-[var(--color-secondary)] tabular-nums mt-0.5 block">
+                  {formatDateTime(shipment.fdCreatedDate)}
+                </span>
+              </div>
+            </div>
+
+            {/* Updated By & Date */}
+            <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-[var(--color-neutral)] border border-[var(--color-border)]">
+              <div className="p-1.5 rounded-lg bg-sky-500/10 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5">
+                <History size={14} />
+              </div>
+              <div className="min-w-0 flex-1">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-secondary)] block">
+                  Terakhir Diperbarui (Updated)
+                </span>
+                <span className="text-xs font-bold text-[var(--color-text)] truncate block mt-0.5">
+                  {shipment.fdEmp2?.trim() || '—'}
+                </span>
+                <span className="text-[11px] text-[var(--color-secondary)] tabular-nums mt-0.5 block">
+                  {formatDateTime(shipment.fdUpdate)}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </div>

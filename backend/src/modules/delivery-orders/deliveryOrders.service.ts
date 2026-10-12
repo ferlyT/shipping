@@ -104,6 +104,7 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
         fdCustCode: true,
         fdCustNameSJ: true,
         fdDescr: true,
+        fdListCode: true,
         fdSupir: true,
         fdCarID: true,
         fdJmlPackSJ: true,
@@ -117,6 +118,12 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
         fdPrintDate: true,
         fdGive: true,
         fdGiveDate: true,
+        entryList: {
+          select: {
+            fdMarkingCode: true,
+            fdMarkingNo: true,
+          },
+        },
       },
     }),
     prisma.tbDelivery.count({ where }),
@@ -141,6 +148,8 @@ export async function getDeliveryOrders(query: Record<string, string | undefined
       fdCustName: finalCustName,
       fdCustNameSJ: finalCustName,
       fdSatuan: d.fdSatuan ? d.fdSatuan.trim() : null,
+      fdMarkingCode: d.entryList?.fdMarkingCode ? d.entryList.fdMarkingCode.trim() : null,
+      fdMarkingNo: d.entryList?.fdMarkingNo ? d.entryList.fdMarkingNo.trim() : null,
     }
   })
 
@@ -2265,7 +2274,7 @@ export async function getDeliveryConfirmBatchDetail(date: string, session: strin
     allRows = fallbackRows
   }
 
-  // 2. Ambil informasi supir & estimasi dari tbDelivery untuk setiap SJ
+  // 2. Ambil informasi supir, estimasi & status billing dari tbDelivery & tbBilling untuk setiap SJ
   const driverMap = new Map<string, any>()
   if (allRows.length > 0) {
     const sjNos = allRows.map((r) => `'${String(r.fdSJNo).replace(/'/g, "''")}'`)
@@ -2275,16 +2284,29 @@ export async function getDeliveryConfirmBatchDetail(date: string, session: strin
       try {
         const drivers: any[] = await prisma.$queryRawUnsafe(`
           SELECT 
-            fdSJNo,
-            RTRIM(fdSupir) AS fdSupir,
-            RTRIM(fdTelpSupir) AS fdTelpSupir,
-            RTRIM(fdSatuan) AS fdSatuan,
-            RTRIM(fdAddr) AS fdAddr,
-            RTRIM(fdCity) AS fdCity,
-            fdEstimasi,
-            fdKembali
-          FROM tbDelivery WITH (NOLOCK)
-          WHERE fdSJNo IN (${chunk})
+            d.fdSJNo,
+            RTRIM(d.fdSupir) AS fdSupir,
+            RTRIM(d.fdTelpSupir) AS fdTelpSupir,
+            RTRIM(d.fdSatuan) AS fdSatuan,
+            RTRIM(d.fdAddr) AS fdAddr,
+            RTRIM(d.fdCity) AS fdCity,
+            d.fdEstimasi,
+            d.fdKembali,
+            ISNULL(b.isBilled, 0) AS isBilled,
+            b.invNos AS invNos,
+            b.invDates AS invDates,
+            ISNULL(b.billCount, 0) AS billCount
+          FROM tbDelivery d WITH (NOLOCK)
+          OUTER APPLY (
+            SELECT 
+              CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END AS isBilled,
+              COUNT(*) AS billCount,
+              STRING_AGG(CAST(RTRIM(tb.fdInvNo) AS VARCHAR(MAX)), ', ') AS invNos,
+              STRING_AGG(CAST(CONVERT(varchar(10), tb.fdInvDate, 120) AS VARCHAR(MAX)), ', ') AS invDates
+            FROM tbBilling tb WITH (NOLOCK)
+            WHERE RTRIM(tb.fdListCode) = RTRIM(d.fdListCode) AND d.fdListCode IS NOT NULL
+          ) b
+          WHERE d.fdSJNo IN (${chunk})
         `)
         for (const d of drivers) {
           driverMap.set(d.fdSJNo, d)
@@ -2335,6 +2357,10 @@ export async function getDeliveryConfirmBatchDetail(date: string, session: strin
       branchCode,
       branchName,
       batchTime,
+      isBilled: Boolean(driver.isBilled),
+      invNos: driver.invNos ? String(driver.invNos).trim() : null,
+      invDates: driver.invDates ? String(driver.invDates).trim() : null,
+      billCount: Number(driver.billCount || 0),
     }
   })
 
@@ -2347,6 +2373,28 @@ export async function getDeliveryConfirmBatchDetail(date: string, session: strin
   const packLaut = items.filter((i) => i.moda === 'Laut').reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0)
   const weightUdara = Math.round(items.filter((i) => i.moda === 'Udara').reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10
   const weightLaut = Math.round(items.filter((i) => i.moda === 'Laut').reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10
+
+  const billedSjCount = items.filter((i) => i.isBilled).length
+  const unbilledSjCount = items.filter((i) => !i.isBilled).length
+
+  const listCodeSet = new Set<string>()
+  const billedListCodeSet = new Set<string>()
+  const unbilledListCodeSet = new Set<string>()
+
+  items.forEach((item) => {
+    const lc = item.fdListCode || 'NO_LIST_CODE'
+    listCodeSet.add(lc)
+    if (item.isBilled) {
+      billedListCodeSet.add(lc)
+    } else {
+      unbilledListCodeSet.add(lc)
+    }
+  })
+
+  const billedPack = items.filter((i) => i.isBilled).reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0)
+  const billedWeight = Math.round(items.filter((i) => i.isBilled).reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10
+  const unbilledPack = items.filter((i) => !i.isBilled).reduce((acc, curr) => acc + curr.fdJmlPackSJ, 0)
+  const unbilledWeight = Math.round(items.filter((i) => !i.isBilled).reduce((acc, curr) => acc + curr.fdJmlBeratSJ, 0) * 10) / 10
 
   return {
     batchDate: cleanDate,
@@ -2361,6 +2409,17 @@ export async function getDeliveryConfirmBatchDetail(date: string, session: strin
     packLaut,
     weightUdara,
     weightLaut,
+    billingRecap: {
+      billedSjCount,
+      unbilledSjCount,
+      totalListCodes: listCodeSet.size,
+      billedListCodeCount: billedListCodeSet.size,
+      unbilledListCodeCount: unbilledListCodeSet.size,
+      billedPack,
+      billedWeight,
+      unbilledPack,
+      unbilledWeight,
+    },
     items,
   }
 }

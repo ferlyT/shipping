@@ -5,6 +5,7 @@ import { calculateOverweight, calculateOverweightRaw, cleanFoxProString } from '
 import type {
   ColumnPreset,
   CustMarkingAggregates,
+  InvoiceGroup,
   NormalizedMarkingRow,
   SortField,
   SortOrder,
@@ -76,6 +77,8 @@ export function useCustMarkingData(
   const [columnPreset, setColumnPreset] = useState<ColumnPreset>('all')
   const [sortField, setSortField] = useState<SortField>('invoice')
   const [sortOrder, setSortOrder] = useState<SortOrder>('asc')
+  const [groupByInvoice, setGroupByInvoice] = useState(true)
+  const [collapsedInvoices, setCollapsedInvoices] = useState<Set<string>>(new Set())
 
   const { data: rows = [], isLoading, isError, refetch } = useQuery({
     queryKey: ['m3CustMarkingDetails', custCode, markingCode],
@@ -110,7 +113,7 @@ export function useCustMarkingData(
       const rawBc = String(
         getRowValue(r, ['fdBranchCode', 'BranchCode', 'branchCode', 'BC', 'fdBC', 'branch', 'Branch']) || ''
       ).trim()
-      const bc = rawBc || '—'
+      const bc = rawBc === '--' || rawBc === '-' ? 'SG' : rawBc || '—'
       const listType = getRowValue(r, ['fdListType', 'ListType'])
       const isAir = listType === 1
       const modeText = isAir ? 'UDARA' : listType === 2 ? 'LAUT' : '—'
@@ -530,6 +533,95 @@ export function useCustMarkingData(
     return base
   }, [sortedRows, commodityTypes])
 
+  // Grouping rows berdasarkan No. Invoice (fdInvNo)
+  const invoiceGroups: InvoiceGroup[] = useMemo(() => {
+    const groupsMap = new Map<string, InvoiceGroup>()
+
+    for (const r of sortedRows) {
+      const invKey = (r.invoice || '').trim() || 'Tanpa No. Invoice'
+      let group = groupsMap.get(invKey)
+      if (!group) {
+        group = {
+          invoice: invKey,
+          dateStr: r.dateStr,
+          date: r.date,
+          branchCode: r.branchCode,
+          isInvoiceUtama: r.isInvoiceUtama,
+          isBillGabungan: r.isBillGabungan,
+          isBillTambahan: r.isBillTambahan,
+          totalItems: 0,
+          totalQtyGdg: 0,
+          totalQtySJ: 0,
+          totalQtyPL: 0,
+          totalQtyK: 0,
+          totalWeightGdg: 0,
+          totalWeightSJ: 0,
+          totalWeightK: 0,
+          totalKgBill: 0,
+          totalM3PL: 0,
+          totalM3Gdg: 0,
+          totalM3K: 0,
+          totalM3Bill: 0,
+          totalVfcGdg: 0,
+          totalVfcK: 0,
+          totalVfcBill: 0,
+          totalValue2: 0,
+          totalFc: 0,
+          hasSelisih: false,
+          hasKomplain: false,
+          isQtyKomplainMismatch: false,
+          rows: [],
+        }
+        groupsMap.set(invKey, group)
+      }
+
+      group.totalItems += 1
+      group.totalQtyGdg += r.qtyGdg || 0
+      group.totalQtySJ += r.qtySJ || 0
+      group.totalQtyPL += r.qtyPL || 0
+      group.totalQtyK += r.qtyK || 0
+      group.totalWeightGdg += r.weightGdg || 0
+      group.totalWeightSJ += r.weightSJ || 0
+      group.totalWeightK += r.weightK || 0
+      group.totalKgBill += r.kgBill || 0
+      group.totalM3PL += r.m3PL || 0
+      group.totalM3Gdg += r.m3Gdg || 0
+      group.totalM3K += r.m3K || 0
+      group.totalM3Bill += r.m3Bill || 0
+      group.totalVfcGdg += r.vfcGdg || 0
+      group.totalVfcK += r.vfcK || 0
+      group.totalVfcBill += r.vfcBill || 0
+      group.totalValue2 += r.value2 || 0
+      group.totalFc += r.fc || 0
+      if (r.hasSelisih) group.hasSelisih = true
+      if (r.hasKomplain) group.hasKomplain = true
+      if (r.isQtyKomplainMismatch) group.isQtyKomplainMismatch = true
+      group.rows.push(r)
+    }
+
+    return Array.from(groupsMap.values())
+  }, [sortedRows])
+
+  const toggleInvoiceCollapse = (inv: string) => {
+    setCollapsedInvoices((prev) => {
+      const next = new Set(prev)
+      if (next.has(inv)) {
+        next.delete(inv)
+      } else {
+        next.add(inv)
+      }
+      return next
+    })
+  }
+
+  const expandAllInvoices = () => {
+    setCollapsedInvoices(new Set())
+  }
+
+  const collapseAllInvoices = () => {
+    setCollapsedInvoices(new Set(invoiceGroups.map((g) => g.invoice)))
+  }
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'))
@@ -553,6 +645,13 @@ export function useCustMarkingData(
     filteredRows,
     sortedRows,
     aggregates,
+    invoiceGroups,
+    groupByInvoice,
+    setGroupByInvoice,
+    collapsedInvoices,
+    toggleInvoiceCollapse,
+    expandAllInvoices,
+    collapseAllInvoices,
     branches,
     commodityTypes,
     selectedCommodityType,

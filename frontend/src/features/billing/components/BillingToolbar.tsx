@@ -77,6 +77,14 @@ export function BillingToolbar({
                 onFocus={() => {
                   if (search.trim().length >= 2) setShowSuggestions(true)
                 }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    setShowSuggestions(false)
+                    onPageReset()
+                  } else if (e.key === 'Escape') {
+                    setShowSuggestions(false)
+                  }
+                }}
                 placeholder={t('billing.searchPlaceholder') || 'Cari no invoice, customer, marking, kode...'}
                 className="w-full pl-9 pr-9 py-2 text-xs sm:text-sm text-[var(--color-primary)] outline-none bg-transparent placeholder:text-[var(--color-secondary)] font-medium"
               />

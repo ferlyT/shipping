@@ -18,6 +18,8 @@ export interface InspectionReport {
   fdNamaCustomer: string
   fdTerima?: string | null
   fdKeterangan?: string | null
+  fdAudioUrl?: string | null
+  fdAudioDuration?: number | null
   fdStatus: '1' | '2' // '1' = Draft, '2' = Selesai
   fdCreatedBy: string
   fdCreatedAt: string

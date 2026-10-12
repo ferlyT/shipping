@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react'
+import React, { useState } from 'react'
 import {
   View,
   Text,
@@ -7,18 +7,13 @@ import {
   ScrollView,
   Linking,
   StyleSheet,
+  SafeAreaView,
+  Platform,
 } from 'react-native'
 import { useQuery } from '@tanstack/react-query'
-import {
-  X,
-  Phone,
-  Mail,
-  Building2,
-} from 'lucide-react-native'
+import { X } from 'lucide-react-native'
 import * as Haptics from 'expo-haptics'
-import { Card } from '@/components/ui/Card'
-import { Badge } from '@/components/ui/Badge'
-import { SegmentedControl } from '@/components/ui/SegmentedControl'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { SkeletonShimmer } from '@/components/ui/SkeletonShimmer'
 import { useThemeStore } from '@/theme/themeStore'
 import { useToastStore } from '@/stores/toastStore'
@@ -29,25 +24,60 @@ import {
 } from '@/lib/utils'
 import {
   formatCustomerSince,
-  formatCustomerTenure,
   tierBadgeConfig,
   statusConfig,
 } from '../utils/master.utils'
 import apiClient from '@/api/client'
+import { CustomerCommodityTab } from './CustomerCommodityTab'
 
-type DetailTabType = 'info' | 'finansial' | 'alamat'
+type DetailTabType = 'ringkasan' | 'finansial' | 'komoditas' | 'alamat'
 
 interface CustomerDetailSheetProps {
   customer: any | null
   onClose: () => void
 }
 
+function parsePhoneList(str?: string | null): string[] {
+  if (!str) return []
+  return str
+    .split(/[/,;]+/)
+    .map((s) => s.trim())
+    .filter(Boolean)
+}
+
+function toSentenceCase(str?: string | null): string {
+  if (!str) return 'Alamat'
+  const clean = str.trim()
+  if (!clean) return 'Alamat'
+  return clean.charAt(0).toUpperCase() + clean.slice(1).toLowerCase()
+}
+
+function isHpNumber(num: string): boolean {
+  const clean = num.replace(/\D/g, '')
+  return clean.startsWith('08') || clean.startsWith('628') || clean.startsWith('8')
+}
+
 export function CustomerDetailSheet({ customer, onClose }: CustomerDetailSheetProps) {
   const { colors, mode } = useThemeStore()
   const { showToast } = useToastStore()
   const isDark = mode === 'midnight'
+  const insets = useSafeAreaInsets()
 
-  const [activeDetailTab, setActiveDetailTab] = useState<DetailTabType>('info')
+  const lineColor = isDark ? '#222C38' : '#E3E7EC'
+  const accentColor = isDark ? '#E0644E' : '#B8402C'
+  const okColor = isDark ? '#4CC38A' : '#17855A'
+
+  const topPadding =
+    Platform.OS === 'android'
+      ? Math.max(insets.top, 28) + 8
+      : Math.max(insets.top, 12) + 4
+
+  const bottomPadding =
+    Platform.OS === 'android'
+      ? Math.max(insets.bottom, 28) + 12
+      : Math.max(insets.bottom, 12) + 12
+
+  const [activeTab, setActiveTab] = useState<DetailTabType>('ringkasan')
 
   // Fetch Full Customer Detail (including addresses, financial stats & delivery info)
   const {
@@ -65,16 +95,19 @@ export function CustomerDetailSheet({ customer, onClose }: CustomerDetailSheetPr
 
   const cust = customerDetail || customer
 
-  const detailTabs = useMemo(() => [
-    { label: 'Ringkasan', value: 'info' as const },
-    { label: 'Finansial', value: 'finansial' as const },
-    {
-      label: cust?.addresses && cust.addresses.length > 0
-        ? `Daftar Alamat (${cust.addresses.length})`
-        : 'Daftar Alamat',
-      value: 'alamat' as const,
+  // Fetch Commodity Stats (2 bar proporsi & grafik tren bulanan)
+  const {
+    data: commodityStats,
+    isLoading: isCommodityLoading,
+  } = useQuery({
+    queryKey: ['master-customer-commodity-stats', customer?.fdCustCode],
+    queryFn: async () => {
+      if (!customer?.fdCustCode) return null
+      const res = await apiClient.get(`/customers/${encodeURIComponent(customer.fdCustCode)}/commodity-stats`)
+      return res.data.data || null
     },
-  ], [cust?.addresses])
+    enabled: Boolean(customer?.fdCustCode),
+  })
 
   const handleCall = (phone?: string) => {
     if (!phone) {
@@ -82,7 +115,8 @@ export function CustomerDetailSheet({ customer, onClose }: CustomerDetailSheetPr
       return
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium)
-    Linking.openURL(`tel:${phone}`)
+    const cleanNumber = phone.replace(/[^0-9+]/g, '')
+    Linking.openURL(`tel:${cleanNumber}`)
   }
 
   const handleWhatsApp = (phone?: string) => {
@@ -96,6 +130,12 @@ export function CustomerDetailSheet({ customer, onClose }: CustomerDetailSheetPr
     Linking.openURL(`https://wa.me/${waNumber}`)
   }
 
+  const handleEmail = (email?: string) => {
+    if (!email) return
+    Haptics.selectionAsync()
+    Linking.openURL(`mailto:${email.trim()}`)
+  }
+
   const copyCustomerCode = (code?: string) => {
     if (!code) return
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
@@ -107,475 +147,827 @@ export function CustomerDetailSheet({ customer, onClose }: CustomerDetailSheetPr
   const activeTierKey = String(cust?.currentTier || cust?.tier || 'none').toLowerCase()
   const activeTierCfg = tierBadgeConfig[activeTierKey] || tierBadgeConfig.none
   const custStatusCfg = statusConfig[(cust?.fdBlocked || 0) as keyof typeof statusConfig] || statusConfig[0]
+  const isBlocked = (cust?.fdBlocked ?? 0) === 1
+
+  const annualRevenue = cust?.annualRevenue || cust?.financialStats?.[0]?.totalRevenue || 0
+  const totalInvoices = cust?.totalInvoices || cust?.financialStats?.[0]?.totalInvoices || 0
+  const addrList = cust?.addresses || []
+
+  const officePhones = parsePhoneList(cust?.fdTelp || cust?.fdPhone)
+  const mobilePhones = parsePhoneList(cust?.fdHP)
 
   return (
     <Modal
       visible={Boolean(customer)}
       animationType="slide"
-      transparent
       onRequestClose={onClose}
     >
-      <View style={styles.modalOverlay}>
+      <SafeAreaView style={[styles.container, { backgroundColor: isDark ? '#0C1118' : '#F6F7F9' }]}>
+        {/* Sticky Header Bar (.bar) */}
         <View
           style={[
-            styles.sheetContent,
+            styles.bar,
             {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-              height: '86%',
+              backgroundColor: isDark ? 'rgba(12,17,24,0.94)' : 'rgba(246,247,249,0.94)',
+              borderBottomColor: lineColor,
+              paddingTop: topPadding,
             },
           ]}
         >
-          {/* Modal Header */}
-          <View style={styles.sheetHeader}>
-            <View style={{ flex: 1, marginRight: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginBottom: 3 }}>
-                <Text style={[styles.sheetTitle, { color: colors.primary }]} numberOfLines={1}>
-                  {displayCustName(cust?.fdCustName, 'PROFIL CUSTOMER')}
+          <View style={{ flex: 1, paddingRight: 12 }}>
+            <Text style={[styles.name, { color: colors.primary }]} numberOfLines={1}>
+              {displayCustName(cust?.fdCustName, 'PROFIL CUSTOMER')}
+            </Text>
+            <View style={styles.t2}>
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={() => copyCustomerCode(cust?.fdCustCode)}
+                style={[styles.tag, { borderColor: lineColor }]}
+              >
+                <Text style={[styles.tagText, { color: colors.secondary }]}>
+                  {cust?.fdCustCode || '–'}
                 </Text>
-                {activeTierKey !== 'none' && (
-                  <View style={[styles.tierBadge, { backgroundColor: activeTierCfg.bg, borderColor: activeTierCfg.border }]}>
-                    <View style={[styles.tierDot, { backgroundColor: activeTierCfg.dot }]} />
-                    <Text style={[styles.tierText, { color: activeTierCfg.text }]}>{activeTierCfg.label}</Text>
-                  </View>
-                )}
-              </View>
+              </TouchableOpacity>
 
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                {/* Customer Code with copy */}
-                <TouchableOpacity
-                  onPress={() => copyCustomerCode(cust?.fdCustCode)}
-                  style={[styles.codeBadge, { backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : '#F1F5F9', borderColor: colors.border }]}
+              <View
+                style={[
+                  styles.tag,
+                  isBlocked
+                    ? { borderColor: isDark ? '#EF6B5B' : '#C4402F' }
+                    : { borderColor: lineColor },
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.tagText,
+                    isBlocked
+                      ? { color: isDark ? '#EF6B5B' : '#C4402F', fontWeight: '600' }
+                      : { color: colors.secondary },
+                  ]}
                 >
-                  <Text style={[styles.codeText, { color: colors.primary }]}>{cust?.fdCustCode}</Text>
-                </TouchableOpacity>
-
-                {/* Status Badge */}
-                <View style={[styles.statusBadge, { borderColor: custStatusCfg.border, backgroundColor: custStatusCfg.bg }]}>
-                  <View style={[styles.statusDot, { backgroundColor: custStatusCfg.dot }]} />
-                  <Text style={[styles.statusText, { color: custStatusCfg.text }]}>{custStatusCfg.label}</Text>
-                </View>
-
-                {/* Tenure */}
-                {formatCustomerTenure(cust?.fdCreatedDate) && (
-                  <Text style={{ fontSize: 11, color: colors.secondary }}>
-                    Bergabung sejak {formatCustomerSince(cust?.fdCreatedDate)}
-                  </Text>
-                )}
+                  {custStatusCfg.label || 'Tanpa status'}
+                </Text>
               </View>
-            </View>
 
-            <TouchableOpacity
-              onPress={onClose}
-              style={[styles.closeBtn, { borderColor: colors.border }]}
-            >
-              <X size={18} color={colors.secondary} />
-            </TouchableOpacity>
+              {cust?.fdCreatedDate && (
+                <Text style={[styles.tenureText, { color: colors.secondary }]}>
+                  Bergabung sejak {formatCustomerSince(cust.fdCreatedDate)}
+                </Text>
+              )}
+            </View>
           </View>
 
-          {/* Segmented Tabs (5 Tabs Sama dengan Frontend Web) */}
-          <SegmentedControl
-            options={detailTabs}
-            selectedValue={activeDetailTab}
-            onValueChange={(val: any) => setActiveDetailTab(val)}
-            style={{ marginHorizontal: 16, marginTop: 10, marginBottom: 6 }}
-          />
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={onClose}
+            style={[
+              styles.iconBtn,
+              {
+                borderColor: lineColor,
+                backgroundColor: colors.surface,
+              },
+            ]}
+            aria-label="Tutup"
+          >
+            <X size={20} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
 
-          <ScrollView contentContainerStyle={{ padding: 16, gap: 14, paddingBottom: 40 }} showsVerticalScrollIndicator={true}>
-            {/* TAB 1: RINGKASAN & KONTAK */}
-            {activeDetailTab === 'info' && (
-              <View style={{ gap: 12 }}>
-                {/* Top 2 Cards: Contact Person & Sales */}
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <Card style={{ flex: 1, padding: 12, gap: 4 }}>
-                    <Text style={[styles.infoCardLabel, { color: colors.secondary }]}>Contact Person</Text>
-                    <Text style={[styles.infoCardVal, { color: colors.primary }]} numberOfLines={1}>
-                      {cust?.fdContact || '—'}
-                    </Text>
-                  </Card>
+        {/* Tab Strip (.tabs) */}
+        <View style={[styles.tabs, { borderBottomColor: lineColor }]}>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.selectionAsync()
+              setActiveTab('ringkasan')
+            }}
+            style={[
+              styles.tabBtn,
+              activeTab === 'ringkasan' && [styles.tabBtnActive, { borderBottomColor: accentColor }],
+            ]}
+          >
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.tabText,
+                {
+                  color: activeTab === 'ringkasan' ? colors.primary : colors.secondary,
+                  fontWeight: activeTab === 'ringkasan' ? '600' : '500',
+                },
+              ]}
+            >
+              Ringkasan
+            </Text>
+          </TouchableOpacity>
 
-                  <Card style={{ flex: 1, padding: 12, gap: 4 }}>
-                    <Text style={[styles.infoCardLabel, { color: colors.secondary }]}>Sales In-Charge</Text>
-                    <Text style={[styles.infoCardVal, { color: colors.primary }]} numberOfLines={1}>
-                      {cust?.fdSalesNM || '—'}
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.selectionAsync()
+              setActiveTab('finansial')
+            }}
+            style={[
+              styles.tabBtn,
+              activeTab === 'finansial' && [styles.tabBtnActive, { borderBottomColor: accentColor }],
+            ]}
+          >
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.tabText,
+                {
+                  color: activeTab === 'finansial' ? colors.primary : colors.secondary,
+                  fontWeight: activeTab === 'finansial' ? '600' : '500',
+                },
+              ]}
+            >
+              Finansial
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.selectionAsync()
+              setActiveTab('komoditas')
+            }}
+            style={[
+              styles.tabBtn,
+              activeTab === 'komoditas' && [styles.tabBtnActive, { borderBottomColor: accentColor }],
+            ]}
+          >
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.tabText,
+                {
+                  color: activeTab === 'komoditas' ? colors.primary : colors.secondary,
+                  fontWeight: activeTab === 'komoditas' ? '600' : '500',
+                },
+              ]}
+            >
+              Komoditas
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => {
+              Haptics.selectionAsync()
+              setActiveTab('alamat')
+            }}
+            style={[
+              styles.tabBtn,
+              styles.tabBtnWide,
+              activeTab === 'alamat' && [styles.tabBtnActive, { borderBottomColor: accentColor }],
+            ]}
+          >
+            <Text
+              numberOfLines={1}
+              style={[
+                styles.tabText,
+                {
+                  color: activeTab === 'alamat' ? colors.primary : colors.secondary,
+                  fontWeight: activeTab === 'alamat' ? '600' : '500',
+                },
+              ]}
+            >
+              Alamat ({addrList.length})
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Scroll Content Body */}
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={[
+            styles.scrollContent,
+            { paddingBottom: bottomPadding + 32 },
+          ]}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* TAB 1: RINGKASAN */}
+          {activeTab === 'ringkasan' && (
+            <View>
+              {/* 2-Col Stats (Contact Person & Sales) */}
+              <View style={styles.sectionFirst}>
+                <View style={styles.statsGrid}>
+                  <View style={[styles.statCol, { borderLeftColor: lineColor }]}>
+                    <Text style={[styles.statDt, { color: colors.secondary }]}>Contact person</Text>
+                    <Text
+                      style={[
+                        styles.statDd,
+                        { color: cust?.fdContact ? colors.primary : colors.secondary },
+                        !cust?.fdContact && styles.none,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {cust?.fdContact?.trim() || '–'}
                     </Text>
-                  </Card>
+                  </View>
+
+                  <View style={[styles.statCol, { borderLeftColor: lineColor }]}>
+                    <Text style={[styles.statDt, { color: colors.secondary }]}>Sales penanggung jawab</Text>
+                    <Text
+                      style={[
+                        styles.statDd,
+                        { color: cust?.fdSalesNM ? colors.primary : colors.secondary },
+                        !cust?.fdSalesNM && styles.none,
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {cust?.fdSalesNM?.trim() || '–'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* KV List (Kontak Channels) */}
+              <View style={[styles.sectionFirst, { paddingTop: 0 }]}>
+                <View style={styles.kvList}>
+                  {/* Telepon kantor */}
+                  <View style={styles.kvItem}>
+                    <Text style={[styles.kvDt, { color: colors.secondary }]}>Telepon kantor</Text>
+                    <View style={styles.kvDdCol}>
+                      {officePhones.length > 0 ? (
+                        officePhones.map((phone, idx) => (
+                          <View key={idx} style={[styles.callRow, idx > 0 && { marginTop: 2 }]}>
+                            <Text style={[styles.callNum, { color: colors.primary }]}>{phone}</Text>
+                            <TouchableOpacity
+                              activeOpacity={0.7}
+                              onPress={() => handleCall(phone)}
+                              style={styles.callLink}
+                              aria-label={`Panggil ${phone}`}
+                            >
+                              <Text style={[styles.callLinkText, { color: accentColor }]}>Panggil</Text>
+                            </TouchableOpacity>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={[styles.kvDd, { color: colors.secondary }, styles.none]}>–</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Handphone / WA */}
+                  <View style={[styles.kvItem, { borderTopColor: lineColor }]}>
+                    <Text style={[styles.kvDt, { color: colors.secondary }]}>Handphone / WA</Text>
+                    <View style={styles.kvDdCol}>
+                      {mobilePhones.length > 0 ? (
+                        mobilePhones.map((phone, idx) => (
+                          <View key={idx} style={[styles.callRow, idx > 0 && { marginTop: 2 }]}>
+                            <Text style={[styles.callNum, { color: colors.primary }]}>{phone}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                              <TouchableOpacity
+                                activeOpacity={0.7}
+                                onPress={() => handleCall(phone)}
+                                style={styles.callLink}
+                                aria-label={`Panggil ${phone}`}
+                              >
+                                <Text style={[styles.callLinkText, { color: accentColor }]}>Panggil</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                activeOpacity={0.7}
+                                onPress={() => handleWhatsApp(phone)}
+                                style={styles.callLink}
+                                aria-label={`WA ${phone}`}
+                              >
+                                <Text style={[styles.callLinkText, { color: okColor }]}>WA</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))
+                      ) : (
+                        <Text style={[styles.kvDd, { color: colors.secondary }, styles.none]}>–</Text>
+                      )}
+                    </View>
+                  </View>
+
+                  {/* Email */}
+                  <View style={[styles.kvItem, { borderTopColor: lineColor }]}>
+                    <Text style={[styles.kvDt, { color: colors.secondary }]}>Email</Text>
+                    {cust?.fdEmail?.trim() ? (
+                      <TouchableOpacity
+                        activeOpacity={0.7}
+                        onPress={() => handleEmail(cust.fdEmail)}
+                        style={styles.callLink}
+                      >
+                        <Text style={[styles.kvDd, { color: accentColor, fontWeight: '600' }]}>
+                          {cust.fdEmail.trim()}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={[styles.kvDd, { color: colors.secondary }, styles.none]}>–</Text>
+                    )}
+                  </View>
+
+                  {/* Kota operasional */}
+                  <View style={[styles.kvItem, { borderTopColor: lineColor }]}>
+                    <Text style={[styles.kvDt, { color: colors.secondary }]}>Kota operasional</Text>
+                    <Text style={[styles.kvDd, { color: colors.primary }]}>
+                      {cust?.fdCityName?.trim() || cust?.fdCity?.trim() || '–'}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Alamat kantor / utama */}
+              <View style={[styles.sectionBlock, { borderTopColor: lineColor }]}>
+                <Text style={[styles.sectionHeading, { color: colors.primary }]}>
+                  Alamat kantor / utama
+                </Text>
+                <Text style={[styles.descText, { color: colors.primary }]}>
+                  {cust?.fdAddr1
+                    ? `${cust.fdAddr1.trim()}${cust.fdAddr2 ? ` ${cust.fdAddr2.trim()}` : ''}`
+                    : '–'}
+                </Text>
+              </View>
+
+              {/* Catatan keterangan */}
+              {cust?.fdKeterangan?.trim() ? (
+                <View style={[styles.sectionBlock, { borderTopColor: lineColor }]}>
+                  <Text style={[styles.sectionHeading, { color: colors.primary }]}>
+                    Catatan keterangan
+                  </Text>
+                  <Text style={[styles.descText, { color: colors.secondary }]}>
+                    {cust.fdKeterangan.trim()}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          )}
+
+          {/* TAB 2: FINANSIAL */}
+          {activeTab === 'finansial' && (
+            <View>
+              {/* Total: Active Tier */}
+              <View style={styles.sectionFirst}>
+                <View style={styles.totalRow}>
+                  <Text style={[styles.sectionHeading, { color: colors.primary }]}>
+                    Tier customer aktif
+                  </Text>
+                  <View
+                    style={[
+                      styles.tag,
+                      activeTierKey !== 'none'
+                        ? { borderColor: okColor }
+                        : { borderColor: lineColor },
+                    ]}
+                  >
+                    <Text
+                      style={[
+                        styles.tagText,
+                        activeTierKey !== 'none'
+                          ? { color: okColor, fontWeight: '600' }
+                          : { color: colors.secondary },
+                      ]}
+                    >
+                      {activeTierCfg.label || 'Unranked'}
+                    </Text>
+                  </View>
                 </View>
 
-                {/* Contact Channels */}
-                <Card style={{ padding: 14, gap: 10 }}>
-                  <View style={styles.infoRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Phone size={13} color={colors.secondary} />
-                      <Text style={[styles.infoLabel, { color: colors.secondary }]}>Telepon Kantor</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={[styles.infoVal, { color: colors.primary }]}>{cust?.fdTelp || cust?.fdPhone || '—'}</Text>
-                      {(cust?.fdTelp || cust?.fdPhone) && (
-                        <TouchableOpacity onPress={() => handleCall(cust?.fdTelp || cust?.fdPhone)}>
-                          <Text style={{ fontSize: 11, color: '#38BDF8', fontWeight: '700' }}>Panggil</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Phone size={13} color={colors.secondary} />
-                      <Text style={[styles.infoLabel, { color: colors.secondary }]}>Handphone / WA</Text>
-                    </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={[styles.infoVal, { color: colors.primary }]}>{cust?.fdHP || '—'}</Text>
-                      {cust?.fdHP && (
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <TouchableOpacity onPress={() => handleCall(cust?.fdHP)}>
-                            <Text style={{ fontSize: 11, color: '#38BDF8', fontWeight: '700' }}>Panggil</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity onPress={() => handleWhatsApp(cust?.fdHP)}>
-                            <Text style={{ fontSize: 11, color: '#10B981', fontWeight: '700' }}>WA</Text>
-                          </TouchableOpacity>
-                        </View>
-                      )}
-                    </View>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Mail size={13} color={colors.secondary} />
-                      <Text style={[styles.infoLabel, { color: colors.secondary }]}>Email</Text>
-                    </View>
-                    <Text style={[styles.infoVal, { color: colors.primary }]}>{cust?.fdEmail || '—'}</Text>
-                  </View>
-
-                  <View style={styles.infoRow}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Building2 size={13} color={colors.secondary} />
-                      <Text style={[styles.infoLabel, { color: colors.secondary }]}>Kota Operasional</Text>
-                    </View>
-                    <Text style={[styles.infoVal, { color: colors.primary }]}>{cust?.fdCityName || cust?.fdCity || '—'}</Text>
-                  </View>
-                </Card>
-
-                {/* Alamat Kantor / Utama */}
-                <Card style={{ padding: 14, gap: 6 }}>
-                  <Text style={[styles.infoLabel, { color: colors.secondary }]}>Alamat Kantor / Utama</Text>
-                  <Text style={{ fontSize: 13, color: colors.primary, lineHeight: 20, fontWeight: '500' }}>
-                    {cust?.fdAddr1 ? `${cust.fdAddr1.trim()}${cust.fdAddr2 ? ` ${cust.fdAddr2.trim()}` : ''}` : '—'}
-                  </Text>
-                </Card>
-
-                {/* Catatan Keterangan */}
-                {cust?.fdKeterangan ? (
-                  <Card style={{ padding: 14, gap: 6 }}>
-                    <Text style={[styles.infoLabel, { color: colors.secondary }]}>Catatan Keterangan</Text>
-                    <Text style={{ fontSize: 12.5, color: colors.secondary, fontStyle: 'italic', lineHeight: 18 }}>
-                      {cust.fdKeterangan}
+                {/* 2-Col Stats (Omset & Total Inv) */}
+                <View style={[styles.statsGrid, { marginTop: 18 }]}>
+                  <View style={[styles.statCol, { borderLeftColor: lineColor }]}>
+                    <Text style={[styles.statDt, { color: colors.secondary }]}>Omset tahun berjalan</Text>
+                    <Text
+                      style={[styles.statDd, { color: colors.primary }]}
+                      numberOfLines={1}
+                      adjustsFontSizeToFit
+                    >
+                      {formatCompactRupiah(annualRevenue)}
                     </Text>
-                  </Card>
-                ) : null}
+                  </View>
+
+                  <View style={[styles.statCol, { borderLeftColor: lineColor }]}>
+                    <Text style={[styles.statDt, { color: colors.secondary }]}>Total invoice</Text>
+                    <Text style={[styles.statDd, { color: colors.primary }]}>
+                      {totalInvoices}
+                      <Text style={[styles.statUnit, { color: colors.secondary }]}> inv</Text>
+                    </Text>
+                  </View>
+                </View>
               </View>
-            )}
 
-            {/* TAB 2: TIER & FINANSIAL */}
-            {activeDetailTab === 'finansial' && (
-              <View style={{ gap: 12 }}>
-                {/* Active Tier Card */}
-                <Card style={{ padding: 14, gap: 10 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={[styles.infoCardLabel, { color: colors.secondary }]}>Customer Tier Aktif</Text>
-                    <View style={[styles.tierBadge, { backgroundColor: activeTierCfg.bg, borderColor: activeTierCfg.border }]}>
-                      <View style={[styles.tierDot, { backgroundColor: activeTierCfg.dot }]} />
-                      <Text style={[styles.tierText, { color: activeTierCfg.text, fontSize: 10 }]}>{activeTierCfg.label}</Text>
-                    </View>
-                  </View>
+              {/* Riwayat Finansial & Omzet */}
+              <View style={[styles.sectionBlock, { borderTopColor: lineColor }]}>
+                <Text style={[styles.sectionHeading, { color: colors.primary }]}>
+                  Riwayat finansial & omzet
+                </Text>
 
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <View>
-                      <Text style={{ fontSize: 11, color: colors.secondary }}>Omset Tahunan Berjalan</Text>
-                      <Text style={{ fontSize: 18, fontWeight: '800', color: colors.primary }}>
-                        {formatCurrency(cust?.annualRevenue || cust?.financialStats?.[0]?.totalRevenue || 0)}
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ fontSize: 11, color: colors.secondary }}>Total Invoice</Text>
-                      <Text style={{ fontSize: 18, fontWeight: '800', color: colors.tertiary }}>
-                        {cust?.totalInvoices || cust?.financialStats?.[0]?.totalInvoices || 0} Inv
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Progress to Next Tier */}
-                  {cust?.financialStats?.[0]?.nextTier && cust?.financialStats?.[0]?.nextTier !== 'none' ? (
-                    <View style={{ gap: 4, marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.border }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontSize: 11, color: colors.secondary }}>
-                          Target ke Tier {String(cust.financialStats[0].nextTier).toUpperCase()}
-                        </Text>
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: colors.primary }}>
-                          {cust.financialStats[0].progressToNextTier}%
-                        </Text>
-                      </View>
-                      <View style={{ height: 6, borderRadius: 3, backgroundColor: isDark ? 'rgba(255,255,255,0.08)' : '#E2E8F0', overflow: 'hidden' }}>
-                        <View
-                          style={{
-                            height: '100%',
-                            width: `${Math.min(100, cust.financialStats[0].progressToNextTier)}%`,
-                            backgroundColor: colors.tertiary,
-                          }}
-                        />
-                      </View>
-                      {cust.financialStats[0].remainingForNextTier > 0 && (
-                        <Text style={{ fontSize: 10.5, color: colors.secondary }}>
-                          Kurang {formatCompactRupiah(cust.financialStats[0].remainingForNextTier)} lagi untuk naik tier
-                        </Text>
-                      )}
-                    </View>
-                  ) : null}
-                </Card>
-
-                {/* Historical Financial Billing */}
-                <Card style={{ padding: 14, gap: 8 }}>
-                  <Text style={[styles.infoCardLabel, { color: colors.secondary }]}>Riwayat Finansial & Omzet</Text>
-                  {cust?.financialStats && cust.financialStats.length > 0 ? (
-                    cust.financialStats.map((stat: any, idx: number) => (
+                {cust?.financialStats && cust.financialStats.length > 0 ? (
+                  <View style={[styles.kvList, { marginTop: 12 }]}>
+                    {cust.financialStats.map((stat: any, idx: number) => (
                       <View
                         key={idx}
-                        style={{
-                          flexDirection: 'row',
-                          justifyContent: 'space-between',
-                          alignItems: 'center',
-                          paddingVertical: 8,
-                          borderBottomWidth: idx < cust.financialStats.length - 1 ? 1 : 0,
-                          borderBottomColor: colors.border,
-                        }}
+                        style={[
+                          styles.kvItem,
+                          idx > 0 && { borderTopColor: lineColor },
+                        ]}
                       >
                         <View>
-                          <Text style={{ fontSize: 13, fontWeight: '700', color: colors.primary }}>
+                          <Text style={[styles.statYear, { color: colors.primary }]}>
                             Tahun {stat.year}
                           </Text>
-                          <Text style={{ fontSize: 11, color: colors.secondary }}>
-                            {stat.totalInvoices || 0} Invoice
+                          <Text style={[styles.statSub, { color: colors.secondary }]}>
+                            {stat.totalInvoices || 0} invoice
                           </Text>
                         </View>
                         <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={{ fontSize: 13.5, fontWeight: '800', color: colors.tertiary }}>
+                          <Text style={[styles.statRev, { color: colors.primary }]}>
                             {formatCurrency(stat.totalRevenue)}
                           </Text>
-                          <Text style={{ fontSize: 10.5, fontWeight: '600', color: '#10B981' }}>
+                          <Text style={[styles.statTier, { color: okColor }]}>
                             Tier: {String(stat.tier || 'NONE').toUpperCase()}
                           </Text>
                         </View>
                       </View>
-                    ))
-                  ) : (
-                    <Text style={{ fontSize: 12, color: colors.secondary, fontStyle: 'italic', paddingVertical: 4 }}>
-                      Belum ada catatan riwayat omzet billing
-                    </Text>
-                  )}
-                </Card>
-              </View>
-            )}
-
-            {/* TAB 3: DAFTAR ALAMAT */}
-            {activeDetailTab === 'alamat' && (
-              <View style={{ gap: 10 }}>
-                {isDetailLoading ? (
-                  <View style={{ gap: 8 }}>
-                    <SkeletonShimmer height={75} />
-                    <SkeletonShimmer height={75} />
+                    ))}
                   </View>
-                ) : cust?.addresses && cust.addresses.length > 0 ? (
-                  cust.addresses.map((addr: any, idx: number) => {
-                    const jenisStr = (addr.fdJenis || '').trim().toUpperCase()
-                    const variant: 'info' | 'success' | 'warning' | 'neutral' =
-                      jenisStr === 'PENGIRIMAN'
-                        ? 'success'
-                        : jenisStr === 'PENAGIHAN'
-                        ? 'warning'
-                        : jenisStr === 'PENGHUBUNG'
-                        ? 'info'
-                        : 'neutral'
-                    const isAktif = addr.fdAktif === 1 || addr.fdAktif === null || addr.fdAktif === undefined
-
-                    return (
-                      <Card key={addr.fdID || String(idx)} style={{ padding: 13, gap: 8 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <Badge label={jenisStr || 'ALAMAT'} variant={variant} />
-                          <Badge
-                            label={isAktif ? 'Aktif' : 'Non-Aktif'}
-                            variant={isAktif ? 'success' : 'neutral'}
-                          />
-                        </View>
-
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <Text style={{ fontSize: 11.5, color: colors.secondary, fontWeight: '600' }}>PIC :</Text>
-                          <Text style={{ fontSize: 12.5, color: colors.primary, fontWeight: '700' }}>
-                            {addr.fdContact?.trim() || '—'}
-                          </Text>
-                        </View>
-
-                        <View style={{ gap: 2 }}>
-                          <Text style={{ fontSize: 11.5, color: colors.secondary, fontWeight: '600' }}>Alamat :</Text>
-                          <Text style={{ fontSize: 12.5, color: colors.primary, fontWeight: '500', lineHeight: 18 }}>
-                            {[addr.fdAddr || addr.fdAddr1, addr.fdCity || addr.fdCityName].filter(Boolean).map((s: string) => s.trim()).join(', ') || '—'}
-                          </Text>
-                        </View>
-
-                        {(addr.fdHP || addr.fdTelp) && (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                            <Text style={{ fontSize: 11.5, color: colors.secondary, fontWeight: '600' }}>Telepon / HP :</Text>
-                            <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-                              {addr.fdHP?.trim() && (
-                                <TouchableOpacity onPress={() => handleCall(addr.fdHP.trim())}>
-                                  <Text style={{ fontSize: 12, color: colors.tertiary, fontWeight: '700' }}>
-                                    {addr.fdHP.trim()}
-                                  </Text>
-                                </TouchableOpacity>
-                              )}
-                              {addr.fdTelp?.trim() && (
-                                <TouchableOpacity onPress={() => handleCall(addr.fdTelp.trim())}>
-                                  <Text style={{ fontSize: 12, color: '#38BDF8', fontWeight: '600' }}>
-                                    {addr.fdTelp.trim()}
-                                  </Text>
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          </View>
-                        )}
-                      </Card>
-                    )
-                  })
                 ) : (
-                  <Card style={styles.emptyCard}>
-                    <Text style={{ color: colors.secondary, fontSize: 12 }}>Tidak ada daftar alamat tersimpan</Text>
-                  </Card>
+                  <Text style={[styles.emptyText, { color: colors.secondary }]}>
+                    Belum ada catatan riwayat omzet billing.
+                  </Text>
                 )}
               </View>
-            )}
-          </ScrollView>
-        </View>
-      </View>
+            </View>
+          )}
+
+          {/* TAB 3: KOMODITAS */}
+          {activeTab === 'komoditas' && (
+            <CustomerCommodityTab
+              stats={commodityStats}
+              isLoading={isCommodityLoading}
+            />
+          )}
+
+          {/* TAB 4: DAFTAR ALAMAT */}
+          {activeTab === 'alamat' && (
+            <View style={styles.sectionFirst}>
+              {isDetailLoading ? (
+                <View style={{ gap: 14, paddingTop: 8 }}>
+                  <SkeletonShimmer height={80} />
+                  <SkeletonShimmer height={80} />
+                </View>
+              ) : addrList.length > 0 ? (
+                addrList.map((addr: any, idx: number) => {
+                  const isAktif = addr.fdAktif === 1 || addr.fdAktif === null || addr.fdAktif === undefined
+                  const jenisStr = toSentenceCase(addr.fdJenis)
+                  const fallbackAddr = [cust?.fdAddr1, cust?.fdAddr2]
+                    .filter(Boolean)
+                    .map((s: string) => s.trim())
+                    .join(' ')
+                  const fullAddr = [addr.fdAddr || addr.fdAddr1, addr.fdCity || addr.fdCityName]
+                    .filter(Boolean)
+                    .map((s: string) => s.trim())
+                    .join(', ') || fallbackAddr || '–'
+
+                  const rawPhoneStr = addr.fdHP?.trim() || addr.fdTelp?.trim() || cust?.fdHP?.trim() || cust?.fdTelp?.trim() || cust?.fdPhone?.trim()
+                  const phoneList = parsePhoneList(rawPhoneStr)
+
+                  return (
+                    <View
+                      key={addr.fdID || String(idx)}
+                      style={[
+                        styles.addrItem,
+                        idx > 0 && [styles.addrItemBorder, { borderTopColor: lineColor }],
+                      ]}
+                    >
+                      {/* Baris 1: Tipe Alamat & Status */}
+                      <View style={styles.a1}>
+                        <Text style={[styles.ty, { color: colors.primary }]} numberOfLines={1}>
+                          {jenisStr}
+                        </Text>
+                        <View
+                          style={[
+                            styles.tag,
+                            isAktif ? { borderColor: okColor } : { borderColor: lineColor },
+                            { flexShrink: 0 },
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              styles.tagText,
+                              isAktif
+                                ? { color: okColor, fontWeight: '600' }
+                                : { color: colors.secondary },
+                            ]}
+                          >
+                            {isAktif ? 'Aktif' : 'Non-Aktif'}
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* Baris 2: PIC */}
+                      <Text style={[styles.a2, { color: colors.secondary }]} numberOfLines={1}>
+                        PIC <Text style={[styles.a2Bold, { color: colors.primary }]}>{addr.fdContact?.trim() || cust?.fdContact?.trim() || '–'}</Text>
+                      </Text>
+
+                      {/* Baris 3: Alamat Lengkap */}
+                      <Text style={[styles.a3, { color: colors.primary }]}>
+                        {fullAddr}
+                      </Text>
+
+                      {/* Baris 4: Telepon / HP */}
+                      <View style={styles.a4}>
+                        <Text style={[styles.a4Label, { color: colors.secondary }]}>Telepon / HP</Text>
+                        {phoneList.length > 0 ? (
+                          <View style={{ marginTop: 2, gap: 2 }}>
+                            {phoneList.map((phone, pIdx) => {
+                              const isHp = isHpNumber(phone)
+                              return (
+                                <View key={pIdx} style={styles.addrCallRow}>
+                                  <Text
+                                    style={[styles.addrCallNum, { color: colors.primary }]}
+                                    numberOfLines={1}
+                                  >
+                                    {phone}
+                                  </Text>
+                                  <View style={styles.addrCallActions}>
+                                    <TouchableOpacity
+                                      activeOpacity={0.7}
+                                      onPress={() => handleCall(phone)}
+                                      style={styles.callLink}
+                                      aria-label={`Panggil ${phone}`}
+                                    >
+                                      <Text style={[styles.callLinkText, { color: accentColor }]}>Panggil</Text>
+                                    </TouchableOpacity>
+                                    {isHp && (
+                                      <TouchableOpacity
+                                        activeOpacity={0.7}
+                                        onPress={() => handleWhatsApp(phone)}
+                                        style={styles.callLink}
+                                        aria-label={`WA ${phone}`}
+                                      >
+                                        <Text style={[styles.callLinkText, { color: okColor }]}>WA</Text>
+                                      </TouchableOpacity>
+                                    )}
+                                  </View>
+                                </View>
+                              )
+                            })}
+                          </View>
+                        ) : (
+                          <View style={styles.addrCallRow}>
+                            <Text style={[styles.addrCallNum, { color: colors.secondary }]}>–</Text>
+                          </View>
+                        )}
+                      </View>
+                    </View>
+                  )
+                })
+              ) : (
+                <Text style={[styles.emptyText, { color: colors.secondary }]}>
+                  Tidak ada daftar alamat tersimpan.
+                </Text>
+              )}
+            </View>
+          )}
+        </ScrollView>
+      </SafeAreaView>
     </Modal>
   )
 }
 
 const styles = StyleSheet.create({
-  modalOverlay: {
+  container: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'flex-end',
   },
-  sheetContent: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  sheetHeader: {
+  bar: {
+    paddingHorizontal: 20,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    padding: 16,
-    paddingBottom: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.08)',
+    zIndex: 2,
   },
-  sheetTitle: {
-    fontSize: 15,
-    fontWeight: '800',
-    letterSpacing: -0.3,
-  },
-  closeBtn: {
-    padding: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-  },
-  codeBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  codeText: {
-    fontSize: 11,
-    fontFamily: 'monospace',
-    fontWeight: '700',
-  },
-  tierBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  tierDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-  },
-  tierText: {
-    fontSize: 9.5,
-    fontWeight: '800',
-    letterSpacing: 0.3,
-  },
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 10,
-    borderWidth: 1,
-    flexShrink: 0,
-  },
-  statusDot: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-  },
-  statusText: {
-    fontSize: 9.5,
-    fontWeight: '700',
-  },
-  infoCardLabel: {
-    fontSize: 10.5,
+  name: {
+    fontSize: 19,
     fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.3,
   },
-  infoCardVal: {
-    fontSize: 13.5,
-    fontWeight: '700',
-  },
-  infoRow: {
+  t2: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: 4,
+    gap: 10,
+    flexWrap: 'wrap',
+    marginTop: 4,
   },
-  infoLabel: {
+  tag: {
+    paddingHorizontal: 7,
+    paddingVertical: 1,
+    borderWidth: 1,
+    borderRadius: 4,
+    alignSelf: 'flex-start',
+  },
+  tagText: {
     fontSize: 12,
   },
-  infoVal: {
-    fontSize: 13,
-    fontWeight: '600',
+  tenureText: {
+    fontSize: 14,
   },
-  contactBtn: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: 8,
+  iconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
     borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  contactBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
+  tabs: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    paddingHorizontal: 8,
   },
-  emptyCard: {
+  tabBtn: {
+    flex: 1,
+    minHeight: 44,
+    paddingVertical: 12,
     alignItems: 'center',
-    padding: 30,
+    justifyContent: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    marginBottom: -1,
+    paddingHorizontal: 4,
+  },
+  tabBtnWide: {
+    flex: 1.4,
+  },
+  tabBtnActive: {
+    // borderBottomColor set dynamically
+  },
+  tabText: {
+    fontSize: 14,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+  },
+  sectionFirst: {
+    paddingVertical: 22,
+  },
+  sectionBlock: {
+    paddingVertical: 22,
+    borderTopWidth: 1,
+  },
+  sectionHeading: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  statsGrid: {
+    flexDirection: 'row',
+    gap: 16,
+  },
+  statCol: {
+    flex: 1,
+    borderLeftWidth: 2,
+    paddingLeft: 12,
+  },
+  statDt: {
+    fontSize: 12,
+  },
+  statDd: {
+    fontSize: 20,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    marginTop: 2,
+  },
+  statUnit: {
+    fontSize: 14,
+    fontWeight: '400',
+  },
+  none: {
+    fontWeight: '400',
+  },
+  kvList: {
+    // List container
+  },
+  kvItem: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 16,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'transparent',
+  },
+  kvDt: {
+    fontSize: 15,
+  },
+  kvDdCol: {
+    alignItems: 'flex-end',
+    flex: 1,
+  },
+  kvDd: {
+    fontSize: 15,
+    fontWeight: '500',
+    textAlign: 'right',
+  },
+  callRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 14,
+  },
+  callNum: {
+    fontSize: 15,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+  },
+  callLink: {
+    minHeight: 44,
+    justifyContent: 'center',
+  },
+  callLinkText: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  descText: {
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 6,
+  },
+  totalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  statYear: {
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  statSub: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  statRev: {
+    fontSize: 15,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
+  statTier: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  emptyText: {
+    fontSize: 14.5,
+    marginTop: 6,
+  },
+  addrItem: {
+    paddingVertical: 18,
+  },
+  addrItemBorder: {
+    borderTopWidth: 1,
+  },
+  a1: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  a2: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  a2Bold: {
+    fontWeight: '500',
+  },
+  a3: {
+    fontSize: 14.5,
+    lineHeight: 21,
+    marginTop: 8,
+  },
+  a4: {
+    marginTop: 8,
+  },
+  a4Label: {
+    fontSize: 13,
+    marginBottom: 2,
+  },
+  ty: {
+    fontSize: 17,
+    fontWeight: '600',
+    flex: 1,
+  },
+  addrCallRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    minHeight: 40,
+    gap: 12,
+  },
+  addrCallNum: {
+    fontSize: 15,
+    fontWeight: '500',
+    fontVariant: ['tabular-nums'],
+    flex: 1,
+  },
+  addrCallActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    flexShrink: 0,
   },
 })

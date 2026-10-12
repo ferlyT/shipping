@@ -3,6 +3,7 @@ import { authMiddleware, requirePermission } from '../../middleware/auth'
 import { validateQuery } from '../../middleware/requestValidator'
 import { CustomerQuerySchema, CustomerSuggestionsQuerySchema } from './customers.types'
 import { getCustomers, getCustomerById, getCustomerSuggestions } from './customers.service'
+import { getCustomerCommodityStats } from './customer-commodity-stats.service'
 import { successResponse, errorResponse } from '../../utils/response'
 
 const customersRoutes = new Hono()
@@ -26,6 +27,18 @@ customersRoutes.get('/suggestions', validateQuery(CustomerSuggestionsQuerySchema
     const q = query.q || ''
     const suggestions = await getCustomerSuggestions(q)
     return successResponse(c, suggestions)
+  } catch (err) {
+    return errorResponse(c, (err as Error).message, 500)
+  }
+})
+
+customersRoutes.get('/:id/commodity-stats', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const yearParam = c.req.query('year')
+    const year = yearParam ? parseInt(yearParam, 10) : undefined
+    const stats = await getCustomerCommodityStats(id, year)
+    return successResponse(c, stats)
   } catch (err) {
     return errorResponse(c, (err as Error).message, 500)
   }

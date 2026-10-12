@@ -22,6 +22,9 @@ import {
   issueInvoice,
   checkBillResiMarking,
   updateBillingDetails,
+  getBatchExitComparison,
+  getBatchExitCargoDetails,
+  getUnissuedBillsDetails,
 } from './billing.service'
 
 import { getReportTemplate, saveReportTemplate } from './report-template.service'
@@ -37,6 +40,12 @@ import {
   IssueInvoiceSchema,
   UpdateBillingDetailsSchema,
 } from './billing.types'
+import {
+  getBillingAttachments,
+  uploadBillingAttachment,
+  deleteBillingAttachment,
+} from './billing-attachments.service'
+import { UploadBillingAttachmentSchema } from './billing-attachments.types'
 import { validateBody } from '../../middleware/requestValidator'
 import { successResponse, errorResponse } from '../../utils/response'
 
@@ -209,6 +218,12 @@ billingRoutes.get('/target-details', async (c) => {
   return successResponse(c, result)
 })
 
+billingRoutes.get('/unissued-bills', async (c) => {
+  const query = c.req.query()
+  const result = await getUnissuedBillsDetails(query)
+  return successResponse(c, result)
+})
+
 billingRoutes.get('/chart/by-employee-daily', async (c) => {
   const query = c.req.query()
   const result = await getBillingByEmployeeDaily(query)
@@ -232,6 +247,73 @@ billingRoutes.get('/chart/sj-vs-bill/details', async (c) => {
   const result = await getSjVsBillDetails(query)
   return successResponse(c, result)
 })
+
+billingRoutes.get('/batch-exit-comparison', async (c) => {
+  const query = c.req.query()
+  const result = await getBatchExitComparison(query)
+  return successResponse(c, result)
+})
+
+billingRoutes.get('/batch-exit-comparison/details', async (c) => {
+  const markingCode = c.req.query('markingCode') || ''
+  if (!markingCode) {
+    return errorResponse(c, 'Parameter markingCode wajib diisi', 400)
+  }
+  const result = await getBatchExitCargoDetails(markingCode)
+  return successResponse(c, result)
+})
+
+billingRoutes.get('/reports/omset-volume', async (c) => {
+  const query = c.req.query()
+  const { getOmsetVolumeReport } = await import('./billing-omset-report.service')
+  const result = await getOmsetVolumeReport({
+    yearFrom: query.yearFrom ? Number(query.yearFrom) : undefined,
+    yearTo: query.yearTo ? Number(query.yearTo) : undefined,
+    search: query.search,
+    sales: query.sales,
+  })
+  return successResponse(c, result)
+})
+
+billingRoutes.get('/reports/omset-volume/export-pivot', async (c) => {
+  try {
+    const query = c.req.query()
+    const yearFrom = query.yearFrom ? Number(query.yearFrom) : 2018
+    const { generateOmsetVolumePivotExcel } = await import('./billing-omset-report.service')
+    const buffer = await generateOmsetVolumePivotExcel(yearFrom)
+
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, '0')
+    const runTs = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`
+    const fileName = `billing_pivot_report_${runTs}.xlsx`
+
+    return new Response(buffer, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        'Content-Disposition': `attachment; filename="${fileName}"`,
+      },
+    })
+  } catch (err: any) {
+    return errorResponse(c, `Gagal mengekspor file Excel Pivot: ${err.message}`, 500)
+  }
+})
+
+billingRoutes.get('/reports/cargo-volume', async (c) => {
+  const query = c.req.query()
+  const { getCargoVolumeReport } = await import('./cargo-volume-report.service')
+  const result = await getCargoVolumeReport({
+    branch: query.branch,
+    yearFrom: query.yearFrom ? Number(query.yearFrom) : undefined,
+    yearTo: query.yearTo ? Number(query.yearTo) : undefined,
+    mode: query.mode ? Number(query.mode) : undefined,
+    typeComodity: query.typeComodity ? Number(query.typeComodity) : undefined,
+    sales: query.sales,
+    search: query.search,
+  })
+  return successResponse(c, result)
+})
+
 
 billingRoutes.get('/customer-tariff-audit/:custCode?', async (c) => {
   const custCode = c.req.param('custCode') || c.req.query('custCode') || ''
@@ -369,6 +451,56 @@ billingRoutes.put('/:id/details', validateBody(UpdateBillingDetailsSchema), asyn
     return errorResponse(c, (err as Error).message, 400)
   }
 })
+
+// ── Invoice Attachments Routes ──
+billingRoutes.get('/:id/attachments', async (c) => {
+  try {
+    const id = c.req.param('id')
+    const attachments = await getBillingAttachments(id)
+    return successResponse(c, attachments)
+  } catch (err: any) {
+    return errorResponse(c, err.message || 'Gagal mengambil lampiran invoice', 500)
+  }
+})
+
+billingRoutes.post(
+  '/:id/attachments',
+  requirePermission(['/mshipping/finance/billing/attachments', '/mshipping/billing/attachments']),
+  validateBody(UploadBillingAttachmentSchema),
+  async (c) => {
+    try {
+      const id = c.req.param('id')
+      const body = c.req.valid('json')
+      const user = c.get('user')
+      const username = user?.username || user?.fullName || 'system'
+      const result = await uploadBillingAttachment(id, body, username)
+      return successResponse(c, result, undefined, 201)
+    } catch (err: any) {
+      return errorResponse(c, err.message || 'Gagal mengunggah lampiran invoice', 400)
+    }
+  }
+)
+
+billingRoutes.delete(
+  '/:id/attachments/:attachmentId',
+  requirePermission([
+    '/mshipping/finance/billing/attachments/delete',
+    '/mshipping/billing/attachments/delete',
+  ]),
+  async (c) => {
+    try {
+      const id = c.req.param('id')
+      const attachmentId = Number(c.req.param('attachmentId'))
+      if (isNaN(attachmentId)) {
+        return errorResponse(c, 'ID lampiran tidak valid', 400)
+      }
+      const result = await deleteBillingAttachment(attachmentId, id)
+      return successResponse(c, result)
+    } catch (err: any) {
+      return errorResponse(c, err.message || 'Gagal menghapus lampiran invoice', 400)
+    }
+  }
+)
 
 export { billingRoutes }
 
